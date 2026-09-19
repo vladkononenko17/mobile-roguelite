@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#070a12" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Neon Hollow</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main id="game-shell" aria-label="Neon Hollow game">
+      <canvas id="game" aria-label="Game arena"></canvas>
+
+      <section id="hud" class="hidden" aria-live="polite">
+        <div class="hud-top">
+          <div class="health-wrap">
+            <span class="hud-label">HP</span>
+            <div class="bar"><div id="health-bar" class="bar-fill health"></div></div>
+            <span id="health-text" class="hud-value">100 / 100</span>
+          </div>
+          <button id="pause-button" class="icon-button" aria-label="Pause game">Ⅱ</button>
+        </div>
+        <div class="xp-row">
+          <span id="level-text">LV 1</span>
+          <div class="bar xp-bar"><div id="xp-bar" class="bar-fill xp"></div></div>
+        </div>
+        <div class="stat-row">
+          <span id="wave-text">WAVE 1</span>
+          <span id="timer-text">00:30</span>
+          <span id="kills-text">0 KILLS</span>
+        </div>
+      </section>
+
+      <section id="start-screen" class="screen active">
+        <div class="logo-mark" aria-hidden="true"><span></span></div>
+        <p class="eyebrow">MOBILE ROGUELITE</p>
+        <h1>NEON<br />HOLLOW</h1>
+        <p class="lead">Move. Evolve. Survive the swarm.</p>
+        <button id="start-button" class="primary-button">ENTER THE HOLLOW</button>
+        <p class="hint">Drag anywhere on the left side to move.<br />Your weapon fires automatically.</p>
+      </section>
+
+      <section id="upgrade-screen" class="screen" aria-labelledby="upgrade-title">
+        <p class="eyebrow">LEVEL UP</p>
+        <h2 id="upgrade-title">CHOOSE AN EVOLUTION</h2>
+        <div id="upgrade-list" class="upgrade-list"></div>
+      </section>
+
+      <section id="pause-screen" class="screen compact" aria-labelledby="pause-title">
+        <p class="eyebrow">RUN PAUSED</p>
+        <h2 id="pause-title">CATCH YOUR BREATH</h2>
+        <button id="resume-button" class="primary-button">RESUME</button>
+        <button id="quit-button" class="secondary-button">END RUN</button>
+      </section>
+
+      <section id="game-over-screen" class="screen" aria-labelledby="game-over-title">
+        <p class="eyebrow danger">SIGNAL LOST</p>
+        <h2 id="game-over-title">THE HOLLOW<br />CLAIMS ANOTHER</h2>
+        <div class="results">
+          <div><strong id="result-time">00:00</strong><span>SURVIVED</span></div>
+          <div><strong id="result-level">1</strong><span>LEVEL</span></div>
+          <div><strong id="result-kills">0</strong><span>KILLS</span></div>
+        </div>
+        <button id="restart-button" class="primary-button">TRY AGAIN</button>
+      </section>
+
+      <div id="joystick" aria-hidden="true">
+        <div class="joystick-ring"></div>
+        <div class="joystick-knob"></div>
+      </div>
+      <div id="toast" role="status" aria-live="polite"></div>
+    </main>
+    <script type="module" src="./src/game.js"></script>
+  </body>
+</html>
