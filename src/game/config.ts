@@ -7,7 +7,7 @@ export const RUN_LENGTH_SECONDS = 90;
 export const ENEMIES: Record<EnemyKind, EnemyConfig> = {
   raider: {
     hp: 42,
-    speed: 75,
+    speed: 125,
     damage: 13,
     xp: 3,
     radius: 17,
@@ -15,7 +15,7 @@ export const ENEMIES: Record<EnemyKind, EnemyConfig> = {
   },
   spitter: {
     hp: 30,
-    speed: 57,
+    speed: 95,
     damage: 10,
     xp: 4,
     radius: 16,
@@ -24,7 +24,7 @@ export const ENEMIES: Record<EnemyKind, EnemyConfig> = {
   },
   brute: {
     hp: 170,
-    speed: 43,
+    speed: 78,
     damage: 24,
     xp: 12,
     radius: 27,
@@ -32,7 +32,7 @@ export const ENEMIES: Record<EnemyKind, EnemyConfig> = {
   },
   boss: {
     hp: 820,
-    speed: 35,
+    speed: 65,
     damage: 31,
     xp: 45,
     radius: 43,

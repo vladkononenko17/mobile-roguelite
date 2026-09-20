@@ -2,11 +2,14 @@ import Phaser from "phaser";
 
 /** Flat scenery only: painted metal, road markings and cracks never imply a solid obstacle. */
 export function drawWasteland(scene: Phaser.Scene, size: number): void {
-  const g = scene.add.graphics().setDepth(-20);
+  let g = scene.add.graphics().setDepth(-20);
   const random = new Phaser.Math.RandomDataGenerator(["dustline-scrapyard-02"]);
-  g.fillStyle(0x77614b).fillRect(0, 0, size, size);
-  for (let y = 0; y < size; y += 96) {
-    for (let x = 0; x < size; x += 96) {
+  // Bake the dense ground once; replaying thousands of vector commands every
+  // frame is especially expensive on mobile. Keep the texture small (384²).
+  const tileSize = 384;
+  g.fillStyle(0x77614b).fillRect(0, 0, tileSize, tileSize);
+  for (let y = 0; y < tileSize; y += 96) {
+    for (let x = 0; x < tileSize; x += 96) {
       const color = random.pick([0x806a50, 0x75604a, 0x6e5947, 0x7b634c]);
       g.fillStyle(color).fillRect(x, y, 96, 96);
       g.lineStyle(1, 0x302b2a, 0.23).lineBetween(x, y, x + 85, y + 2);
@@ -18,6 +21,12 @@ export function drawWasteland(scene: Phaser.Scene, size: number): void {
       for (let i = 0; i < 8; i++) g.fillCircle(x + random.between(1, 90), y + random.between(1, 90), 1);
     }
   }
+  if (!scene.textures.exists("wasteland-ground")) {
+    g.generateTexture("wasteland-ground", tileSize, tileSize);
+  }
+  g.destroy();
+  scene.add.tileSprite(0, 0, size, size, "wasteland-ground").setOrigin(0).setDepth(-21);
+  g = scene.add.graphics().setDepth(-20);
   const center = size / 2;
   g.fillStyle(0x49413a).fillRect(center - 112, 0, 224, size);
   g.lineStyle(5, 0x252127).lineBetween(center - 115, 0, center - 115, size).lineBetween(center + 115, 0, center + 115, size);
