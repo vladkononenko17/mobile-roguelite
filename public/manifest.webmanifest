@@ -1,0 +1,19 @@
+{
+  "name": "Neon Hollow: Dustline",
+  "short_name": "Dustline",
+  "description": "A mobile-first comic wasteland action roguelite.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#171318",
+  "theme_color": "#e8a92f",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
