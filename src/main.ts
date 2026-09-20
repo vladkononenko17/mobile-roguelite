@@ -20,7 +20,8 @@ const gameConfig: Phaser.Types.Core.GameConfig = {
   height: GAME_HEIGHT,
   backgroundColor: "#342c28",
   render: {
-    antialias: true,
+    antialias: false,
+    antialiasGL: false,
     roundPixels: true,
     powerPreference: "high-performance",
   },
@@ -105,22 +106,26 @@ function showToast(message: string): void {
   toastTimer = window.setTimeout(() => ui.toast.classList.remove("show"), 1450);
 }
 
+function setHudText(target: HTMLElement, value: string): void {
+  if (target.textContent !== value) target.textContent = value;
+}
+
 function updateHud(state: HudState): void {
   ui.healthBar.style.transform = `scaleX(${Math.max(0, state.hp / state.maxHp)})`;
-  ui.healthText.textContent = String(Math.ceil(state.hp));
-  ui.timerText.textContent = timeLabel(state.remaining);
-  ui.killsText.textContent = `${state.kills} SCRAPPED`;
+  setHudText(ui.healthText, String(Math.ceil(state.hp)));
+  setHudText(ui.timerText, timeLabel(state.remaining));
+  setHudText(ui.killsText, `${state.kills} SCRAPPED`);
   ui.xpFill.style.transform = `scaleX(${Math.max(0, state.xp / state.xpToNext)})`;
-  ui.ammoText.textContent = `${state.ammo} / ${state.magazine}`;
-  ui.reloadText.textContent = state.reloading
+  setHudText(ui.ammoText, `${state.ammo} / ${state.magazine}`);
+  setHudText(ui.reloadText, state.reloading
     ? `RELOADING ${Math.floor(state.reloadProgress * 100)}%`
     : state.ammo === 0
       ? "EMPTY"
-      : "READY";
+      : "READY");
   ui.reloadButton.disabled = state.reloading;
   ui.boss.classList.toggle("hidden", state.bossRatio === null);
   ui.bossFill.style.transform = `scaleX(${state.bossRatio ?? 0})`;
-  ui.stage.textContent = state.remaining === 0 && !state.bossDefeated ? "FINISH THE FOREMAN" : `DUSTLINE // RANK ${state.level}`;
+  setHudText(ui.stage, state.remaining === 0 && !state.bossDefeated ? "FINISH THE FOREMAN" : `DUSTLINE // RANK ${state.level}`);
 }
 
 function presentUpgrade(choices: UpgradeChoice[]): void {
