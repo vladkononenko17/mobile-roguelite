@@ -67,7 +67,6 @@ button {
   z-index: 2;
   opacity: 0.13;
   pointer-events: none;
-  mix-blend-mode: multiply;
   background-image:
     repeating-radial-gradient(circle at 17% 23%, #000 0 0.7px, transparent 0.9px 5px),
     repeating-linear-gradient(112deg, transparent 0 7px, rgba(0, 0, 0, 0.1) 8px 9px);
@@ -82,7 +81,6 @@ button {
   inset: max(12px, env(safe-area-inset-top)) 12px auto;
   z-index: 5;
   pointer-events: none;
-  filter: drop-shadow(3px 4px 0 rgba(0, 0, 0, 0.45));
 }
 
 .hud-row,
@@ -197,7 +195,6 @@ button {
   background:
     radial-gradient(circle at 75% 20%, rgba(232, 96, 47, 0.28), transparent 34%),
     linear-gradient(155deg, rgba(28, 24, 26, 0.88), rgba(13, 12, 14, 0.97));
-  backdrop-filter: blur(4px);
   overflow-y: auto;
 }
 
