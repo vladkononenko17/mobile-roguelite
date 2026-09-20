@@ -1,11 +1,12 @@
 {
-  "name": "Neon Hollow",
-  "short_name": "Neon Hollow",
-  "description": "A mobile-first action roguelite built for the web.",
+  "name": "Neon Hollow: Dustline",
+  "short_name": "Dustline",
+  "description": "A mobile-first comic wasteland action roguelite.",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#070a12",
-  "theme_color": "#070a12",
+  "background_color": "#171318",
+  "theme_color": "#e8a92f",
   "orientation": "portrait-primary",
   "icons": [
     {
