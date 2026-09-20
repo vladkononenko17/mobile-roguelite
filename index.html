@@ -3,77 +3,99 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-    <meta name="theme-color" content="#070a12" />
+    <meta name="theme-color" content="#e8a92f" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>Neon Hollow</title>
-    <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="./styles.css" />
+    <title>Neon Hollow: Dustline</title>
+    <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
+    <link rel="icon" href="%BASE_URL%icon.svg" type="image/svg+xml" />
   </head>
   <body>
     <main id="game-shell" aria-label="Neon Hollow game">
-      <canvas id="game" aria-label="Game arena"></canvas>
+      <div id="game"></div>
+      <div class="paper-grain" aria-hidden="true"></div>
 
-      <section id="hud" class="hidden" aria-live="polite">
-        <div class="hud-top">
-          <div class="health-wrap">
-            <span class="hud-label">HP</span>
-            <div class="bar"><div id="health-bar" class="bar-fill health"></div></div>
-            <span id="health-text" class="hud-value">100 / 100</span>
+      <section id="hud" class="hidden" aria-label="Run status">
+        <div class="hud-row">
+          <div class="health-block">
+            <span class="hud-tag">VITALS</span>
+            <div class="ink-bar"><div id="health-bar" class="health-fill"></div></div>
+            <b id="health-text">100</b>
           </div>
           <button id="pause-button" class="icon-button" aria-label="Pause game">Ⅱ</button>
         </div>
-        <div class="xp-row">
-          <span id="level-text">LV 1</span>
-          <div class="bar xp-bar"><div id="xp-bar" class="bar-fill xp"></div></div>
+        <div class="mission-strip">
+          <span id="stage-text">DUSTLINE // 01</span>
+          <b id="timer-text">01:30</b>
+          <span id="kills-text">0 SCRAPPED</span>
         </div>
-        <div class="stat-row">
-          <span id="wave-text">WAVE 1</span>
-          <span id="timer-text">00:30</span>
-          <span id="kills-text">0 KILLS</span>
-        </div>
+        <div class="xp-bar"><div id="xp-fill"></div></div>
+        <div id="boss-panel" class="hidden"><span>BOUNTY // THE FOREMAN</span><div class="boss-track"><div id="boss-fill"></div></div></div>
       </section>
 
       <section id="start-screen" class="screen active">
-        <div class="logo-mark" aria-hidden="true"><span></span></div>
-        <p class="eyebrow">MOBILE ROGUELITE</p>
-        <h1>NEON<br />HOLLOW</h1>
-        <p class="lead">Move. Evolve. Survive the swarm.</p>
-        <button id="start-button" class="primary-button">ENTER THE HOLLOW</button>
-        <p class="hint">Drag anywhere on the left side to move.<br />Your weapon fires automatically.</p>
+        <div class="sticker">VERTICAL SLICE</div>
+        <p class="eyebrow">NEON HOLLOW PRESENTS</p>
+        <h1>DUST<br /><span>LINE</span></h1>
+        <p class="lead">Survive the rush. Take down the Foreman.</p>
+        <div class="weapon-card">
+          <span class="weapon-icon">R-12</span>
+          <div><b>SCRAPLINE RIFLE</b><small>R-12 · auto reload · critical hits</small></div>
+        </div>
+        <div class="loadout" role="group" aria-label="Starting rifle modification">
+          <span class="loadout-label">PICK YOUR STARTING MOD</span>
+          <div class="loadout-options">
+            <button class="loadout-option" data-mod="damage" data-description="Hollow-point rounds: +25% damage" aria-pressed="true">DMG +25%</button>
+            <button class="loadout-option" data-mod="magazine" data-description="Extended magazine: 16 rounds" aria-pressed="false">MAG +4</button>
+            <button class="loadout-option" data-mod="crit" data-description="Lucky chamber: 20% critical chance" aria-pressed="false">CRIT +8%</button>
+          </div>
+          <span id="loadout-description">Hollow-point rounds: +25% damage</span>
+        </div>
+        <button id="start-button" class="primary-button" disabled>DROP INTO THE WASTE</button>
+        <p class="hint">Left thumb moves. Hold FIRE for auto-aim.<br />Drag FIRE to aim yourself. AUTO frees your right thumb.</p>
       </section>
 
-      <section id="upgrade-screen" class="screen" aria-labelledby="upgrade-title">
-        <p class="eyebrow">LEVEL UP</p>
-        <h2 id="upgrade-title">CHOOSE AN EVOLUTION</h2>
+      <section id="upgrade-screen" class="screen">
+        <p class="eyebrow">FIELD MOD FOUND</p>
+        <h2>CHOOSE YOUR POISON</h2>
         <div id="upgrade-list" class="upgrade-list"></div>
       </section>
 
-      <section id="pause-screen" class="screen compact" aria-labelledby="pause-title">
-        <p class="eyebrow">RUN PAUSED</p>
-        <h2 id="pause-title">CATCH YOUR BREATH</h2>
-        <button id="resume-button" class="primary-button">RESUME</button>
-        <button id="quit-button" class="secondary-button">END RUN</button>
+      <section id="pause-screen" class="screen compact">
+        <p class="eyebrow">RADIO SILENCE</p>
+        <h2>RUN PAUSED</h2>
+        <button id="resume-button" class="primary-button">BACK TO WORK</button>
+        <button id="quit-button" class="secondary-button">ABANDON RUN</button>
       </section>
 
-      <section id="game-over-screen" class="screen" aria-labelledby="game-over-title">
-        <p class="eyebrow danger">SIGNAL LOST</p>
-        <h2 id="game-over-title">THE HOLLOW<br />CLAIMS ANOTHER</h2>
+      <section id="result-screen" class="screen">
+        <p id="result-eyebrow" class="eyebrow">CONTRACT COMPLETE</p>
+        <h2 id="result-title">YOU MADE<br />A MESS</h2>
         <div class="results">
-          <div><strong id="result-time">00:00</strong><span>SURVIVED</span></div>
-          <div><strong id="result-level">1</strong><span>LEVEL</span></div>
-          <div><strong id="result-kills">0</strong><span>KILLS</span></div>
+          <div><strong id="result-time">00:00</strong><span>TIME</span></div>
+          <div><strong id="result-kills">0</strong><span>SCRAPPED</span></div>
+          <div><strong id="result-level">1</strong><span>RANK</span></div>
         </div>
-        <button id="restart-button" class="primary-button">TRY AGAIN</button>
+        <button id="restart-button" class="primary-button">RUN IT AGAIN</button>
       </section>
 
-      <div id="joystick" aria-hidden="true">
-        <div class="joystick-ring"></div>
-        <div class="joystick-knob"></div>
+      <div id="controls" class="hidden">
+        <div id="joystick" aria-hidden="true">
+          <div class="joystick-ring"></div>
+          <div class="joystick-knob"></div>
+        </div>
+        <button id="fire-button" class="combat-button fire"><span>HOLD</span>FIRE</button>
+        <button id="reload-button" class="combat-button reload">RELOAD</button>
+        <button id="auto-button" class="auto-button" aria-pressed="false">AUTO</button>
+      </div>
+
+      <div id="ammo-panel" class="hidden">
+        <span id="weapon-text">R-12</span>
+        <b id="ammo-text">12 / 12</b>
+        <span id="reload-text">READY</span>
       </div>
       <div id="toast" role="status" aria-live="polite"></div>
     </main>
-    <script type="module" src="./src/game.js"></script>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
