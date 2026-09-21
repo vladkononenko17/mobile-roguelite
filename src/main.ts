@@ -95,7 +95,9 @@ function showPlayUi(): void {
 function startRun(): void {
   if (!sceneReady) return;
   showPlayUi();
-  ui.auto.setAttribute("aria-pressed", "false");
+  // Auto-fire is the default mobile control mode. A player can still switch
+  // it off for full manual aim before or during a run.
+  ui.auto.setAttribute("aria-pressed", "true");
   gameScene.startRun(loadout);
 }
 
