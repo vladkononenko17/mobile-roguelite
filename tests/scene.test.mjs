@@ -45,6 +45,21 @@ describe('Scene lifecycle regressions', () => {
     const s = new exported.GameScene();
     assert.ok(s.uiEvents instanceof EventEmitter);
   });
+  it('starts with smart auto-fire enabled for touch-first combat', () => {
+    const s = new exported.GameScene();
+    const chain = { setAlpha() { return this; }, clearTint() { return this; }, setVelocity() { return this; }, setAngle() { return this; }, enableBody() { return this; } };
+    s.tweens = { killAll() {}, resumeAll() {}, pauseAll() {} };
+    s.effects = { clear() {} };
+    s.clearGroups = () => {};
+    s.physics = { resume() {}, pause() {} };
+    s.player = chain;
+    s.rifle = { setVisible() {} };
+    s.muzzle = { setVisible() {} };
+    s.cameras = { main: { fadeIn() {} } };
+    s.healthBars = { clear() {} };
+    s.startRun('damage');
+    assert.equal(s.autoFire, true);
+  });
   it('pause freezes physics, tweens and simulation clock', () => {
     const s = scene();
     s.togglePause();

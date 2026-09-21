@@ -132,7 +132,10 @@ export class GameScene extends Phaser.Scene {
     this.invulnerable = 0;
     this.enemyId = 0;
     this.firing = false;
-    this.autoFire = false;
+    // Gun Hero-style runs should be immediately playable on touch devices:
+    // the rifle tracks targets from the first second, while the AUTO button
+    // still lets players opt out for manual aiming.
+    this.autoFire = true;
     this.moveInput.set(0, 0);
     this.upgradeLevels = { damage: 0, firerate: 0, magazine: 0, crit: 0, speed: 0, pierce: 0 };
     this.upgradeLevels[loadout] = 1;
