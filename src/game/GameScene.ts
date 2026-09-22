@@ -1,10 +1,9 @@
 import Phaser from "phaser";
-import { ENEMIES, RUN_LENGTH_SECONDS, UPGRADE_COPY } from "./config";
+import { CAMPAIGN_STAGES, ENEMIES, UPGRADE_COPY } from "./config";
 import { createGameTextures } from "./TextureFactory";
 import { Weapon } from "./Weapon";
-import { contractComplete } from "./math";
 import { drawWasteland } from "./World";
-import type { EnemyKind, HudState, ResultState, RunMode, UpgradeChoice, UpgradeId } from "./types";
+import type { EnemyKind, HudState, PerformanceRank, ResultState, RunMode, StageResult, UpgradeChoice, UpgradeId } from "./types";
 
 const WORLD_SIZE = 2600;
 
@@ -12,6 +11,7 @@ export class GameScene extends Phaser.Scene {
   readonly uiEvents = new Phaser.Events.EventEmitter();
   private mode: RunMode = "menu";
   private player!: Phaser.Physics.Arcade.Sprite;
+  private heroArt!: Phaser.GameObjects.Image;
   private rifle!: Phaser.GameObjects.Image;
   private enemies!: Phaser.Physics.Arcade.Group;
   private bullets!: Phaser.Physics.Arcade.Group;
@@ -26,7 +26,11 @@ export class GameScene extends Phaser.Scene {
   private weapon = new Weapon();
   private facing = 0;
   private elapsed = 0;
-  private remaining = RUN_LENGTH_SECONDS;
+  private remaining = CAMPAIGN_STAGES[0].duration;
+  private stageElapsed = 0;
+  private stageIndex = 0;
+  private stageKills = 0;
+  private pendingStageResult: StageResult | null = null;
   private spawnClock = 0;
   private eliteClock = 0;
   private bossSpawned = false;
@@ -60,6 +64,13 @@ export class GameScene extends Phaser.Scene {
     super("game");
   }
 
+  preload(): void {
+    this.load.image("hero-idle", "assets/hero-idle.png");
+    this.load.image("hero-fire", "assets/hero-fire.png");
+    this.load.image("hero-dash", "assets/hero-dash.png");
+    this.load.image("hero-run", "assets/hero-run.png");
+  }
+
   create(): void {
     createGameTextures(this);
     this.physics.world.setBounds(0, 0, WORLD_SIZE, WORLD_SIZE);
@@ -75,7 +86,8 @@ export class GameScene extends Phaser.Scene {
     this.healthBars = this.add.graphics().setDepth(12);
 
     this.player = this.physics.add.sprite(WORLD_SIZE / 2, WORLD_SIZE / 2, "wastelander");
-    this.player.setDepth(10).setCircle(17, 9, 12).setCollideWorldBounds(true);
+    this.player.setDepth(10).setCircle(17, 9, 12).setCollideWorldBounds(true).setVisible(false);
+    this.heroArt = this.add.image(this.player.x, this.player.y, "hero-idle").setScale(0.52).setDepth(10).setVisible(false);
     this.rifle = this.add.image(this.player.x + 28, this.player.y, "rifle").setOrigin(0.18, 0.5).setDepth(11);
     this.muzzle = this.add.image(0, 0, "muzzle").setOrigin(0, 0.5).setDepth(12).setVisible(false);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
@@ -108,7 +120,11 @@ export class GameScene extends Phaser.Scene {
     this.physics.resume();
     this.tweens.resumeAll();
     this.elapsed = 0;
-    this.remaining = RUN_LENGTH_SECONDS;
+    this.stageElapsed = 0;
+    this.stageIndex = 0;
+    this.stageKills = 0;
+    this.pendingStageResult = null;
+    this.remaining = this.stage.duration;
     this.spawnClock = 0.4;
     this.eliteClock = 16;
     this.bossSpawned = false;
@@ -141,9 +157,10 @@ export class GameScene extends Phaser.Scene {
     this.upgradeLevels[loadout] = 1;
     this.player.enableBody(true, WORLD_SIZE / 2, WORLD_SIZE / 2, true, true);
     this.player.setAlpha(1).clearTint().setVelocity(0, 0).setAngle(0);
-    this.rifle.setVisible(true);
+    this.heroArt.setPosition(this.player.x, this.player.y).setTexture("hero-idle").setVisible(true).setFlipX(false).setAngle(0);
+    this.rifle.setVisible(false);
     this.cameras.main.fadeIn(220, 20, 16, 16);
-    this.uiEvents.emit("toast", "CONTRACT LIVE // SURVIVE 90 SECONDS");
+    this.uiEvents.emit("toast", `SECTOR 01 // ${this.stage.name}`);
     this.emitHud();
   }
 
@@ -201,12 +218,16 @@ export class GameScene extends Phaser.Scene {
     this.upgradeLevels[id] += 1;
     this.weapon.upgrade(id);
     if (id === "speed") this.moveSpeed = Math.min(350, this.moveSpeed * 1.12);
-    this.hp = Math.min(this.maxHp, this.hp + 12);
+    const performance = this.pendingStageResult;
+    this.hp = Math.min(this.maxHp, this.hp + (performance?.recovery ?? 12));
+    if (performance) this.beginNextStage();
     this.mode = "playing";
     this.physics.resume();
     this.tweens.resumeAll();
     this.uiEvents.emit("upgrade-closed");
-    this.uiEvents.emit("toast", `${UPGRADE_COPY[id].title} // INSTALLED`);
+    this.uiEvents.emit("toast", performance
+      ? `SECTOR ${String(this.stageIndex + 1).padStart(2, "0")} // ${this.stage.name}`
+      : `${UPGRADE_COPY[id].title} // INSTALLED`);
     this.emitHud();
   }
 
@@ -217,7 +238,8 @@ export class GameScene extends Phaser.Scene {
 
     const dt = Math.min(deltaMs / 1000, 0.035);
     this.elapsed += dt;
-    this.remaining = Math.max(0, RUN_LENGTH_SECONDS - this.elapsed);
+    this.stageElapsed += dt;
+    this.remaining = Math.max(0, this.stage.duration - this.stageElapsed);
     this.invulnerable = Math.max(0, this.invulnerable - dt);
     this.hitFlash = Math.max(0, this.hitFlash - dt);
     this.player.setTint(this.hitFlash > 0 ? 0xff7744 : 0xffffff);
@@ -232,22 +254,30 @@ export class GameScene extends Phaser.Scene {
     this.updatePickups(dt);
 
     if (this.spawnClock <= 0 && this.remaining > 0) {
-      this.spawnClock = Math.max(0.38, 1.02 - this.elapsed * 0.006);
-      const kind: EnemyKind = this.elapsed > 12 && Math.random() < 0.34 ? "spitter" : "raider";
+      this.spawnClock = Math.max(0.31, 0.9 - this.stageIndex * 0.1 - this.stageElapsed * 0.008);
+      const kind: EnemyKind = this.stageElapsed > 9 && Math.random() < 0.28 + this.stageIndex * 0.08 ? "spitter" : "raider";
       this.spawnEnemy(kind);
     }
-    if (this.eliteClock <= 0 && this.elapsed < 58) {
-      this.eliteClock = 22;
+    if (this.eliteClock <= 0 && this.remaining > 8) {
+      this.eliteClock = Math.max(14, 20 - this.stageIndex * 2);
       this.spawnEnemy("brute");
       this.uiEvents.emit("toast", "BAD NEWS // BRUTE INBOUND");
     }
-    if (!this.bossSpawned && this.elapsed >= 60) {
+    if (!this.bossSpawned && this.stage.bossAt !== undefined && this.stageElapsed >= this.stage.bossAt) {
       this.bossSpawned = true;
       this.spawnEnemy("boss");
       this.uiEvents.emit("toast", "BOUNTY TARGET // THE FOREMAN");
       this.cameras.main.shake(420, 0.012);
     }
-    if (contractComplete(this.elapsed, RUN_LENGTH_SECONDS, this.bossDefeated)) this.finish(true);
+    if (this.remaining <= 0) {
+      if (this.stage.bossAt !== undefined && !this.bossDefeated) {
+        // The final timer cannot end a run before the boss does.
+      } else if (this.stageIndex === CAMPAIGN_STAGES.length - 1) {
+        this.finish(true);
+      } else {
+        this.completeStage();
+      }
+    }
 
     this.hudClock -= dt;
     if (this.hudClock <= 0) {
@@ -269,7 +299,10 @@ export class GameScene extends Phaser.Scene {
     if (Math.abs(movement.x) > 0.05) this.player.setFlipX(movement.x < 0);
     this.player.setAngle(Math.sin(this.elapsed * 11) * Math.min(2.5, movement.length() * 2.5));
     const frame = movement.lengthSq() > 0.01 ? Math.floor(this.elapsed * 10) % 4 : 0;
-    this.player.setTexture(`wastelander-${frame}`);
+    this.heroArt.setPosition(this.player.x, this.player.y);
+    this.heroArt.setFlipX(movement.x < -0.05);
+    this.heroArt.setAngle(Math.sin(this.elapsed * 8) * Math.min(2.2, movement.length() * 2));
+    this.heroArt.setTexture(frame > 0 ? "hero-run" : "hero-idle");
   }
 
   private updateWeapon(dt: number): void {
@@ -282,8 +315,7 @@ export class GameScene extends Phaser.Scene {
       this.player.x + Math.cos(this.facing) * (12 - this.recoil),
       this.player.y + Math.sin(this.facing) * (12 - this.recoil),
     );
-    this.rifle.setAngle(targetAngle);
-    this.rifle.setFlipY(Math.cos(this.facing) < 0);
+    this.rifle.setAngle(targetAngle).setVisible(false);
     this.muzzle.setVisible(this.recoil > 3).setRotation(this.facing).setPosition(
       this.player.x + Math.cos(this.facing) * 59,
       this.player.y + Math.sin(this.facing) * 59,
@@ -295,6 +327,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if ((this.firing || (this.autoFire && target !== null)) && this.weapon.cooldown <= 0) this.shoot();
+    if (this.recoil > 2.5) this.heroArt.setTexture("hero-fire");
   }
 
   private shoot(): void {
@@ -338,7 +371,7 @@ export class GameScene extends Phaser.Scene {
     const y = Phaser.Math.Clamp(this.player.y + Math.sin(angle) * distance, 50, WORLD_SIZE - 50);
     const enemy = this.enemies.get(x, y, config.texture) as Phaser.Physics.Arcade.Sprite | null;
     if (!enemy) return;
-    const scale = 1 + this.elapsed * 0.004;
+    const scale = 1 + this.stageIndex * 0.18 + this.stageElapsed * 0.005;
     // Group.get reuses inactive objects without applying the new texture or scale.
     enemy.setTexture(config.texture).setScale(1).setAlpha(1).clearTint().setAngle(0);
     enemy.enableBody(true, x, y, true, true);
@@ -348,7 +381,7 @@ export class GameScene extends Phaser.Scene {
       kind,
       hp: config.hp * scale,
       maxHp: config.hp * scale,
-      speed: config.speed * (1 + this.elapsed * 0.0015),
+      speed: config.speed * (1 + this.stageIndex * 0.06 + this.stageElapsed * 0.001),
       damage: config.damage,
       xp: config.xp,
       cooldown: Phaser.Math.FloatBetween(0.4, 1.5),
@@ -515,6 +548,7 @@ export class GameScene extends Phaser.Scene {
     this.impact(enemy.x, enemy.y, kind === "boss" ? 0xb8d84a : 0xe8602f, kind === "boss" ? 22 : 8);
     enemy.disableBody(true, true);
     this.kills += 1;
+    this.stageKills += 1;
     if (kind === "boss") {
       this.bossDefeated = true;
       this.uiEvents.emit("toast", "THE FOREMAN IS DOWN // HOLD THE LINE");
@@ -535,23 +569,67 @@ export class GameScene extends Phaser.Scene {
       this.xp -= this.xpToNext;
       this.level += 1;
       this.xpToNext = Math.floor(this.xpToNext * 1.28 + 4);
-      this.presentUpgrade();
     }
   }
 
-  private presentUpgrade(): void {
+  private presentUpgrade(result?: StageResult): void {
     this.mode = "upgrading";
     this.physics.pause();
     this.tweens.pauseAll();
     this.player.setVelocity(0, 0);
     this.firing = false;
-    const ids = Phaser.Utils.Array.Shuffle(Object.keys(UPGRADE_COPY) as UpgradeId[]).slice(0, 3);
+    const choiceCount = result?.choices ?? 3;
+    const ids = Phaser.Utils.Array.Shuffle(Object.keys(UPGRADE_COPY) as UpgradeId[]).slice(0, choiceCount);
     const choices: UpgradeChoice[] = ids.map((id) => ({
       id,
       ...UPGRADE_COPY[id],
       level: this.upgradeLevels[id] + 1,
     }));
-    this.uiEvents.emit("upgrade", choices);
+    this.uiEvents.emit("upgrade", choices, result);
+  }
+
+  private completeStage(): void {
+    const result = this.evaluateStage();
+    this.pendingStageResult = result;
+    this.clearGroups();
+    this.uiEvents.emit("toast", `SECTOR CLEAR // RANK ${result.rank}`);
+    this.presentUpgrade(result);
+  }
+
+  private evaluateStage(): StageResult {
+    const killRatio = Math.min(1, this.stageKills / this.stage.targetKills);
+    const hpRatio = this.hp / this.maxHp;
+    const score = killRatio * 0.62 + hpRatio * 0.38;
+    const rank: PerformanceRank = score >= 0.9 ? "S" : score >= 0.74 ? "A" : score >= 0.56 ? "B" : "C";
+    const recovery = rank === "S" ? 24 : rank === "A" ? 17 : rank === "B" ? 11 : 6;
+    return {
+      stage: this.stageIndex + 1,
+      name: this.stage.name,
+      kills: this.stageKills,
+      targetKills: this.stage.targetKills,
+      hpPercent: Math.round(hpRatio * 100),
+      rank,
+      recovery,
+      choices: rank === "S" || rank === "A" ? 3 : 2,
+    };
+  }
+
+  private beginNextStage(): void {
+    this.stageIndex += 1;
+    this.stageElapsed = 0;
+    this.remaining = this.stage.duration;
+    this.stageKills = 0;
+    this.spawnClock = 0.65;
+    this.eliteClock = 13;
+    this.bossSpawned = false;
+    this.bossDefeated = false;
+    this.boss = null;
+    this.pendingStageResult = null;
+    this.clearGroups();
+  }
+
+  private get stage() {
+    return CAMPAIGN_STAGES[this.stageIndex];
   }
 
   private damageNumber(x: number, y: number, value: number, critical: boolean): void {
@@ -619,12 +697,14 @@ export class GameScene extends Phaser.Scene {
     this.firing = false;
     this.player.setVelocity(0, 0);
     this.rifle.setVisible(false);
+    this.heroArt.setVisible(false);
     this.muzzle.setVisible(false);
     const result: ResultState = {
       won,
       elapsed: this.elapsed,
       kills: this.kills,
       level: this.level,
+      stagesCleared: won ? CAMPAIGN_STAGES.length : this.stageIndex,
     };
     this.uiEvents.emit("result", result);
   }
@@ -644,6 +724,9 @@ export class GameScene extends Phaser.Scene {
       xpToNext: this.xpToNext,
       bossRatio: this.boss?.active ? Math.max(0, this.boss.getData("hp") / this.boss.getData("maxHp")) : null,
       bossDefeated: this.bossDefeated,
+      stage: this.stageIndex + 1,
+      stageName: this.stage.name,
+      stageTargetKills: this.stage.targetKills,
     };
     this.uiEvents.emit("hud", state);
   }
