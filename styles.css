@@ -207,6 +207,21 @@ button {
   background: repeating-linear-gradient(-12deg, transparent 0 16px, var(--paper) 17px 18px);
 }
 
+.hero-splash {
+  position: absolute;
+  z-index: 0;
+  right: -58px;
+  bottom: -25px;
+  width: min(94vw, 430px);
+  max-height: 61vh;
+  object-fit: contain;
+  opacity: 0.26;
+  pointer-events: none;
+  filter: drop-shadow(8px 10px 0 rgba(0, 0, 0, .38));
+}
+
+.screen > :not(.hero-splash) { z-index: 1; }
+
 .screen.active {
   display: flex;
   animation: slam-in 260ms cubic-bezier(0.2, 0.85, 0.3, 1.15);
@@ -394,6 +409,15 @@ button:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
   margin-top: 30px;
 }
 
+.upgrade-score {
+  position: relative;
+  width: min(100%, 500px);
+  margin: 15px 0 -13px;
+  color: #c9bdab;
+  font: 700 11px "Barlow Condensed", sans-serif;
+  letter-spacing: .09em;
+}
+
 .upgrade-card {
   display: grid;
   grid-template-columns: 52px 1fr auto;
@@ -419,11 +443,14 @@ button:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
   height: 52px;
   place-items: center;
   border: 3px solid var(--ink);
-  background: var(--yellow);
+  overflow: hidden;
+  background: #171318;
   font-family: "Barlow Condensed", sans-serif;
   font-size: 22px;
   font-weight: 900;
 }
+
+.upgrade-icon img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 .upgrade-copy strong,
 .upgrade-copy span {
