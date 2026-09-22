@@ -67,5 +67,7 @@ export interface EnemyConfig {
   xp: number;
   radius: number;
   texture: string;
+  /** Render scale keeps high-detail source art inexpensive in the world. */
+  visualScale?: number;
   ranged?: boolean;
 }
