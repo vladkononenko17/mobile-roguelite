@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import "../styles.css";
 import { GAME_HEIGHT, GAME_WIDTH } from "./game/config";
 import { GameScene } from "./game/GameScene";
-import type { HudState, ResultState, UpgradeChoice, UpgradeId } from "./game/types";
+import type { HudState, ResultState, StageResult, UpgradeChoice, UpgradeId } from "./game/types";
 import { joystickVector, timeLabel } from "./game/math";
 
 function element<T extends HTMLElement>(selector: string): T {
@@ -53,6 +53,9 @@ const ui = {
   startScreen: element<HTMLElement>("#start-screen"),
   upgradeScreen: element<HTMLElement>("#upgrade-screen"),
   upgradeList: element<HTMLElement>("#upgrade-list"),
+  upgradeEyebrow: element<HTMLElement>("#upgrade-eyebrow"),
+  upgradeTitle: element<HTMLElement>("#upgrade-title"),
+  upgradeScore: element<HTMLElement>("#upgrade-score"),
   pauseScreen: element<HTMLElement>("#pause-screen"),
   resultScreen: element<HTMLElement>("#result-screen"),
   resultEyebrow: element<HTMLElement>("#result-eyebrow"),
@@ -127,17 +130,24 @@ function updateHud(state: HudState): void {
   ui.reloadButton.disabled = state.reloading;
   ui.boss.classList.toggle("hidden", state.bossRatio === null);
   ui.bossFill.style.transform = `scaleX(${state.bossRatio ?? 0})`;
-  setHudText(ui.stage, state.remaining === 0 && !state.bossDefeated ? "FINISH THE FOREMAN" : `DUSTLINE // RANK ${state.level}`);
+  setHudText(ui.stage, state.remaining === 0 && !state.bossDefeated
+    ? "FINISH THE FOREMAN"
+    : `SECTOR ${String(state.stage).padStart(2, "0")} // ${state.stageName} // ${state.kills}/${state.stageTargetKills}`);
 }
 
-function presentUpgrade(choices: UpgradeChoice[]): void {
+function presentUpgrade(choices: UpgradeChoice[], result?: StageResult): void {
   resetControls();
   ui.upgradeList.replaceChildren();
+  ui.upgradeEyebrow.textContent = result ? `SECTOR ${String(result.stage).padStart(2, "0")} CLEAR // RANK ${result.rank}` : "FIELD MOD FOUND";
+  ui.upgradeTitle.innerHTML = result ? "TAKE YOUR<br />PAYDAY" : "CHOOSE YOUR POISON";
+  ui.upgradeScore.textContent = result
+    ? `${result.kills}/${result.targetKills} SCRAPPED · ${result.hpPercent}% VITALS · +${result.recovery} HP NEXT SECTOR`
+    : "";
   choices.forEach((choice) => {
     const button = document.createElement("button");
     button.className = "upgrade-card";
     button.innerHTML = `
-      <span class="upgrade-icon">${choice.icon}</span>
+      <span class="upgrade-icon"><img src="${choice.art}" alt="" /></span>
       <span class="upgrade-copy"><strong>${choice.title}</strong><span>${choice.description}</span></span>
       <span class="upgrade-level">MK ${choice.level}</span>
     `;
@@ -158,7 +168,7 @@ function showResult(result: ResultState): void {
   ui.resultTitle.innerHTML = result.won ? "YOU MADE<br />A MESS" : "THE WASTE<br />BIT BACK";
   ui.resultTime.textContent = timeLabel(result.elapsed);
   ui.resultKills.textContent = String(result.kills);
-  ui.resultLevel.textContent = String(result.level);
+  ui.resultLevel.textContent = String(result.stagesCleared);
   ui.resultScreen.classList.add("active");
 }
 
