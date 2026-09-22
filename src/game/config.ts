@@ -24,7 +24,8 @@ export const ENEMIES: Record<EnemyKind, EnemyConfig> = {
     damage: 13,
     xp: 3,
     radius: 17,
-    texture: "raider",
+    texture: "enemy-raider-v2",
+    visualScale: 0.48,
   },
   spitter: {
     hp: 30,
@@ -32,7 +33,8 @@ export const ENEMIES: Record<EnemyKind, EnemyConfig> = {
     damage: 10,
     xp: 4,
     radius: 16,
-    texture: "spitter",
+    texture: "enemy-spitter-v2",
+    visualScale: 0.48,
     ranged: true,
   },
   brute: {
@@ -41,7 +43,8 @@ export const ENEMIES: Record<EnemyKind, EnemyConfig> = {
     damage: 24,
     xp: 12,
     radius: 27,
-    texture: "brute",
+    texture: "enemy-brute-v2",
+    visualScale: 0.52,
   },
   boss: {
     hp: 820,
@@ -49,7 +52,8 @@ export const ENEMIES: Record<EnemyKind, EnemyConfig> = {
     damage: 31,
     xp: 45,
     radius: 43,
-    texture: "boss",
+    texture: "enemy-boss-v2",
+    visualScale: 0.52,
     ranged: true,
   },
 };
