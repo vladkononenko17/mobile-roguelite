@@ -24,7 +24,14 @@ vm.runInNewContext(compiled, {
     if (name === 'phaser') return fakePhaser;
     if (name === './Weapon') return { Weapon };
     if (name === './math') return math;
-    if (name === './config') return { RUN_LENGTH_SECONDS: 90, UPGRADE_COPY: { damage: { title: 'Damage' }, crit: { title: 'Crit' }, magazine: { title: 'Magazine' } } };
+    if (name === './config') return {
+      CAMPAIGN_STAGES: [
+        { name: 'Rust Gate', duration: 34, targetKills: 17 },
+        { name: 'Tanker Yard', duration: 42, targetKills: 27 },
+        { name: 'Foreman Pit', duration: 54, targetKills: 38, bossAt: 28 },
+      ],
+      UPGRADE_COPY: { damage: { title: 'Damage' }, crit: { title: 'Crit' }, magazine: { title: 'Magazine' } },
+    };
     return {};
   },
 });
@@ -35,6 +42,7 @@ function scene() {
   s.tweens = { paused: false, pauseAll() { this.paused = true; }, resumeAll() { this.paused = false; } };
   s.player = { setVelocity() {} };
   s.rifle = { setVisible() {} };
+  s.heroArt = { setVisible() {} };
   s.muzzle = { setVisible() {} };
   s.mode = 'playing';
   return s;
@@ -54,6 +62,7 @@ describe('Scene lifecycle regressions', () => {
     s.physics = { resume() {}, pause() {} };
     s.player = chain;
     s.rifle = { setVisible() {} };
+    s.heroArt = { setPosition() { return this; }, setTexture() { return this; }, setVisible() { return this; }, setFlipX() { return this; }, setAngle() { return this; } };
     s.muzzle = { setVisible() {} };
     s.cameras = { main: { fadeIn() {} } };
     s.healthBars = { clear() {} };
@@ -89,6 +98,24 @@ describe('Scene lifecycle regressions', () => {
     assert.equal(s.physics.paused, false);
     s.applyUpgrade('damage');
     assert.equal(s.weapon.damage, 35);
+  });
+  it('grades cleared sectors and turns performance into a fair upgrade reward', () => {
+    const s = new exported.GameScene();
+    s.stageIndex = 0;
+    s.stageKills = 20;
+    s.hp = 95;
+    s.maxHp = 100;
+    const elite = s.evaluateStage();
+    assert.equal(elite.rank, 'S');
+    assert.equal(elite.choices, 3);
+    assert.equal(elite.recovery, 24);
+
+    s.stageKills = 2;
+    s.hp = 18;
+    const rough = s.evaluateStage();
+    assert.equal(rough.rank, 'C');
+    assert.equal(rough.choices, 2);
+    assert.ok(rough.recovery < elite.recovery);
   });
   it('result is terminal and freezes the world without duplicate results', () => {
     const s = scene();
