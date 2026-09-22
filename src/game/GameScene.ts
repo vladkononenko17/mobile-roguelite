@@ -65,10 +65,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.image("hero-idle", "assets/hero-idle.png");
-    this.load.image("hero-fire", "assets/hero-fire.png");
-    this.load.image("hero-dash", "assets/hero-dash.png");
-    this.load.image("hero-run", "assets/hero-run.png");
+    this.load.image("hero-detail-v2", "assets/hero-detail-v2.png");
+    this.load.image("enemy-raider-v2", "assets/enemy-raider-v2.png");
+    this.load.image("enemy-spitter-v2", "assets/enemy-spitter-v2.png");
+    this.load.image("enemy-brute-v2", "assets/enemy-brute-v2.png");
+    this.load.image("enemy-boss-v2", "assets/enemy-boss-v2.png");
   }
 
   create(): void {
@@ -87,7 +88,7 @@ export class GameScene extends Phaser.Scene {
 
     this.player = this.physics.add.sprite(WORLD_SIZE / 2, WORLD_SIZE / 2, "wastelander");
     this.player.setDepth(10).setCircle(17, 9, 12).setCollideWorldBounds(true).setVisible(false);
-    this.heroArt = this.add.image(this.player.x, this.player.y, "hero-idle").setScale(0.52).setDepth(10).setVisible(false);
+    this.heroArt = this.add.image(this.player.x, this.player.y, "hero-detail-v2").setScale(0.48).setDepth(10).setVisible(false);
     this.rifle = this.add.image(this.player.x + 28, this.player.y, "rifle").setOrigin(0.18, 0.5).setDepth(11);
     this.muzzle = this.add.image(0, 0, "muzzle").setOrigin(0, 0.5).setDepth(12).setVisible(false);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
@@ -157,7 +158,7 @@ export class GameScene extends Phaser.Scene {
     this.upgradeLevels[loadout] = 1;
     this.player.enableBody(true, WORLD_SIZE / 2, WORLD_SIZE / 2, true, true);
     this.player.setAlpha(1).clearTint().setVelocity(0, 0).setAngle(0);
-    this.heroArt.setPosition(this.player.x, this.player.y).setTexture("hero-idle").setVisible(true).setFlipX(false).setAngle(0);
+    this.heroArt.setPosition(this.player.x, this.player.y).setTexture("hero-detail-v2").setVisible(true).setFlipX(false).setAngle(0);
     this.rifle.setVisible(false);
     this.cameras.main.fadeIn(220, 20, 16, 16);
     this.uiEvents.emit("toast", `SECTOR 01 // ${this.stage.name}`);
@@ -298,11 +299,10 @@ export class GameScene extends Phaser.Scene {
     this.player.setVelocity(movement.x * this.moveSpeed, movement.y * this.moveSpeed);
     if (Math.abs(movement.x) > 0.05) this.player.setFlipX(movement.x < 0);
     this.player.setAngle(Math.sin(this.elapsed * 11) * Math.min(2.5, movement.length() * 2.5));
-    const frame = movement.lengthSq() > 0.01 ? Math.floor(this.elapsed * 10) % 4 : 0;
     this.heroArt.setPosition(this.player.x, this.player.y);
     this.heroArt.setFlipX(movement.x < -0.05);
     this.heroArt.setAngle(Math.sin(this.elapsed * 8) * Math.min(2.2, movement.length() * 2));
-    this.heroArt.setTexture(frame > 0 ? "hero-run" : "hero-idle");
+    this.heroArt.setScale(0.48 + Math.min(0.015, movement.length() * 0.015));
   }
 
   private updateWeapon(dt: number): void {
@@ -327,7 +327,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if ((this.firing || (this.autoFire && target !== null)) && this.weapon.cooldown <= 0) this.shoot();
-    if (this.recoil > 2.5) this.heroArt.setTexture("hero-fire");
+    if (this.recoil > 2.5) this.heroArt.setScale(0.5);
   }
 
   private shoot(): void {
@@ -373,9 +373,15 @@ export class GameScene extends Phaser.Scene {
     if (!enemy) return;
     const scale = 1 + this.stageIndex * 0.18 + this.stageElapsed * 0.005;
     // Group.get reuses inactive objects without applying the new texture or scale.
-    enemy.setTexture(config.texture).setScale(1).setAlpha(1).clearTint().setAngle(0);
+    const visualScale = config.visualScale ?? 1;
+    enemy.setTexture(config.texture).setScale(visualScale).setAlpha(1).clearTint().setAngle(0);
     enemy.enableBody(true, x, y, true, true);
-    enemy.setDepth(8).setCircle(config.radius, enemy.width / 2 - config.radius, enemy.height / 2 - config.radius).setDataEnabled();
+    const physicsRadius = config.radius / visualScale;
+    enemy.setDepth(8).setCircle(
+      physicsRadius,
+      enemy.frame.width / 2 - physicsRadius,
+      enemy.frame.height / 2 - physicsRadius,
+    ).setDataEnabled();
     enemy.setData({
       id: ++this.enemyId,
       kind,
