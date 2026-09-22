@@ -65,7 +65,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.image("hero-topdown-v3", "hero-topdown-v3.png");
+    this.load.image("hero-combat-v4", "hero-combat-v4.png");
     this.load.image("enemy-raider-v2", "assets/enemy-raider-v2.png");
     this.load.image("enemy-spitter-v2", "assets/enemy-spitter-v2.png");
     this.load.image("enemy-brute-v2", "assets/enemy-brute-v2.png");
@@ -88,7 +88,7 @@ export class GameScene extends Phaser.Scene {
 
     this.player = this.physics.add.sprite(WORLD_SIZE / 2, WORLD_SIZE / 2, "wastelander");
     this.player.setDepth(10).setCircle(17, 9, 12).setCollideWorldBounds(true).setVisible(false);
-    this.heroArt = this.add.image(this.player.x, this.player.y, "hero-topdown-v3").setScale(0.32).setDepth(10).setVisible(false);
+    this.heroArt = this.add.image(this.player.x, this.player.y, "hero-combat-v4").setScale(0.38).setDepth(10).setVisible(false);
     this.rifle = this.add.image(this.player.x + 12, this.player.y, "rifle").setOrigin(0.18, 0.5).setScale(0.7).setDepth(11);
     this.muzzle = this.add.image(0, 0, "muzzle").setOrigin(0, 0.5).setDepth(12).setVisible(false);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
@@ -158,8 +158,8 @@ export class GameScene extends Phaser.Scene {
     this.upgradeLevels[loadout] = 1;
     this.player.enableBody(true, WORLD_SIZE / 2, WORLD_SIZE / 2, true, true);
     this.player.setAlpha(1).clearTint().setVelocity(0, 0).setAngle(0);
-    this.heroArt.setPosition(this.player.x, this.player.y).setTexture("hero-topdown-v3").setVisible(true).setAngle(90);
-    this.rifle.setVisible(true);
+    this.heroArt.setPosition(this.player.x, this.player.y).setTexture("hero-combat-v4").setVisible(true).setAngle(90);
+    this.rifle.setVisible(false);
     this.cameras.main.fadeIn(220, 20, 16, 16);
     this.uiEvents.emit("toast", `SECTOR 01 // ${this.stage.name}`);
     this.emitHud();
@@ -299,7 +299,7 @@ export class GameScene extends Phaser.Scene {
     this.player.setVelocity(movement.x * this.moveSpeed, movement.y * this.moveSpeed);
     this.player.setAngle(Math.sin(this.elapsed * 11) * Math.min(2.5, movement.length() * 2.5));
     this.heroArt.setPosition(this.player.x, this.player.y);
-    this.heroArt.setScale(0.32 + Math.min(0.012, movement.length() * 0.012));
+    this.heroArt.setScale(0.38 + Math.min(0.012, movement.length() * 0.012));
   }
 
   private updateWeapon(dt: number): void {
@@ -307,7 +307,6 @@ export class GameScene extends Phaser.Scene {
     if (this.manualAim !== null) this.facing = this.manualAim;
     else if (target) this.facing = Phaser.Math.Angle.Between(this.player.x, this.player.y, target.x, target.y);
     this.recoil = Math.max(0, this.recoil - dt * 45);
-    const targetAngle = Phaser.Math.RadToDeg(this.facing);
     // The art faces "up" in its source image; rotate its whole top-down body
     // toward the aim vector. This keeps movement independent from aiming and
     // lets the player read as a 360° character instead of a left/right sprite.
@@ -316,23 +315,16 @@ export class GameScene extends Phaser.Scene {
       this.facing + Math.PI / 2,
       dt * 11,
     );
-    this.rifle.setPosition(
-      this.player.x + Math.cos(this.facing) * (11 - this.recoil),
-      this.player.y + Math.sin(this.facing) * (11 - this.recoil),
-    );
-    this.rifle.setAngle(targetAngle).setVisible(true);
+    this.rifle.setVisible(false);
     this.muzzle.setVisible(this.recoil > 3).setRotation(this.facing).setPosition(
       this.player.x + Math.cos(this.facing) * 59,
       this.player.y + Math.sin(this.facing) * 59,
     );
 
-    if (this.weapon.reloadLeft > 0) {
-      this.rifle.setAngle(targetAngle + Math.sin(this.elapsed * 35) * 7);
-      return;
-    }
+    if (this.weapon.reloadLeft > 0) return;
 
     if ((this.firing || (this.autoFire && target !== null)) && this.weapon.cooldown <= 0) this.shoot();
-    if (this.recoil > 2.5) this.heroArt.setScale(0.34);
+    if (this.recoil > 2.5) this.heroArt.setScale(0.4);
   }
 
   private shoot(): void {
