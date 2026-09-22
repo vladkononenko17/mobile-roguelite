@@ -4,6 +4,8 @@ export type EnemyKind = "raider" | "spitter" | "brute" | "boss";
 
 export type UpgradeId = "damage" | "firerate" | "magazine" | "crit" | "speed" | "pierce";
 
+export type PerformanceRank = "S" | "A" | "B" | "C";
+
 export interface HudState {
   hp: number;
   maxHp: number;
@@ -18,6 +20,9 @@ export interface HudState {
   xpToNext: number;
   bossRatio: number | null;
   bossDefeated: boolean;
+  stage: number;
+  stageName: string;
+  stageTargetKills: number;
 }
 
 export interface ResultState {
@@ -25,6 +30,7 @@ export interface ResultState {
   elapsed: number;
   kills: number;
   level: number;
+  stagesCleared: number;
 }
 
 export interface UpgradeChoice {
@@ -33,6 +39,25 @@ export interface UpgradeChoice {
   title: string;
   description: string;
   level: number;
+  art: string;
+}
+
+export interface StageResult {
+  stage: number;
+  name: string;
+  kills: number;
+  targetKills: number;
+  hpPercent: number;
+  rank: PerformanceRank;
+  recovery: number;
+  choices: number;
+}
+
+export interface CampaignStage {
+  name: string;
+  duration: number;
+  targetKills: number;
+  bossAt?: number;
 }
 
 export interface EnemyConfig {
