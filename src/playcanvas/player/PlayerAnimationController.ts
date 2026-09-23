@@ -26,6 +26,8 @@ export class PlayerAnimationController {
   readonly clipNames: Record<LocomotionState, string>;
   /** Character scale; a bigger body covers more ground per stride, so clips play slower. */
   strideScale = 1;
+  private actionTime = 0;
+  private actionDuration = 0;
 
   constructor(
     private readonly model: Entity,
@@ -80,6 +82,12 @@ export class PlayerAnimationController {
           states: [{ name: "START" }, { name: "Pose", speed: 1, loop: true }],
           transitions: [{ from: "START", to: "Pose", time: 0 }],
         },
+        {
+          // One-shot full-body actions (weapon attacks) over everything else; weight 0 when idle.
+          name: "Action",
+          states: [{ name: "START" }, { name: "Action", speed: 1, loop: false }],
+          transitions: [{ from: "START", to: "Action", time: 0 }],
+        },
       ],
       parameters: { speed: { name: "speed", type: ANIM_PARAMETER_FLOAT, value: 0 } },
     });
@@ -90,6 +98,9 @@ export class PlayerAnimationController {
     const upper = anim.findAnimationLayer("UpperBody")!;
     anim.assignAnimation("Pose", resolved.Idle, "UpperBody");
     upper.weight = 0;
+    anim.assignAnimation("Action", resolved.Idle, "Action");
+    anim.findAnimationLayer("Action")!.weight = 0;
+
     const spine = model.findByName(ANIMATION.upperBodyRootBone);
     if (spine) {
       // Mask paths match the animation curve paths: entity names from the model root (included)
@@ -116,13 +127,42 @@ export class PlayerAnimationController {
     upper.weight = track ? 1 : 0;
   }
 
+  /** Plays `clipName` once on the whole body (e.g. a weapon attack). Returns false if missing. */
+  playAction(clipName: string): boolean {
+    const anim = this.model.anim;
+    const layer = anim?.findAnimationLayer("Action");
+    const track = findTrack(this.tracks, clipName);
+    if (!anim || !layer || !track) {
+      console.warn(`[PlayerAnimation] Action clip ${clipName} not found.`);
+      return false;
+    }
+    anim.assignAnimation("Action", track, "Action");
+    layer.play("Action");
+    this.actionTime = 0;
+    this.actionDuration = track.duration;
+    return true;
+  }
+
+  /** True while a one-shot action is playing. */
+  get acting(): boolean {
+    return this.actionTime < this.actionDuration;
+  }
+
   get state(): LocomotionState {
     return (this.model.anim?.baseLayer?.activeState ?? "Idle") as LocomotionState;
   }
 
-  update(groundSpeed: number): void {
+  update(groundSpeed: number, dt = 0): void {
     const anim = this.model.anim;
     if (!anim) return;
+    // Fade the action layer in over the first moments of the clip and out over its last ones.
+    const action = anim.findAnimationLayer("Action");
+    if (action) {
+      if (this.actionTime < this.actionDuration) this.actionTime += dt * anim.speed;
+      const fade = ANIMATION.blendTime;
+      const t = this.actionTime, d = this.actionDuration;
+      action.weight = t >= d ? 0 : math.clamp(Math.min(t / fade, (d - t) / fade), 0, 1);
+    }
     anim.setFloat("speed", groundSpeed);
     // Match cadence to ground speed so feet stay planted when walking/running at other speeds.
     let rate = 1;

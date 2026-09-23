@@ -59,23 +59,38 @@ export type CharacterId = keyof typeof CHARACTERS;
  * along the hand with the weapon's top facing the back of the hand. `rollDeg` then turns the weapon
  * about the hand's finger axis; -43° keeps a rifle upright (not canted) in the Vanguard's aiming
  * pose (Run_and_Shoot). `position` is in hand-bone space (metres, before the character scale).
- * `pose` is the clip played on the arms and torso while the weapon is held (null = normal arms).
+ * `pose` is the clip played on the arms and torso while the weapon is held (null = normal arms);
+ * `attack` is the full-body clip played once by the attack action (Space / on-screen button).
  */
 export const WEAPONS = {
   url: "models/weapons/weapons.glb",
   handBone: "mixamorig:RightHand",
   list: {
-    rifle: { label: "Assault rifle", node: "assault_rifle_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot" },
-    shotgun: { label: "Shotgun", node: "shotgun_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot" },
-    sniper: { label: "Sniper rifle", node: "sniper_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot" },
-    pistol: { label: "Pistol", node: "pistol_1", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot" },
-    knife: { label: "Knife", node: "tactical_knife", position: [0, 0.08, 0.01], rotation: [90, 0, 0], rollDeg: 0, pose: null },
-    grenade: { label: "Grenade", node: "frag_grenade", position: [0, 0.09, -0.01], rotation: [90, 0, 0], rollDeg: 0, pose: null },
+    // "assetpack-free" (textured)
+    rifle: { label: "Assault rifle", node: "assault_rifle_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
+    shotgun: { label: "Shotgun", node: "shotgun_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
+    sniper: { label: "Sniper rifle", node: "sniper_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
+    pistol: { label: "Pistol", node: "pistol_1", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
+    knife: { label: "Knife", node: "tactical_knife", position: [0, 0.08, 0.01], rotation: [90, 0, 0], rollDeg: 0, pose: null, attack: "Attack" },
+    grenade: { label: "Grenade", node: "frag_grenade", position: [0, 0.09, -0.01], rotation: [90, 0, 0], rollDeg: 0, pose: null, attack: null },
+    // "Flat Guns East" (flat colours)
+    eastRifle: { label: "Rifle (East)", node: "Rifle_Assault_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
+    eastBattleRifle: { label: "Battle rifle (East)", node: "Rifle_Battle_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
+    eastSmg: { label: "SMG (East)", node: "SMG_Full_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
+    eastSmgCompact: { label: "Compact SMG (East)", node: "SMG_Compact_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
+    eastShotgun: { label: "Auto shotgun (East)", node: "Shotgun_Auto_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
+    eastPumpShotgun: { label: "Pump shotgun (East)", node: "Shotgun_Pump_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
+    eastSniper: { label: "Sniper (East)", node: "Sniper_Rifle_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
+    eastMarksman: { label: "Marksman rifle (East)", node: "Sniper_Material_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
+    eastPistol: { label: "Pistol (East)", node: "Pistol_Full_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
+    eastPistolCompact: { label: "Compact pistol (East)", node: "Pistol_Compact_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
+    // Low poly axe: head up past the thumb, gripped ~0.6 m down the handle.
+    axe: { label: "Axe", node: "low_poly_axe", position: [0, 0.08, 0.62], rotation: [90, 0, 0], rollDeg: 0, pose: null, attack: "Axe_Spin_Attack" },
   },
 } satisfies {
   url: string;
   handBone: string;
-  list: Record<string, { label: string; node: string; position: [number, number, number]; rotation: [number, number, number]; rollDeg: number; pose: string | null }>;
+  list: Record<string, { label: string; node: string; position: [number, number, number]; rotation: [number, number, number]; rollDeg: number; pose: string | null; attack: string | null }>;
 };
 
 export type WeaponId = keyof typeof WEAPONS.list;

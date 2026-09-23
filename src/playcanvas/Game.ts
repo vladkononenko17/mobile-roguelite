@@ -153,6 +153,19 @@ export class Game {
     this.setCharacterScale(this.characterScale);
     await Promise.all([groundLoaded, kitLoaded, propsLoaded, weaponsLoaded]);
     this.weapons.onPoseChange = (clip) => this.animation.setUpperBodyPose(clip);
+    // Attack: Space, or the on-screen button (shown only when the weapon has an attack clip).
+    const attackButton = document.querySelector<HTMLElement>("[data-attack]");
+    this.weapons.onChange = () => attackButton?.classList.toggle("hidden", !this.weapons.attackClip);
+    const attack = () => {
+      const clip = this.weapons.attackClip;
+      if (clip && !this.animation.acting) this.animation.playAction(clip);
+    };
+    attackButton?.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+      event.preventDefault();
+      attack();
+    });
+    window.addEventListener("keydown", (event) => { if (event.code === "Space") attack(); });
     this.weapons.attachTo(character.model);
     this.setupWeaponSelect();
 
@@ -176,7 +189,7 @@ export class Game {
     const dt = Math.min(rawDt, MAX_DT);
     this.resolution.update(rawDt);
     this.player.update(dt);
-    this.animation.update(this.player.speed);
+    this.animation.update(this.player.speed, dt);
     const device = this.app.graphicsDevice;
     this.camera.update(dt, device.width / Math.max(1, device.height));
 

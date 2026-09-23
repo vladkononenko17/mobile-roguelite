@@ -38,12 +38,15 @@
       #app-canvas { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
       .joystick { position: fixed; left: -64px; top: -64px; width: 128px; height: 128px; border-radius: 50%; border: 2px solid rgba(243, 231, 211, 0.5); background: rgba(20, 15, 12, 0.25); pointer-events: none; opacity: 0; transition: opacity 0.15s; }
       .joystick.active { opacity: 1; }
+      #attack { position: fixed; right: max(24px, env(safe-area-inset-right)); bottom: max(32px, env(safe-area-inset-bottom)); width: 76px; height: 76px; border-radius: 50%; border: 2px solid rgba(243, 231, 211, 0.6); background: rgba(20, 15, 12, 0.35); color: #f3e7d3; font: 600 13px system-ui, sans-serif; touch-action: none; -webkit-user-select: none; user-select: none; }
+      #attack.hidden { display: none; }
       .joystick-knob { position: absolute; left: 40px; top: 40px; width: 48px; height: 48px; border-radius: 50%; background: rgba(243, 231, 211, 0.75); }
     </style>
   </head>
   <body>
     <canvas id="app-canvas"></canvas>
     <div id="vignette" aria-hidden="true"></div>
+    <button type="button" id="attack" class="hidden" data-attack>ATTACK</button>
     <div id="debug" class="collapsed">
       <button type="button" data-toggle>tune</button>
       <div data-stats>Loading…</div>

@@ -1,4 +1,4 @@
-import { Entity, Quat, Vec3, type AppBase, type Asset, type ContainerResource, type RenderComponent } from "playcanvas";
+import { Entity, Quat, Vec3, type AppBase, type Asset, type ContainerResource, type RenderComponent, type StandardMaterial } from "playcanvas";
 import { WEAPONS, type WeaponId } from "../config";
 import { CHARACTER_LIGHT_MASK } from "../world/Environment";
 
@@ -14,6 +14,8 @@ export class WeaponHolder {
 
   /** Called with the held weapon's upper-body clip (or null) whenever the weapon changes. */
   onPoseChange: (clipName: string | null) => void = () => {};
+  /** Called after every equip (e.g. to show or hide the attack button). */
+  onChange: () => void = () => {};
 
   constructor(private readonly app: AppBase) {}
 
@@ -26,7 +28,15 @@ export class WeaponHolder {
     });
     const root = (asset.resource as ContainerResource).instantiateRenderEntity();
     for (const render of root.findComponents("render") as RenderComponent[]) {
-      for (const meshInstance of render.meshInstances) meshInstance.mask |= CHARACTER_LIGHT_MASK;
+      for (const meshInstance of render.meshInstances) {
+        meshInstance.mask |= CHARACTER_LIGHT_MASK;
+        // Flat-colour guns carry their colours per vertex (see scripts/build-weapons.mjs).
+        const material = meshInstance.material as StandardMaterial;
+        if (material.name === "flat" && !material.diffuseVertexColor) {
+          material.diffuseVertexColor = true;
+          material.update();
+        }
+      }
       render.castShadows = true;
     }
     for (const [id, weapon] of Object.entries(WEAPONS.list) as [WeaponId, (typeof WEAPONS.list)[WeaponId]][]) {
@@ -54,7 +64,10 @@ export class WeaponHolder {
     this.current = id;
     const template = id ? this.templates.get(id) : undefined;
     this.onPoseChange(id && template && this.hand ? WEAPONS.list[id].pose : null);
-    if (!id || !template || !this.hand) return;
+    if (!id || !template || !this.hand) {
+      this.onChange();
+      return;
+    }
     const { position, rotation, rollDeg } = WEAPONS.list[id];
     const held = new Entity(`weapon-${id}`);
     held.addChild(template.clone());
@@ -64,6 +77,12 @@ export class WeaponHolder {
     held.setLocalRotation(new Quat().setFromAxisAngle(Vec3.UP, rollDeg).mul(grip));
     this.hand.addChild(held);
     this.held = held;
+    this.onChange();
+  }
+
+  /** The held weapon's one-shot attack clip, if it has one. */
+  get attackClip(): string | null {
+    return this.current && this.held ? WEAPONS.list[this.current].attack : null;
   }
 
   /** The held weapon's root (for tuning its grip). */
