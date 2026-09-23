@@ -5,18 +5,19 @@ import {
   FILLMODE_FILL_WINDOW,
   GAMMA_SRGB,
   RESOLUTION_AUTO,
-  TONEMAP_ACES,
+  TONEMAP_NEUTRAL,
 } from "playcanvas";
 import { CameraController } from "./camera/CameraController";
-import { ASSETS, CAMERA, LIGHTING, PLAYER, RENDER } from "./config";
+import { ASSETS, CAMERA, CHARACTER, LIGHTING, PLAYER, RENDER } from "./config";
 import { KeyboardMoveInput } from "./input/KeyboardMoveInput";
 import { TouchJoystickInput } from "./input/TouchJoystickInput";
 import { CombinedMoveInput, type MoveInputSource } from "./input/MoveInput";
 import { loadCharacter } from "./player/CharacterLoader";
 import { PlayerAnimationController } from "./player/PlayerAnimationController";
 import { PlayerController } from "./player/PlayerController";
-import { DebugPanel } from "./ui/DebugPanel";
+import { DebugPanel, type TuneParam } from "./ui/DebugPanel";
 import { createArena } from "./world/Arena";
+import { createContactShadow } from "./world/ContactShadow";
 import { createLighting } from "./world/Environment";
 
 export interface GameOptions {
@@ -37,6 +38,9 @@ export class Game {
   camera!: CameraController;
 
   private input!: MoveInputSource;
+  private model!: Entity;
+  private contactShadow!: Entity;
+  private characterScale: number = CHARACTER.scale;
   private debug!: DebugPanel;
   private debugTimer = 0;
   private frames = 0;
@@ -68,7 +72,8 @@ export class Game {
       fov: CAMERA.fovDeg,
       nearClip: CAMERA.nearClip,
       farClip: CAMERA.farClip,
-      toneMapping: TONEMAP_ACES,
+      // Neutral keeps hue and saturation of the armour and yellow accents better than ACES.
+      toneMapping: TONEMAP_NEUTRAL,
       gammaCorrection: GAMMA_SRGB,
     });
     app.root.addChild(cameraEntity);
@@ -83,18 +88,23 @@ export class Game {
     // Player root sits on the ground and owns position/yaw; the GLB hierarchy stays untouched below it.
     const playerRoot = new Entity("Player");
     playerRoot.addChild(character.model);
+    this.contactShadow = createContactShadow(app);
+    playerRoot.addChild(this.contactShadow);
     app.root.addChild(playerRoot);
+    this.model = character.model;
 
     this.input = new CombinedMoveInput([
       new KeyboardMoveInput(PLAYER.walkSpeed / PLAYER.runSpeed),
       new TouchJoystickInput(this.options.canvas),
     ]);
-    this.camera = new CameraController(cameraEntity, playerRoot);
     this.player = new PlayerController(playerRoot, this.input, () => this.camera.yawDeg);
+    this.camera = new CameraController(cameraEntity, playerRoot, this.player.velocity);
     this.animation = new PlayerAnimationController(character.model, character.tracks);
     console.info(`[PlayerAnimation] Idle=${this.animation.clipNames.Idle}, Walk=${this.animation.clipNames.Walk}, Run=${this.animation.clipNames.Run}`);
 
-    this.debug = new DebugPanel(this.options.debugRoot, this.camera.settings);
+    this.setCharacterScale(this.characterScale);
+
+    this.debug = new DebugPanel(this.options.debugRoot, this.tuneParams());
     app.on("update", this.update, this);
   }
 
@@ -102,8 +112,7 @@ export class Game {
     const dt = Math.min(rawDt, MAX_DT);
     this.player.update(dt);
     this.animation.update(this.player.speed);
-    const device = this.app.graphicsDevice;
-    this.camera.update(dt, device.width / Math.max(1, device.height));
+    this.camera.update(dt);
 
     this.frames++;
     this.debugTimer += rawDt;
@@ -121,6 +130,30 @@ export class Game {
       this.debugTimer = 0;
       this.frames = 0;
     }
+  }
+
+  /** Scales the GLB root uniformly; camera pivot and stride matching follow the new size. */
+  private setCharacterScale(scale: number): void {
+    this.characterScale = scale;
+    this.model.setLocalScale(scale, scale, scale);
+    this.contactShadow.setLocalScale(1.1 * scale, 1, 1.1 * scale);
+    this.camera.pivotHeight = CAMERA.pivotHeight * scale;
+    this.animation.strideScale = scale;
+  }
+
+  private tuneParams(): TuneParam[] {
+    const camera = this.camera;
+    const settings = camera.settings;
+    return [
+      { key: "pitchDeg", label: "Pitch°", min: 35, max: 80, step: 1, get: () => settings.pitchDeg, set: (v) => (settings.pitchDeg = v) },
+      { key: "distance", label: "Distance", min: 4, max: 20, step: 0.1, get: () => settings.distance, set: (v) => (settings.distance = v) },
+      { key: "height", label: "Height", min: 3, max: 18, step: 0.1, get: () => camera.height, set: (v) => (camera.height = v), derived: true },
+      { key: "fovDeg", label: "FOV°", min: 25, max: 70, step: 1, get: () => settings.fovDeg, set: (v) => (settings.fovDeg = v) },
+      { key: "screenOffset", label: "Offset", min: -0.1, max: 0.3, step: 0.01, get: () => settings.screenOffset, set: (v) => (settings.screenOffset = v) },
+      { key: "followSharpness", label: "Follow", min: 1, max: 30, step: 0.5, get: () => settings.followSharpness, set: (v) => (settings.followSharpness = v) },
+      { key: "lookAheadTime", label: "Lead s", min: 0, max: 0.6, step: 0.05, get: () => settings.lookAheadTime, set: (v) => (settings.lookAheadTime = v) },
+      { key: "characterScale", label: "Scale", min: 0.7, max: 1.6, step: 0.01, get: () => this.characterScale, set: (v) => this.setCharacterScale(v) },
+    ];
   }
 
   private readonly onResize = (): void => {

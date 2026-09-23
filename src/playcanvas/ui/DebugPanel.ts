@@ -1,6 +1,4 @@
-import type { CameraSettings } from "../camera/CameraController";
-
-interface DebugStats {
+export interface DebugStats {
   fps: number;
   state: string;
   clip: string;
@@ -10,48 +8,69 @@ interface DebugStats {
   yaw: number;
 }
 
-const SLIDERS: { key: keyof CameraSettings; label: string; min: number; max: number; step: number }[] = [
-  { key: "pitchDeg", label: "Pitch", min: 30, max: 85, step: 1 },
-  { key: "height", label: "Height", min: 4, max: 25, step: 0.1 },
-  { key: "distance", label: "Distance", min: 0, max: 20, step: 0.1 },
-  { key: "fovDeg", label: "FOV", min: 20, max: 75, step: 1 },
-];
+export interface TuneParam {
+  key: string;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  get(): number;
+  set(value: number): void;
+  /** Derived values are shown and editable but not saved (they are recomputed from others). */
+  derived?: boolean;
+}
+
+const STORAGE_KEY = "dustline3d.tune.v2";
+
+function decimals(step: number): number {
+  return step >= 1 ? 0 : Math.min(3, Math.ceil(-Math.log10(step)));
+}
 
 /**
- * Small readout plus live camera sliders for judging framing in the browser. Values edited here
- * are not persisted; copy them into `config.ts` once they look right.
+ * Stats readout plus live tuning sliders. Values persist in this browser (so a phone keeps its
+ * tuning across reloads); "copy" puts them on the clipboard for pasting into `config.ts`.
  */
 export class DebugPanel {
   private readonly stats: HTMLElement;
+  private readonly output: HTMLElement;
+  private readonly rows: { param: TuneParam; input: HTMLInputElement; value: HTMLElement }[] = [];
+  private readonly defaults = new Map<string, number>();
   private lastText = "";
 
-  constructor(root: HTMLElement, camera: CameraSettings) {
+  constructor(private readonly root: HTMLElement, params: TuneParam[]) {
     this.stats = root.querySelector<HTMLElement>("[data-stats]")!;
+    this.output = root.querySelector<HTMLElement>("[data-output]")!;
     const sliders = root.querySelector<HTMLElement>("[data-sliders]")!;
-    const output = root.querySelector<HTMLElement>("[data-output]")!;
-    const printConfig = () => {
-      output.textContent = `pitchDeg: ${camera.pitchDeg}, height: ${camera.height}, distance: ${camera.distance}, fovDeg: ${camera.fovDeg}`;
-    };
-    for (const slider of SLIDERS) {
+
+    for (const param of params) {
+      this.defaults.set(param.key, param.get());
       const label = document.createElement("label");
+      const name = document.createElement("span");
       const value = document.createElement("span");
       const input = document.createElement("input");
+      name.textContent = param.label;
+      value.className = "value";
       input.type = "range";
-      input.min = String(slider.min);
-      input.max = String(slider.max);
-      input.step = String(slider.step);
-      input.value = String(camera[slider.key]);
-      value.textContent = input.value;
+      input.min = String(param.min);
+      input.max = String(param.max);
+      input.step = String(param.step);
       input.addEventListener("input", () => {
-        camera[slider.key] = Number(input.value);
-        value.textContent = input.value;
-        printConfig();
+        param.set(Number(input.value));
+        this.refresh(param);
+        this.save();
       });
-      label.append(slider.label, input, value);
+      label.append(name, input, value);
       sliders.append(label);
+      this.rows.push({ param, input, value });
     }
-    printConfig();
+
+    this.load();
+    this.refresh();
     root.querySelector("[data-toggle]")!.addEventListener("click", () => root.classList.toggle("collapsed"));
+    root.querySelector("[data-reset]")!.addEventListener("click", () => this.reset());
+    root.querySelector("[data-copy]")!.addEventListener("click", () => {
+      navigator.clipboard?.writeText(this.output.textContent ?? "").catch(() => undefined);
+    });
   }
 
   update(stats: DebugStats): void {
@@ -62,5 +81,41 @@ export class DebugPanel {
       this.stats.textContent = text;
       this.lastText = text;
     }
+  }
+
+  /** Re-reads every slider from its getter; one parameter can change another (height/distance). */
+  private refresh(skip?: TuneParam): void {
+    for (const { param, input, value } of this.rows) {
+      const current = param.get();
+      const text = current.toFixed(decimals(param.step));
+      if (param !== skip) input.value = String(current);
+      value.textContent = text;
+    }
+    this.output.textContent = this.rows
+      .map(({ param }) => `${param.key}: ${Number(param.get().toFixed(decimals(param.step)))}`)
+      .join(", ");
+  }
+
+  private reset(): void {
+    // Apply defaults of the saved (non-derived) parameters; derived ones follow from them.
+    for (const { param } of this.rows) if (!param.derived) param.set(this.defaults.get(param.key)!);
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* storage unavailable */ }
+    this.refresh();
+  }
+
+  private save(): void {
+    const values: Record<string, number> = {};
+    for (const { param } of this.rows) if (!param.derived) values[param.key] = param.get();
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(values)); } catch { /* storage unavailable */ }
+  }
+
+  private load(): void {
+    let values: Record<string, unknown> = {};
+    try { values = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}"); } catch { return; }
+    for (const { param } of this.rows) {
+      const value = values[param.key];
+      if (!param.derived && typeof value === "number" && Number.isFinite(value)) param.set(value);
+    }
+    if (Object.keys(values).length > 0) this.root.dataset.tuned = "true";
   }
 }

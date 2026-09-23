@@ -21,11 +21,11 @@ The game is migrating from Phaser 2D to a PlayCanvas 3D presentation. The Phaser
 
 - Page: `playcanvas.html` → `src/playcanvas/` (the Phaser game stays at `index.html` → `src/main.ts`)
 - Run: `npm run dev:3d` (or `npm run dev` and open `/mobile-roguelite/playcanvas.html`)
-- Controls: WASD / arrows to run, hold Shift to walk. The **tune** button shows live camera sliders.
+- Controls: WASD / arrows to run, hold Shift to walk; on touch, drag anywhere (a light push walks). The **tune** button shows live sliders for camera pitch, distance, height, FOV, screen offset, follow smoothing, look-ahead and character scale; values persist per browser and **copy values** puts them on the clipboard.
 - Character: `public/models/orc/Meshy_AI_Iron_Shoulder_Orc_All_Animations.glb`, used unmodified
 - Tuning: `src/playcanvas/config.ts` (camera, movement, animation thresholds, lighting)
 
-Modules: `Game.ts` (bootstrap), `player/PlayerController.ts`, `player/PlayerAnimationController.ts`, `player/CharacterLoader.ts`, `camera/CameraController.ts`, `input/*` (move-input sources; a mobile joystick plugs in as another `MoveInputSource`), `world/Environment.ts` (lights, IBL, fog), `world/Arena.ts` (ground and placeholder props), `ui/DebugPanel.ts`.
+Modules: `Game.ts` (bootstrap), `player/PlayerController.ts`, `player/PlayerAnimationController.ts`, `player/CharacterLoader.ts`, `camera/CameraController.ts`, `input/*` (move-input sources; a mobile joystick plugs in as another `MoveInputSource`), `world/Environment.ts` (lights, IBL, fog), `world/Arena.ts` (ground and placeholder props), `world/ContactShadow.ts`, `ui/DebugPanel.ts`.
 
 Known gaps: the GLB has no real idle (the static `restpose` A-pose stands in), the 20 MB GLB and its 4096² metallic-roughness texture are not optimized yet, and props have no collision.
 

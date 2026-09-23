@@ -23,6 +23,8 @@ function findTrack(tracks: AnimTrack[], name: string): AnimTrack | undefined {
  */
 export class PlayerAnimationController {
   readonly clipNames: Record<LocomotionState, string>;
+  /** Character scale; a bigger body covers more ground per stride, so clips play slower. */
+  strideScale = 1;
 
   constructor(private readonly model: Entity, tracks: AnimTrack[]) {
     const idle = findTrack(tracks, ANIMATION.clips.idle);
@@ -82,8 +84,8 @@ export class PlayerAnimationController {
     // Match cadence to ground speed so feet stay planted when walking/running at other speeds.
     let rate = 1;
     const state = this.state;
-    if (state === "Walk") rate = groundSpeed / ANIMATION.walkNativeSpeed;
-    else if (state === "Run") rate = groundSpeed / ANIMATION.runNativeSpeed;
+    if (state === "Walk") rate = groundSpeed / (ANIMATION.walkNativeSpeed * this.strideScale);
+    else if (state === "Run") rate = groundSpeed / (ANIMATION.runNativeSpeed * this.strideScale);
     anim.speed = state === "Idle" ? 1 : math.clamp(rate, ANIMATION.minPlaybackRate, ANIMATION.maxPlaybackRate);
   }
 }

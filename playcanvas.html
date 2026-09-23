@@ -7,21 +7,31 @@
     <title>Dustline 3D Prototype</title>
     <link rel="icon" href="%BASE_URL%icon.svg" type="image/svg+xml" />
     <style>
-      html, body { margin: 0; height: 100%; overflow: hidden; background: #c79a6b; touch-action: none; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #66503e; touch-action: none; }
       body { font: 12px/1.4 system-ui, sans-serif; color: #f3e7d3; }
       #app-canvas { display: block; width: 100%; height: 100%; }
       #loading { position: fixed; inset: 0; display: grid; place-content: center; gap: 12px; background: #1c1612; transition: opacity 0.4s; }
       #loading.done { opacity: 0; pointer-events: none; }
       #loading-track { width: min(280px, 70vw); height: 6px; background: #3b2f26; overflow: hidden; }
       #loading-bar { height: 100%; background: #e8a92f; transform: scaleX(0); transform-origin: left; }
-      #debug { position: fixed; top: max(8px, env(safe-area-inset-top)); left: 8px; max-width: calc(100vw - 16px); padding: 8px 10px; background: rgba(20, 15, 12, 0.72); border-radius: 6px; box-sizing: border-box; }
-      #debug [data-stats] { white-space: pre; margin-right: 48px; font-variant-numeric: tabular-nums; }
-      #debug label { display: grid; grid-template-columns: 58px 1fr 36px; align-items: center; gap: 6px; }
-      #debug input { width: 100%; min-width: 0; }
-      #debug [data-output] { margin-top: 4px; opacity: 0.7; font-size: 11px; user-select: all; }
-      #debug button { float: right; margin-left: 8px; background: none; border: 1px solid #f3e7d3; color: inherit; border-radius: 4px; }
-      #debug.collapsed [data-sliders], #debug.collapsed [data-output], #debug.collapsed .hint { display: none; }
-      #debug .hint { opacity: 0.7; margin-top: 4px; }
+      #debug { position: fixed; top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); width: min(420px, calc(100vw - 16px)); max-height: 45vh; overflow-y: auto; padding: 8px 10px; background: rgba(20, 15, 12, 0.72); border-radius: 8px; box-sizing: border-box; font-size: 12px; -webkit-user-select: none; user-select: none; }
+      #debug.collapsed { width: auto; }
+      #debug [data-stats] { white-space: pre; margin-right: 64px; font-variant-numeric: tabular-nums; }
+      /* Two slider columns keep the open panel in the top ~40% of a portrait phone, above the hero. */
+      #debug [data-sliders] { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; margin-top: 4px; }
+      #debug label { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "name value" "slider slider"; align-items: center; }
+      #debug label > span:first-child { grid-area: name; opacity: 0.85; }
+      #debug .value { grid-area: value; font-variant-numeric: tabular-nums; }
+      #debug input[type="range"] { grid-area: slider; width: 100%; min-width: 0; height: 28px; margin: 0; accent-color: #e8a92f; touch-action: pan-x; }
+      #debug [data-output] { margin-top: 6px; opacity: 0.7; font-size: 11px; word-break: break-word; }
+      #debug .actions { display: flex; gap: 8px; margin-top: 6px; }
+      #debug button { min-height: 32px; padding: 0 12px; background: none; border: 1px solid #f3e7d3; color: inherit; border-radius: 6px; font: inherit; }
+      #debug [data-toggle] { position: absolute; top: 6px; right: 8px; }
+      #debug.collapsed [data-sliders], #debug.collapsed [data-output], #debug.collapsed .hint, #debug.collapsed .actions { display: none; }
+      #debug .hint { opacity: 0.7; margin-top: 2px; font-size: 11px; }
+      @media (max-width: 520px) { #debug [data-output], #debug .hint { display: none; } }
+      /* Cheap focal vignette composited by the browser, no post-processing pass. */
+      #vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse 75% 65% at 50% 58%, rgba(0, 0, 0, 0) 55%, rgba(16, 10, 6, 0.45) 100%); }
       #app-canvas { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
       .joystick { position: fixed; left: -64px; top: -64px; width: 128px; height: 128px; border-radius: 50%; border: 2px solid rgba(243, 231, 211, 0.5); background: rgba(20, 15, 12, 0.25); pointer-events: none; opacity: 0; transition: opacity 0.15s; }
       .joystick.active { opacity: 1; }
@@ -30,11 +40,13 @@
   </head>
   <body>
     <canvas id="app-canvas"></canvas>
+    <div id="vignette" aria-hidden="true"></div>
     <div id="debug" class="collapsed">
       <button type="button" data-toggle>tune</button>
       <div data-stats>Loading…</div>
       <div class="hint">WASD / arrows to run · Shift to walk · touch: drag anywhere (light push walks)</div>
       <div data-sliders></div>
+      <div class="actions"><button type="button" data-reset>reset</button><button type="button" data-copy>copy values</button></div>
       <div data-output></div>
     </div>
     <div id="loading">

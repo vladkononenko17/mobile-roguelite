@@ -13,32 +13,47 @@ import {
 import { PLAYER } from "../config";
 
 /** Metres covered by one repeat of the ground texture. */
-const GROUND_TILE_METRES = 4;
+const GROUND_TILE_METRES = 6;
 const GROUND_SIZE = 120;
 
-/** Cracked, dusty ground drawn once on a canvas; gives the eye motion and scale reference. */
+/** Cracked, dusty ground drawn once on a canvas. Deliberately dark and low-contrast so it gives
+ * motion and scale reference without competing with the character. */
 function createGroundTexture(app: AppBase): Texture {
   const size = 512;
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#94694a";
+  ctx.fillStyle = "#6e5746";
   ctx.fillRect(0, 0, size, size);
 
-  // Deterministic speckle so the texture looks the same every load.
+  // Deterministic noise so the texture looks the same every load.
   let seed = 1337;
   const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let i = 0; i < 2600; i++) {
-    const shade = random();
-    ctx.fillStyle = shade > 0.5 ? `rgba(196,150,104,${0.3 * random()})` : `rgba(92,62,40,${0.3 * random()})`;
-    const r = 1 + random() * 9;
-    ctx.beginPath();
-    ctx.arc(random() * size, random() * size, r, 0, Math.PI * 2);
-    ctx.fill();
+  // Soft low-frequency patches (drawn with wrap-around copies so the tile stays seamless).
+  for (let i = 0; i < 18; i++) {
+    const x = random() * size;
+    const y = random() * size;
+    const r = 60 + random() * 110;
+    const light = random() > 0.5;
+    for (const ox of [-size, 0, size]) {
+      for (const oy of [-size, 0, size]) {
+        const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+        g.addColorStop(0, light ? "rgba(140,112,88,0.22)" : "rgba(58,42,30,0.22)");
+        g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
+      }
+    }
+  }
+  // Fine grit.
+  for (let i = 0; i < 7000; i++) {
+    ctx.fillStyle = random() > 0.5 ? `rgba(150,124,100,${0.25 * random()})` : `rgba(40,30,22,${0.25 * random()})`;
+    const r = 0.5 + random() * 1.4;
+    ctx.fillRect(random() * size, random() * size, r, r);
   }
   // Worn slab seams: two per tile, wrapping cleanly.
-  ctx.strokeStyle = "rgba(70,46,30,0.45)";
-  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(48,34,24,0.07)";
+  ctx.lineWidth = 2;
   for (const p of [0, size / 2]) {
     ctx.beginPath();
     ctx.moveTo(p + 1.5, 0); ctx.lineTo(p + 1.5, size);
@@ -46,7 +61,7 @@ function createGroundTexture(app: AppBase): Texture {
     ctx.stroke();
   }
   // A few hairline cracks.
-  ctx.strokeStyle = "rgba(60,38,24,0.5)";
+  ctx.strokeStyle = "rgba(44,30,20,0.22)";
   ctx.lineWidth = 1.5;
   for (let i = 0; i < 14; i++) {
     let x = random() * size;
@@ -111,7 +126,7 @@ export function createArena(app: AppBase): void {
   groundMaterial.diffuseMap = createGroundTexture(app);
   const tiling = GROUND_SIZE / GROUND_TILE_METRES;
   groundMaterial.diffuseMapTiling = new Vec2(tiling, tiling);
-  groundMaterial.gloss = 0.18;
+  groundMaterial.gloss = 0.1;
   groundMaterial.useMetalness = true;
   groundMaterial.metalness = 0;
   groundMaterial.update();
@@ -121,13 +136,17 @@ export function createArena(app: AppBase): void {
   ground.setLocalScale(GROUND_SIZE, 1, GROUND_SIZE);
   app.root.addChild(ground);
 
-  const crate = material("#8a5a32", 0.3);
-  const rust = material("#7b3f24", 0.45, 0.55);
-  const concrete = material("#9c9285", 0.12);
-  const hazard = material("#d99a2b", 0.35);
+  const crate = material("#5f4a3a", 0.25);
+  const rust = material("#5a3b2c", 0.4, 0.4);
+  const concrete = material("#6f6961", 0.1);
+  const hazard = material("#7c6236", 0.3);
 
+  // A few pieces close to spawn so the portrait camera always has scale reference in view.
+  addPrimitive(app, "box", crate, [2.3, 0, -2.2], [1.1, 1.1, 1.1], 20);
+  addPrimitive(app, "box", crate, [3.2, 0, -1.4], [0.8, 0.8, 0.8], -10);
+  addPrimitive(app, "cylinder", rust, [-2.2, 0, -3.8], [0.7, 1.1, 0.7]);
+  addPrimitive(app, "box", concrete, [-2.6, 0, 1.8], [1.8, 0.7, 0.6], 15);
   addPrimitive(app, "box", crate, [4, 0, -3], [1.2, 1.2, 1.2], 20);
-  addPrimitive(app, "box", crate, [5.1, 0, -2.2], [0.9, 0.9, 0.9], -10);
   addPrimitive(app, "box", crate, [-6, 0, 4], [1.4, 1.1, 1.4], 45);
   addPrimitive(app, "cylinder", rust, [-4, 0, -5], [0.8, 1.2, 0.8]);
   addPrimitive(app, "cylinder", hazard, [-3.1, 0, -5.6], [0.8, 1.2, 0.8]);

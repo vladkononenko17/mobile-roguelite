@@ -6,7 +6,7 @@ import {
   FloatPacking,
   FOG_LINEAR,
   PIXELFORMAT_RGBA16F,
-  SHADOW_PCF3,
+  SHADOW_PCF5,
   Texture,
   type AppBase,
 } from "playcanvas";
@@ -90,7 +90,7 @@ function createEnvironmentAtlas(app: AppBase): Texture {
   return atlas;
 }
 
-/** Sun, bounce fill, image-based ambient and distance fog. */
+/** Sun (soft PCF5 shadows), bounce fill, rim, image-based ambient and distance fog. */
 export function createLighting(app: AppBase): { sun: Entity } {
   const scene = app.scene;
   scene.envAtlas = createEnvironmentAtlas(app);
@@ -110,7 +110,7 @@ export function createLighting(app: AppBase): { sun: Entity } {
     color: new Color(s.color[0], s.color[1], s.color[2]),
     intensity: s.intensity,
     castShadows: true,
-    shadowType: SHADOW_PCF3,
+    shadowType: SHADOW_PCF5,
     shadowResolution: s.shadowResolution,
     shadowDistance: s.shadowDistance,
     shadowBias: s.shadowBias,
@@ -130,6 +130,17 @@ export function createLighting(app: AppBase): { sun: Entity } {
   });
   aimLight(fill, f.elevationDeg, f.azimuthDeg);
   app.root.addChild(fill);
+
+  const rimConfig = LIGHTING.rim;
+  const rim = new Entity("Rim");
+  rim.addComponent("light", {
+    type: "directional",
+    color: new Color(rimConfig.color[0], rimConfig.color[1], rimConfig.color[2]),
+    intensity: rimConfig.intensity,
+    castShadows: false,
+  });
+  aimLight(rim, rimConfig.elevationDeg, rimConfig.azimuthDeg);
+  app.root.addChild(rim);
 
   return { sun };
 }
