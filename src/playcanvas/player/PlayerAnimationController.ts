@@ -6,7 +6,7 @@ import {
   type AnimTrack,
   type Entity,
 } from "playcanvas";
-import { ANIMATION } from "../config";
+import { ANIMATION, type CharacterModel } from "../config";
 
 export type LocomotionState = "Idle" | "Walk" | "Run";
 
@@ -26,7 +26,11 @@ export class PlayerAnimationController {
   /** Character scale; a bigger body covers more ground per stride, so clips play slower. */
   strideScale = 1;
 
-  constructor(private readonly model: Entity, tracks: AnimTrack[]) {
+  constructor(
+    private readonly model: Entity,
+    tracks: AnimTrack[],
+    private readonly stride: Pick<CharacterModel, "walkNativeSpeed" | "runNativeSpeed">,
+  ) {
     const idle = findTrack(tracks, ANIMATION.clips.idle);
     const walk = findTrack(tracks, ANIMATION.clips.walk);
     const run = findTrack(tracks, ANIMATION.clips.run);
@@ -84,8 +88,8 @@ export class PlayerAnimationController {
     // Match cadence to ground speed so feet stay planted when walking/running at other speeds.
     let rate = 1;
     const state = this.state;
-    if (state === "Walk") rate = groundSpeed / (ANIMATION.walkNativeSpeed * this.strideScale);
-    else if (state === "Run") rate = groundSpeed / (ANIMATION.runNativeSpeed * this.strideScale);
+    if (state === "Walk") rate = groundSpeed / (this.stride.walkNativeSpeed * this.strideScale);
+    else if (state === "Run") rate = groundSpeed / (this.stride.runNativeSpeed * this.strideScale);
     anim.speed = state === "Idle" ? 1 : math.clamp(rate, ANIMATION.minPlaybackRate, ANIMATION.maxPlaybackRate);
   }
 }

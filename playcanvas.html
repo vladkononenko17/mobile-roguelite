@@ -27,6 +27,9 @@
       #debug .actions { display: flex; gap: 8px; margin-top: 6px; }
       #debug button { min-height: 32px; padding: 0 12px; background: none; border: 1px solid #f3e7d3; color: inherit; border-radius: 6px; font: inherit; }
       #debug [data-toggle] { position: absolute; top: 6px; right: 8px; }
+      #debug .model { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+      #debug .model select { flex: 1; min-height: 32px; font: inherit; color: #f3e7d3; background: #2b221c; border: 1px solid #f3e7d3; border-radius: 6px; }
+      #debug.collapsed .model,
       #debug.collapsed [data-sliders], #debug.collapsed [data-output], #debug.collapsed .hint, #debug.collapsed .actions { display: none; }
       #debug .hint { opacity: 0.7; margin-top: 2px; font-size: 11px; }
       @media (max-width: 520px) { #debug [data-output], #debug .hint { display: none; } }
@@ -45,6 +48,7 @@
       <button type="button" data-toggle>tune</button>
       <div data-stats>Loading…</div>
       <div class="hint">WASD / arrows to run · Shift to walk · touch: drag anywhere (light push walks)</div>
+      <label class="model">Model <select data-model></select></label>
       <div data-sliders></div>
       <div class="actions"><button type="button" data-reset>reset</button><button type="button" data-copy>copy values</button></div>
       <div data-output></div>

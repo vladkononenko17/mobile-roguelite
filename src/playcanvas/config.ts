@@ -2,9 +2,40 @@
 // Everything a designer is likely to tweak while judging the visual direction lives here.
 // The in-game "tune" panel edits the CAMERA and CHARACTER values live.
 
-export const ASSETS = {
-  character: "models/orc/Meshy_AI_Iron_Shoulder_Orc_All_Animations.glb",
-};
+export interface CharacterModel {
+  label: string;
+  url: string;
+  /** Ground speed (m/s) at which the Walking / Running clips' feet do not slide at playback
+   * speed 1 and scale 1. Measured by tracing the planted toe bone across each clip. */
+  walkNativeSpeed: number;
+  runNativeSpeed: number;
+}
+
+/** Character GLBs selectable from the tune panel. All share the same Mixamo-style rig and clips. */
+export const CHARACTERS = {
+  brawler2k: {
+    label: "Brawler (2K tex)",
+    // Unmodified mesh, rig, animations and materials; only textures resized 4096 -> 2048.
+    url: "models/brawler/Meshy_AI_Wasteland_Brawler_All_Animations_2k.glb",
+    walkNativeSpeed: 1.2,
+    runNativeSpeed: 3.9,
+  },
+  brawler4k: {
+    label: "Brawler (original 4K)",
+    url: "models/brawler/Meshy_AI_Wasteland_Brawler_All_Animations.glb",
+    walkNativeSpeed: 1.2,
+    runNativeSpeed: 3.9,
+  },
+  orc: {
+    label: "Iron Shoulder Orc",
+    url: "models/orc/Meshy_AI_Iron_Shoulder_Orc_All_Animations.glb",
+    walkNativeSpeed: 1.3,
+    runNativeSpeed: 3.9,
+  },
+} satisfies Record<string, CharacterModel>;
+
+export type CharacterId = keyof typeof CHARACTERS;
+export const DEFAULT_CHARACTER: CharacterId = "brawler2k";
 
 export const CAMERA = {
   /** Downward tilt of the camera (0 = horizon, 90 = straight down). Because the hero sits below
@@ -61,10 +92,6 @@ export const ANIMATION = {
     walk: "Walking",
     run: "Running",
   },
-  /** Ground speed (m/s) at which each clip's feet do not slide at playback speed 1, at character
-   * scale 1. Measured from the GLB by tracing the planted toe bone across each clip. */
-  walkNativeSpeed: 1.3,
-  runNativeSpeed: 3.9,
   /** State thresholds on the actual ground speed (m/s). */
   idleToWalkSpeed: 0.15,
   walkToRunSpeed: 2.4,

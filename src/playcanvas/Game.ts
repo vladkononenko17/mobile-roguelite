@@ -8,7 +8,7 @@ import {
   TONEMAP_NEUTRAL,
 } from "playcanvas";
 import { CameraController } from "./camera/CameraController";
-import { ASSETS, CAMERA, CHARACTER, LIGHTING, PLAYER, RENDER } from "./config";
+import { CAMERA, CHARACTER, CHARACTERS, LIGHTING, PLAYER, RENDER, type CharacterId } from "./config";
 import { KeyboardMoveInput } from "./input/KeyboardMoveInput";
 import { TouchJoystickInput } from "./input/TouchJoystickInput";
 import { CombinedMoveInput, type MoveInputSource } from "./input/MoveInput";
@@ -23,6 +23,7 @@ import { createLighting } from "./world/Environment";
 export interface GameOptions {
   canvas: HTMLCanvasElement;
   debugRoot: HTMLElement;
+  character: CharacterId;
   onProgress: (loaded: number, total: number) => void;
 }
 
@@ -78,10 +79,11 @@ export class Game {
     });
     app.root.addChild(cameraEntity);
 
-    const character = await loadCharacter(app, `${import.meta.env.BASE_URL}${ASSETS.character}`, this.options.onProgress);
+    const characterModel = CHARACTERS[this.options.character];
+    const character = await loadCharacter(app, `${import.meta.env.BASE_URL}${characterModel.url}`, this.options.onProgress);
     const { min, max } = { min: character.bounds.getMin(), max: character.bounds.getMax() };
     console.info(
-      `[Character] ${character.triangleCount} triangles, bind-pose height ${(max.y - min.y).toFixed(2)} m, ` +
+      `[Character] ${characterModel.label}: ${character.triangleCount} triangles, bind-pose height ${(max.y - min.y).toFixed(2)} m, ` +
         `feet at y=${min.y.toFixed(3)}; clips: ${character.tracks.map((t) => `${t.name} (${t.duration.toFixed(2)}s)`).join(", ")}`,
     );
 
@@ -99,7 +101,7 @@ export class Game {
     ]);
     this.player = new PlayerController(playerRoot, this.input, () => this.camera.yawDeg);
     this.camera = new CameraController(cameraEntity, playerRoot, this.player.velocity);
-    this.animation = new PlayerAnimationController(character.model, character.tracks);
+    this.animation = new PlayerAnimationController(character.model, character.tracks, characterModel);
     console.info(`[PlayerAnimation] Idle=${this.animation.clipNames.Idle}, Walk=${this.animation.clipNames.Walk}, Run=${this.animation.clipNames.Run}`);
 
     this.setCharacterScale(this.characterScale);
