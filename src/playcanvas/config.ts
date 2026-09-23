@@ -37,14 +37,7 @@ export const CHARACTERS = {
 export type CharacterId = keyof typeof CHARACTERS;
 export const DEFAULT_CHARACTER: CharacterId = "brawler2k";
 
-/** A 1K PBR texture set: colour (sRGB), OpenGL normal and roughness (linear). */
-export interface SurfaceTextures {
-  folder: string;
-  diffuse: string;
-  normal: string;
-  roughness: string;
-  bumpiness: number;
-}
+import type { SurfaceTextures } from "./world/Surface";
 
 /** Ground surface: "Damaged Road" PBR set (1K) from the user-supplied road_damaged_1k.blend.zip.
  * EXR normal/roughness were converted to 8-bit JPG; the displacement map is not used. */
@@ -52,7 +45,7 @@ export const GROUND = {
   folder: "textures/road_damaged",
   diffuse: "road_damaged_diff_1k.jpg",
   normal: "road_damaged_nor_gl_1k.jpg",
-  roughness: "road_damaged_rough_1k.jpg",
+  roughnessMap: "road_damaged_rough_1k.jpg",
   /** Metres covered by one repeat of the texture. */
   tileMetres: 5,
   /** Multiplier on the colour map; below 1 keeps the ground from competing with the hero. */
@@ -66,7 +59,7 @@ export const ROCKY = {
   folder: "textures/rocky_terrain",
   diffuse: "rocky_terrain_diff_1k.jpg",
   normal: "rocky_terrain_nor_gl_1k.jpg",
-  roughness: "rocky_terrain_rough_1k.jpg",
+  roughnessMap: "rocky_terrain_rough_1k.jpg",
   bumpiness: 1.2,
   tileMetres: 5,
   /** Relative to the ground brightness; the grass-and-rock texture is brighter and busier than the
@@ -88,7 +81,7 @@ export const METAL = {
   folder: "textures/rusty_metal_grid",
   diffuse: "rusty_metal_grid_diff_1k.jpg",
   normal: "rusty_metal_grid_nor_gl_1k.jpg",
-  roughness: "rusty_metal_grid_rough_1k.jpg",
+  roughnessMap: "rusty_metal_grid_rough_1k.jpg",
   bumpiness: 1,
   /** One texture repeat = 3 x 3 plates, so plates are ~1 m. */
   tileMetres: 3,
@@ -103,6 +96,64 @@ export const METAL = {
   trimWidth: 0.14,
   trimHeight: 0.035,
 } satisfies SurfaceTextures & Record<string, unknown>;
+
+/**
+ * Environment-kit materials (world/kit). Every kit mesh carries UVs in metres, so `tileMetres` is
+ * the texel density: a 1K texture over 2 m is ~512 px/m on every piece regardless of its size.
+ * Normal maps are OpenGL (+Y) convention, which PlayCanvas expects. No AO maps ship with these
+ * sets, and displacement is deliberately unused (no tessellation on mobile).
+ */
+export const KIT_SURFACES = {
+  brick: {
+    folder: "textures/broken_brick_wall",
+    diffuse: "broken_brick_wall_diff_1k.jpg",
+    normal: "broken_brick_wall_nor_gl_1k.jpg",
+    // The roughness map only spans 0.85-1.0, so a constant saves a texture fetch.
+    roughness: 0.93,
+    bumpiness: 1,
+    tileMetres: 2,
+  },
+  concrete: {
+    folder: "textures/cracked_concrete",
+    diffuse: "cracked_concrete_diff_1k.jpg",
+    normal: "cracked_concrete_nor_gl_1k.jpg",
+    roughnessMap: "cracked_concrete_rough_1k.jpg",
+    bumpiness: 1,
+    tileMetres: 2.5,
+  },
+  rust: {
+    folder: "textures/rusty_metal_04",
+    diffuse: "rusty_metal_04_diff_1k.jpg",
+    normal: "rusty_metal_04_nor_gl_1k.jpg",
+    // Roughness in G, metalness in B: bare steel reads metallic, rust stays matte.
+    roughMetalMap: "rusty_metal_04_rough_metal_1k.jpg",
+    bumpiness: 1,
+    tileMetres: 2,
+  },
+  painted: {
+    folder: "textures/rusty_metal_grid",
+    diffuse: "rusty_metal_grid_diff_1k.jpg",
+    normal: "rusty_metal_grid_nor_gl_1k.jpg",
+    roughnessMap: "rusty_metal_grid_rough_1k.jpg",
+    bumpiness: 1,
+    tileMetres: 3,
+  },
+  planks: {
+    folder: "textures/worn_planks",
+    diffuse: "worn_planks_diff_1k.jpg",
+    normal: "worn_planks_nor_gl_1k.jpg",
+    roughnessMap: "worn_planks_rough_1k.jpg",
+    bumpiness: 1,
+    tileMetres: 1.6,
+  },
+} satisfies Record<string, SurfaceTextures>;
+
+/** Kit pieces are slightly dimmed so the hero stays the brightest, most saturated thing on screen. */
+export const KIT = {
+  brightness: 0.85,
+  /** Static batching: pieces sharing a material within this many metres merge into one draw call. */
+  batchCellMetres: 16,
+};
 
 export const CAMERA = {
   /** Downward tilt of the camera (0 = horizon, 90 = straight down). Because the hero sits below
@@ -198,13 +249,16 @@ export const LIGHTING = {
     intensity: 2.6,
     elevationDeg: 46,
     azimuthDeg: 318,
-    shadowResolution: 2048,
-    shadowDistance: 22,
+    // PCF3 (4 hardware-filtered taps) at 1024 over an 18 m range: ~2 cm texels near the hero,
+    // a fraction of the PCF5 / 2048 / 22 m cost per pixel and per shadow pass.
+    shadowResolution: 1024,
+    shadowDistance: 18,
     shadowBias: 0.2,
     normalOffsetBias: 0.04,
     shadowIntensity: 0.72,
   },
-  /** Cool shadowless bounce from the opposite side so the shadow side keeps its shape. */
+  /** Cool shadowless bounce from the opposite side so the shadow side keeps its shape. Fill and rim
+   * only light the hero (light mask), so the ground and environment pay for a single light. */
   fill: {
     color: [0.55, 0.68, 0.95] as const,
     intensity: 0.35,
@@ -226,6 +280,10 @@ export const LIGHTING = {
     intensity: 0.55,
   },
   exposure: 1.0,
+  /** Constant ambient for the ground, which skips image-based lighting: the ground covers the
+   * whole screen and IBL cost ~25% of its shading for what is, on rough flat ground, only a soft
+   * sky tint. Calibrated to match the IBL-lit ground's average colour. */
+  groundAmbient: [0.79, 0.95, 1.04] as const,
   clearColor: [0.4, 0.31, 0.24] as const,
   fogStart: 16,
   fogEnd: 42,
@@ -234,4 +292,12 @@ export const LIGHTING = {
 export const RENDER = {
   /** Cap the backbuffer resolution on high-DPI phones. */
   maxPixelRatio: 2,
+  /** Dynamic resolution: drop towards minPixelRatio while fps < governorLowFps, climb back while
+   * fps > governorHighFps (averaged over governorWindowSeconds). */
+  dynamicResolution: true,
+  minPixelRatio: 1,
+  governorStep: 0.25,
+  governorLowFps: 48,
+  governorHighFps: 57,
+  governorWindowSeconds: 1.5,
 };

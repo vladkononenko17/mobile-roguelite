@@ -1,114 +1,48 @@
 import {
   ADDRESS_CLAMP_TO_EDGE,
-  ADDRESS_REPEAT,
   BLEND_NORMAL,
-  Color,
   Entity,
-  FILTER_LINEAR,
-  FILTER_LINEAR_MIPMAP_LINEAR,
   Layer,
+  MeshInstance,
   PIXELFORMAT_RGBA8,
-  PIXELFORMAT_SRGBA8,
   StandardMaterial,
   Texture,
-  Vec2,
   type AppBase,
   type CameraComponent,
   type LightComponent,
 } from "playcanvas";
-import { GROUND, METAL, PLAYER, ROCKY, type SurfaceTextures } from "../config";
-import { GROUND_SIZE } from "./Arena";
+import { GROUND, METAL, PLAYER, ROCKY } from "../config";
+import { createGroundTexture, GROUND_SIZE } from "./Arena";
+import { groundQuadMesh } from "./kit/KitMesh";
+import type { EnvironmentKit } from "./kit/EnvironmentKit";
+import { applySurface, setSurfaceTiling, setSurfaceTint } from "./Surface";
 
-async function loadImage(url: string): Promise<HTMLImageElement> {
-  const image = new Image();
-  image.crossOrigin = "anonymous";
-  image.src = url;
-  await image.decode();
-  return image;
-}
-
-/** Colour maps must be sRGB; normal and roughness data are linear. */
-async function loadTexture(app: AppBase, url: string, srgb: boolean): Promise<Texture> {
-  const texture = new Texture(app.graphicsDevice, {
-    name: url.split("/").pop(),
-    format: srgb ? PIXELFORMAT_SRGBA8 : PIXELFORMAT_RGBA8,
-    mipmaps: true,
-    minFilter: FILTER_LINEAR_MIPMAP_LINEAR,
-    magFilter: FILTER_LINEAR,
-    addressU: ADDRESS_REPEAT,
-    addressV: ADDRESS_REPEAT,
-    // The camera sees the ground at a grazing-ish angle; anisotropy keeps it sharp towards the top.
-    anisotropy: 8,
-  });
-  texture.setSource(await loadImage(url));
-  return texture;
-}
-
-/** Loads a diffuse / OpenGL-normal / roughness set onto a material. */
-async function applySurface(app: AppBase, material: StandardMaterial, set: SurfaceTextures): Promise<void> {
-  const base = `${import.meta.env.BASE_URL}${set.folder}`;
-  const [diffuse, normal, rough] = await Promise.all([
-    loadTexture(app, `${base}/${set.diffuse}`, true),
-    loadTexture(app, `${base}/${set.normal}`, false),
-    loadTexture(app, `${base}/${set.roughness}`, false),
-  ]);
-  material.diffuseMap = diffuse;
-  material.normalMap = normal;
-  material.bumpiness = set.bumpiness;
-  // Roughness map -> gloss: PlayCanvas stores gloss, so invert it.
-  material.glossMap = rough;
-  material.glossMapChannel = "g";
-  material.glossInvert = true;
-  material.gloss = 1;
-  material.useMetalness = true;
-  material.metalness = 0;
-}
-
-/** Tiles the surface maps every `tileMetres` over a plane `width` x `depth` metres. */
-function setTiling(
-  material: StandardMaterial,
-  tileMetres: number,
-  width: number,
-  depth: number,
-  brightness: number,
-  tint: readonly [number, number, number] = [1, 1, 1],
-): void {
-  const tiling = new Vec2(width / tileMetres, depth / tileMetres);
-  material.diffuseMapTiling = tiling;
-  material.normalMapTiling = tiling;
-  material.glossMapTiling = tiling;
-  material.diffuse = new Color(brightness * tint[0], brightness * tint[1], brightness * tint[2]);
-  material.update();
-}
+const HALF = GROUND_SIZE / 2;
 
 /**
- * Soft, irregular edge for the rock overlay as an alpha mask over the whole overlay plane
- * (not tiled). On the plane primitive v = 0 is its far (-Z) edge, so the fade is drawn at the
- * bottom of the canvas, where the overlay meets the road.
+ * Alpha mask for the rock -> road border strip (UV1 runs 0..1 across the strip, V = 0 on the rock
+ * side). The fade band wanders along X so the border reads as natural ground, not a ruler line.
  */
 function createEdgeMask(app: AppBase, depth: number): Texture {
   const width = 512;
-  const height = 512;
+  const height = 64;
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d")!;
   const image = ctx.createImageData(width, height);
-  const metresPerRow = depth / height;
-  const fadeRows = ROCKY.edgeFadeMetres / metresPerRow;
-  // Deterministic wobble: a few sine octaves in metres along X.
   const phases = [1.7, 4.2, 0.6, 2.9];
   for (let x = 0; x < width; x++) {
     const worldX = (x / width) * GROUND_SIZE;
-    let wobble = 0;
-    wobble += Math.sin(worldX * 0.21 + phases[0]) * 0.55;
-    wobble += Math.sin(worldX * 0.53 + phases[1]) * 0.3;
-    wobble += Math.sin(worldX * 1.37 + phases[2]) * 0.1;
-    wobble += Math.sin(worldX * 3.1 + phases[3]) * 0.05;
-    // Edge row for this column: the overlay's near edge minus the fade band, shifted by the wobble.
-    const edge = height - fadeRows - (wobble * ROCKY.edgeNoiseMetres + ROCKY.edgeNoiseMetres) / metresPerRow;
+    const wobble =
+      Math.sin(worldX * 0.21 + phases[0]) * 0.55 +
+      Math.sin(worldX * 0.53 + phases[1]) * 0.3 +
+      Math.sin(worldX * 1.37 + phases[2]) * 0.1 +
+      Math.sin(worldX * 3.1 + phases[3]) * 0.05;
+    const centre = depth / 2 + wobble * ROCKY.edgeNoiseMetres;
     for (let y = 0; y < height; y++) {
-      const t = Math.min(1, Math.max(0, (y - edge) / fadeRows));
+      const metres = ((y + 0.5) / height) * depth;
+      const t = Math.min(1, Math.max(0, (metres - (centre - ROCKY.edgeFadeMetres / 2)) / ROCKY.edgeFadeMetres));
       const alpha = 1 - t * t * (3 - 2 * t);
       const i = (y * width + x) * 4;
       image.data[i] = image.data[i + 1] = image.data[i + 2] = 255;
@@ -128,82 +62,81 @@ function createEdgeMask(app: AppBase, depth: number): Texture {
 }
 
 /**
- * Ground surfaces: the "damaged road" PBR set on the base ground, and a "rocky terrain" overlay
- * covering the far third of the arena with a soft, irregular border into the road.
- *
- * The overlay is a transparent plane on its own layer, drawn after all opaque geometry (so it
- * sits on the road and under the hero) but before the World layer's transparent pass (so the
- * hero's contact shadow still draws on top of it).
+ * Ground surfaces, built from non-overlapping world-space quads (UVs in metres, so every surface
+ * keeps its texel density and neighbouring quads line up):
+ * - road: from the rock border strip to the near edge;
+ * - rock: opaque from the far edge to the border strip;
+ * - border strip: the only transparent ground (~5.5 m deep), blending rock into road. It sits on
+ *   its own layer after all opaque geometry and before the World transparent pass, so the hero's
+ *   contact shadow still draws on top of it;
+ * - steel deck: opaque plates a few millimetres above the road, framed by kit trim.
  */
 export class Ground {
   private roadTile: number = GROUND.tileMetres;
   private rockTile: number = ROCKY.tileMetres;
-  private brightness: number = GROUND.brightness;
-  private roadLoaded = false;
-  private rockLoaded = false;
   private metalTile: number = METAL.tileMetres;
-  private metalLoaded = false;
-  private readonly rockMaterial = new StandardMaterial();
-  private readonly metalMaterial = new StandardMaterial();
-  private readonly rockDepth: number;
-  readonly rockBoundaryZ: number;
+  private brightness: number = GROUND.brightness;
+  private readonly road = new StandardMaterial();
+  private readonly rock = new StandardMaterial();
+  private readonly rockBand = new StandardMaterial();
+  private readonly metal = new StandardMaterial();
+  private readonly bandFarZ: number;
+  private readonly bandNearZ: number;
 
-  constructor(private readonly roadMaterial: StandardMaterial) {
+  constructor(private readonly app: AppBase, private readonly kit: EnvironmentKit) {
     const arena = PLAYER.arenaHalfSize * 2;
-    this.rockBoundaryZ = -PLAYER.arenaHalfSize + arena * ROCKY.coverage;
-    // The overlay runs from the far edge of the ground to just past the boundary (fade + wobble).
-    this.rockDepth = this.rockBoundaryZ + ROCKY.edgeFadeMetres / 2 + ROCKY.edgeNoiseMetres + GROUND_SIZE / 2;
+    const boundary = -PLAYER.arenaHalfSize + arena * ROCKY.coverage;
+    const halfBand = ROCKY.edgeFadeMetres / 2 + ROCKY.edgeNoiseMetres;
+    this.bandFarZ = boundary - halfBand;
+    this.bandNearZ = boundary + halfBand;
+
+    // The ground skips image-based lighting (see LIGHTING.groundAmbient); it is the biggest
+    // per-pixel cost in the scene because it covers the whole screen.
+    for (const m of [this.road, this.rock, this.rockBand, this.metal]) m.useSkybox = false;
+
+    // Procedural road texture until the road set loads (and if it fails).
+    this.road.diffuseMap = createGroundTexture(app);
+    this.road.gloss = 0.1;
+    this.road.useMetalness = true;
+    setSurfaceTiling(this.road, 6);
+
+    this.addQuad("Road", this.road, -HALF, this.bandFarZ, HALF, HALF, 0);
   }
 
-  get tileSize(): number {
-    return this.roadTile;
-  }
+  get tileSize(): number { return this.roadTile; }
+  get rockTileSize(): number { return this.rockTile; }
+  get metalTileSize(): number { return this.metalTile; }
+  get tint(): number { return this.brightness; }
 
-  get rockTileSize(): number {
-    return this.rockTile;
-  }
-
-  get metalTileSize(): number {
-    return this.metalTile;
-  }
-
-  get tint(): number {
-    return this.brightness;
-  }
-
-  /** Creates the overlay layer/entity; call once the camera and lights exist. */
-  async load(app: AppBase): Promise<void> {
-    const overlayLayer = this.createOverlayLayer(app);
+  /** Loads all surface textures and adds the rock, border strip and deck. Needs camera + lights. */
+  async load(): Promise<void> {
+    const app = this.app;
+    const overlay = this.createOverlayLayer();
+    const warn = (what: string) => (error: unknown) => console.warn(`[Ground] ${what} failed to load.`, error);
     await Promise.all([
-      applySurface(app, this.roadMaterial, GROUND).then(
-        () => { this.roadLoaded = true; this.applyRoad(); },
-        (error) => console.warn("[Ground] Road textures failed to load; keeping the procedural ground.", error),
-      ),
-      this.createRockOverlay(app, overlayLayer).then(
-        () => { this.rockLoaded = true; this.applyRock(); },
-        (error) => console.warn("[Ground] Rocky terrain failed to load; the road covers the whole arena.", error),
-      ),
-      this.createMetalDeck(app).then(
-        () => { this.metalLoaded = true; this.applyMetal(); },
-        (error) => console.warn("[Ground] Metal deck textures failed to load; no deck.", error),
-      ),
+      applySurface(app, this.road, GROUND).then(() => this.applyRoad(), warn("Road textures")),
+      Promise.all([applySurface(app, this.rock, ROCKY), applySurface(app, this.rockBand, ROCKY)]).then(() => {
+        this.addQuad("RockyTerrain", this.rock, -HALF, -HALF, HALF, this.bandFarZ, 0.001);
+        const band = this.rockBand;
+        band.opacityMap = createEdgeMask(app, this.bandNearZ - this.bandFarZ);
+        band.opacityMapChannel = "a";
+        band.opacityMapUv = 1;
+        band.blendType = BLEND_NORMAL;
+        band.depthWrite = false;
+        this.addQuad("RockyBorder", band, -HALF, this.bandFarZ, HALF, this.bandNearZ, 0.001, [overlay.id]);
+        this.applyRock();
+      }, warn("Rocky terrain")),
+      applySurface(app, this.metal, METAL).then(() => {
+        this.addQuad("MetalDeck", this.metal, METAL.minX, METAL.minZ, METAL.maxX, METAL.maxZ, 0.004);
+        this.addDeckTrim();
+        this.applyMetal();
+      }, warn("Metal deck textures")),
     ]);
   }
 
-  setTileSize(metres: number): void {
-    this.roadTile = metres;
-    this.applyRoad();
-  }
-
-  setRockTileSize(metres: number): void {
-    this.rockTile = metres;
-    this.applyRock();
-  }
-
-  setMetalTileSize(metres: number): void {
-    this.metalTile = metres;
-    this.applyMetal();
-  }
+  setTileSize(metres: number): void { this.roadTile = metres; this.applyRoad(); }
+  setRockTileSize(metres: number): void { this.rockTile = metres; this.applyRock(); }
+  setMetalTileSize(metres: number): void { this.metalTile = metres; this.applyMetal(); }
 
   setBrightness(value: number): void {
     this.brightness = value;
@@ -212,96 +145,55 @@ export class Ground {
     this.applyMetal();
   }
 
-  private createOverlayLayer(app: AppBase): Layer {
-    const layers = app.scene.layers;
+  private addQuad(name: string, material: StandardMaterial, x0: number, z0: number, x1: number, z1: number, y: number, layers?: number[]): void {
+    const entity = new Entity(name);
+    entity.addComponent("render", {
+      meshInstances: [new MeshInstance(groundQuadMesh(this.app.graphicsDevice, x0, z0, x1, z1), material)],
+      castShadows: false,
+      receiveShadows: true,
+      ...(layers ? { layers } : {}),
+    });
+    entity.setLocalPosition(0, y, 0);
+    this.app.root.addChild(entity);
+  }
+
+  private addDeckTrim(): void {
+    const { minX, maxX, minZ, maxZ, trimWidth: w, trimHeight: h } = METAL;
+    const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
+    const width = maxX - minX, depth = maxZ - minZ;
+    const holder = new Entity("MetalDeckTrim");
+    this.app.root.addChild(holder);
+    const bars: [number, number, number, number][] = [
+      [cx, minZ, width + w, w], [cx, maxZ, width + w, w], [minX, cz, w, depth + w], [maxX, cz, w, depth + w],
+    ];
+    for (const [x, z, sx, sz] of bars) this.kit.part(holder, "steel", [sx, h, sz], [x, h / 2, z], { bevel: 0.012, noBottom: true });
+  }
+
+  private createOverlayLayer(): Layer {
+    const layers = this.app.scene.layers;
     const world = layers.getLayerByName("World")!;
     const overlay = new Layer({ name: "GroundOverlay" });
     layers.insertTransparent(overlay, layers.getTransparentIndex(world));
-    for (const camera of app.root.findComponents("camera") as CameraComponent[]) {
-      camera.layers = [...camera.layers, overlay.id];
-    }
+    for (const camera of this.app.root.findComponents("camera") as CameraComponent[]) camera.layers = [...camera.layers, overlay.id];
     // Lights only affect (and shadow) layers they list.
-    for (const light of app.root.findComponents("light") as LightComponent[]) {
-      light.layers = [...light.layers, overlay.id];
-    }
+    for (const light of this.app.root.findComponents("light") as LightComponent[]) light.layers = [...light.layers, overlay.id];
     return overlay;
   }
 
-  private async createRockOverlay(app: AppBase, layer: Layer): Promise<void> {
-    await applySurface(app, this.rockMaterial, ROCKY);
-    const m = this.rockMaterial;
-    m.opacityMap = createEdgeMask(app, this.rockDepth);
-    m.opacityMapChannel = "a";
-    m.opacityMapTiling = new Vec2(1, 1);
-    m.blendType = BLEND_NORMAL;
-    m.depthWrite = false;
-
-    const entity = new Entity("RockyTerrain");
-    entity.addComponent("render", {
-      type: "plane",
-      material: m,
-      castShadows: false,
-      receiveShadows: true,
-      layers: [layer.id],
-    });
-    const farZ = -GROUND_SIZE / 2;
-    const nearZ = farZ + this.rockDepth;
-    entity.setLocalScale(GROUND_SIZE, 1, this.rockDepth);
-    // A hair above the road; depth writes are off, so there is no z-fighting to worry about.
-    entity.setLocalPosition(0, 0.002, (farZ + nearZ) / 2);
-    app.root.addChild(entity);
+  private applyRoad(): void {
+    setSurfaceTiling(this.road, this.roadTile);
+    setSurfaceTint(this.road, this.brightness);
   }
 
-  /**
-   * Hard-edged steel deck: an opaque plane a few millimetres above the road (normal opaque pass,
-   * so shadows and sorting need nothing special) framed by a low dark-steel trim. The entities
-   * are only added once the textures have loaded.
-   */
-  private async createMetalDeck(app: AppBase): Promise<void> {
-    await applySurface(app, this.metalMaterial, METAL);
-    const width = METAL.maxX - METAL.minX;
-    const depth = METAL.maxZ - METAL.minZ;
-    const centreX = (METAL.minX + METAL.maxX) / 2;
-    const centreZ = (METAL.minZ + METAL.maxZ) / 2;
-
-    const deck = new Entity("MetalDeck");
-    deck.addComponent("render", { type: "plane", material: this.metalMaterial, castShadows: false, receiveShadows: true });
-    deck.setLocalScale(width, 1, depth);
-    deck.setLocalPosition(centreX, 0.004, centreZ);
-    app.root.addChild(deck);
-
-    const trim = new StandardMaterial();
-    trim.diffuse = new Color(0.16, 0.15, 0.14);
-    trim.useMetalness = true;
-    trim.metalness = 0.7;
-    trim.gloss = 0.45;
-    trim.update();
-    const { trimWidth: w, trimHeight: h } = METAL;
-    const bars: [number, number, number, number][] = [
-      [centreX, METAL.minZ, width + w, w],
-      [centreX, METAL.maxZ, width + w, w],
-      [METAL.minX, centreZ, w, depth + w],
-      [METAL.maxX, centreZ, w, depth + w],
-    ];
-    for (const [x, z, sx, sz] of bars) {
-      const bar = new Entity("MetalDeckTrim");
-      bar.addComponent("render", { type: "box", material: trim, castShadows: true, receiveShadows: true });
-      bar.setLocalScale(sx, h, sz);
-      bar.setLocalPosition(x, h / 2, z);
-      app.root.addChild(bar);
+  private applyRock(): void {
+    for (const m of [this.rock, this.rockBand]) {
+      setSurfaceTiling(m, this.rockTile);
+      setSurfaceTint(m, this.brightness * ROCKY.brightness, ROCKY.tint);
     }
   }
 
   private applyMetal(): void {
-    if (!this.metalLoaded) return;
-    setTiling(this.metalMaterial, this.metalTile, METAL.maxX - METAL.minX, METAL.maxZ - METAL.minZ, this.brightness * METAL.brightness);
-  }
-
-  private applyRoad(): void {
-    if (this.roadLoaded) setTiling(this.roadMaterial, this.roadTile, GROUND_SIZE, GROUND_SIZE, this.brightness);
-  }
-
-  private applyRock(): void {
-    if (this.rockLoaded) setTiling(this.rockMaterial, this.rockTile, GROUND_SIZE, this.rockDepth, this.brightness * ROCKY.brightness, ROCKY.tint);
+    setSurfaceTiling(this.metal, this.metalTile);
+    setSurfaceTint(this.metal, this.brightness * METAL.brightness);
   }
 }

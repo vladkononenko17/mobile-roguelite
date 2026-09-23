@@ -6,9 +6,10 @@ import {
   GAMMA_SRGB,
   RESOLUTION_AUTO,
   TONEMAP_NEUTRAL,
+  type RenderComponent,
 } from "playcanvas";
 import { CameraController } from "./camera/CameraController";
-import { CAMERA, CHARACTER, CHARACTERS, LIGHTING, PLAYER, RENDER, type CharacterId } from "./config";
+import { CAMERA, CHARACTER, CHARACTERS, LIGHTING, PLAYER, type CharacterId } from "./config";
 import { KeyboardMoveInput } from "./input/KeyboardMoveInput";
 import { TouchJoystickInput } from "./input/TouchJoystickInput";
 import { CombinedMoveInput, type MoveInputSource } from "./input/MoveInput";
@@ -16,10 +17,12 @@ import { loadCharacter } from "./player/CharacterLoader";
 import { PlayerAnimationController } from "./player/PlayerAnimationController";
 import { PlayerController } from "./player/PlayerController";
 import { DebugPanel, type TuneParam } from "./ui/DebugPanel";
-import { createArena } from "./world/Arena";
 import { Ground } from "./world/Ground";
 import { createContactShadow } from "./world/ContactShadow";
-import { createLighting } from "./world/Environment";
+import { CHARACTER_LIGHT_MASK, createLighting } from "./world/Environment";
+import { EnvironmentKit } from "./world/kit/EnvironmentKit";
+import { buildTestLayout } from "./world/kit/TestLayout";
+import { ResolutionGovernor } from "./perf/ResolutionGovernor";
 
 export interface GameOptions {
   canvas: HTMLCanvasElement;
@@ -44,16 +47,17 @@ export class Game {
   private contactShadow!: Entity;
   private characterScale: number = CHARACTER.scale;
   private ground!: Ground;
+  private kit!: EnvironmentKit;
+  private resolution!: ResolutionGovernor;
   private debug!: DebugPanel;
   private debugTimer = 0;
   private frames = 0;
-  private readonly debugStats = { fps: 0, state: "", clip: "", speed: 0, x: 0, z: 0, yaw: 0 };
+  private readonly debugStats = { fps: 0, state: "", clip: "", speed: 0, x: 0, z: 0, yaw: 0, pixelRatio: 1, width: 0, height: 0, drawCalls: 0, triangles: 0, shadowCalls: 0 };
 
   constructor(private readonly options: GameOptions) {
     this.app = new Application(options.canvas, {
       graphicsDeviceOptions: { antialias: true, alpha: false, powerPreference: "high-performance" },
     });
-    this.app.graphicsDevice.maxPixelRatio = Math.min(window.devicePixelRatio || 1, RENDER.maxPixelRatio);
     this.app.setCanvasFillMode(FILLMODE_FILL_WINDOW);
     this.app.setCanvasResolution(RESOLUTION_AUTO);
     // Only two directional lights: the non-clustered forward path is cheaper on mobile GPUs.
@@ -65,9 +69,10 @@ export class Game {
     window.addEventListener("resize", this.onResize);
     app.start();
 
+    this.resolution = new ResolutionGovernor(app);
     createLighting(app);
-    const arena = createArena(app);
-    this.ground = new Ground(arena.groundMaterial);
+    this.kit = new EnvironmentKit(app);
+    this.ground = new Ground(app, this.kit);
 
     const cameraEntity = new Entity("Camera");
     const [r, g, b] = LIGHTING.clearColor;
@@ -82,7 +87,9 @@ export class Game {
     });
     app.root.addChild(cameraEntity);
     // Small textures; they stream in alongside the character download. Needs camera + lights.
-    const groundLoaded = this.ground.load(app);
+    const groundLoaded = this.ground.load();
+    const kitLoaded = this.kit.load();
+    app.root.addChild(buildTestLayout(this.kit));
 
     const characterModel = CHARACTERS[this.options.character];
     const character = await loadCharacter(app, `${import.meta.env.BASE_URL}${characterModel.url}`, this.options.onProgress);
@@ -99,6 +106,10 @@ export class Game {
     playerRoot.addChild(this.contactShadow);
     app.root.addChild(playerRoot);
     this.model = character.model;
+    // Fill and rim lights are masked to the hero only.
+    for (const render of character.model.findComponents("render") as RenderComponent[]) {
+      for (const meshInstance of render.meshInstances) meshInstance.mask |= CHARACTER_LIGHT_MASK;
+    }
 
     this.input = new CombinedMoveInput([
       new KeyboardMoveInput(PLAYER.walkSpeed / PLAYER.runSpeed),
@@ -110,7 +121,7 @@ export class Game {
     console.info(`[PlayerAnimation] Idle=${this.animation.clipNames.Idle}, Walk=${this.animation.clipNames.Walk}, Run=${this.animation.clipNames.Run}`);
 
     this.setCharacterScale(this.characterScale);
-    await groundLoaded;
+    await Promise.all([groundLoaded, kitLoaded]);
 
     this.debug = new DebugPanel(this.options.debugRoot, this.tuneParams());
     app.on("update", this.update, this);
@@ -118,6 +129,7 @@ export class Game {
 
   private update(rawDt: number): void {
     const dt = Math.min(rawDt, MAX_DT);
+    this.resolution.update(rawDt);
     this.player.update(dt);
     this.animation.update(this.player.speed);
     this.camera.update(dt);
@@ -134,6 +146,14 @@ export class Game {
       stats.x = position.x;
       stats.z = position.z;
       stats.yaw = this.player.yawDeg;
+      const device = this.app.graphicsDevice;
+      const engine = this.app.stats;
+      stats.pixelRatio = this.resolution.pixelRatio;
+      stats.width = device.width;
+      stats.height = device.height;
+      stats.drawCalls = engine.drawCalls.total;
+      stats.shadowCalls = engine.drawCalls.shadow;
+      stats.triangles = engine.frame.triangles;
       this.debug.update(stats);
       this.debugTimer = 0;
       this.frames = 0;
@@ -164,6 +184,7 @@ export class Game {
       { key: "rockTile", label: "Rock m", min: 1, max: 12, step: 0.5, get: () => this.ground.rockTileSize, set: (v) => this.ground.setRockTileSize(v) },
       { key: "metalTile", label: "Metal m", min: 1, max: 8, step: 0.5, get: () => this.ground.metalTileSize, set: (v) => this.ground.setMetalTileSize(v) },
       { key: "groundBrightness", label: "Ground lum", min: 0.3, max: 1.6, step: 0.05, get: () => this.ground.tint, set: (v) => this.ground.setBrightness(v) },
+      { key: "resMax", label: "Res max", min: 0.75, max: 3, step: 0.25, get: () => this.resolution.maxRatio, set: (v) => this.resolution.setMaxRatio(v) },
       { key: "characterScale", label: "Scale", min: 0.7, max: 1.6, step: 0.01, get: () => this.characterScale, set: (v) => this.setCharacterScale(v) },
     ];
   }

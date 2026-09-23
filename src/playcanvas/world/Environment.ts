@@ -6,7 +6,7 @@ import {
   FloatPacking,
   FOG_LINEAR,
   PIXELFORMAT_RGBA16F,
-  SHADOW_PCF5,
+  SHADOW_PCF3,
   Texture,
   type AppBase,
 } from "playcanvas";
@@ -90,12 +90,19 @@ function createEnvironmentAtlas(app: AppBase): Texture {
   return atlas;
 }
 
-/** Sun (soft PCF5 shadows), bounce fill, rim, image-based ambient and distance fog. */
+/** Light mask bit carried by the hero's mesh instances (plus the default dynamic bit). */
+export const CHARACTER_LIGHT_MASK = 8;
+
+/** Sun (PCF3 shadows) for everything; bounce fill and rim for the hero only (light mask); image-
+ * based ambient and distance fog. */
 export function createLighting(app: AppBase): { sun: Entity } {
   const scene = app.scene;
   scene.envAtlas = createEnvironmentAtlas(app);
   scene.skyboxIntensity = 1;
   scene.exposure = LIGHTING.exposure;
+  // Only used by materials with useSkybox = false (the ground).
+  const [ar, ag, ab] = LIGHTING.groundAmbient;
+  scene.ambientLight = new Color(ar, ag, ab);
 
   const [r, g, b] = LIGHTING.clearColor;
   scene.fog.type = FOG_LINEAR;
@@ -110,7 +117,7 @@ export function createLighting(app: AppBase): { sun: Entity } {
     color: new Color(s.color[0], s.color[1], s.color[2]),
     intensity: s.intensity,
     castShadows: true,
-    shadowType: SHADOW_PCF5,
+    shadowType: SHADOW_PCF3,
     shadowResolution: s.shadowResolution,
     shadowDistance: s.shadowDistance,
     shadowBias: s.shadowBias,
@@ -127,6 +134,7 @@ export function createLighting(app: AppBase): { sun: Entity } {
     color: new Color(f.color[0], f.color[1], f.color[2]),
     intensity: f.intensity,
     castShadows: false,
+    mask: CHARACTER_LIGHT_MASK,
   });
   aimLight(fill, f.elevationDeg, f.azimuthDeg);
   app.root.addChild(fill);
@@ -138,6 +146,7 @@ export function createLighting(app: AppBase): { sun: Entity } {
     color: new Color(rimConfig.color[0], rimConfig.color[1], rimConfig.color[2]),
     intensity: rimConfig.intensity,
     castShadows: false,
+    mask: CHARACTER_LIGHT_MASK,
   });
   aimLight(rim, rimConfig.elevationDeg, rimConfig.azimuthDeg);
   app.root.addChild(rim);

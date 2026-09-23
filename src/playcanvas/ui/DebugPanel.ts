@@ -6,6 +6,12 @@ export interface DebugStats {
   x: number;
   z: number;
   yaw: number;
+  pixelRatio: number;
+  width: number;
+  height: number;
+  drawCalls: number;
+  shadowCalls: number;
+  triangles: number;
 }
 
 export interface TuneParam {
@@ -75,7 +81,9 @@ export class DebugPanel {
 
   update(stats: DebugStats): void {
     const text = `${stats.fps.toFixed(0)} fps · ${stats.state} (${stats.clip}) · ${stats.speed.toFixed(2)} m/s\n` +
-      `pos ${stats.x.toFixed(1)}, ${stats.z.toFixed(1)} · yaw ${stats.yaw.toFixed(0)}°`;
+      `pos ${stats.x.toFixed(1)}, ${stats.z.toFixed(1)} · yaw ${stats.yaw.toFixed(0)}°\n` +
+      `res ${stats.width}x${stats.height} (x${stats.pixelRatio.toFixed(2)}) · ${stats.drawCalls} draws ` +
+      `(${stats.shadowCalls} shadow) · ${(stats.triangles / 1000).toFixed(0)}k tris`;
     // Avoid DOM writes (and layout) on frames where nothing visible changed.
     if (text !== this.lastText) {
       this.stats.textContent = text;
