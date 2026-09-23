@@ -1,59 +1,34 @@
 import {
   ADDRESS_CLAMP_TO_EDGE,
+  ADDRESS_REPEAT,
   BLEND_NORMAL,
+  calculateTangents,
   Entity,
   Layer,
+  Mesh,
   MeshInstance,
   PIXELFORMAT_RGBA8,
+  SEMANTIC_TANGENT,
   StandardMaterial,
   Texture,
   type AppBase,
   type CameraComponent,
   type LightComponent,
 } from "playcanvas";
-import { GROUND, PLAYER, ROCKY } from "../config";
+import { GROUND, PAD, ROAD, ROCKY } from "../config";
 import { createGroundTexture, GROUND_SIZE } from "./Arena";
 import { groundQuadMesh } from "./kit/KitMesh";
+import type { GroundSpec } from "./level/CheckpointLevel";
 import { applySurface, setSurfaceTiling, setSurfaceTint } from "./Surface";
 
 const HALF = GROUND_SIZE / 2;
 
-/**
- * Alpha mask for the rock -> road border strip (UV1 runs 0..1 across the strip, V = 0 on the rock
- * side). The fade band wanders along X so the border reads as natural ground, not a ruler line.
- */
-function createEdgeMask(app: AppBase, depth: number): Texture {
-  const width = 512;
-  const height = 64;
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d")!;
-  const image = ctx.createImageData(width, height);
-  const phases = [1.7, 4.2, 0.6, 2.9];
-  for (let x = 0; x < width; x++) {
-    const worldX = (x / width) * GROUND_SIZE;
-    const wobble =
-      Math.sin(worldX * 0.21 + phases[0]) * 0.55 +
-      Math.sin(worldX * 0.53 + phases[1]) * 0.3 +
-      Math.sin(worldX * 1.37 + phases[2]) * 0.1 +
-      Math.sin(worldX * 3.1 + phases[3]) * 0.05;
-    const centre = depth / 2 + wobble * ROCKY.edgeNoiseMetres;
-    for (let y = 0; y < height; y++) {
-      const metres = ((y + 0.5) / height) * depth;
-      const t = Math.min(1, Math.max(0, (metres - (centre - ROCKY.edgeFadeMetres / 2)) / ROCKY.edgeFadeMetres));
-      const alpha = 1 - t * t * (3 - 2 * t);
-      const i = (y * width + x) * 4;
-      image.data[i] = image.data[i + 1] = image.data[i + 2] = 255;
-      image.data[i + 3] = Math.round(alpha * 255);
-    }
-  }
-  ctx.putImageData(image, 0, 0);
+function maskTexture(app: AppBase, name: string, canvas: HTMLCanvasElement, repeatU: boolean): Texture {
   const texture = new Texture(app.graphicsDevice, {
-    name: "rocky-edge-mask",
+    name,
     format: PIXELFORMAT_RGBA8,
     mipmaps: true,
-    addressU: ADDRESS_CLAMP_TO_EDGE,
+    addressU: repeatU ? ADDRESS_REPEAT : ADDRESS_CLAMP_TO_EDGE,
     addressV: ADDRESS_CLAMP_TO_EDGE,
   });
   texture.setSource(canvas);
@@ -61,84 +36,206 @@ function createEdgeMask(app: AppBase, depth: number): Texture {
 }
 
 /**
- * Ground surfaces, built from non-overlapping world-space quads (UVs in metres, so every surface
- * keeps its texel density and neighbouring quads line up):
- * - road: from the rock border strip to the near edge;
- * - rock: opaque from the far edge to the border strip;
- * - border strip: the only transparent ground (~5.5 m deep), blending rock into road. It sits on
- *   its own layer after all opaque geometry and before the World transparent pass, so the hero's
- *   contact shadow still draws on top of it;
- *
- * The rusty metal plate textures are kept for kit props (panels, gates, barricades), not ground.
+ * Road edge alpha: U runs along the road (tileable, one repeat per ROAD.maskPeriod metres), V
+ * across the edge strip (0 = inner, fully road; 1 = outer, fully dirt). The fade line wanders so
+ * the edge reads as crumbled asphalt rather than a clean border.
+ */
+function createRoadEdgeMask(app: AppBase): Texture {
+  const width = 512, height = 32;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d")!;
+  const image = ctx.createImageData(width, height);
+  for (let x = 0; x < width; x++) {
+    const u = (x / width) * Math.PI * 2;
+    // Integer frequencies keep the mask seamless along U.
+    const wobble = Math.sin(u * 3 + 0.7) * 0.5 + Math.sin(u * 7 + 2.1) * 0.3 + Math.sin(u * 19 + 4.0) * 0.14 + Math.sin(u * 41 + 1.3) * 0.06;
+    const centre = 0.5 + wobble * 0.3;
+    for (let y = 0; y < height; y++) {
+      const v = (y + 0.5) / height;
+      const t = Math.min(1, Math.max(0, (v - (centre - 0.2)) / 0.4));
+      const i = (y * width + x) * 4;
+      image.data[i] = image.data[i + 1] = image.data[i + 2] = 255;
+      image.data[i + 3] = Math.round((1 - t * t * (3 - 2 * t)) * 255);
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+  return maskTexture(app, "road-edge-mask", canvas, true);
+}
+
+/** Irregular soft blob (UV1 0..1 over a patch quad) for rocky patches. */
+function createPatchMask(app: AppBase): Texture {
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const image = ctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = (x + 0.5) / size - 0.5, dy = (y + 0.5) / size - 0.5;
+      const angle = Math.atan2(dy, dx);
+      const radius = 0.34 + Math.sin(angle * 3 + 0.4) * 0.05 + Math.sin(angle * 5 + 2.2) * 0.035 + Math.sin(angle * 11 + 1.1) * 0.02;
+      const d = Math.hypot(dx, dy);
+      const t = Math.min(1, Math.max(0, (d - (radius - 0.12)) / 0.16));
+      const i = (y * size + x) * 4;
+      image.data[i] = image.data[i + 1] = image.data[i + 2] = 255;
+      image.data[i + 3] = Math.round((1 - t * t * (3 - 2 * t)) * 255);
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+  return maskTexture(app, "rock-patch-mask", canvas, false);
+}
+
+/** Triangle strip between two polylines, UV0 = world metres, UV1 = (along / period, across). */
+function stripMesh(app: AppBase, inner: number[], outer: number[], along: number[], period: number, v0: number, v1: number): Mesh {
+  const positions: number[] = [], normals: number[] = [], uvs: number[] = [], uv1: number[] = [], indices: number[] = [];
+  const n = along.length;
+  for (let i = 0; i < n; i++) {
+    for (const [pts, v] of [[inner, v0], [outer, v1]] as const) {
+      const x = pts[i * 2], z = pts[i * 2 + 1];
+      positions.push(x, 0, z);
+      normals.push(0, 1, 0);
+      uvs.push(x, z);
+      uv1.push(along[i] / period, v);
+    }
+  }
+  for (let i = 0; i < n - 1; i++) {
+    const a = i * 2, b = a + 1, c = a + 2, d = a + 3;
+    // Wind so the face points up whichever side of the centreline the strip lies on.
+    const ax = positions[a * 3], az = positions[a * 3 + 2];
+    const bx = positions[b * 3], bz = positions[b * 3 + 2];
+    const cx = positions[c * 3], cz = positions[c * 3 + 2];
+    const up = (bz - az) * (cx - ax) - (bx - ax) * (cz - az) > 0;
+    if (up) indices.push(a, b, c, b, d, c);
+    else indices.push(a, c, b, b, c, d);
+  }
+  const mesh = new Mesh(app.graphicsDevice);
+  mesh.setPositions(positions);
+  mesh.setNormals(normals);
+  mesh.setUvs(0, uvs);
+  mesh.setUvs(1, uv1);
+  mesh.setVertexStream(SEMANTIC_TANGENT, calculateTangents(positions, normals, uvs, indices), 4);
+  mesh.setIndices(indices);
+  mesh.update();
+  return mesh;
+}
+
+/**
+ * Level ground, all with UVs in world metres so surfaces keep their texel density:
+ * - dirt: one opaque quad under everything;
+ * - road: an opaque strip following the level's road path, plus two thin transparent edge strips
+ *   whose mask crumbles the asphalt into the dirt;
+ * - pads: opaque concrete floors (the yard);
+ * - rocky patches: small transparent quads with an irregular blob mask.
+ * Transparent pieces sit on their own layer after the opaque pass and before the World transparent
+ * pass, so the hero's contact shadow still draws over them. Only the thin road edges and the
+ * patches are transparent, which keeps overdraw low; the ground skips image-based lighting.
  */
 export class Ground {
-  private roadTile: number = GROUND.tileMetres;
+  private dirtTile: number = GROUND.tileMetres;
   private rockTile: number = ROCKY.tileMetres;
   private brightness: number = GROUND.brightness;
+  private readonly dirt = new StandardMaterial();
   private readonly road = new StandardMaterial();
+  private readonly roadEdge = new StandardMaterial();
+  private readonly pad = new StandardMaterial();
   private readonly rock = new StandardMaterial();
-  private readonly rockBand = new StandardMaterial();
-  private readonly bandFarZ: number;
-  private readonly bandNearZ: number;
 
-  constructor(private readonly app: AppBase) {
-    const arena = PLAYER.arenaHalfSize * 2;
-    const boundary = -PLAYER.arenaHalfSize + arena * ROCKY.coverage;
-    const halfBand = ROCKY.edgeFadeMetres / 2 + ROCKY.edgeNoiseMetres;
-    this.bandFarZ = boundary - halfBand;
-    this.bandNearZ = boundary + halfBand;
-
-    // The ground skips image-based lighting (see LIGHTING.groundAmbient); it is the biggest
-    // per-pixel cost in the scene because it covers the whole screen.
-    for (const m of [this.road, this.rock, this.rockBand]) m.useSkybox = false;
-
-    // Procedural road texture until the road set loads (and if it fails).
-    this.road.diffuseMap = createGroundTexture(app);
-    this.road.gloss = 0.1;
-    this.road.useMetalness = true;
-    setSurfaceTiling(this.road, 6);
-
-    this.addQuad("Road", this.road, -HALF, this.bandFarZ, HALF, HALF, 0);
+  constructor(private readonly app: AppBase, private readonly spec: GroundSpec) {
+    for (const m of [this.dirt, this.road, this.roadEdge, this.pad, this.rock]) m.useSkybox = false;
+    // Procedural dirt until the texture set loads (and if it fails).
+    this.dirt.diffuseMap = createGroundTexture(app);
+    this.dirt.gloss = 0.1;
+    this.dirt.useMetalness = true;
+    setSurfaceTiling(this.dirt, 6);
+    this.addMesh("Dirt", this.dirt, groundQuadMesh(app.graphicsDevice, -HALF, -HALF, HALF, HALF), 0);
   }
 
-  get tileSize(): number { return this.roadTile; }
+  get tileSize(): number { return this.dirtTile; }
   get rockTileSize(): number { return this.rockTile; }
   get tint(): number { return this.brightness; }
 
-  /** Loads all surface textures and adds the rock and its border strip. Needs camera + lights. */
+  /** Loads the surface textures and builds the road, pads and patches. Needs camera + lights. */
   async load(): Promise<void> {
     const app = this.app;
     const overlay = this.createOverlayLayer();
     const warn = (what: string) => (error: unknown) => console.warn(`[Ground] ${what} failed to load.`, error);
     await Promise.all([
-      applySurface(app, this.road, GROUND).then(() => this.applyRoad(), warn("Road textures")),
-      Promise.all([applySurface(app, this.rock, ROCKY), applySurface(app, this.rockBand, ROCKY)]).then(() => {
-        this.addQuad("RockyTerrain", this.rock, -HALF, -HALF, HALF, this.bandFarZ, 0.001);
-        const band = this.rockBand;
-        band.opacityMap = createEdgeMask(app, this.bandNearZ - this.bandFarZ);
-        band.opacityMapChannel = "a";
-        band.opacityMapUv = 1;
-        band.blendType = BLEND_NORMAL;
-        band.depthWrite = false;
-        this.addQuad("RockyBorder", band, -HALF, this.bandFarZ, HALF, this.bandNearZ, 0.001, [overlay.id]);
+      applySurface(app, this.dirt, GROUND).then(() => this.applyDirt(), warn("Dirt textures")),
+      Promise.all([applySurface(app, this.road, ROAD), applySurface(app, this.roadEdge, ROAD), applySurface(app, this.pad, ROAD)]).then(() => {
+        this.buildRoad(overlay);
+        for (const p of this.spec.pads) this.addMesh("ConcretePad", this.pad, groundQuadMesh(app.graphicsDevice, p.x0, p.z0, p.x1, p.z1), 0.004);
+        this.applyRoad();
+      }, warn("Road textures")),
+      applySurface(app, this.rock, ROCKY).then(() => {
+        const rock = this.rock;
+        rock.opacityMap = createPatchMask(app);
+        rock.opacityMapChannel = "a";
+        rock.opacityMapUv = 1;
+        rock.blendType = BLEND_NORMAL;
+        rock.depthWrite = false;
+        for (const p of this.spec.rockPatches) {
+          this.addMesh("RockPatch", rock, groundQuadMesh(app.graphicsDevice, p.x - p.w / 2, p.z - p.d / 2, p.x + p.w / 2, p.z + p.d / 2), 0.001, [overlay.id]);
+        }
         this.applyRock();
       }, warn("Rocky terrain")),
     ]);
   }
 
-  setTileSize(metres: number): void { this.roadTile = metres; this.applyRoad(); }
+  setTileSize(metres: number): void { this.dirtTile = metres; this.applyDirt(); }
   setRockTileSize(metres: number): void { this.rockTile = metres; this.applyRock(); }
 
   setBrightness(value: number): void {
     this.brightness = value;
+    this.applyDirt();
     this.applyRoad();
     this.applyRock();
   }
 
-  private addQuad(name: string, material: StandardMaterial, x0: number, z0: number, x1: number, z1: number, y: number, layers?: number[]): void {
+  private buildRoad(overlay: Layer): void {
+    const { roadCentreX, roadHalfWidth } = this.spec;
+    const step = 0.75;
+    const core = [[], []] as number[][];
+    const edgeL = [[], []] as number[][];
+    const edgeR = [[], []] as number[][];
+    const along: number[] = [];
+    let distance = 0;
+    let prevX = roadCentreX(-HALF), prevZ = -HALF;
+    for (let z = -HALF; z <= HALF + 1e-6; z += step) {
+      const x = roadCentreX(z);
+      distance += Math.hypot(x - prevX, z - prevZ);
+      prevX = x; prevZ = z;
+      // Unit normal to the centreline in the ground plane (points towards +X).
+      const slope = (roadCentreX(z + 0.01) - roadCentreX(z - 0.01)) / 0.02;
+      const len = Math.hypot(1, slope);
+      const nx = 1 / len, nz = -slope / len;
+      const hw = roadHalfWidth(z);
+      const inner = hw - ROAD.edgeInner, outer = hw + ROAD.edgeOuter;
+      core[0].push(x - nx * inner, z - nz * inner);
+      core[1].push(x + nx * inner, z + nz * inner);
+      edgeL[0].push(x - nx * inner, z - nz * inner);
+      edgeL[1].push(x - nx * outer, z - nz * outer);
+      edgeR[0].push(x + nx * inner, z + nz * inner);
+      edgeR[1].push(x + nx * outer, z + nz * outer);
+      along.push(distance);
+    }
+    const app = this.app;
+    this.addMesh("Road", this.road, stripMesh(app, core[0], core[1], along, ROAD.maskPeriod, 0, 0), 0.002);
+    const edge = this.roadEdge;
+    edge.opacityMap = createRoadEdgeMask(app);
+    edge.opacityMapChannel = "a";
+    edge.opacityMapUv = 1;
+    edge.blendType = BLEND_NORMAL;
+    edge.depthWrite = false;
+    this.addMesh("RoadEdge", edge, stripMesh(app, edgeL[0], edgeL[1], along, ROAD.maskPeriod, 0, 1), 0.002, [overlay.id]);
+    this.addMesh("RoadEdge", edge, stripMesh(app, edgeR[0], edgeR[1], along, ROAD.maskPeriod, 0, 1), 0.002, [overlay.id]);
+  }
+
+  private addMesh(name: string, material: StandardMaterial, mesh: Mesh, y: number, layers?: number[]): void {
     const entity = new Entity(name);
     entity.addComponent("render", {
-      meshInstances: [new MeshInstance(groundQuadMesh(this.app.graphicsDevice, x0, z0, x1, z1), material)],
+      meshInstances: [new MeshInstance(mesh, material)],
       castShadows: false,
       receiveShadows: true,
       ...(layers ? { layers } : {}),
@@ -158,15 +255,18 @@ export class Ground {
     return overlay;
   }
 
+  private applyDirt(): void {
+    setSurfaceTiling(this.dirt, this.dirtTile);
+    setSurfaceTint(this.dirt, this.brightness);
+  }
+
   private applyRoad(): void {
-    setSurfaceTiling(this.road, this.roadTile);
-    setSurfaceTint(this.road, this.brightness);
+    for (const m of [this.road, this.roadEdge]) setSurfaceTint(m, ROAD.brightness * this.brightness / GROUND.brightness, ROAD.tint);
+    setSurfaceTint(this.pad, PAD.brightness * this.brightness / GROUND.brightness, PAD.tint);
   }
 
   private applyRock(): void {
-    for (const m of [this.rock, this.rockBand]) {
-      setSurfaceTiling(m, this.rockTile);
-      setSurfaceTint(m, this.brightness * ROCKY.brightness, ROCKY.tint);
-    }
+    setSurfaceTiling(this.rock, this.rockTile);
+    setSurfaceTint(this.rock, this.brightness * ROCKY.brightness, ROCKY.tint);
   }
 }

@@ -51,7 +51,7 @@ export class EnvironmentKit {
         const material = this.materials[id];
         try {
           await applySurface(this.app, material, KIT_SURFACES[id]);
-          setSurfaceTint(material, KIT.brightness);
+          setSurfaceTint(material, KIT.brightness, KIT.tints[id]);
         } catch (error) {
           console.warn(`[Kit] ${id} textures failed to load; using flat colour.`, error);
         }
@@ -79,6 +79,15 @@ export class EnvironmentKit {
     entity.setLocalEulerAngles(0, yawDeg, 0);
     parent.addChild(entity);
     declareCollider(entity, shape);
+    return entity;
+  }
+
+  /** Empty child at (x, z) turned by yawDeg, for rotated sub-assemblies inside a prefab. */
+  group(parent: Entity, x: number, z: number, yawDeg = 0): Entity {
+    const entity = new Entity("group");
+    entity.setLocalPosition(x, 0, z);
+    entity.setLocalEulerAngles(0, yawDeg, 0);
+    parent.addChild(entity);
     return entity;
   }
 

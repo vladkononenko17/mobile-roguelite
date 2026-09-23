@@ -59,12 +59,32 @@ export class CameraController {
     this.settings.distance = Math.max(1, (value - this.pivotHeight) / perMetre);
   }
 
+  /**
+   * DEV MAP VIEW: when set, the camera ignores the player and frames this rectangle of the level
+   * from high above (for inspecting layouts). The gameplay camera is untouched while it is null.
+   */
+  mapView: { centreX: number; centreZ: number; width: number; depth: number } | null = null;
+  private gameplayFarClip = 0;
+
+  /** Distance from the camera to the level centre in map view (for shadow / clip ranges). */
+  mapViewDistance = 0;
+
   /** Jump straight to the target without smoothing (spawn, teleport). */
   snap(): void {
     this.snapped = false;
   }
 
-  update(dt: number): void {
+  update(dt: number, aspect = 1): void {
+    const camera = this.entity.camera!;
+    if (this.mapView) {
+      this.updateMapView(aspect);
+      return;
+    }
+    if (this.gameplayFarClip) {
+      camera.farClip = this.gameplayFarClip;
+      this.gameplayFarClip = 0;
+      this.snapped = false;
+    }
     this.desired.copy(this.targetVelocity).mulScalar(this.settings.lookAheadTime).add(this.target.getPosition());
     if (!this.snapped) {
       this.focus.copy(this.desired);
@@ -96,9 +116,29 @@ export class CameraController {
     this.position.set(x, y, z);
     this.entity.setPosition(this.position);
     this.entity.setEulerAngles(-pitchDeg, yawDeg, 0);
-    const camera = this.entity.camera!;
     camera.horizontalFov = false;
     camera.fov = fovDeg;
+  }
+
+  /** Fits the map-view rectangle on screen for the current aspect ratio. */
+  private updateMapView(aspect: number): void {
+    const view = this.mapView!;
+    const camera = this.entity.camera!;
+    if (!this.gameplayFarClip) this.gameplayFarClip = camera.farClip;
+    const pitchDeg = 62;
+    const fovDeg = 40;
+    const pitch = pitchDeg * math.DEG_TO_RAD;
+    const tanV = Math.tan((fovDeg * math.DEG_TO_RAD) / 2);
+    const tanH = tanV * aspect;
+    // Depth foreshortens by sin(pitch); walls add a little height at the edges.
+    const distance = 1.08 * Math.max((view.depth * Math.sin(pitch)) / 2 / tanV + 2, view.width / 2 / tanH + 2);
+    this.mapViewDistance = distance;
+    this.position.set(view.centreX, distance * Math.sin(pitch), view.centreZ + distance * Math.cos(pitch));
+    this.entity.setPosition(this.position);
+    this.entity.setEulerAngles(-pitchDeg, 0, 0);
+    camera.horizontalFov = false;
+    camera.fov = fovDeg;
+    camera.farClip = distance + view.depth;
   }
 
   private offsetFactor(): number {

@@ -23,6 +23,8 @@ export class PlayerController {
   yawDeg = 0;
   /** Collision circle radius (metres); set from PLAYER.colliderRadius x character scale. */
   radius = PLAYER.colliderRadius;
+  /** Safety clamp for the player position (the level's own colliders are the real edge). */
+  bounds = { minX: -PLAYER.arenaHalfSize, maxX: PLAYER.arenaHalfSize, minZ: -PLAYER.arenaHalfSize, maxZ: PLAYER.arenaHalfSize };
 
   private readonly input = new Vec2();
   private readonly targetVelocity = new Vec3();
@@ -85,10 +87,10 @@ export class PlayerController {
       this.position.x += dx;
       this.position.z += dz;
     }
-    // Safety clamp; the arena curbs are the real boundary.
-    const limit = PLAYER.arenaHalfSize;
-    const clampedX = math.clamp(this.position.x, -limit, limit);
-    const clampedZ = math.clamp(this.position.z, -limit, limit);
+    // Safety clamp; the level's boundary colliders are the real edge.
+    const b = this.bounds;
+    const clampedX = math.clamp(this.position.x, b.minX, b.maxX);
+    const clampedZ = math.clamp(this.position.z, b.minZ, b.maxZ);
     if (clampedX !== this.position.x) this.velocity.x = 0;
     if (clampedZ !== this.position.z) this.velocity.z = 0;
     this.position.x = clampedX;

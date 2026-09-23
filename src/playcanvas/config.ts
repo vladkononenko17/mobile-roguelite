@@ -39,22 +39,48 @@ export const DEFAULT_CHARACTER: CharacterId = "brawler2k";
 
 import type { SurfaceTextures } from "./world/Surface";
 
-/** Ground surface: "Damaged Road" PBR set (1K) from the user-supplied road_damaged_1k.blend.zip.
- * EXR normal/roughness were converted to 8-bit JPG; the displacement map is not used. */
+/**
+ * Ground surfaces (1K PBR sets converted from the supplied .blend.zip files; EXR normal / roughness
+ * as 8-bit JPG, displacement unused). The level (world/level) decides where each one goes.
+ */
+
+/** Dusty dirt everywhere by default ("Damaged Road" set, which reads as packed brown earth). */
 export const GROUND = {
   folder: "textures/road_damaged",
   diffuse: "road_damaged_diff_1k.jpg",
   normal: "road_damaged_nor_gl_1k.jpg",
   roughnessMap: "road_damaged_rough_1k.jpg",
-  /** Metres covered by one repeat of the texture. */
-  tileMetres: 5,
+  /** Metres covered by one repeat of the texture (large, so its dark blotches repeat less). */
+  tileMetres: 7,
   /** Multiplier on the colour map; below 1 keeps the ground from competing with the hero. */
   brightness: 0.85,
   bumpiness: 1,
 } satisfies SurfaceTextures & Record<string, unknown>;
 
-/** "Rocky Terrain" PBR set (1K) from rocky_terrain_1k.blend.zip, converted like the road. It covers
- * the far third of the arena (the top of the screen at spawn) and fades into the road. */
+/** Broken asphalt road ("Cracked Concrete" set darkened to an asphalt grey). */
+export const ROAD = {
+  folder: "textures/cracked_concrete",
+  diffuse: "cracked_concrete_diff_1k.jpg",
+  normal: "cracked_concrete_nor_gl_1k.jpg",
+  roughnessMap: "cracked_concrete_rough_1k.jpg",
+  bumpiness: 1,
+  tileMetres: 4,
+  brightness: 0.52,
+  tint: [1.0, 0.96, 0.9] as const,
+  /** The road edge blends into the dirt over [halfWidth - edgeInner, halfWidth + edgeOuter]; only
+   * these two thin strips are transparent. The mask repeats every maskPeriod metres. */
+  edgeInner: 0.6,
+  edgeOuter: 1.1,
+  maskPeriod: 23,
+} satisfies SurfaceTextures & Record<string, unknown>;
+
+/** Poured concrete pads (the yard floor): same set as the road, lighter and warmer. */
+export const PAD = {
+  brightness: 0.68,
+  tint: [1.0, 0.95, 0.86] as const,
+};
+
+/** "Rocky Terrain" set, used for irregular rocky patches placed by the level. */
 export const ROCKY = {
   folder: "textures/rocky_terrain",
   diffuse: "rocky_terrain_diff_1k.jpg",
@@ -62,16 +88,10 @@ export const ROCKY = {
   roughnessMap: "rocky_terrain_rough_1k.jpg",
   bumpiness: 1.2,
   tileMetres: 5,
-  /** Relative to the ground brightness; the grass-and-rock texture is brighter and busier than the
-   * road, which hides shadows, so it is toned down. */
-  brightness: 0.8,
-  /** Warm multiplier that pulls the saturated grass towards olive to fit the wasteland palette. */
-  tint: [1.0, 0.9, 0.76] as const,
-  /** Share of the arena depth covered, measured from the far (-Z) wall. */
-  coverage: 1 / 3,
-  /** Width of the soft blend into the road, and how far the border wanders either way. */
-  edgeFadeMetres: 2.5,
-  edgeNoiseMetres: 1.5,
+  /** Relative to the ground brightness; the busy grass-and-rock texture is toned down. */
+  brightness: 0.64,
+  /** Pulls the saturated grass and orange slabs towards dusty olive-grey. */
+  tint: [0.92, 0.84, 0.72] as const,
 } satisfies SurfaceTextures & Record<string, unknown>;
 
 /**
@@ -128,8 +148,11 @@ export const KIT_SURFACES = {
 /** Kit pieces are slightly dimmed so the hero stays the brightest, most saturated thing on screen. */
 export const KIT = {
   brightness: 0.85,
+  /** Per-material colour multipliers: the teal paint is pulled towards a faded grey-green so the
+   * panels stay muted accents rather than bright surfaces. */
+  tints: { painted: [0.78, 0.76, 0.7] } as Partial<Record<string, readonly [number, number, number]>>,
   /** Static batching: pieces sharing a material within this many metres merge into one draw call. */
-  batchCellMetres: 16,
+  batchCellMetres: 24,
 };
 
 export const CAMERA = {
@@ -227,7 +250,8 @@ export const LIGHTING = {
   sun: {
     color: [1.0, 0.87, 0.7] as const,
     intensity: 2.6,
-    elevationDeg: 46,
+    // A little lower than before for longer shadows and more readable depth (not the final pass).
+    elevationDeg: 42,
     azimuthDeg: 318,
     // PCF3 (4 hardware-filtered taps) at 1024 over an 18 m range: ~2 cm texels near the hero,
     // a fraction of the PCF5 / 2048 / 22 m cost per pixel and per shadow pass.
@@ -235,7 +259,7 @@ export const LIGHTING = {
     shadowDistance: 18,
     shadowBias: 0.2,
     normalOffsetBias: 0.04,
-    shadowIntensity: 0.72,
+    shadowIntensity: 0.78,
   },
   /** Cool shadowless bounce from the opposite side so the shadow side keeps its shape. Fill and rim
    * only light the hero (light mask), so the ground and environment pay for a single light. */

@@ -6,6 +6,8 @@ import {
   GAMMA_SRGB,
   RESOLUTION_AUTO,
   TONEMAP_NEUTRAL,
+  FOG_LINEAR,
+  FOG_NONE,
   type RenderComponent,
 } from "playcanvas";
 import { CameraController } from "./camera/CameraController";
@@ -23,7 +25,7 @@ import { CHARACTER_LIGHT_MASK, createLighting } from "./world/Environment";
 import { ColliderDebugView } from "./world/collision/ColliderDebugView";
 import { CollisionWorld } from "./world/collision/CollisionWorld";
 import { EnvironmentKit } from "./world/kit/EnvironmentKit";
-import { buildTestLayout } from "./world/kit/TestLayout";
+import { BOUNDS, buildCheckpointLevel, GROUND_SPEC, SPAWN } from "./world/level/CheckpointLevel";
 import { ResolutionGovernor } from "./perf/ResolutionGovernor";
 
 export interface GameOptions {
@@ -76,7 +78,7 @@ export class Game {
     this.resolution = new ResolutionGovernor(app);
     createLighting(app);
     this.kit = new EnvironmentKit(app);
-    this.ground = new Ground(app);
+    this.ground = new Ground(app, GROUND_SPEC);
 
     const cameraEntity = new Entity("Camera");
     const [r, g, b] = LIGHTING.clearColor;
@@ -93,7 +95,7 @@ export class Game {
     // Small textures; they stream in alongside the character download. Needs camera + lights.
     const groundLoaded = this.ground.load();
     const kitLoaded = this.kit.load();
-    const layout = buildTestLayout(this.kit);
+    const layout = buildCheckpointLevel(this.kit);
     app.root.addChild(layout);
     // Every kit piece that declared itself solid joins the static collision world.
     this.collision.addStaticFrom(layout);
@@ -108,6 +110,8 @@ export class Game {
 
     // Player root sits on the ground and owns position/yaw; the GLB hierarchy stays untouched below it.
     const playerRoot = new Entity("Player");
+    playerRoot.setPosition(SPAWN.x, 0, SPAWN.z);
+    playerRoot.setEulerAngles(0, SPAWN.yawDeg, 0);
     playerRoot.addChild(character.model);
     this.contactShadow = createContactShadow(app);
     playerRoot.addChild(this.contactShadow);
@@ -135,6 +139,12 @@ export class Game {
     this.options.debugRoot.querySelector("[data-colliders]")?.addEventListener("click", () => {
       this.colliderDebug.enabled = !this.colliderDebug.enabled;
     });
+    this.player.bounds = BOUNDS;
+
+    // DEV MAP VIEW: tune panel button, the M key, or ?map=1.
+    this.options.debugRoot.querySelector("[data-mapview]")?.addEventListener("click", () => this.setMapView(!this.camera.mapView));
+    window.addEventListener("keydown", (event) => { if (event.code === "KeyM") this.setMapView(!this.camera.mapView); });
+    if (new URLSearchParams(location.search).get("map") === "1") this.setMapView(true);
 
     this.debug = new DebugPanel(this.options.debugRoot, this.tuneParams());
     app.on("update", this.update, this);
@@ -145,7 +155,8 @@ export class Game {
     this.resolution.update(rawDt);
     this.player.update(dt);
     this.animation.update(this.player.speed);
-    this.camera.update(dt);
+    const device = this.app.graphicsDevice;
+    this.camera.update(dt, device.width / Math.max(1, device.height));
 
     this.frames++;
     this.debugTimer += rawDt;
@@ -201,6 +212,29 @@ export class Game {
       { key: "resMax", label: "Res max", min: 0.75, max: 3, step: 0.25, get: () => this.resolution.maxRatio, set: (v) => this.resolution.setMaxRatio(v) },
       { key: "characterScale", label: "Scale", min: 0.7, max: 1.6, step: 0.01, get: () => this.characterScale, set: (v) => this.setCharacterScale(v) },
     ];
+  }
+
+  /**
+   * DEV MAP VIEW: frames the whole level from above for layout inspection. Fog is lifted and the
+   * sun's shadow range stretched to cover it; both return to gameplay values when switched off.
+   * The player can still be moved while it is on.
+   */
+  setMapView(on: boolean): void {
+    const sun = (this.app.root.findByName("Sun") as Entity).light!;
+    if (on) {
+      this.camera.mapView = {
+        centreX: (BOUNDS.minX + BOUNDS.maxX) / 2,
+        centreZ: (BOUNDS.minZ + BOUNDS.maxZ) / 2,
+        width: BOUNDS.maxX - BOUNDS.minX + 3,
+        depth: BOUNDS.maxZ - BOUNDS.minZ + 3,
+      };
+      this.app.scene.fog.type = FOG_NONE;
+      sun.shadowDistance = 110;
+    } else {
+      this.camera.mapView = null;
+      this.app.scene.fog.type = FOG_LINEAR;
+      sun.shadowDistance = LIGHTING.sun.shadowDistance;
+    }
   }
 
   private readonly onResize = (): void => {
