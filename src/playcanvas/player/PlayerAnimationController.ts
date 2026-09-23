@@ -6,7 +6,8 @@ import {
   type AnimTrack,
   type Entity,
 } from "playcanvas";
-import { ANIMATION, type CharacterModel } from "../config";
+import { ANIMATION, IDLE, type CharacterModel } from "../config";
+import { createBreathingIdle } from "./BreathingIdle";
 
 export type LocomotionState = "Idle" | "Walk" | "Run";
 
@@ -31,7 +32,8 @@ export class PlayerAnimationController {
     tracks: AnimTrack[],
     private readonly stride: Pick<CharacterModel, "walkNativeSpeed" | "runNativeSpeed">,
   ) {
-    const idle = findTrack(tracks, ANIMATION.clips.idle);
+    const restPose = findTrack(tracks, ANIMATION.clips.idle);
+    const idle = restPose && IDLE.procedural ? createBreathingIdle(restPose) : restPose;
     const walk = findTrack(tracks, ANIMATION.clips.walk);
     const run = findTrack(tracks, ANIMATION.clips.run);
     if (!walk || !run || !idle) {

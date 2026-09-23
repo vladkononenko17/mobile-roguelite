@@ -27,7 +27,7 @@ The game is migrating from Phaser 2D to a PlayCanvas 3D presentation. The Phaser
 
 Modules: `Game.ts` (bootstrap), `player/PlayerController.ts`, `player/PlayerAnimationController.ts`, `player/CharacterLoader.ts`, `camera/CameraController.ts`, `input/*` (move-input sources; a mobile joystick plugs in as another `MoveInputSource`), `world/Environment.ts` (lights, IBL, fog), `world/Arena.ts` (placeholder props and procedural fallback ground), `world/Ground.ts` ("Damaged Road" PBR ground from `public/textures/road_damaged/`: colour JPG plus normal and roughness maps converted from EXR), `world/ContactShadow.ts`, `ui/DebugPanel.ts`.
 
-Known gaps: the GLB has no real idle (the static `restpose` A-pose stands in), the 20 MB GLB and its 4096² metallic-roughness texture are not optimized yet, and props have no collision.
+Known gaps: the GLBs have no real idle; `player/BreathingIdle.ts` generates a looping breathing idle from the static `restpose` A-pose (relaxed arms, chest and shoulder lift; tune in `IDLE` in `config.ts`) until a hand-made Idle clip exists, the 20 MB GLB and its 4096² metallic-roughness texture are not optimized yet, and props have no collision.
 
 ## Controls
 

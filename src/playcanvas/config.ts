@@ -101,7 +101,8 @@ export const PLAYER = {
 export const ANIMATION = {
   /** Clip names as authored in the GLB. Matching is case-insensitive. */
   clips: {
-    // The GLB has no dedicated idle. `restpose` is a static A-pose used as a temporary idle.
+    // The GLBs have no real idle. `restpose` (a static A-pose) is the base of the procedural
+    // breathing idle below; set IDLE.procedural = false to play it as-is.
     idle: "restpose",
     walk: "Walking",
     run: "Running",
@@ -114,6 +115,26 @@ export const ANIMATION = {
   /** Playback-rate clamp when matching the clip to the movement speed. */
   minPlaybackRate: 0.7,
   maxPlaybackRate: 1.35,
+};
+
+/** Procedural breathing idle generated from the rest pose (see player/BreathingIdle.ts). */
+export const IDLE = {
+  procedural: true,
+  /** One full breath (in and out). */
+  periodSeconds: 3.4,
+  samples: 32,
+  /** How far the A-pose upper arms are lowered towards the body, and how much they drift out on
+   * each inhale. */
+  armRelaxDeg: 12,
+  armBreathDeg: 1.5,
+  /** Constant elbow bend so the arms do not hang dead straight. */
+  elbowBendDeg: 12,
+  /** Chest lift at the top of the breath (spread over Spine / Spine1 / Spine2). */
+  chestDeg: 3,
+  /** Shoulder lift at the top of the breath. */
+  shoulderDeg: 3.5,
+  /** Hips sink by this much on the exhale. */
+  hipDropMetres: 0.008,
 };
 
 export const LIGHTING = {
