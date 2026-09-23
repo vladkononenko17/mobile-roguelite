@@ -1,7 +1,8 @@
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 
-const files = await readdir('dist/assets');
+// The PlayCanvas prototype is a separate page; keep its engine out of the Phaser game's offline cache.
+const files = (await readdir('dist/assets')).filter(file => !file.startsWith('playcanvas'));
 const html = await readFile('dist/index.html', 'utf8');
 const version = createHash('sha256').update(html + files.join(',')).digest('hex').slice(0, 12);
 const assets = ['.', 'index.html', 'manifest.webmanifest', 'icon.svg', ...files.map(file => `assets/${file}`)];

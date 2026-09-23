@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#c79a6b" />
+    <title>Dustline 3D Prototype</title>
+    <link rel="icon" href="%BASE_URL%icon.svg" type="image/svg+xml" />
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #c79a6b; touch-action: none; }
+      body { font: 12px/1.4 system-ui, sans-serif; color: #f3e7d3; }
+      #app-canvas { display: block; width: 100%; height: 100%; }
+      #loading { position: fixed; inset: 0; display: grid; place-content: center; gap: 12px; background: #1c1612; transition: opacity 0.4s; }
+      #loading.done { opacity: 0; pointer-events: none; }
+      #loading-track { width: min(280px, 70vw); height: 6px; background: #3b2f26; overflow: hidden; }
+      #loading-bar { height: 100%; background: #e8a92f; transform: scaleX(0); transform-origin: left; }
+      #debug { position: fixed; top: max(8px, env(safe-area-inset-top)); left: 8px; max-width: calc(100vw - 16px); padding: 8px 10px; background: rgba(20, 15, 12, 0.72); border-radius: 6px; box-sizing: border-box; }
+      #debug [data-stats] { white-space: pre; margin-right: 48px; font-variant-numeric: tabular-nums; }
+      #debug label { display: grid; grid-template-columns: 58px 1fr 36px; align-items: center; gap: 6px; }
+      #debug input { width: 100%; min-width: 0; }
+      #debug [data-output] { margin-top: 4px; opacity: 0.7; font-size: 11px; user-select: all; }
+      #debug button { float: right; margin-left: 8px; background: none; border: 1px solid #f3e7d3; color: inherit; border-radius: 4px; }
+      #debug.collapsed [data-sliders], #debug.collapsed [data-output], #debug.collapsed .hint { display: none; }
+      #debug .hint { opacity: 0.7; margin-top: 4px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="app-canvas"></canvas>
+    <div id="debug" class="collapsed">
+      <button type="button" data-toggle>tune</button>
+      <div data-stats>Loading…</div>
+      <div class="hint">WASD / arrows to run · hold Shift to walk</div>
+      <div data-sliders></div>
+      <div data-output></div>
+    </div>
+    <div id="loading">
+      <div id="loading-text">Loading character…</div>
+      <div id="loading-track"><div id="loading-bar"></div></div>
+    </div>
+    <script type="module" src="/src/playcanvas/main.ts"></script>
+  </body>
+</html>

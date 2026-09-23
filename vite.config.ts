@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { defineConfig } from "vite";
 
 export default defineConfig({
@@ -5,6 +6,14 @@ export default defineConfig({
   build: {
     target: "es2020",
     sourcemap: false,
-    rollupOptions: { output: { manualChunks: { phaser: ["phaser"] } } },
+    rollupOptions: {
+      input: {
+        // Legacy Phaser game (gameplay reference).
+        main: resolve(__dirname, "index.html"),
+        // PlayCanvas 3D vertical slice.
+        playcanvas: resolve(__dirname, "playcanvas.html"),
+      },
+      output: { manualChunks: { phaser: ["phaser"], "playcanvas-engine": ["playcanvas"] } },
+    },
   },
 });

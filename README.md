@@ -15,6 +15,20 @@ A mobile-first comic-wasteland action roguelite inspired by the tactile weapon l
 - Physics and weapon timers freeze during pause, upgrade selection, and results
 - Installable PWA and automatic GitHub Pages deployment
 
+## PlayCanvas 3D prototype (Phase 1)
+
+The game is migrating from Phaser 2D to a PlayCanvas 3D presentation. The Phaser game above remains the gameplay reference and is unchanged; the 3D vertical slice lives separately:
+
+- Page: `playcanvas.html` → `src/playcanvas/` (the Phaser game stays at `index.html` → `src/main.ts`)
+- Run: `npm run dev:3d` (or `npm run dev` and open `/mobile-roguelite/playcanvas.html`)
+- Controls: WASD / arrows to run, hold Shift to walk. The **tune** button shows live camera sliders.
+- Character: `public/models/orc/Meshy_AI_Iron_Shoulder_Orc_All_Animations.glb`, used unmodified
+- Tuning: `src/playcanvas/config.ts` (camera, movement, animation thresholds, lighting)
+
+Modules: `Game.ts` (bootstrap), `player/PlayerController.ts`, `player/PlayerAnimationController.ts`, `player/CharacterLoader.ts`, `camera/CameraController.ts`, `input/*` (move-input sources; a mobile joystick plugs in as another `MoveInputSource`), `world/Environment.ts` (lights, IBL, fog), `world/Arena.ts` (ground and placeholder props), `ui/DebugPanel.ts`.
+
+Known gaps: the GLB has no real idle (the static `restpose` A-pose stands in), the 20 MB GLB and its 4096² metallic-roughness texture are not optimized yet, and props have no collision.
+
 ## Controls
 
 - **Mobile:** left joystick to move; hold **FIRE** for assisted aiming, drag it to aim manually, tap **RELOAD**
