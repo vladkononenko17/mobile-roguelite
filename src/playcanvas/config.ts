@@ -81,6 +81,29 @@ export const ROCKY = {
   edgeNoiseMetres: 1.5,
 } satisfies SurfaceTextures & Record<string, unknown>;
 
+/** "Rusty Metal Grid" PBR set (1K) from rusty_metal_grid_1k.blend.zip, converted like the road:
+ * painted steel plates with a raised frame. Laid as a hard-edged steel deck in the near-right
+ * corner of the arena, 14 x 14 m = ~17% of the play area. */
+export const METAL = {
+  folder: "textures/rusty_metal_grid",
+  diffuse: "rusty_metal_grid_diff_1k.jpg",
+  normal: "rusty_metal_grid_nor_gl_1k.jpg",
+  roughness: "rusty_metal_grid_rough_1k.jpg",
+  bumpiness: 1,
+  /** One texture repeat = 3 x 3 plates, so plates are ~1 m. */
+  tileMetres: 3,
+  /** Relative to the ground brightness. */
+  brightness: 0.9,
+  /** Deck rectangle on the ground (metres). The arena runs from -17 to 17 on both axes. */
+  minX: 3,
+  maxX: 17,
+  minZ: 3,
+  maxZ: 17,
+  /** Dark steel trim around the deck edge. */
+  trimWidth: 0.14,
+  trimHeight: 0.035,
+} satisfies SurfaceTextures & Record<string, unknown>;
+
 export const CAMERA = {
   /** Downward tilt of the camera (0 = horizon, 90 = straight down). Because the hero sits below
    * the screen centre, the line of sight to him is a few degrees steeper than this. */

@@ -16,7 +16,7 @@ import {
   type CameraComponent,
   type LightComponent,
 } from "playcanvas";
-import { GROUND, PLAYER, ROCKY, type SurfaceTextures } from "../config";
+import { GROUND, METAL, PLAYER, ROCKY, type SurfaceTextures } from "../config";
 import { GROUND_SIZE } from "./Arena";
 
 async function loadImage(url: string): Promise<HTMLImageElement> {
@@ -141,7 +141,10 @@ export class Ground {
   private brightness: number = GROUND.brightness;
   private roadLoaded = false;
   private rockLoaded = false;
+  private metalTile: number = METAL.tileMetres;
+  private metalLoaded = false;
   private readonly rockMaterial = new StandardMaterial();
+  private readonly metalMaterial = new StandardMaterial();
   private readonly rockDepth: number;
   readonly rockBoundaryZ: number;
 
@@ -160,6 +163,10 @@ export class Ground {
     return this.rockTile;
   }
 
+  get metalTileSize(): number {
+    return this.metalTile;
+  }
+
   get tint(): number {
     return this.brightness;
   }
@@ -176,6 +183,10 @@ export class Ground {
         () => { this.rockLoaded = true; this.applyRock(); },
         (error) => console.warn("[Ground] Rocky terrain failed to load; the road covers the whole arena.", error),
       ),
+      this.createMetalDeck(app).then(
+        () => { this.metalLoaded = true; this.applyMetal(); },
+        (error) => console.warn("[Ground] Metal deck textures failed to load; no deck.", error),
+      ),
     ]);
   }
 
@@ -189,10 +200,16 @@ export class Ground {
     this.applyRock();
   }
 
+  setMetalTileSize(metres: number): void {
+    this.metalTile = metres;
+    this.applyMetal();
+  }
+
   setBrightness(value: number): void {
     this.brightness = value;
     this.applyRoad();
     this.applyRock();
+    this.applyMetal();
   }
 
   private createOverlayLayer(app: AppBase): Layer {
@@ -233,6 +250,51 @@ export class Ground {
     // A hair above the road; depth writes are off, so there is no z-fighting to worry about.
     entity.setLocalPosition(0, 0.002, (farZ + nearZ) / 2);
     app.root.addChild(entity);
+  }
+
+  /**
+   * Hard-edged steel deck: an opaque plane a few millimetres above the road (normal opaque pass,
+   * so shadows and sorting need nothing special) framed by a low dark-steel trim. The entities
+   * are only added once the textures have loaded.
+   */
+  private async createMetalDeck(app: AppBase): Promise<void> {
+    await applySurface(app, this.metalMaterial, METAL);
+    const width = METAL.maxX - METAL.minX;
+    const depth = METAL.maxZ - METAL.minZ;
+    const centreX = (METAL.minX + METAL.maxX) / 2;
+    const centreZ = (METAL.minZ + METAL.maxZ) / 2;
+
+    const deck = new Entity("MetalDeck");
+    deck.addComponent("render", { type: "plane", material: this.metalMaterial, castShadows: false, receiveShadows: true });
+    deck.setLocalScale(width, 1, depth);
+    deck.setLocalPosition(centreX, 0.004, centreZ);
+    app.root.addChild(deck);
+
+    const trim = new StandardMaterial();
+    trim.diffuse = new Color(0.16, 0.15, 0.14);
+    trim.useMetalness = true;
+    trim.metalness = 0.7;
+    trim.gloss = 0.45;
+    trim.update();
+    const { trimWidth: w, trimHeight: h } = METAL;
+    const bars: [number, number, number, number][] = [
+      [centreX, METAL.minZ, width + w, w],
+      [centreX, METAL.maxZ, width + w, w],
+      [METAL.minX, centreZ, w, depth + w],
+      [METAL.maxX, centreZ, w, depth + w],
+    ];
+    for (const [x, z, sx, sz] of bars) {
+      const bar = new Entity("MetalDeckTrim");
+      bar.addComponent("render", { type: "box", material: trim, castShadows: true, receiveShadows: true });
+      bar.setLocalScale(sx, h, sz);
+      bar.setLocalPosition(x, h / 2, z);
+      app.root.addChild(bar);
+    }
+  }
+
+  private applyMetal(): void {
+    if (!this.metalLoaded) return;
+    setTiling(this.metalMaterial, this.metalTile, METAL.maxX - METAL.minX, METAL.maxZ - METAL.minZ, this.brightness * METAL.brightness);
   }
 
   private applyRoad(): void {
