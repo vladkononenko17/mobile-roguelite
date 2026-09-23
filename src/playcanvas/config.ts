@@ -51,6 +51,35 @@ export const CHARACTERS = {
 } satisfies Record<string, CharacterModel>;
 
 export type CharacterId = keyof typeof CHARACTERS;
+
+/**
+ * Hand-held weapons ("assetpack-free", merged by scripts/build-weapons.mjs). The chosen weapon is
+ * parented to the hero's right-hand bone. Weapons point their muzzle along -Z with the origin at
+ * the grip; the Mixamo hand bone points its +Y along the fingers, so +90° about X lays the barrel
+ * along the hand with the weapon's top facing the back of the hand. `rollDeg` then turns the weapon
+ * about the hand's finger axis; -43° keeps a rifle upright (not canted) in the Vanguard's aiming
+ * pose (Run_and_Shoot). `position` is in hand-bone space (metres, before the character scale).
+ * `pose` is the clip played on the arms and torso while the weapon is held (null = normal arms).
+ */
+export const WEAPONS = {
+  url: "models/weapons/weapons.glb",
+  handBone: "mixamorig:RightHand",
+  list: {
+    rifle: { label: "Assault rifle", node: "assault_rifle_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot" },
+    shotgun: { label: "Shotgun", node: "shotgun_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot" },
+    sniper: { label: "Sniper rifle", node: "sniper_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot" },
+    pistol: { label: "Pistol", node: "pistol_1", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot" },
+    knife: { label: "Knife", node: "tactical_knife", position: [0, 0.08, 0.01], rotation: [90, 0, 0], rollDeg: 0, pose: null },
+    grenade: { label: "Grenade", node: "frag_grenade", position: [0, 0.09, -0.01], rotation: [90, 0, 0], rollDeg: 0, pose: null },
+  },
+} satisfies {
+  url: string;
+  handBone: string;
+  list: Record<string, { label: string; node: string; position: [number, number, number]; rotation: [number, number, number]; rollDeg: number; pose: string | null }>;
+};
+
+export type WeaponId = keyof typeof WEAPONS.list;
+export const DEFAULT_WEAPON: WeaponId | null = "rifle";
 export const DEFAULT_CHARACTER: CharacterId = "vanguard";
 
 import type { SurfaceTextures } from "./world/Surface";
@@ -243,6 +272,8 @@ export const ANIMATION = {
   /** State thresholds on the actual ground speed (m/s). */
   idleToWalkSpeed: 0.15,
   walkToRunSpeed: 2.4,
+  /** Bone at which the upper-body (weapon pose) layer starts; everything below it stays on locomotion. */
+  upperBodyRootBone: "mixamorig:Spine",
   /** Cross-fade time between states. */
   blendTime: 0.18,
   /** Playback-rate clamp when matching the clip to the movement speed. */

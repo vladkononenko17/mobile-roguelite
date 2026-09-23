@@ -29,7 +29,7 @@ export class PlayerAnimationController {
 
   constructor(
     private readonly model: Entity,
-    tracks: AnimTrack[],
+    private readonly tracks: AnimTrack[],
     private readonly stride: Pick<CharacterModel, "walkNativeSpeed" | "runNativeSpeed" | "clips" | "proceduralIdle">,
   ) {
     const clips = { ...ANIMATION.clips, ...stride.clips };
@@ -73,12 +73,47 @@ export class PlayerAnimationController {
             { from: "Run", to: "Idle", time: t, conditions: slower(ANIMATION.idleToWalkSpeed) },
           ],
         },
+        {
+          // Arms and torso only (masked from the spine up), for holding a weapon while the legs
+          // keep walking or running. Weight 0 (off) until a weapon pose is set.
+          name: "UpperBody",
+          states: [{ name: "START" }, { name: "Pose", speed: 1, loop: true }],
+          transitions: [{ from: "START", to: "Pose", time: 0 }],
+        },
       ],
       parameters: { speed: { name: "speed", type: ANIM_PARAMETER_FLOAT, value: 0 } },
     });
     anim.assignAnimation("Idle", resolved.Idle);
     anim.assignAnimation("Walk", resolved.Walk);
     anim.assignAnimation("Run", resolved.Run);
+
+    const upper = anim.findAnimationLayer("UpperBody")!;
+    anim.assignAnimation("Pose", resolved.Idle, "UpperBody");
+    upper.weight = 0;
+    const spine = model.findByName(ANIMATION.upperBodyRootBone);
+    if (spine) {
+      // Mask paths match the animation curve paths: entity names from the model root (included)
+      // down to the bone, e.g. "target_character/mixamorig:Hips/mixamorig:Spine".
+      const names: string[] = [];
+      for (let e: Entity | null = spine as Entity; e; e = e === model ? null : (e.parent as Entity | null)) names.unshift(e.name);
+      upper.mask = { [names.join("/")]: { children: true } };
+    } else {
+      console.warn(`[PlayerAnimation] ${ANIMATION.upperBodyRootBone} not found; weapon poses disabled.`);
+    }
+  }
+
+  /**
+   * Plays `clipName` on the arms and torso only (e.g. a rifle-aiming clip while a gun is held),
+   * over the normal locomotion; null returns the whole body to locomotion.
+   */
+  setUpperBodyPose(clipName: string | null): void {
+    const anim = this.model.anim;
+    const upper = anim?.findAnimationLayer("UpperBody");
+    if (!anim || !upper) return;
+    const track = clipName ? findTrack(this.tracks, clipName) : undefined;
+    if (clipName && !track) console.warn(`[PlayerAnimation] Upper-body clip ${clipName} not found.`);
+    if (track) anim.assignAnimation("Pose", track, "UpperBody");
+    upper.weight = track ? 1 : 0;
   }
 
   get state(): LocomotionState {

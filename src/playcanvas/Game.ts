@@ -11,13 +11,14 @@ import {
   type RenderComponent,
 } from "playcanvas";
 import { CameraController } from "./camera/CameraController";
-import { CAMERA, CHARACTER, CHARACTERS, DEBUG, LIGHTING, PLAYER, PROPS, type CharacterId } from "./config";
+import { CAMERA, CHARACTER, CHARACTERS, DEBUG, DEFAULT_WEAPON, LIGHTING, PLAYER, PROPS, WEAPONS, type CharacterId, type WeaponId } from "./config";
 import { KeyboardMoveInput } from "./input/KeyboardMoveInput";
 import { TouchJoystickInput } from "./input/TouchJoystickInput";
 import { CombinedMoveInput, type MoveInputSource } from "./input/MoveInput";
 import { loadCharacter } from "./player/CharacterLoader";
 import { PlayerAnimationController } from "./player/PlayerAnimationController";
 import { PlayerController } from "./player/PlayerController";
+import { WeaponHolder } from "./player/WeaponHolder";
 import { DebugPanel, type TuneParam } from "./ui/DebugPanel";
 import { Ground } from "./world/Ground";
 import { createContactShadow } from "./world/ContactShadow";
@@ -49,6 +50,7 @@ export class Game {
 
   private input!: MoveInputSource;
   private model!: Entity;
+  weapons!: WeaponHolder;
   private contactShadow!: Entity;
   private characterScale: number = CHARACTER.scale;
   private ground!: Ground;
@@ -111,6 +113,12 @@ export class Game {
       (error: unknown) => console.warn("[Props] not loaded; the level runs without them.", error),
     );
 
+    // Weapons (~1.5 MB) download alongside the character; a failure only leaves the hands empty.
+    this.weapons = new WeaponHolder(app);
+    const weaponsLoaded = this.weapons.load(`${import.meta.env.BASE_URL}${WEAPONS.url}`).catch((error: unknown) =>
+      console.warn("[Weapons] not loaded.", error),
+    );
+
     const characterModel = CHARACTERS[this.options.character];
     const character = await loadCharacter(app, `${import.meta.env.BASE_URL}${characterModel.url}`, this.options.onProgress);
     const { min, max } = { min: character.bounds.getMin(), max: character.bounds.getMax() };
@@ -143,7 +151,10 @@ export class Game {
     console.info(`[PlayerAnimation] Idle=${this.animation.clipNames.Idle}, Walk=${this.animation.clipNames.Walk}, Run=${this.animation.clipNames.Run}`);
 
     this.setCharacterScale(this.characterScale);
-    await Promise.all([groundLoaded, kitLoaded, propsLoaded]);
+    await Promise.all([groundLoaded, kitLoaded, propsLoaded, weaponsLoaded]);
+    this.weapons.onPoseChange = (clip) => this.animation.setUpperBodyPose(clip);
+    this.weapons.attachTo(character.model);
+    this.setupWeaponSelect();
 
     this.colliderDebug = new ColliderDebugView(app, this.collision, playerRoot, () => this.player.radius);
     this.colliderDebug.enabled = DEBUG.DEBUG_COLLIDERS || new URLSearchParams(location.search).get("colliders") === "1";
@@ -230,6 +241,27 @@ export class Game {
    * sun's shadow range stretched to cover it; both return to gameplay values when switched off.
    * The player can still be moved while it is on.
    */
+  /** Tune-panel weapon picker; ?weapon=<id|none> wins, then the last choice in this browser. */
+  private setupWeaponSelect(): void {
+    const KEY = "dustline3d.weapon";
+    const isWeapon = (value: string | null): value is WeaponId => value !== null && value in WEAPONS.list;
+    const fromUrl = new URLSearchParams(location.search).get("weapon");
+    let saved: string | null = null;
+    try { saved = localStorage.getItem(KEY); } catch { /* storage unavailable */ }
+    const pick = fromUrl ?? saved;
+    const initial: WeaponId | null = pick === "none" ? null : isWeapon(pick) ? pick : DEFAULT_WEAPON;
+    this.weapons.equip(initial);
+
+    const select = this.options.debugRoot.querySelector<HTMLSelectElement>("[data-weapon]");
+    if (!select) return;
+    select.add(new Option("None", "none", false, initial === null));
+    for (const [id, weapon] of Object.entries(WEAPONS.list)) select.add(new Option(weapon.label, id, false, id === initial));
+    select.addEventListener("change", () => {
+      try { localStorage.setItem(KEY, select.value); } catch { /* storage unavailable */ }
+      this.weapons.equip(isWeapon(select.value) ? select.value : null);
+    });
+  }
+
   setMapView(on: boolean): void {
     const sun = (this.app.root.findByName("Sun") as Entity).light!;
     if (on) {
