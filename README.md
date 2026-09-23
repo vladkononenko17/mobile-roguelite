@@ -27,6 +27,8 @@ The game is migrating from Phaser 2D to a PlayCanvas 3D presentation. The Phaser
 
 Modules: `Game.ts` (bootstrap), `player/PlayerController.ts`, `player/PlayerAnimationController.ts`, `player/CharacterLoader.ts`, `camera/CameraController.ts`, `input/*` (move-input sources; a mobile joystick plugs in as another `MoveInputSource`), `world/Environment.ts` (lights, IBL, fog), `world/Arena.ts` (placeholder props and procedural fallback ground), `world/Ground.ts` ("Damaged Road" PBR ground from `public/textures/road_damaged/`, plus a "Rocky Terrain" overlay from `public/textures/rocky_terrain/` covering the far third of the arena with a soft, irregular border, and a hard-edged "Rusty Metal Grid" steel deck from `public/textures/rusty_metal_grid/` in the near-right corner (~17% of the arena); normal and roughness maps converted from the supplied EXRs), `world/ContactShadow.ts`, `ui/DebugPanel.ts`.
 
+Texture library in `public/textures/` (1K PBR sets from the supplied `.blend.zip` files; colour JPG as supplied, EXR normal/roughness/metalness converted to 8-bit JPG, displacement not used): `road_damaged`, `rocky_terrain`, `rusty_metal_grid` (in use), plus `rusty_metal_04` (with metalness map), `worn_planks`, `broken_brick_wall` and `cracked_concrete` (not placed yet).
+
 Known gaps: the GLBs have no real idle; `player/BreathingIdle.ts` generates a looping breathing idle from the static `restpose` A-pose (relaxed arms, chest and shoulder lift; tune in `IDLE` in `config.ts`) until a hand-made Idle clip exists, the 20 MB GLB and its 4096² metallic-roughness texture are not optimized yet, and props have no collision.
 
 ## Controls
