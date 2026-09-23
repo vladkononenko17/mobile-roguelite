@@ -9,10 +9,26 @@ export interface CharacterModel {
    * speed 1 and scale 1. Measured by tracing the planted toe bone across each clip. */
   walkNativeSpeed: number;
   runNativeSpeed: number;
+  /** Per-model clip names, overriding ANIMATION.clips (matching is case-insensitive). */
+  clips?: Partial<typeof ANIMATION.clips>;
+  /** Build the breathing idle from the idle clip (for models whose only "idle" is a static rest pose). */
+  proceduralIdle?: boolean;
 }
 
-/** Character GLBs selectable from the tune panel. All share the same Mixamo-style rig and clips. */
+/** Character GLBs selectable from the tune panel. All use a Mixamo-style rig with Walking / Running clips. */
 export const CHARACTERS = {
+  vanguard: {
+    label: "Ironclad Vanguard",
+    // Unmodified mesh, rig and all 17 animations; textures resized to max 2048 and stored as WebP
+    // (22.6 MB -> 5.4 MB).
+    url: "models/vanguard/Meshy_AI_Ironclad_Vanguard_All_Animations_2k.glb",
+    walkNativeSpeed: 1.45,
+    runNativeSpeed: 4.6,
+    // Has a real idle, so no procedural breathing. The weapon clips (Run_and_Shoot,
+    // Rifle_Charge_inplace, Running_Reload, Axe_Spin_Attack, ...) are loaded but not used yet.
+    clips: { idle: "Idle_10" },
+    proceduralIdle: false,
+  },
   brawler2k: {
     label: "Brawler (2K tex)",
     // Unmodified mesh, rig, animations and materials; only textures resized 4096 -> 2048.
@@ -35,7 +51,7 @@ export const CHARACTERS = {
 } satisfies Record<string, CharacterModel>;
 
 export type CharacterId = keyof typeof CHARACTERS;
-export const DEFAULT_CHARACTER: CharacterId = "brawler2k";
+export const DEFAULT_CHARACTER: CharacterId = "vanguard";
 
 import type { SurfaceTextures } from "./world/Surface";
 

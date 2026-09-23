@@ -30,12 +30,14 @@ export class PlayerAnimationController {
   constructor(
     private readonly model: Entity,
     tracks: AnimTrack[],
-    private readonly stride: Pick<CharacterModel, "walkNativeSpeed" | "runNativeSpeed">,
+    private readonly stride: Pick<CharacterModel, "walkNativeSpeed" | "runNativeSpeed" | "clips" | "proceduralIdle">,
   ) {
-    const restPose = findTrack(tracks, ANIMATION.clips.idle);
-    const idle = restPose && IDLE.procedural ? createBreathingIdle(restPose) : restPose;
-    const walk = findTrack(tracks, ANIMATION.clips.walk);
-    const run = findTrack(tracks, ANIMATION.clips.run);
+    const clips = { ...ANIMATION.clips, ...stride.clips };
+    const idleClip = findTrack(tracks, clips.idle);
+    const procedural = stride.proceduralIdle ?? IDLE.procedural;
+    const idle = idleClip && procedural ? createBreathingIdle(idleClip) : idleClip;
+    const walk = findTrack(tracks, clips.walk);
+    const run = findTrack(tracks, clips.run);
     if (!walk || !run || !idle) {
       const available = tracks.map((track) => track.name).join(", ") || "none";
       console.warn(`[PlayerAnimation] Missing clip(s). Available: ${available}`);
