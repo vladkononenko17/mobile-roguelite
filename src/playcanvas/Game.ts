@@ -10,6 +10,7 @@ import {
 import { CameraController } from "./camera/CameraController";
 import { ASSETS, CAMERA, LIGHTING, PLAYER, RENDER } from "./config";
 import { KeyboardMoveInput } from "./input/KeyboardMoveInput";
+import { TouchJoystickInput } from "./input/TouchJoystickInput";
 import { CombinedMoveInput, type MoveInputSource } from "./input/MoveInput";
 import { loadCharacter } from "./player/CharacterLoader";
 import { PlayerAnimationController } from "./player/PlayerAnimationController";
@@ -84,7 +85,10 @@ export class Game {
     playerRoot.addChild(character.model);
     app.root.addChild(playerRoot);
 
-    this.input = new CombinedMoveInput([new KeyboardMoveInput(PLAYER.walkSpeed / PLAYER.runSpeed)]);
+    this.input = new CombinedMoveInput([
+      new KeyboardMoveInput(PLAYER.walkSpeed / PLAYER.runSpeed),
+      new TouchJoystickInput(this.options.canvas),
+    ]);
     this.camera = new CameraController(cameraEntity, playerRoot);
     this.player = new PlayerController(playerRoot, this.input, () => this.camera.yawDeg);
     this.animation = new PlayerAnimationController(character.model, character.tracks);
