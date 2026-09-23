@@ -37,6 +37,20 @@ export const CHARACTERS = {
 export type CharacterId = keyof typeof CHARACTERS;
 export const DEFAULT_CHARACTER: CharacterId = "brawler2k";
 
+/** Ground surface: "Damaged Road" PBR set (1K) from the user-supplied road_damaged_1k.blend.zip.
+ * EXR normal/roughness were converted to 8-bit JPG; the displacement map is not used. */
+export const GROUND = {
+  folder: "textures/road_damaged",
+  diffuse: "road_damaged_diff_1k.jpg",
+  normal: "road_damaged_nor_gl_1k.jpg",
+  roughness: "road_damaged_rough_1k.jpg",
+  /** Metres covered by one repeat of the texture. */
+  tileMetres: 5,
+  /** Multiplier on the colour map; below 1 keeps the ground from competing with the hero. */
+  brightness: 0.85,
+  bumpiness: 1,
+};
+
 export const CAMERA = {
   /** Downward tilt of the camera (0 = horizon, 90 = straight down). Because the hero sits below
    * the screen centre, the line of sight to him is a few degrees steeper than this. */

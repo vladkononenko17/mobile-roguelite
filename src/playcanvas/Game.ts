@@ -17,6 +17,7 @@ import { PlayerAnimationController } from "./player/PlayerAnimationController";
 import { PlayerController } from "./player/PlayerController";
 import { DebugPanel, type TuneParam } from "./ui/DebugPanel";
 import { createArena } from "./world/Arena";
+import { Ground } from "./world/Ground";
 import { createContactShadow } from "./world/ContactShadow";
 import { createLighting } from "./world/Environment";
 
@@ -42,6 +43,7 @@ export class Game {
   private model!: Entity;
   private contactShadow!: Entity;
   private characterScale: number = CHARACTER.scale;
+  private ground!: Ground;
   private debug!: DebugPanel;
   private debugTimer = 0;
   private frames = 0;
@@ -64,7 +66,10 @@ export class Game {
     app.start();
 
     createLighting(app);
-    createArena(app);
+    const arena = createArena(app);
+    this.ground = new Ground(arena.groundMaterial);
+    // Small textures; they stream in alongside the character download.
+    const groundLoaded = this.ground.load(app);
 
     const cameraEntity = new Entity("Camera");
     const [r, g, b] = LIGHTING.clearColor;
@@ -105,6 +110,7 @@ export class Game {
     console.info(`[PlayerAnimation] Idle=${this.animation.clipNames.Idle}, Walk=${this.animation.clipNames.Walk}, Run=${this.animation.clipNames.Run}`);
 
     this.setCharacterScale(this.characterScale);
+    await groundLoaded;
 
     this.debug = new DebugPanel(this.options.debugRoot, this.tuneParams());
     app.on("update", this.update, this);
@@ -154,6 +160,8 @@ export class Game {
       { key: "screenOffset", label: "Offset", min: -0.1, max: 0.3, step: 0.01, get: () => settings.screenOffset, set: (v) => (settings.screenOffset = v) },
       { key: "followSharpness", label: "Follow", min: 1, max: 30, step: 0.5, get: () => settings.followSharpness, set: (v) => (settings.followSharpness = v) },
       { key: "lookAheadTime", label: "Lead s", min: 0, max: 0.6, step: 0.05, get: () => settings.lookAheadTime, set: (v) => (settings.lookAheadTime = v) },
+      { key: "groundTile", label: "Ground m", min: 1, max: 12, step: 0.5, get: () => this.ground.tileSize, set: (v) => this.ground.setTileSize(v) },
+      { key: "groundBrightness", label: "Ground lum", min: 0.3, max: 1.6, step: 0.05, get: () => this.ground.tint, set: (v) => this.ground.setBrightness(v) },
       { key: "characterScale", label: "Scale", min: 0.7, max: 1.6, step: 0.01, get: () => this.characterScale, set: (v) => this.setCharacterScale(v) },
     ];
   }

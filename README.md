@@ -25,7 +25,7 @@ The game is migrating from Phaser 2D to a PlayCanvas 3D presentation. The Phaser
 - Characters (switch in the **tune** panel or with `?model=brawler2k|brawler4k|orc`): Wasteland Brawler with textures resized to 2048² (default; mesh, rig, animations and materials untouched), the original 4096² Wasteland Brawler, and the Iron Shoulder Orc. Files live in `public/models/`; the original brawler GLB is also attached to the `model` GitHub release.
 - Tuning: `src/playcanvas/config.ts` (camera, movement, animation thresholds, lighting)
 
-Modules: `Game.ts` (bootstrap), `player/PlayerController.ts`, `player/PlayerAnimationController.ts`, `player/CharacterLoader.ts`, `camera/CameraController.ts`, `input/*` (move-input sources; a mobile joystick plugs in as another `MoveInputSource`), `world/Environment.ts` (lights, IBL, fog), `world/Arena.ts` (ground and placeholder props), `world/ContactShadow.ts`, `ui/DebugPanel.ts`.
+Modules: `Game.ts` (bootstrap), `player/PlayerController.ts`, `player/PlayerAnimationController.ts`, `player/CharacterLoader.ts`, `camera/CameraController.ts`, `input/*` (move-input sources; a mobile joystick plugs in as another `MoveInputSource`), `world/Environment.ts` (lights, IBL, fog), `world/Arena.ts` (placeholder props and procedural fallback ground), `world/Ground.ts` ("Damaged Road" PBR ground from `public/textures/road_damaged/`: colour JPG plus normal and roughness maps converted from EXR), `world/ContactShadow.ts`, `ui/DebugPanel.ts`.
 
 Known gaps: the GLB has no real idle (the static `restpose` A-pose stands in), the 20 MB GLB and its 4096² metallic-roughness texture are not optimized yet, and props have no collision.
 

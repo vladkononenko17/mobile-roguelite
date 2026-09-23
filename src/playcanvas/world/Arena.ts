@@ -12,11 +12,12 @@ import {
 } from "playcanvas";
 import { PLAYER } from "../config";
 
-/** Metres covered by one repeat of the ground texture. */
+/** Metres covered by one repeat of the procedural fallback ground texture. */
 const GROUND_TILE_METRES = 6;
-const GROUND_SIZE = 120;
+export const GROUND_SIZE = 120;
 
-/** Cracked, dusty ground drawn once on a canvas. Deliberately dark and low-contrast so it gives
+/** Cracked, dusty ground drawn once on a canvas; shown until the road textures load, and kept
+ * if they fail. Deliberately dark and low-contrast so it gives
  * motion and scale reference without competing with the character. */
 function createGroundTexture(app: AppBase): Texture {
   const size = 512;
@@ -121,7 +122,7 @@ function addPrimitive(
  * blocks for scale, parallax and shadow reference. No collision yet; the player is clamped to
  * the arena square instead.
  */
-export function createArena(app: AppBase): void {
+export function createArena(app: AppBase): { groundMaterial: StandardMaterial } {
   const groundMaterial = new StandardMaterial();
   groundMaterial.diffuseMap = createGroundTexture(app);
   const tiling = GROUND_SIZE / GROUND_TILE_METRES;
@@ -162,4 +163,6 @@ export function createArena(app: AppBase): void {
   addPrimitive(app, "box", concrete, [0, 0, edge], [length, 0.6, 0.8]);
   addPrimitive(app, "box", concrete, [-edge, 0, 0], [0.8, 0.6, length]);
   addPrimitive(app, "box", concrete, [edge, 0, 0], [0.8, 0.6, length]);
+
+  return { groundMaterial };
 }
