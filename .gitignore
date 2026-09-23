@@ -2,3 +2,6 @@ node_modules/
 dist/
 *.png
 .DS_Store
+
+# Atomic Realm packs: licence forbids redistribution, keep sources out of the public repo
+assets-src/atomic-realm/
