@@ -1,6 +1,7 @@
 import { Color, Entity, MeshInstance, StandardMaterial, type AppBase } from "playcanvas";
 import { KIT, KIT_SURFACES } from "../../config";
 import { applySurface, setSurfaceTint } from "../Surface";
+import { declareCollider, type ColliderShape } from "../collision/CollisionWorld";
 import { boxMesh, type BoxOptions } from "./KitMesh";
 import { PREFABS, type PrefabName } from "./Prefabs";
 
@@ -66,6 +67,19 @@ export class EnvironmentKit {
     root.setLocalEulerAngles(0, yawDeg, 0);
     parent.addChild(root);
     return root;
+  }
+
+  /**
+   * Declares a solid footprint on the ground plane (collision is 2D, X/Z): a box of width x depth
+   * (along the prefab's local X / Z) or a circle, centred at (x, z) relative to `parent`.
+   */
+  solid(parent: Entity, shape: ColliderShape, x: number, z: number, yawDeg = 0): Entity {
+    const entity = new Entity("collider");
+    entity.setLocalPosition(x, 0, z);
+    entity.setLocalEulerAngles(0, yawDeg, 0);
+    parent.addChild(entity);
+    declareCollider(entity, shape);
+    return entity;
   }
 
   /** Adds one chamfered-box part: size in metres, centre position relative to the prefab root. */

@@ -1,6 +1,7 @@
 import { math, Vec2, Vec3, type Entity } from "playcanvas";
 import { PLAYER } from "../config";
 import type { MoveInputSource } from "../input/MoveInput";
+import type { CollisionWorld } from "../world/collision/CollisionWorld";
 
 /** Shortest signed difference between two angles in degrees, in (-180, 180]. */
 function deltaAngle(from: number, to: number): number {
@@ -20,6 +21,8 @@ export class PlayerController {
   readonly velocity = new Vec3();
   /** Current facing in degrees around +Y. */
   yawDeg = 0;
+  /** Collision circle radius (metres); set from PLAYER.colliderRadius x character scale. */
+  radius = PLAYER.colliderRadius;
 
   private readonly input = new Vec2();
   private readonly targetVelocity = new Vec3();
@@ -29,6 +32,7 @@ export class PlayerController {
     readonly entity: Entity,
     private readonly moveInput: MoveInputSource,
     private readonly getCameraYawDeg: () => number,
+    private readonly collision: CollisionWorld | null = null,
   ) {
     this.yawDeg = entity.getEulerAngles().y;
   }
@@ -70,12 +74,25 @@ export class PlayerController {
     }
 
     this.position.copy(this.entity.getPosition());
+    const dx = this.velocity.x * dt;
+    const dz = this.velocity.z * dt;
+    if (this.collision) {
+      // Move-and-slide: blocked components are removed from both the step and the velocity, so
+      // running diagonally into a wall keeps the along-wall part of the motion (and the animation
+      // follows the real speed); running straight into it stops.
+      this.collision.moveCircle(this.position, this.radius, dx, dz, this.velocity);
+    } else {
+      this.position.x += dx;
+      this.position.z += dz;
+    }
+    // Safety clamp; the arena curbs are the real boundary.
     const limit = PLAYER.arenaHalfSize;
-    this.position.x = math.clamp(this.position.x + this.velocity.x * dt, -limit, limit);
-    this.position.z = math.clamp(this.position.z + this.velocity.z * dt, -limit, limit);
-    // Stop pushing into the arena edge so the run cycle does not play against a wall.
-    if (Math.abs(this.position.x) === limit) this.velocity.x = 0;
-    if (Math.abs(this.position.z) === limit) this.velocity.z = 0;
+    const clampedX = math.clamp(this.position.x, -limit, limit);
+    const clampedZ = math.clamp(this.position.z, -limit, limit);
+    if (clampedX !== this.position.x) this.velocity.x = 0;
+    if (clampedZ !== this.position.z) this.velocity.z = 0;
+    this.position.x = clampedX;
+    this.position.z = clampedZ;
 
     this.entity.setPosition(this.position);
     this.entity.setEulerAngles(0, this.yawDeg, 0);

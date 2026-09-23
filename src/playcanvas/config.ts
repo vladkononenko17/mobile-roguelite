@@ -74,29 +74,6 @@ export const ROCKY = {
   edgeNoiseMetres: 1.5,
 } satisfies SurfaceTextures & Record<string, unknown>;
 
-/** "Rusty Metal Grid" PBR set (1K) from rusty_metal_grid_1k.blend.zip, converted like the road:
- * painted steel plates with a raised frame. Laid as a hard-edged steel deck in the near-right
- * corner of the arena, 14 x 14 m = ~17% of the play area. */
-export const METAL = {
-  folder: "textures/rusty_metal_grid",
-  diffuse: "rusty_metal_grid_diff_1k.jpg",
-  normal: "rusty_metal_grid_nor_gl_1k.jpg",
-  roughnessMap: "rusty_metal_grid_rough_1k.jpg",
-  bumpiness: 1,
-  /** One texture repeat = 3 x 3 plates, so plates are ~1 m. */
-  tileMetres: 3,
-  /** Relative to the ground brightness. */
-  brightness: 0.9,
-  /** Deck rectangle on the ground (metres). The arena runs from -17 to 17 on both axes. */
-  minX: 3,
-  maxX: 17,
-  minZ: 3,
-  maxZ: 17,
-  /** Dark steel trim around the deck edge. */
-  trimWidth: 0.14,
-  trimHeight: 0.035,
-} satisfies SurfaceTextures & Record<string, unknown>;
-
 /**
  * Environment-kit materials (world/kit). Every kit mesh carries UVs in metres, so `tileMetres` is
  * the texel density: a 1K texture over 2 m is ~512 px/m on every piece regardless of its size.
@@ -198,8 +175,11 @@ export const PLAYER = {
   turnSharpness: 14,
   /** Input magnitudes below this are ignored (joystick dead zone). */
   inputDeadZone: 0.12,
-  /** Square play area half-size around the origin. */
+  /** Square play area half-size around the origin (a safety clamp; curbs are the real edge). */
   arenaHalfSize: 17,
+  /** Radius of the player's collision circle at character scale 1: the body / feet footprint, not
+   * the swinging arms. Scaled with the character. */
+  colliderRadius: 0.34,
 };
 
 export const ANIMATION = {
@@ -287,6 +267,12 @@ export const LIGHTING = {
   clearColor: [0.4, 0.31, 0.24] as const,
   fogStart: 16,
   fogEnd: 42,
+};
+
+export const DEBUG = {
+  /** Show translucent collider footprints (also: "colliders" button in the tune panel, or
+   * ?colliders=1 in the URL). Off by default. */
+  DEBUG_COLLIDERS: false,
 };
 
 export const RENDER = {

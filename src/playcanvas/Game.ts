@@ -9,7 +9,7 @@ import {
   type RenderComponent,
 } from "playcanvas";
 import { CameraController } from "./camera/CameraController";
-import { CAMERA, CHARACTER, CHARACTERS, LIGHTING, PLAYER, type CharacterId } from "./config";
+import { CAMERA, CHARACTER, CHARACTERS, DEBUG, LIGHTING, PLAYER, type CharacterId } from "./config";
 import { KeyboardMoveInput } from "./input/KeyboardMoveInput";
 import { TouchJoystickInput } from "./input/TouchJoystickInput";
 import { CombinedMoveInput, type MoveInputSource } from "./input/MoveInput";
@@ -20,6 +20,8 @@ import { DebugPanel, type TuneParam } from "./ui/DebugPanel";
 import { Ground } from "./world/Ground";
 import { createContactShadow } from "./world/ContactShadow";
 import { CHARACTER_LIGHT_MASK, createLighting } from "./world/Environment";
+import { ColliderDebugView } from "./world/collision/ColliderDebugView";
+import { CollisionWorld } from "./world/collision/CollisionWorld";
 import { EnvironmentKit } from "./world/kit/EnvironmentKit";
 import { buildTestLayout } from "./world/kit/TestLayout";
 import { ResolutionGovernor } from "./perf/ResolutionGovernor";
@@ -48,6 +50,8 @@ export class Game {
   private characterScale: number = CHARACTER.scale;
   private ground!: Ground;
   private kit!: EnvironmentKit;
+  readonly collision = new CollisionWorld();
+  colliderDebug!: ColliderDebugView;
   private resolution!: ResolutionGovernor;
   private debug!: DebugPanel;
   private debugTimer = 0;
@@ -72,7 +76,7 @@ export class Game {
     this.resolution = new ResolutionGovernor(app);
     createLighting(app);
     this.kit = new EnvironmentKit(app);
-    this.ground = new Ground(app, this.kit);
+    this.ground = new Ground(app);
 
     const cameraEntity = new Entity("Camera");
     const [r, g, b] = LIGHTING.clearColor;
@@ -89,7 +93,10 @@ export class Game {
     // Small textures; they stream in alongside the character download. Needs camera + lights.
     const groundLoaded = this.ground.load();
     const kitLoaded = this.kit.load();
-    app.root.addChild(buildTestLayout(this.kit));
+    const layout = buildTestLayout(this.kit);
+    app.root.addChild(layout);
+    // Every kit piece that declared itself solid joins the static collision world.
+    this.collision.addStaticFrom(layout);
 
     const characterModel = CHARACTERS[this.options.character];
     const character = await loadCharacter(app, `${import.meta.env.BASE_URL}${characterModel.url}`, this.options.onProgress);
@@ -115,13 +122,19 @@ export class Game {
       new KeyboardMoveInput(PLAYER.walkSpeed / PLAYER.runSpeed),
       new TouchJoystickInput(this.options.canvas),
     ]);
-    this.player = new PlayerController(playerRoot, this.input, () => this.camera.yawDeg);
+    this.player = new PlayerController(playerRoot, this.input, () => this.camera.yawDeg, this.collision);
     this.camera = new CameraController(cameraEntity, playerRoot, this.player.velocity);
     this.animation = new PlayerAnimationController(character.model, character.tracks, characterModel);
     console.info(`[PlayerAnimation] Idle=${this.animation.clipNames.Idle}, Walk=${this.animation.clipNames.Walk}, Run=${this.animation.clipNames.Run}`);
 
     this.setCharacterScale(this.characterScale);
     await Promise.all([groundLoaded, kitLoaded]);
+
+    this.colliderDebug = new ColliderDebugView(app, this.collision, playerRoot, () => this.player.radius);
+    this.colliderDebug.enabled = DEBUG.DEBUG_COLLIDERS || new URLSearchParams(location.search).get("colliders") === "1";
+    this.options.debugRoot.querySelector("[data-colliders]")?.addEventListener("click", () => {
+      this.colliderDebug.enabled = !this.colliderDebug.enabled;
+    });
 
     this.debug = new DebugPanel(this.options.debugRoot, this.tuneParams());
     app.on("update", this.update, this);
@@ -167,6 +180,8 @@ export class Game {
     this.contactShadow.setLocalScale(1.1 * scale, 1, 1.1 * scale);
     this.camera.pivotHeight = CAMERA.pivotHeight * scale;
     this.animation.strideScale = scale;
+    this.player.radius = PLAYER.colliderRadius * scale;
+    this.colliderDebug?.update();
   }
 
   private tuneParams(): TuneParam[] {
@@ -182,7 +197,6 @@ export class Game {
       { key: "lookAheadTime", label: "Lead s", min: 0, max: 0.6, step: 0.05, get: () => settings.lookAheadTime, set: (v) => (settings.lookAheadTime = v) },
       { key: "groundTile", label: "Ground m", min: 1, max: 12, step: 0.5, get: () => this.ground.tileSize, set: (v) => this.ground.setTileSize(v) },
       { key: "rockTile", label: "Rock m", min: 1, max: 12, step: 0.5, get: () => this.ground.rockTileSize, set: (v) => this.ground.setRockTileSize(v) },
-      { key: "metalTile", label: "Metal m", min: 1, max: 8, step: 0.5, get: () => this.ground.metalTileSize, set: (v) => this.ground.setMetalTileSize(v) },
       { key: "groundBrightness", label: "Ground lum", min: 0.3, max: 1.6, step: 0.05, get: () => this.ground.tint, set: (v) => this.ground.setBrightness(v) },
       { key: "resMax", label: "Res max", min: 0.75, max: 3, step: 0.25, get: () => this.resolution.maxRatio, set: (v) => this.resolution.setMaxRatio(v) },
       { key: "characterScale", label: "Scale", min: 0.7, max: 1.6, step: 0.01, get: () => this.characterScale, set: (v) => this.setCharacterScale(v) },

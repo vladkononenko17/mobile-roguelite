@@ -29,12 +29,14 @@ function brickWall(kit: EnvironmentKit, root: Entity, length: number, height: nu
   const bodyHeight = height - CAP_HEIGHT;
   kit.part(root, "brick", [length, bodyHeight, thickness], [cx, bodyHeight / 2, cz], { bevel: 0.03, noBottom: true });
   kit.part(root, "concrete", [length + 0.06, CAP_HEIGHT, thickness + 0.1], [cx, height - CAP_HEIGHT / 2, cz], { bevel: 0.035 });
+  kit.solid(root, { kind: "box", width: length + 0.06, depth: thickness + 0.1 }, cx, cz);
 }
 
 /** Square concrete post with a small cap, used at wall corners and ends. */
 function post(kit: EnvironmentKit, root: Entity, x: number, z: number, height: number, width = 0.52): void {
   kit.part(root, "concrete", [width, height, width], [x, height / 2, z], { bevel: 0.04, noBottom: true });
   kit.part(root, "concrete", [width + 0.1, 0.12, width + 0.1], [x, height + 0.06, z], { bevel: 0.035 });
+  kit.solid(root, { kind: "box", width: width + 0.1, depth: width + 0.1 }, x, z);
 }
 
 /** A loose chunk of broken material lying at a random angle. */
@@ -79,6 +81,7 @@ export const PREFABS = {
     const t = WALL_THICKNESS;
     // Continuous footing along the whole length.
     kit.part(root, "brick", [4, 0.35, t + 0.02], [0, 0.175, 0], { bevel: 0.03, noBottom: true });
+    kit.solid(root, { kind: "box", width: 4, depth: t + 0.02 }, 0, 0);
     // Intact section with its cap.
     brickWall(kit, root, 1.5, 2.2, -1.25, 0);
     // Stepped remains: [centre x, width, height].
@@ -96,26 +99,32 @@ export const PREFABS = {
   barrierLarge: (kit, root) => {
     kit.part(root, "concrete", [3, 0.36, 0.72], [0, 0.18, 0], { bevel: 0.05, noBottom: true });
     kit.part(root, "concrete", [3, 0.6, 0.4], [0, 0.36 + 0.3, 0], { bevel: 0.06 });
+    kit.solid(root, { kind: "box", width: 3, depth: 0.72 }, 0, 0);
   },
   /** 0.9 m concrete block. */
   blockSmall: (kit, root) => {
     kit.part(root, "concrete", [0.9, 0.6, 0.9], [0, 0.3, 0], { bevel: 0.06, noBottom: true });
+    kit.solid(root, { kind: "box", width: 0.9, depth: 0.9 }, 0, 0);
   },
   /** 3.2 m pillar with plinth and cap. */
   pillar: (kit, root) => {
     kit.part(root, "concrete", [0.8, 0.25, 0.8], [0, 0.125, 0], { bevel: 0.04, noBottom: true });
     kit.part(root, "concrete", [0.55, 2.75, 0.55], [0, 0.25 + 1.375, 0], { bevel: 0.04 });
     kit.part(root, "concrete", [0.75, 0.2, 0.75], [0, 3.1, 0], { bevel: 0.04 });
+    // Round footprint so the player rolls smoothly around it.
+    kit.solid(root, { kind: "circle", radius: 0.42 }, 0, 0);
   },
   /** Cracked slab tipped up on a chunk of debris. */
   slabBroken: (kit, root) => {
     const random = rng(11);
     kit.part(root, "concrete", [2.2, 0.22, 1.4], [0, 0.28, 0], { bevel: 0.05, rot: [7, 0, -9] });
     kit.part(root, "concrete", [0.9, 0.2, 0.8], [1.45, 0.1, 0.35], { bevel: 0.05, rot: [0, 25, 4] });
+    // Only the tipped slab blocks; the loose chunks around it are walk-over debris.
+    kit.solid(root, { kind: "box", width: 2.2, depth: 1.4 }, 0, 0);
     chunk(kit, root, "concrete", -1.2, -0.6, 0.35, random);
     chunk(kit, root, "concrete", 0.6, 0.95, 0.3, random);
   },
-  /** Low rubble pile of concrete and brick chunks (~2 m across). */
+  /** Low rubble pile of concrete and brick chunks (~2 m across). Walk-over debris: no collider. */
   rubble: (kit, root) => {
     const random = rng(23);
     for (let i = 0; i < 9; i++) {
@@ -131,12 +140,14 @@ export const PREFABS = {
     kit.part(root, "painted", [2.9, 2.0, 0.08], [0, 1.15, 0], { bevel: 0.015 });
     for (const x of [-1.5, 1.5]) kit.part(root, "rust", [0.16, 2.4, 0.16], [x, 1.2, 0], { bevel: 0.025, noBottom: true });
     for (const y of [0.12, 2.2]) kit.part(root, "rust", [3.0, 0.1, 0.14], [0, y, 0], { bevel: 0.02 });
+    kit.solid(root, { kind: "box", width: 3.16, depth: 0.16 }, 0, 0);
   },
   /** 3 m rusty bar fence section. */
   fence: (kit, root) => {
     for (const x of [-1.5, 1.5]) kit.part(root, "rust", [0.12, 2.0, 0.12], [x, 1.0, 0], { bevel: 0.02, noBottom: true });
     for (const y of [0.25, 1.85]) kit.part(root, "rust", [3.0, 0.08, 0.08], [0, y, 0], { bevel: 0.012 });
     for (let i = 0; i < 11; i++) kit.part(root, "rust", [0.04, 1.75, 0.04], [-1.25 + i * 0.25, 1.05, 0], { castShadows: true });
+    kit.solid(root, { kind: "box", width: 3.12, depth: 0.14 }, 0, 0);
   },
   /** Sheet-metal barricade leaning on braces, with a patched plate. */
   metalBarricade: (kit, root) => {
@@ -144,6 +155,7 @@ export const PREFABS = {
     kit.part(root, "painted", [0.8, 0.55, 0.03], [0.55, 0.78, 0.07], { bevel: 0.01, rot: [-12, 0, 4] });
     for (const x of [-0.9, 0.9]) kit.part(root, "rust", [0.08, 1.25, 0.08], [x, 0.58, -0.32], { bevel: 0.015, rot: [28, 0, 0] });
     kit.part(root, "steel", [2.5, 0.08, 0.5], [0, 0.04, -0.12], { bevel: 0.015 });
+    kit.solid(root, { kind: "box", width: 2.5, depth: 0.75 }, 0, -0.12);
   },
   /** 2.6 m gate: posts, framed leaf with bars, diagonal brace and a kick plate. */
   metalGate: (kit, root) => {
@@ -155,6 +167,8 @@ export const PREFABS = {
     const brace = Math.hypot(leaf - 0.2, 1.65);
     kit.part(root, "rust", [brace, 0.08, 0.06], [0, 1.075, 0.02], { bevel: 0.012, rot: [0, 0, (Math.atan2(1.65, leaf - 0.2) * 180) / Math.PI] });
     kit.part(root, "painted", [leaf - 0.2, 0.55, 0.03], [0, 0.55, -0.03], { bevel: 0.01 });
+    // Closed gate leaf (the posts declare their own boxes).
+    kit.solid(root, { kind: "box", width: leaf, depth: 0.14 }, 0, 0);
   },
 
   // ---------------------------------------------------------------- wood
@@ -171,8 +185,9 @@ export const PREFABS = {
       for (const z of [-1, 1]) kit.part(root, "planks", [s - 2 * b, b, b], [0, y, z * (h - b / 2)], { bevel: 0.015, grain: "x" });
       for (const x of [-1, 1]) kit.part(root, "planks", [b, b, s - 2 * b], [x * (h - b / 2), y, 0], { bevel: 0.015, grain: "z" });
     }
+    kit.solid(root, { kind: "box", width: s, depth: s }, 0, 0);
   },
-  /** 1.2 x 1.0 m pallet. */
+  /** 1.2 x 1.0 m pallet. 14 cm tall, so it is walk-over (no collider). */
   pallet: (kit, root) => {
     for (const x of [-0.52, 0, 0.52]) kit.part(root, "planks", [0.1, 0.09, 1.0], [x, 0.07, 0], { bevel: 0.012, grain: "z" });
     for (let i = 0; i < 5; i++) kit.part(root, "planks", [1.2, 0.025, 0.14], [0, 0.1275, -0.43 + i * 0.215], { bevel: 0.006, grain: "x" });
@@ -184,12 +199,14 @@ export const PREFABS = {
     const boards: [number, number][] = [[0.45, -4], [0.85, 3], [1.3, -2]];
     for (const [y, angle] of boards) kit.part(root, "planks", [2.5, 0.2, 0.05], [0, y, 0.1], { bevel: 0.012, grain: "x", rot: [0, 0, angle] });
     kit.part(root, "planks", [2.55, 0.2, 0.05], [0, 0.85, 0.15], { bevel: 0.012, grain: "x", rot: [0, 0, 27] });
+    kit.solid(root, { kind: "box", width: 2.6, depth: 0.4 }, 0, 0.05);
   },
 
   // ---------------------------------------------------------------- level furniture
   /** Low concrete curb, 4 m long. Chain them to edge an area. */
   curb: (kit, root) => {
     kit.part(root, "concrete", [4, 0.5, 0.7], [0, 0.25, 0], { bevel: 0.06, noBottom: true });
+    kit.solid(root, { kind: "box", width: 4, depth: 0.7 }, 0, 0);
   },
 } satisfies Record<string, Build>;
 
