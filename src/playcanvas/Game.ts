@@ -68,8 +68,6 @@ export class Game {
     createLighting(app);
     const arena = createArena(app);
     this.ground = new Ground(arena.groundMaterial);
-    // Small textures; they stream in alongside the character download.
-    const groundLoaded = this.ground.load(app);
 
     const cameraEntity = new Entity("Camera");
     const [r, g, b] = LIGHTING.clearColor;
@@ -83,6 +81,8 @@ export class Game {
       gammaCorrection: GAMMA_SRGB,
     });
     app.root.addChild(cameraEntity);
+    // Small textures; they stream in alongside the character download. Needs camera + lights.
+    const groundLoaded = this.ground.load(app);
 
     const characterModel = CHARACTERS[this.options.character];
     const character = await loadCharacter(app, `${import.meta.env.BASE_URL}${characterModel.url}`, this.options.onProgress);
@@ -161,6 +161,7 @@ export class Game {
       { key: "followSharpness", label: "Follow", min: 1, max: 30, step: 0.5, get: () => settings.followSharpness, set: (v) => (settings.followSharpness = v) },
       { key: "lookAheadTime", label: "Lead s", min: 0, max: 0.6, step: 0.05, get: () => settings.lookAheadTime, set: (v) => (settings.lookAheadTime = v) },
       { key: "groundTile", label: "Ground m", min: 1, max: 12, step: 0.5, get: () => this.ground.tileSize, set: (v) => this.ground.setTileSize(v) },
+      { key: "rockTile", label: "Rock m", min: 1, max: 12, step: 0.5, get: () => this.ground.rockTileSize, set: (v) => this.ground.setRockTileSize(v) },
       { key: "groundBrightness", label: "Ground lum", min: 0.3, max: 1.6, step: 0.05, get: () => this.ground.tint, set: (v) => this.ground.setBrightness(v) },
       { key: "characterScale", label: "Scale", min: 0.7, max: 1.6, step: 0.01, get: () => this.characterScale, set: (v) => this.setCharacterScale(v) },
     ];

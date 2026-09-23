@@ -37,6 +37,15 @@ export const CHARACTERS = {
 export type CharacterId = keyof typeof CHARACTERS;
 export const DEFAULT_CHARACTER: CharacterId = "brawler2k";
 
+/** A 1K PBR texture set: colour (sRGB), OpenGL normal and roughness (linear). */
+export interface SurfaceTextures {
+  folder: string;
+  diffuse: string;
+  normal: string;
+  roughness: string;
+  bumpiness: number;
+}
+
 /** Ground surface: "Damaged Road" PBR set (1K) from the user-supplied road_damaged_1k.blend.zip.
  * EXR normal/roughness were converted to 8-bit JPG; the displacement map is not used. */
 export const GROUND = {
@@ -49,7 +58,28 @@ export const GROUND = {
   /** Multiplier on the colour map; below 1 keeps the ground from competing with the hero. */
   brightness: 0.85,
   bumpiness: 1,
-};
+} satisfies SurfaceTextures & Record<string, unknown>;
+
+/** "Rocky Terrain" PBR set (1K) from rocky_terrain_1k.blend.zip, converted like the road. It covers
+ * the far third of the arena (the top of the screen at spawn) and fades into the road. */
+export const ROCKY = {
+  folder: "textures/rocky_terrain",
+  diffuse: "rocky_terrain_diff_1k.jpg",
+  normal: "rocky_terrain_nor_gl_1k.jpg",
+  roughness: "rocky_terrain_rough_1k.jpg",
+  bumpiness: 1.2,
+  tileMetres: 5,
+  /** Relative to the ground brightness; the grass-and-rock texture is brighter and busier than the
+   * road, which hides shadows, so it is toned down. */
+  brightness: 0.8,
+  /** Warm multiplier that pulls the saturated grass towards olive to fit the wasteland palette. */
+  tint: [1.0, 0.9, 0.76] as const,
+  /** Share of the arena depth covered, measured from the far (-Z) wall. */
+  coverage: 1 / 3,
+  /** Width of the soft blend into the road, and how far the border wanders either way. */
+  edgeFadeMetres: 2.5,
+  edgeNoiseMetres: 1.5,
+} satisfies SurfaceTextures & Record<string, unknown>;
 
 export const CAMERA = {
   /** Downward tilt of the camera (0 = horizon, 90 = straight down). Because the hero sits below
