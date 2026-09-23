@@ -155,6 +155,16 @@ export const KIT = {
   batchCellMetres: 24,
 };
 
+/**
+ * CC0 GLB props from 3dassets.dev ("FPS Survival Forest Outpost"), merged into one file by
+ * scripts/build-props.mjs, which also mutes their colours (saturation is baked there). This
+ * brightness is applied on top at load, for quick tuning without rebuilding the file.
+ */
+export const PROPS = {
+  url: "models/props/wasteland-props.glb",
+  brightness: 1,
+};
+
 export const CAMERA = {
   /** Downward tilt of the camera (0 = horizon, 90 = straight down). Because the hero sits below
    * the screen centre, the line of sight to him is a few degrees steeper than this. */

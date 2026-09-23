@@ -2,6 +2,7 @@ import { Entity } from "playcanvas";
 import type { EnvironmentKit } from "../kit/EnvironmentKit";
 import { fenceRun, wallRun } from "../kit/Modules";
 import type { PrefabName } from "../kit/Prefabs";
+import type { PropId, PropLibrary } from "../props/PropLibrary";
 
 /**
  * LEVEL 1 - "Dustline Checkpoint": an abandoned checkpoint / industrial outpost, 35 x 50 m.
@@ -127,7 +128,6 @@ const YARD: Placement[] = [
   ["crate", 15.7, 6.9, -22],
   ["metalBarricade", 11.6, 2.4, 35],
   ["crateStack", 13.6, -2.2, 2],
-  ["rubbleSmall", 9.2, -3.0, 0],
 ];
 
 const RUINED_HOUSE: Placement[] = [
@@ -170,6 +170,48 @@ const COMBAT: Placement[] = [
   ["crateStack", 1.6, -20.6, -8],
   ["pallet", 3.4, -19.9, 25],
 ];
+
+/** Imported GLB props (CC0, 3dassets.dev): [prop, x, z, yaw degrees]. */
+type PropPlacement = [PropId, number, number, number];
+
+const IMPORTED_PROPS: PropPlacement[] = [
+  // Approach: a pickup abandoned off the road, a wrecked car dragged across the east shoulder.
+  ["pickup-battered", -7.2, 21.8, 195],
+  ["wreck-barricade", 10.6, 23.0, -8],
+  ["tyre-stack", -4.2, 24.2, 20],
+  ["scrap-pile", -2.9, 20.8, 40],
+  ["road-sign", 5.6, 19.2, 0],
+  // The checkpoint's defences: a sandbag line and wire west of the gate, a floodlight covering
+  // the road behind it, a dead generator and fuel drums beside the guard post.
+  ["sandbag-wall", -5.6, 12.1, 0],
+  ["razor-wire-coil", -8.9, 11.4, 4],
+  ["floodlight-mast", -4.6, 8.8, 20],
+  ["generator-unit", 7.4, 11.3, 90],
+  ["oil-drum", 8.3, 12.7, 0],
+  ["oil-drum", 8.0, 13.5, 0],
+  // Yard: fuel storage against the north wall, the bowser parked by the east fence.
+  ["fuel-drum-rack", 9.0, -3.2, 0],
+  ["fuel-bowser", 15.8, 4.0, 180],
+  ["oil-drum", 6.0, 0.9, 0],
+  ["oil-drum", 6.1, 1.7, 0],
+  // Combat area: a container as big cover, leaving a 3 m lane down the east side from the yard's
+  // back exit; sandbags and drums as low cover; wire in front of the north roadblock.
+  ["shipping-container", 11.0, -10.0, 8],
+  ["sandbag-wall", -1.6, -14.4, 10],
+  ["oil-drum", -2.3, -11.0, 0],
+  ["oil-drum", -2.9, -10.4, 0],
+  ["tyre-stack", -10.8, -10.2, -15],
+  ["pallet-stack", 6.0, -22.6, 10],
+  ["razor-wire-coil", -8.8, -23.4, 0],
+  ["scrap-pile", 6.4, -13.4, 0],
+];
+
+/** Places the imported GLB props (after they load) under their own root, collidable. */
+export function buildCheckpointProps(props: PropLibrary): Entity {
+  const root = new Entity("CheckpointProps");
+  for (const [id, x, z, yaw] of IMPORTED_PROPS) props.spawn(id, x, z, yaw, root);
+  return root;
+}
 
 /** Builds the whole level under one root entity (static, batched, collidable). */
 export function buildCheckpointLevel(kit: EnvironmentKit): Entity {

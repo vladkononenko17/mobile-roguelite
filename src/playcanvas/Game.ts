@@ -11,7 +11,7 @@ import {
   type RenderComponent,
 } from "playcanvas";
 import { CameraController } from "./camera/CameraController";
-import { CAMERA, CHARACTER, CHARACTERS, DEBUG, LIGHTING, PLAYER, type CharacterId } from "./config";
+import { CAMERA, CHARACTER, CHARACTERS, DEBUG, LIGHTING, PLAYER, PROPS, type CharacterId } from "./config";
 import { KeyboardMoveInput } from "./input/KeyboardMoveInput";
 import { TouchJoystickInput } from "./input/TouchJoystickInput";
 import { CombinedMoveInput, type MoveInputSource } from "./input/MoveInput";
@@ -25,7 +25,8 @@ import { CHARACTER_LIGHT_MASK, createLighting } from "./world/Environment";
 import { ColliderDebugView } from "./world/collision/ColliderDebugView";
 import { CollisionWorld } from "./world/collision/CollisionWorld";
 import { EnvironmentKit } from "./world/kit/EnvironmentKit";
-import { BOUNDS, buildCheckpointLevel, GROUND_SPEC, SPAWN } from "./world/level/CheckpointLevel";
+import { BOUNDS, buildCheckpointLevel, buildCheckpointProps, GROUND_SPEC, SPAWN } from "./world/level/CheckpointLevel";
+import { PropLibrary } from "./world/props/PropLibrary";
 import { ResolutionGovernor } from "./perf/ResolutionGovernor";
 
 export interface GameOptions {
@@ -99,6 +100,16 @@ export class Game {
     app.root.addChild(layout);
     // Every kit piece that declared itself solid joins the static collision world.
     this.collision.addStaticFrom(layout);
+    // Imported GLB props (~1 MB) download alongside the character; a failure only loses the props.
+    const props = new PropLibrary(app, this.kit.batchGroupId);
+    const propsLoaded = props.load(`${import.meta.env.BASE_URL}${PROPS.url}`).then(
+      () => {
+        const placed = buildCheckpointProps(props);
+        app.root.addChild(placed);
+        this.collision.addStaticFrom(placed);
+      },
+      (error: unknown) => console.warn("[Props] not loaded; the level runs without them.", error),
+    );
 
     const characterModel = CHARACTERS[this.options.character];
     const character = await loadCharacter(app, `${import.meta.env.BASE_URL}${characterModel.url}`, this.options.onProgress);
@@ -132,7 +143,7 @@ export class Game {
     console.info(`[PlayerAnimation] Idle=${this.animation.clipNames.Idle}, Walk=${this.animation.clipNames.Walk}, Run=${this.animation.clipNames.Run}`);
 
     this.setCharacterScale(this.characterScale);
-    await Promise.all([groundLoaded, kitLoaded]);
+    await Promise.all([groundLoaded, kitLoaded, propsLoaded]);
 
     this.colliderDebug = new ColliderDebugView(app, this.collision, playerRoot, () => this.player.radius);
     this.colliderDebug.enabled = DEBUG.DEBUG_COLLIDERS || new URLSearchParams(location.search).get("colliders") === "1";

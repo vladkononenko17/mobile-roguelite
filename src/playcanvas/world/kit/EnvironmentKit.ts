@@ -21,7 +21,8 @@ export interface PartOptions extends BoxOptions {
  */
 export class EnvironmentKit {
   readonly materials = {} as Record<KitMaterial, StandardMaterial>;
-  private readonly batchGroupId: number;
+  /** Static batch group shared by kit pieces and imported props. */
+  readonly batchGroupId: number;
 
   constructor(private readonly app: AppBase) {
     for (const id of Object.keys(KIT_SURFACES) as (keyof typeof KIT_SURFACES)[]) {
