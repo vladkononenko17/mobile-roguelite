@@ -10,24 +10,27 @@ export const BIOMES = {
 
 export type BiomeId = keyof typeof BIOMES;
 
-const KEY = "dustline3d.biome";
 export const isBiomeId = (value: string | null): value is BiomeId => value !== null && value in BIOMES;
 
-/** ?biome=<id> wins, then the last map picked in this browser, then chapter 1. */
+/** Short names accepted in the URL besides the ids. */
+const ALIASES: Record<string, BiomeId> = { space: "facility", orion: "facility", desert: "outpost" };
+
+/**
+ * The map comes from the URL only, so each map has its own link and the plain link is always
+ * chapter 1: ?level=space (or ?biome=facility) opens the ORION facility; space.html redirects there.
+ */
 export function pickBiome(): BiomeId {
-  const fromUrl = new URLSearchParams(location.search).get("biome");
-  if (isBiomeId(fromUrl)) return fromUrl;
-  try {
-    const saved = localStorage.getItem(KEY);
-    if (isBiomeId(saved)) return saved;
-  } catch { /* storage unavailable */ }
-  return "outpost";
+  const params = new URLSearchParams(location.search);
+  const value = (params.get("level") ?? params.get("biome") ?? "").toLowerCase();
+  if (isBiomeId(value)) return value;
+  return ALIASES[value] ?? "outpost";
 }
 
-/** Remembers the map and reloads with it (one kit in GPU memory at a time). */
+/** Reloads with the chosen map (one kit in GPU memory at a time). */
 export function switchBiome(id: BiomeId): void {
-  try { localStorage.setItem(KEY, id); } catch { /* storage unavailable */ }
   const url = new URL(location.href);
-  url.searchParams.set("biome", id);
+  url.searchParams.delete("biome");
+  if (id === "outpost") url.searchParams.delete("level");
+  else url.searchParams.set("level", id === "facility" ? "space" : id);
   location.replace(url);
 }
