@@ -5,3 +5,6 @@ dist/
 
 # Atomic Realm packs: licence forbids redistribution, keep sources out of the public repo
 assets-src/atomic-realm/
+
+# SHS Monsters Pack: licence forbids sharing the raw files; keep local only
+assets-src/shs-monsters/
