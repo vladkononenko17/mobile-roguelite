@@ -1,4 +1,5 @@
-import { Vec3, type CameraComponent, type Entity } from "playcanvas";
+import { Vec3, type Entity } from "playcanvas";
+import type { ScreenProjector } from "../camera/ScreenProjector";
 import "@fontsource/barlow-condensed/latin-700.css";
 import "@fontsource/barlow-condensed/latin-800.css";
 import { CATEGORY_COLORS, ICON_PATHS, iconSvg, type UpgradeCategory, type UpgradeIcon, type UpgradeRarity } from "./UpgradeIcons";
@@ -22,7 +23,14 @@ const CSS = `
 #hud .lvl .time { font-size: 24px; font-weight: 800; letter-spacing: 0.03em; }
 #hud .lvl .time.alert { color: var(--warn); font-size: 19px; letter-spacing: 0.1em; }
 #hud .lvl .prog { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(0, 0, 0, 0.45); overflow: hidden; border-radius: 0 0 3px 3px; }
-#hud .lvl .prog > i { position: absolute; inset: 0 auto 0 0; background: var(--amber); transition: width 0.3s linear; }
+#hud .lvl .prog > i { position: absolute; inset: 0 auto 0 0; background: rgba(236, 227, 207, 0.55); transition: width 0.3s linear; }
+/* Character level + XP: a slim row under the wave plate (the level-up progress, separate from waves). */
+#hud .xp { display: flex; align-items: center; gap: 6px; padding: 3px 8px 4px; }
+#hud .xp .cap { color: var(--cream); font-size: 10px; letter-spacing: 0.12em; min-width: 26px; }
+#hud .xp .bar { position: relative; flex: 1; min-width: 44px; height: 4px; background: rgba(0, 0, 0, 0.5); border-radius: 1px; overflow: hidden; }
+#hud .xp .bar > i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #c08a2c, #efc55a); transition: width 0.25s ease-out; }
+#hud .xp.up .bar > i { animation: xp-full 0.5s ease-out; }
+@keyframes xp-full { 0% { filter: brightness(2); } 100% { filter: none; } }
 /* Ammo: small weapon name, big magazine count, smaller capacity. */
 #hud .row { display: flex; gap: 5px; align-items: stretch; }
 #hud .ammo { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; align-items: end; column-gap: 6px; padding: 4px 9px 5px 7px; }
@@ -111,6 +119,17 @@ const CSS = `
 #overlay .cards.compact .card b { font-size: 15px; }
 #overlay .cards.compact .card .tag { display: none; }
 #overlay .card.special { border-color: #9c3bd8; }
+/* Level-up: the game is paused underneath; a punchy title and big, touch-friendly cards. */
+#overlay .panel.levelup { width: min(420px, 100%); }
+#overlay .panel.levelup h2 { font: 800 38px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.12em; color: #efc55a; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7); animation: lvl-pop 0.4s ease-out; }
+#overlay .panel.levelup p { font: 700 14px "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.14em; text-transform: uppercase; }
+#overlay .panel.levelup .card { min-height: 72px; background: linear-gradient(180deg, rgba(40, 36, 29, 0.97), rgba(24, 23, 20, 0.97)); border-radius: 6px; animation: card-in 0.3s ease-out backwards; }
+#overlay .panel.levelup .card:nth-child(2) { animation-delay: 0.06s; }
+#overlay .panel.levelup .card:nth-child(3) { animation-delay: 0.12s; }
+#overlay .panel.levelup .card:active { transform: scale(0.98); }
+#overlay .panel.levelup .card b { font: 800 19px "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.04em; }
+@keyframes lvl-pop { 0% { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes card-in { 0% { transform: translateY(14px); opacity: 0; } 100% { transform: none; opacity: 1; } }
 #overlay .card:disabled { opacity: 0.4; }
 #overlay .actions { margin-top: 14px; display: flex; gap: 10px; justify-content: center; }
 #overlay .primary { padding: 12px 22px; border-radius: 10px; border: 0; background: #e8a92f; color: #1b140f; font: 700 16px system-ui, sans-serif; }
@@ -169,6 +188,9 @@ export class Hud {
   private readonly hpText: HTMLElement;
   private readonly hpBar: HTMLElement;
   private readonly levelFill: HTMLElement;
+  private readonly xp: HTMLElement;
+  private readonly xpLevel: HTMLElement;
+  private readonly xpFill: HTMLElement;
   private readonly levelName: HTMLElement;
   private readonly timer: HTMLElement;
   private readonly money: HTMLElement;
@@ -204,6 +226,7 @@ export class Hud {
       <div class="hurt"></div>
       <div class="corner tl">
         <div class="plate lvl"><span class="cap"></span><span class="time"></span><div class="prog"><i></i></div></div>
+        <div class="plate xp"><span class="cap"></span><div class="bar"><i></i></div></div>
         <div class="row">
           <div class="plate ammo">${bulletSvg}<span class="cap"></span><span class="count"><b></b><small></small></span></div>
           <button type="button" class="plate gear" aria-label="settings">${GEAR_SVG}</button>
@@ -226,6 +249,9 @@ export class Hud {
     this.hpText = q(".health b");
     this.hpBar = q(".health .hpbar > i");
     this.levelFill = q(".lvl .prog > i");
+    this.xp = q(".xp");
+    this.xpLevel = q(".xp .cap");
+    this.xpFill = q(".xp .bar > i");
     this.levelName = q(".lvl .cap");
     this.timer = q(".lvl .time");
     this.money = q(".money");
@@ -275,8 +301,20 @@ export class Hud {
     this.health.classList.toggle("low", value > 0 && value <= max * 0.25);
   }
 
-  /** Level name small, the timer (or BOSS / CLEAR) large, progress along the plate's bottom edge. */
-  setLevel(label: string, progress: number, right: string): void {
+  private shownLevel = 0;
+
+  /** Character level and XP toward the next level (flashes on a level-up). */
+  setXp(level: number, xp: number, needed: number): void {
+    if (level !== this.shownLevel) {
+      if (this.shownLevel > 0) restartAnimation(this.xp, "up");
+      this.shownLevel = level;
+      this.xpLevel.textContent = `LV ${level}`;
+    }
+    this.xpFill.style.width = `${Math.min(100, (100 * xp) / needed)}%`;
+  }
+
+  /** Wave name small, the timer (or BOSS / CLEAR) large, wave progress along the plate's bottom edge. */
+  setWave(label: string, progress: number, right: string): void {
     this.levelFill.style.width = `${Math.round(progress * 100)}%`;
     if (this.levelName.textContent !== label) this.levelName.textContent = label;
     if (this.timer.textContent !== right) {
@@ -383,14 +421,14 @@ export class Hud {
     f.el.style.display = "block";
   }
 
-  update(dt: number, camera: CameraComponent): void {
+  update(dt: number, camera: ScreenProjector): void {
     if (this.bannerTimer > 0) {
       this.bannerTimer -= dt;
       if (this.bannerTimer <= 0) this.banner.style.opacity = "0";
     }
     if (this.pulseTime > 0 && this.pulseAnchor) {
       this.pulseTime -= dt;
-      camera.worldToScreen(this.pulseAnchor.getPosition(), this.screen);
+      camera.toScreen(this.pulseAnchor.getPosition(), this.screen);
       this.pulse.style.left = `${this.screen.x}px`;
       this.pulse.style.top = `${this.screen.y}px`;
     }
@@ -402,7 +440,7 @@ export class Hud {
         continue;
       }
       f.position.y += dt * 1.2;
-      camera.worldToScreen(f.position, this.screen);
+      camera.toScreen(f.position, this.screen);
       f.el.style.left = `${this.screen.x}px`;
       f.el.style.top = `${this.screen.y}px`;
       f.el.style.opacity = `${Math.min(1, f.life / 0.3)}`;
@@ -410,9 +448,9 @@ export class Hud {
   }
 
   /** Opens the modal with a title, text, optional cards (each a button) and optional actions. */
-  openModal(options: { title: string; text?: string; cards?: Card[]; compact?: boolean; onCard?: (index: number) => void; actions?: { label: string; onClick: () => void }[] }): void {
+  openModal(options: { title: string; text?: string; cards?: Card[]; compact?: boolean; levelUp?: boolean; onCard?: (index: number) => void; actions?: { label: string; onClick: () => void }[] }): void {
     const panel = document.createElement("div");
-    panel.className = "panel";
+    panel.className = options.levelUp ? "panel levelup" : "panel";
     const h = document.createElement("h2");
     h.textContent = options.title;
     panel.append(h);

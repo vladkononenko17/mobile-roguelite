@@ -11,7 +11,17 @@ export interface BodySource {
   tracks: AnimTrack[];
 }
 
-type State = "move" | "attack" | "telegraph" | "charge" | "recover" | "throw" | "slam" | "dead";
+/**
+ * Lifecycle: the combat states (alive) -> "dying" (death clip playing; set once, by die()) ->
+ * "dead" (corpse resting, then sinking) -> despawn (back to the pool). Only alive enemies can be
+ * targeted, hit, attack, push others or count toward the cap.
+ */
+type State = "move" | "attack" | "telegraph" | "charge" | "recover" | "throw" | "slam" | "dying" | "dead";
+
+/** Alive = spawned and not dying / dead. */
+export function isAlive(e: Enemy): boolean {
+  return e.active && e.state !== "dying" && e.state !== "dead";
+}
 
 export interface Enemy {
   id: EnemyId;
@@ -51,6 +61,8 @@ export interface Enemy {
   /** Hit flinch time left, and the time until the next flinch may start. */
   hitReact: number;
   hitCooldown: number;
+  /** How many times die() ran for this spawn (must stay <= 1; checked by tests). */
+  deaths: number;
 }
 
 interface Pool {
@@ -149,7 +161,7 @@ export class EnemyManager {
       root, model, meshes, normalMaterial: first, flashMaterial: first,
       active: false, hp: 1, maxHp: 1, damageScale: 1, position: new Vec3(), push: new Vec3(),
       state: "move", stateTime: 0, cooldown: 0, specialCooldown: 0, flash: 0, yaw: 0, dirX: 0, dirZ: 1, hitDone: false, marker: null, stuck: 0,
-      hitReact: 0, hitCooldown: 0,
+      hitReact: 0, hitCooldown: 0, deaths: 0,
     };
     pool.bodies.add(enemy);
     return enemy;
@@ -218,6 +230,7 @@ export class EnemyManager {
     enemy.stuck = 0;
     enemy.hitReact = 0;
     enemy.hitCooldown = 0;
+    enemy.deaths = 0;
     // Materials (per type) and animation clips.
     const skins = (visual.skins ?? []).filter((k) => this.skins.has(k));
     enemy.skin = skins.length ? skins[Math.floor(Math.random() * skins.length)] : null;
@@ -228,11 +241,13 @@ export class EnemyManager {
     const anim = enemy.model.anim!;
     const track = (name: string) => pool.source.tracks.find((t) => t.name === name) ?? pool.source.tracks[0];
     const clips = enemy.clips;
-    anim.assignAnimation("Move", track(clips.move));
-    anim.assignAnimation("Attack", track(clips.attack));
-    anim.assignAnimation("Hit", track(clips.hit ?? clips.move));
-    anim.assignAnimation("Death", track(clips.death[Math.floor(Math.random() * clips.death.length)]));
-    anim.assignAnimation("Special", track(clips.special ?? clips.move));
+    // assignAnimation's `loop` argument defaults to true and overrides the state graph, so one-shot
+    // clips must say so: a looping Death clip replays (the corpse stands up and dies again).
+    anim.assignAnimation("Move", track(clips.move), undefined, 1, true);
+    anim.assignAnimation("Attack", track(clips.attack), undefined, 1, false);
+    anim.assignAnimation("Hit", track(clips.hit ?? clips.move), undefined, 1, false);
+    anim.assignAnimation("Death", track(clips.death[Math.floor(Math.random() * clips.death.length)]), undefined, 1, false);
+    anim.assignAnimation("Special", track(clips.special ?? clips.move), undefined, 1, true);
     anim.speed = this.moveRate(enemy);
     anim.baseLayer!.play("Move");
     // Start each body at a different point of its walk cycle so a group does not march in step.
@@ -248,7 +263,7 @@ export class EnemyManager {
 
   /** Damage from the player. Returns true if it killed the enemy. */
   damage(enemy: Enemy, amount: number, fromX: number, fromZ: number, knockback: number): boolean {
-    if (!enemy.active || enemy.state === "dead") return false;
+    if (!isAlive(enemy)) return false;
     enemy.hp -= amount;
     enemy.flash = 0.08;
     for (const mi of enemy.meshes) mi.material = enemy.flashMaterial;
@@ -257,10 +272,7 @@ export class EnemyManager {
     const resist = enemy.def.boss ? 0.15 : 1;
     enemy.push.x += (dx / d) * knockback * 12 * resist;
     enemy.push.z += (dz / d) * knockback * 12 * resist;
-    if (enemy.hp <= 0) {
-      this.kill(enemy);
-      return true;
-    }
+    if (enemy.hp <= 0) return this.die(enemy, true);
     // Flinch (regular enemies walking, not too often; the attack wind-up is not interrupted).
     if (enemy.clips.hit && !enemy.def.boss && enemy.state === "move" && enemy.hitCooldown <= 0) {
       enemy.hitReact = ENEMY_LIMITS.hitReact;
@@ -276,13 +288,24 @@ export class EnemyManager {
     return enemy.def.speed / (ENEMY_VISUALS[enemy.visual].moveSpeed * enemy.scale);
   }
 
-  private kill(enemy: Enemy): void {
+  /**
+   * The only way an enemy dies: alive -> "dying" once. Plays the death clip, clears its telegraph
+   * and (with `reward`) reports the kill (XP, drops) exactly once. Returns false if it was not alive
+   * (a second bullet / pellet / hit callback in the same frame changes nothing).
+   */
+  private die(enemy: Enemy, reward: boolean): boolean {
+    if (!isAlive(enemy)) return false;
+    enemy.deaths++;
     enemy.hp = 0;
-    this.setState(enemy, "dead");
+    enemy.hitReact = 0;
+    enemy.push.set(0, 0, 0);
+    this.setState(enemy, "dying");
     this.hazards.clear(enemy.marker);
+    enemy.marker = null;
     enemy.model.anim!.speed = 1;
     enemy.model.anim!.baseLayer!.transition("Death", 0.1);
-    this.onDeath(enemy);
+    if (reward) this.onDeath(enemy);
+    return true;
   }
 
   private release(enemy: Enemy): void {
@@ -298,16 +321,9 @@ export class EnemyManager {
     return undefined;
   }
 
-  /** Kills every regular (non-boss) enemy without rewards (the level is over). */
+  /** Kills every enemy still alive, without rewards (the wave is over). */
   killAll(): void {
-    for (const enemy of [...this.alive]) {
-      if (enemy.state === "dead") continue;
-      enemy.hp = 0;
-      this.setState(enemy, "dead");
-      this.hazards.clear(enemy.marker);
-      enemy.model.anim!.speed = 1;
-      enemy.model.anim!.baseLayer!.transition("Death", 0.1);
-    }
+    for (const enemy of [...this.alive]) this.die(enemy, false);
   }
 
   /** Removes every enemy immediately (new level / restart). */
@@ -320,7 +336,7 @@ export class EnemyManager {
 
   get livingCount(): number {
     let n = 0;
-    for (const e of this.alive) if (e.state !== "dead") n++;
+    for (const e of this.alive) if (isAlive(e)) n++;
     return n;
   }
 
@@ -335,10 +351,10 @@ export class EnemyManager {
     // Separation (O(n^2) over at most ~30 bodies).
     for (let i = 0; i < alive.length; i++) {
       const a = alive[i];
-      if (a.state === "dead") continue;
+      if (!isAlive(a)) continue;
       for (let j = i + 1; j < alive.length; j++) {
         const b = alive[j];
-        if (b.state === "dead") continue;
+        if (!isAlive(b)) continue;
         const dx = b.position.x - a.position.x, dz = b.position.z - a.position.z;
         const min = (a.def.radius + b.def.radius) * ENEMY_LIMITS.separation;
         const d2 = dx * dx + dz * dz;
@@ -362,8 +378,13 @@ export class EnemyManager {
       enemy.flash -= dt;
       if (enemy.flash <= 0) for (const mi of enemy.meshes) mi.material = enemy.normalMaterial;
     }
+    if (enemy.state === "dying") {
+      // The death clip plays out (it ends lying down), then the body is a corpse.
+      if (enemy.stateTime >= ENEMY_LIMITS.dyingSeconds) this.setState(enemy, "dead");
+      return;
+    }
     if (enemy.state === "dead") {
-      // Lie there, then sink and go back to the pool.
+      // Lie there, then sink and despawn (back to the pool).
       const t = enemy.stateTime - ENEMY_LIMITS.corpseSeconds;
       if (t > 0) enemy.model.setLocalPosition(0, -t * 0.9, 0);
       if (t > 1.2) this.release(enemy);
@@ -543,7 +564,7 @@ export class EnemyManager {
   raycast(ox: number, oz: number, dx: number, dz: number, range: number, out: { enemy: Enemy; t: number }[]): void {
     out.length = 0;
     for (const e of this.alive) {
-      if (e.state === "dead") continue;
+      if (!isAlive(e)) continue;
       const r = e.def.radius * 1.35;
       const cx = e.position.x - ox, cz = e.position.z - oz;
       const along = cx * dx + cz * dz;
@@ -557,7 +578,7 @@ export class EnemyManager {
   }
 
   get bosses(): Enemy[] {
-    return this.alive.filter((e) => e.def.boss && e.state !== "dead");
+    return this.alive.filter((e) => e.def.boss && isAlive(e));
   }
 
   /** Whether `id` can spawn now (one of its looks is loaded, under the enemy cap). */

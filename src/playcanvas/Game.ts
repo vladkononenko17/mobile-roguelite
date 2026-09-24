@@ -30,7 +30,8 @@ import { createContactShadow } from "./world/ContactShadow";
 import { CHARACTER_LIGHT_MASK, createLighting } from "./world/Environment";
 import { ColliderDebugView } from "./world/collision/ColliderDebugView";
 import { CollisionWorld } from "./world/collision/CollisionWorld";
-import { BOUNDS, buildOutpostLevel, GROUND_SPEC, SPAWN } from "./world/level/OutpostLevel";
+import { AMBIENT, BOUNDS, buildOutpostLevel, GROUND_SPEC, SPAWN } from "./world/level/OutpostLevel";
+import { AmbientFx } from "./world/AmbientFx";
 import { ModelKit } from "./world/props/ModelKit";
 import { OUTPOST_MODELS, type OutpostModel } from "./world/props/OutpostKit";
 import { ResolutionGovernor } from "./perf/ResolutionGovernor";
@@ -60,6 +61,7 @@ export class Game {
   private weaponTuner: WeaponTuner | null = null;
   /** The roguelite run (null in the ?sandbox=1 movement sandbox). */
   gameplay: Gameplay | null = null;
+  private ambient: AmbientFx | null = null;
   weapons!: WeaponHolder;
   private contactShadow!: Entity;
   private characterScale: number = CHARACTER.scale;
@@ -114,6 +116,7 @@ export class Game {
         const layout = buildOutpostLevel(this.kit);
         app.root.addChild(layout);
         this.collision.addStaticFrom(layout);
+        this.ambient = new AmbientFx(app, AMBIENT);
       },
       (error: unknown) => console.error("[Level] environment kit failed to load.", error),
     );
@@ -231,6 +234,7 @@ export class Game {
     this.weaponHands?.update(this.weapons, aimWeight, this.player.yawDeg, runBlend);
     // Combat after the hands are posed (tracers start at the posed muzzle).
     this.gameplay?.update(dt);
+    this.ambient?.update(dt, this.player.entity.getPosition());
     const device = this.app.graphicsDevice;
     this.camera.update(dt, device.width / Math.max(1, device.height));
 

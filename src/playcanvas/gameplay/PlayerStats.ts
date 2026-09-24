@@ -1,9 +1,10 @@
-import { PLAYER_COMBAT, WEAPON_STATS, type UpgradeId, type WeaponStats } from "./config";
+import { PLAYER_COMBAT, WEAPON_STATS, xpToNext, type UpgradeId, type WeaponStats } from "./config";
 import type { WeaponId } from "../config";
 
 /**
- * The hero's run state: health, currency and every modifier that upgrades and the shop change.
- * Combat reads effective values from here, so upgrades compose (they only touch these numbers).
+ * The hero's run state: health, cash (the shop currency), character level / XP (level-ups offer
+ * upgrades; separate from cash) and every modifier that upgrades and the shop change. Combat reads
+ * effective values from here, so upgrades compose (they only touch these numbers).
  */
 export class PlayerStats {
   maxHp = PLAYER_COMBAT.maxHp;
@@ -13,13 +14,15 @@ export class PlayerStats {
   armor = 0;
   damageMult = 1;
   fireRateMult = 1;
-  reloadMult = 1;
-  magazineMult = 1;
+  /** Multiplies the reload time (< 1 = faster). */
+  reloadTimeMult = 1;
+  /** Extra rounds per magazine. */
+  magazineBonus = 0;
   moveSpeedMult = 1;
   penetration = 0;
   critChance = 0;
-  /** Every Nth bullet deals bonus damage (0 = off). */
-  fifthShot = false;
+  /** Every 5th bullet deals bonus damage (0 = off, 1 = on). */
+  fifthShot = 0;
   /** Chance per kill to heal `vampireHeal`. */
   vampireChance = 0;
   vampireHeal = 5;
@@ -28,6 +31,26 @@ export class PlayerStats {
   readonly upgrades = new Map<UpgradeId, number>();
   invulnerable = 0;
   kills = 0;
+  /** Character level and XP toward the next one. */
+  level = 1;
+  xp = 0;
+
+  /** XP needed for the next level. */
+  get xpNeeded(): number {
+    return xpToNext(this.level);
+  }
+
+  /** Adds XP; returns how many levels were gained. */
+  gainXp(amount: number): number {
+    this.xp += amount;
+    let gained = 0;
+    while (this.xp >= this.xpNeeded) {
+      this.xp -= this.xpNeeded;
+      this.level++;
+      gained++;
+    }
+    return gained;
+  }
 
   get alive(): boolean {
     return this.hp > 0;
@@ -41,8 +64,8 @@ export class PlayerStats {
       ...base,
       damage: base.damage * this.damageMult,
       fireRate: base.fireRate * this.fireRateMult,
-      reloadSeconds: base.reloadSeconds / this.reloadMult,
-      magazine: Math.round(base.magazine * this.magazineMult),
+      reloadSeconds: base.reloadSeconds * this.reloadTimeMult,
+      magazine: base.magazine + this.magazineBonus,
       penetration: base.penetration + this.penetration,
     };
   }

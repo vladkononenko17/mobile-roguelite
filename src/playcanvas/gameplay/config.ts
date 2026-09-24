@@ -180,6 +180,8 @@ export interface EnemyDef {
   attackCooldown: number;
   /** Cash (currency) value when it drops cash. */
   cash: number;
+  /** Character XP for the kill. */
+  xp: number;
   drops: { cash: number; health: number; upgrade: number };
   boss?: boolean;
   /** Thrower / tank projectile. */
@@ -197,37 +199,37 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
   walker: {
     label: "Walker", visuals: WALKER_LOOKS, scale: 1.1, scaleJitter: 0.05, behavior: "chaser",
     maxHp: 30, speed: 1.35, radius: 0.36, damage: 9, attackRange: 1.15, attackWindup: 0.42, attackCooldown: 1.2,
-    cash: 1, drops: { cash: 0.4, health: 0.025, upgrade: 0.006 },
+    cash: 1, xp: 10, drops: { cash: 0.4, health: 0.025, upgrade: 0.006 },
   },
   // Runner: lean and ~0.95x the hero, sprinting.
   runner: {
     label: "Runner", visuals: ["zombieRunnerMale", "zombieRunnerFemale"], scale: 1.06, scaleJitter: 0.03, behavior: "chaser",
     maxHp: 22, speed: 3.9, radius: 0.34, damage: 7, attackRange: 1.1, attackWindup: 0.3, attackCooldown: 0.9,
-    cash: 1, drops: { cash: 0.45, health: 0.03, upgrade: 0.008 },
+    cash: 1, xp: 15, drops: { cash: 0.45, health: 0.03, upgrade: 0.008 },
   },
   thrower: {
     label: "Thrower", visuals: ["zombieThrower"], scale: 1.12, behavior: "thrower",
     maxHp: 55, speed: 1.1, radius: 0.38, damage: 8, attackRange: 1.15, attackWindup: 0.45, attackCooldown: 1.4,
-    cash: 2, drops: { cash: 0.6, health: 0.05, upgrade: 0.012 },
+    cash: 2, xp: 25, drops: { cash: 0.6, health: 0.05, upgrade: 0.012 },
     projectile: { damage: 14, speed: 5.5, radius: 1.3, cooldown: 3.6, minRange: 5, maxRange: 11 },
   },
   brute: {
     // ~1.4x the hero's height and much broader.
     label: "Brute", visuals: ["zombieBrute"], scale: 1.55, behavior: "chaser", boss: true,
     maxHp: 240, speed: 1.05, radius: 0.7, damage: 24, attackRange: 1.9, attackWindup: 0.7, attackCooldown: 1.6,
-    cash: 25, drops: { cash: 1, health: 1, upgrade: 0 },
+    cash: 25, xp: 60, drops: { cash: 1, health: 1, upgrade: 0 },
   },
   charger: {
     label: "Charger", visuals: ["vanguard"], scale: 1.55, tint: [0.95, 0.6, 0.45], behavior: "charger", boss: true,
     maxHp: 420, speed: 1.6, radius: 0.62, damage: 18, attackRange: 1.8, attackWindup: 0.55, attackCooldown: 1.4,
-    cash: 40, drops: { cash: 1, health: 1, upgrade: 0 },
+    cash: 40, xp: 80, drops: { cash: 1, health: 1, upgrade: 0 },
     clips: { special: "Rifle_Charge_inplace" },
     charge: { cooldown: 5, telegraph: 1.0, speed: 12, distance: 13, recover: 1.6, damage: 28 },
   },
   tank: {
     label: "Mutant Tank", visuals: ["vanguard"], scale: 2.05, tint: [0.66, 0.55, 0.78], behavior: "tank", boss: true,
     maxHp: 900, speed: 0.95, radius: 0.85, damage: 30, attackRange: 2.2, attackWindup: 0.8, attackCooldown: 1.8,
-    cash: 60, drops: { cash: 1, health: 1, upgrade: 0 },
+    cash: 60, xp: 120, drops: { cash: 1, health: 1, upgrade: 0 },
     clips: { special: "Charged_Ground_Slam" },
     projectile: { damage: 20, speed: 6, radius: 1.8, cooldown: 5.5, minRange: 4, maxRange: 13 },
     slam: { cooldown: 6, telegraph: 1.1, radius: 3.6, damage: 32, triggerRange: 3.4 },
@@ -243,63 +245,121 @@ export const ENEMY_LIMITS = {
   /** Seconds a hit flinch lasts (and slows the enemy), and the minimum time between flinches. */
   hitReact: 0.3,
   hitReactCooldown: 0.7,
-  /** Corpses linger this long, then sink and return to the pool. */
-  corpseSeconds: 1.6,
+  /** The death clip plays this long ("dying"), then the corpse lingers, sinks and returns to the pool. */
+  dyingSeconds: 2.3,
+  corpseSeconds: 0.6,
   /** Enemies push each other apart within this factor of their radii. */
   separation: 1.05,
 };
 
 /* ------------------------------------------------------------------------------------------------
- * Levels / spawning
+ * Waves / spawning
+ *
+ * A run is a sequence of WAVES (timed survival phases). Everything a wave does is data here, with no
+ * map-specific values, so another biome (space, hell) can use its own wave list, enemy roster and map
+ * without touching the systems. Character level / XP is a separate system (XP below).
  * ---------------------------------------------------------------------------------------------- */
 
-export interface LevelDef {
-  label: string;
-  /** Seconds of regular spawning before the boss arrives. */
-  duration: number;
-  /** Relative spawn weights; a type's weight can ramp in over the level (weight x clamp(t / rampIn)). */
-  enemies: Partial<Record<Exclude<EnemyId, "brute" | "charger" | "tank">, { weight: number; from?: number }>>;
-  /** Enemies per second at the start and at the end of the level (linear in between). */
-  spawnRate: [number, number];
-  /** Group size at the start / end (a group spawns together from one direction). */
-  groupSize: [number, number];
-  maxEnemies: [number, number];
-  boss: "brute" | "charger" | "tank";
-  /** While the boss is alive, regular spawning continues at this fraction of the final rate. */
-  bossSpawnFactor: number;
-  /** Enemy HP / damage multipliers for this level. */
-  hpScale: number;
-  damageScale: number;
+/** Regular (non-boss) enemy types a wave can spawn. */
+export type WaveEnemyId = Exclude<EnemyId, "brute" | "charger" | "tank">;
+export type BossId = Extract<EnemyId, "brute" | "charger" | "tank">;
+
+/** One pacing step of a wave, in effect from `at` seconds until the next step. */
+export interface WavePhase {
+  at: number;
+  /** Seconds between groups. */
+  spawnInterval: number;
+  /** Group size range (a group comes from one direction). */
+  group: [number, number];
+  /** No new groups while this many enemies are alive. */
+  maxAlive: number;
+  /** Relative spawn weights of the enemy types in this step. */
+  weights: Partial<Record<WaveEnemyId, number>>;
 }
 
-export const LEVELS: LevelDef[] = [
+export interface WaveDef {
+  label: string;
+  /** Seconds of survival; the wave completes when it runs out (after the boss dies, if it has one). */
+  duration: number;
+  /** Enemies placed just outside the view at the start, so the first ones walk in within ~1-2 s. */
+  prespawn: number;
+  phases: WavePhase[];
+  /** Enemy HP / damage multipliers (difficulty). */
+  hpScale: number;
+  damageScale: number;
+  /** Optional boss: arrives when the time runs out; regular spawning continues at `spawnFactor` of the last step's rate. */
+  boss?: { type: BossId; spawnFactor: number };
+}
+
+export const WAVES: WaveDef[] = [
   {
-    label: "Level 1", duration: 150,
-    enemies: { walker: { weight: 1 } },
-    spawnRate: [0.35, 1.2], groupSize: [2, 5], maxEnemies: [8, 24],
-    boss: "brute", bossSpawnFactor: 0.35, hpScale: 1, damageScale: 1,
+    // ~55 s, no boss: small walker groups, rising pressure, the first runners after 30 s.
+    label: "Wave 1", duration: 55, prespawn: 6, hpScale: 1, damageScale: 1,
+    phases: [
+      { at: 0, spawnInterval: 3.2, group: [2, 3], maxAlive: 9, weights: { walker: 1 } },
+      { at: 10, spawnInterval: 2.8, group: [3, 4], maxAlive: 12, weights: { walker: 1 } },
+      { at: 30, spawnInterval: 2.6, group: [3, 5], maxAlive: 15, weights: { walker: 1, runner: 0.15 } },
+      { at: 45, spawnInterval: 2.0, group: [4, 6], maxAlive: 19, weights: { walker: 1, runner: 0.25 } },
+    ],
   },
   {
-    label: "Level 2", duration: 200,
-    enemies: { walker: { weight: 1 }, runner: { weight: 0.45, from: 20 } },
-    spawnRate: [0.6, 1.6], groupSize: [3, 6], maxEnemies: [14, 28],
-    boss: "charger", bossSpawnFactor: 0.35, hpScale: 1.25, damageScale: 1.1,
+    label: "Wave 2", duration: 75, prespawn: 8, hpScale: 1.15, damageScale: 1.05,
+    phases: [
+      { at: 0, spawnInterval: 2.8, group: [3, 4], maxAlive: 12, weights: { walker: 1, runner: 0.2 } },
+      { at: 25, spawnInterval: 2.4, group: [3, 5], maxAlive: 16, weights: { walker: 1, runner: 0.35 } },
+      { at: 55, spawnInterval: 2.0, group: [4, 6], maxAlive: 20, weights: { walker: 1, runner: 0.45 } },
+    ],
+    boss: { type: "brute", spawnFactor: 0.4 },
   },
   {
-    label: "Level 3", duration: 260,
-    enemies: { walker: { weight: 1 }, runner: { weight: 0.5 }, thrower: { weight: 0.3, from: 15 } },
-    spawnRate: [0.8, 1.9], groupSize: [3, 7], maxEnemies: [18, 30],
-    boss: "tank", bossSpawnFactor: 0.3, hpScale: 1.55, damageScale: 1.2,
+    label: "Wave 3", duration: 90, prespawn: 8, hpScale: 1.3, damageScale: 1.1,
+    phases: [
+      { at: 0, spawnInterval: 2.6, group: [3, 5], maxAlive: 14, weights: { walker: 1, runner: 0.35 } },
+      { at: 20, spawnInterval: 2.3, group: [3, 5], maxAlive: 18, weights: { walker: 1, runner: 0.4, thrower: 0.2 } },
+      { at: 60, spawnInterval: 1.9, group: [4, 6], maxAlive: 22, weights: { walker: 1, runner: 0.5, thrower: 0.3 } },
+    ],
+    boss: { type: "charger", spawnFactor: 0.35 },
+  },
+  {
+    label: "Wave 4", duration: 110, prespawn: 10, hpScale: 1.55, damageScale: 1.2,
+    phases: [
+      { at: 0, spawnInterval: 2.4, group: [3, 5], maxAlive: 16, weights: { walker: 1, runner: 0.45, thrower: 0.25 } },
+      { at: 40, spawnInterval: 2.0, group: [4, 6], maxAlive: 22, weights: { walker: 1, runner: 0.5, thrower: 0.3 } },
+      { at: 80, spawnInterval: 1.7, group: [4, 7], maxAlive: 26, weights: { walker: 1, runner: 0.55, thrower: 0.35 } },
+    ],
+    boss: { type: "tank", spawnFactor: 0.3 },
   },
 ];
 
-/** Where each run (and level) starts: the open main yard in the middle of the outpost. */
+/**
+ * Character XP and levels (independent of waves): kills give XP (EnemyDef.xp); each level-up offers a
+ * choice of 3 upgrades. `toNext[i]` = XP from level i + 1 to i + 2; past the table each level needs
+ * `growth` more than the one before.
+ */
+export const XP = {
+  toNext: [50, 90, 140, 200, 270],
+  growth: 80,
+  /** Upgrade cards offered per level-up. */
+  choices: 3,
+};
+
+/** XP needed to go from `level` to `level + 1`. */
+export function xpToNext(level: number): number {
+  const table = XP.toNext;
+  return level <= table.length ? table[level - 1] : table[table.length - 1] + (level - table.length) * XP.growth;
+}
+
+/** Where each run (and wave) starts: the open main yard in the middle of the outpost. */
 export const RUN_START = { x: 0, z: 14, yawDeg: 180 };
 
 export const SPAWNING = {
-  /** Spawn ring around the player (m). Candidates inside the camera view are rejected. */
-  minDistance: 12,
-  maxDistance: 22,
+  /** Groups appear just outside the visible area (so they walk in soon, never pop in on screen): a
+   * spawn point is the first point along a random direction that is off-screen by `screenMargin` px,
+   * pushed out a further `extra` metres. Farther than `maxDistance`, the direction is skipped. */
+  screenMargin: 30,
+  extra: [0.6, 2.8] as [number, number],
+  minDistance: 4.5,
+  maxDistance: 24,
   /** Candidates tried per group before giving up this tick. */
   attempts: 14,
   /** Groups scatter this far around their centre. */
@@ -325,43 +385,76 @@ export const DROPS = {
  * ---------------------------------------------------------------------------------------------- */
 
 export type UpgradeId =
-  | "damage" | "fireRate" | "penetration" | "reload" | "magazine" | "crit"
-  | "maxHp" | "moveSpeed" | "armor" | "heal"
-  | "fifthShot" | "vampire";
+  | "rapidFire" | "heavyRounds" | "extendedMag" | "vitality" | "quickHands" | "piercing" | "adrenaline"
+  | "armor" | "crit" | "medkit" | "fifthShot" | "vampire";
+
+/** PlayerStats numbers an upgrade may change. */
+export type UpgradeStat =
+  | "damageMult" | "fireRateMult" | "reloadTimeMult" | "magazineBonus" | "moveSpeedMult" | "penetration"
+  | "critChance" | "armor" | "maxHp" | "fifthShot" | "vampireChance";
 
 /**
- * One upgrade: its presentation (name, stat line, value, icon, category colour, rarity) and stacking.
- * The effect itself lives in Upgrades.ts (keyed by id). The HUD toast, the reward cards and the
- * world pickup badge are all drawn from these fields, so a new upgrade is one entry here plus one
- * effect function.
+ * One effect: `add` or `mul` a stat (clamped to `max` / `min`); `heal` restores HP (absolute) and
+ * `healFraction` a fraction of max HP.
+ */
+export type UpgradeEffect =
+  | { stat: UpgradeStat; op: "add" | "mul"; value: number; max?: number; min?: number }
+  | { heal: number }
+  | { healFraction: number };
+
+/** Where an upgrade can be offered: level-up cards and/or rare world pickups. */
+export type UpgradePool = "levelUp" | "drop";
+
+/**
+ * One upgrade, pure data: presentation (name, stat line, value, icon, category colour, rarity), its
+ * effects per stack, the stack limit and the pools it appears in. Upgrades.ts applies effects
+ * generically; the level-up cards, pickup badges and toasts draw from these fields. A new upgrade is
+ * one entry here (plus an icon if none fits).
  */
 export interface UpgradeDef {
   id: UpgradeId;
-  /** Display name ("Scrap Plating"). */
+  /** Display name ("Rapid Fire"). */
   name: string;
-  /** What it changes ("Damage Resistance") and by how much ("+10%"). */
+  /** What it changes ("Fire Rate") and by how much per stack ("+15%"). */
   stat: string;
   value: string;
   icon: UpgradeIcon;
   category: UpgradeCategory;
   rarity: UpgradeRarity;
+  effects: UpgradeEffect[];
   /** How many times it can be taken per run (default unlimited). */
   maxStacks?: number;
+  /** Default: both pools. */
+  pools?: UpgradePool[];
 }
 
 export const UPGRADES: UpgradeDef[] = [
-  { id: "damage", name: "Hollow Points", stat: "Weapon Damage", value: "+15%", icon: "bullet", category: "weapon", rarity: "common" },
-  { id: "fireRate", name: "Hair Trigger", stat: "Fire Rate", value: "+15%", icon: "rapid", category: "weapon", rarity: "common" },
-  { id: "penetration", name: "Piercing Rounds", stat: "Bullets Pierce", value: "+1 enemy", icon: "pierce", category: "weapon", rarity: "rare", maxStacks: 3 },
-  { id: "reload", name: "Quick Hands", stat: "Reload Speed", value: "+10%", icon: "reload", category: "weapon", rarity: "common", maxStacks: 5 },
-  { id: "magazine", name: "Extended Mag", stat: "Magazine Capacity", value: "+25%", icon: "magazine", category: "weapon", rarity: "common", maxStacks: 3 },
-  { id: "crit", name: "Steady Hand", stat: "Critical Chance", value: "+10%", icon: "target", category: "weapon", rarity: "rare", maxStacks: 5 },
-  { id: "maxHp", name: "Thick Skin", stat: "Max HP", value: "+20", icon: "heart", category: "player", rarity: "common" },
-  { id: "moveSpeed", name: "Adrenaline", stat: "Movement Speed", value: "+10%", icon: "boot", category: "player", rarity: "common", maxStacks: 4 },
-  { id: "armor", name: "Scrap Plating", stat: "Damage Resistance", value: "+10%", icon: "shield", category: "player", rarity: "common", maxStacks: 5 },
-  { id: "heal", name: "Field Medkit", stat: "Restore HP", value: "30%", icon: "medkit", category: "player", rarity: "common" },
-  { id: "fifthShot", name: "Fifth Shot", stat: "Every 5th Bullet", value: "+150% damage", icon: "star", category: "special", rarity: "epic", maxStacks: 1 },
-  { id: "vampire", name: "Scavenger", stat: "Heal 5 HP on Kill", value: "6% chance", icon: "drop", category: "special", rarity: "rare", maxStacks: 3 },
+  // Level-up pool.
+  { id: "rapidFire", name: "Rapid Fire", stat: "Fire Rate", value: "+15%", icon: "rapid", category: "weapon", rarity: "common", maxStacks: 5,
+    effects: [{ stat: "fireRateMult", op: "mul", value: 1.15 }] },
+  { id: "heavyRounds", name: "Heavy Rounds", stat: "Weapon Damage", value: "+20%", icon: "bullet", category: "weapon", rarity: "common", maxStacks: 5,
+    effects: [{ stat: "damageMult", op: "mul", value: 1.2 }] },
+  { id: "extendedMag", name: "Extended Magazine", stat: "Magazine", value: "+3 rounds", icon: "magazine", category: "weapon", rarity: "common", maxStacks: 4,
+    effects: [{ stat: "magazineBonus", op: "add", value: 3 }] },
+  { id: "vitality", name: "Vitality", stat: "Max HP", value: "+20", icon: "heart", category: "player", rarity: "common", maxStacks: 5,
+    effects: [{ stat: "maxHp", op: "add", value: 20 }, { heal: 20 }] },
+  { id: "quickHands", name: "Quick Hands", stat: "Reload Time", value: "-20%", icon: "reload", category: "weapon", rarity: "common", maxStacks: 3,
+    effects: [{ stat: "reloadTimeMult", op: "mul", value: 0.8 }] },
+  { id: "piercing", name: "Piercing Round", stat: "Bullets Pierce", value: "+1 enemy", icon: "pierce", category: "weapon", rarity: "rare", maxStacks: 3,
+    effects: [{ stat: "penetration", op: "add", value: 1 }] },
+  { id: "adrenaline", name: "Adrenaline", stat: "Movement Speed", value: "+10%", icon: "boot", category: "player", rarity: "common", maxStacks: 3,
+    effects: [{ stat: "moveSpeedMult", op: "mul", value: 1.1 }] },
+  // Rare world pickups only.
+  { id: "armor", name: "Scrap Plating", stat: "Damage Resistance", value: "+10%", icon: "shield", category: "player", rarity: "common", maxStacks: 5, pools: ["drop"],
+    effects: [{ stat: "armor", op: "add", value: 0.1, max: 0.6 }] },
+  { id: "crit", name: "Steady Hand", stat: "Critical Chance", value: "+10%", icon: "target", category: "weapon", rarity: "rare", maxStacks: 5, pools: ["drop"],
+    effects: [{ stat: "critChance", op: "add", value: 0.1, max: 0.6 }] },
+  { id: "medkit", name: "Field Medkit", stat: "Restore HP", value: "30%", icon: "medkit", category: "player", rarity: "common", pools: ["drop"],
+    effects: [{ healFraction: 0.3 }] },
+  { id: "fifthShot", name: "Fifth Shot", stat: "Every 5th Bullet", value: "+150% damage", icon: "star", category: "special", rarity: "epic", maxStacks: 1, pools: ["drop"],
+    effects: [{ stat: "fifthShot", op: "add", value: 1, max: 1 }] },
+  { id: "vampire", name: "Scavenger", stat: "Heal 5 HP on Kill", value: "6% chance", icon: "drop", category: "special", rarity: "rare", maxStacks: 3, pools: ["drop"],
+    effects: [{ stat: "vampireChance", op: "add", value: 0.06, max: 0.2 }] },
 ];
 
 /** "Damage Resistance +10%" */

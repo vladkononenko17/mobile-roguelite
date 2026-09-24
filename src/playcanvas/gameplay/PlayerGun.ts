@@ -1,7 +1,8 @@
-import { Vec3, type CameraComponent } from "playcanvas";
+import { Vec3 } from "playcanvas";
+import type { ScreenProjector } from "../camera/ScreenProjector";
 import { TARGETING, type WeaponStats } from "./config";
 import type { Effects } from "./Effects";
-import type { Enemy, EnemyManager } from "./EnemyManager";
+import { isAlive, type Enemy, type EnemyManager } from "./EnemyManager";
 import { blocked } from "./NavField";
 import type { PlayerStats } from "./PlayerStats";
 import type { PlayerController } from "../player/PlayerController";
@@ -62,7 +63,7 @@ export class PlayerGun {
     private readonly effects: Effects,
     private readonly collision: CollisionWorld,
     private readonly stats: PlayerStats,
-    private readonly camera: CameraComponent,
+    private readonly camera: ScreenProjector,
   ) {}
 
   /** Refills the magazine (new weapon, new level). */
@@ -138,7 +139,7 @@ export class PlayerGun {
 
   /** Alive, in weapon range and in line of sight (screen visibility is checked separately). */
   private valid(e: Enemy, x: number, z: number, stats: WeaponStats): boolean {
-    if (!e.active || e.state === "dead") return false;
+    if (!isAlive(e)) return false;
     if (Math.hypot(e.position.x - x, e.position.z - z) > stats.range + e.def.radius) return false;
     return this.lineOfSight(x, z, e.position.x, e.position.z);
   }
@@ -146,17 +147,16 @@ export class PlayerGun {
   /** Whether the enemy's chest point is inside the combat viewport grown by `slack` (fraction). */
   private onScreen(e: Enemy, slack: number): boolean {
     this.aimPoint.set(e.position.x, TARGETING.aimHeight * e.scale, e.position.z);
-    const s = this.camera.worldToScreen(this.aimPoint, this.screen);
+    const s = this.camera.normalized(this.aimPoint, this.screen);
     if (s.z <= 0) return false;
-    const { width, height } = this.camera.system.app.graphicsDevice.clientRect;
     return (
-      s.x >= width * (TARGETING.marginX - slack) && s.x <= width * (1 - TARGETING.marginX + slack) &&
-      s.y >= height * (TARGETING.marginTop - slack) && s.y <= height * (1 - TARGETING.marginBottom + slack)
+      s.x >= TARGETING.marginX - slack && s.x <= 1 - TARGETING.marginX + slack &&
+      s.y >= TARGETING.marginTop - slack && s.y <= 1 - TARGETING.marginBottom + slack
     );
   }
 
   private updateDebug(x: number, z: number): void {
-    const { width, height } = this.camera.system.app.graphicsDevice.clientRect;
+    const { width, height } = this.camera;
     const d = this.debug;
     d.left = width * TARGETING.marginX;
     d.right = width * (1 - TARGETING.marginX);
@@ -168,7 +168,7 @@ export class PlayerGun {
       return;
     }
     this.aimPoint.set(t.position.x, TARGETING.aimHeight * t.scale, t.position.z);
-    const s = this.camera.worldToScreen(this.aimPoint, this.screen);
+    const s = this.camera.toScreen(this.aimPoint, this.screen);
     d.target = { x: s.x, y: s.y, distance: Math.hypot(t.position.x - x, t.position.z - z), label: t.def.label };
   }
 
@@ -197,6 +197,8 @@ export class PlayerGun {
     const muzzle = weapon.muzzle(this.muzzle) ?? this.muzzle.copy(this.origin);
     this.effects.muzzleFlash(muzzle, stats.pellets > 1 ? 0.32 : 0.22);
     const baseAngle = Math.atan2(tx, tz);
+    // A casing flies out to the right (the hero faces the target when firing).
+    this.effects.casing(muzzle, -Math.cos(baseAngle), Math.sin(baseAngle));
     const bonus = this.stats.fifthShot && this.shotCount % 5 === 0 ? 2.5 : 1;
     for (let p = 0; p < stats.pellets; p++) {
       const spread = ((Math.random() * 2 - 1) * stats.spreadDeg * Math.PI) / 180;
@@ -211,7 +213,7 @@ export class PlayerGun {
         const vulnerable = this.enemies.vulnerable(hit.enemy) ? 1.5 : 1;
         const amount = Math.round(stats.damage * bonus * (crit ? 2 : 1) * vulnerable);
         const point = this.end.set(this.origin.x + dx * hit.t, muzzle.y, this.origin.z + dz * hit.t);
-        this.effects.spark(point);
+        this.effects.bloodHit(point, dx, dz);
         this.onHit(point, amount, crit || bonus > 1);
         if (this.enemies.damage(hit.enemy, amount, this.origin.x, this.origin.z, stats.knockback)) this.onKill(hit.enemy);
         travel = hit.t;
@@ -219,6 +221,8 @@ export class PlayerGun {
       }
       this.end.set(this.origin.x + dx * travel, muzzle.y, this.origin.z + dz * travel);
       this.effects.tracer(muzzle, this.end);
+      // Stopped by a wall (not an enemy, not the end of the range): dust and a spark there.
+      if (travel === range && range < stats.range) this.effects.impact(this.end);
     }
   }
 }

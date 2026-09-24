@@ -1,3 +1,4 @@
+import type { AmbientEmitter } from "../AmbientFx";
 import { Entity } from "playcanvas";
 import type { GroundSpec } from "../Ground";
 import type { ModelKit, SpawnOptions } from "../props/ModelKit";
@@ -42,6 +43,22 @@ export const BOUNDS: LevelBounds = { minX: -23.4, maxX: 23.4, minZ: -39.4, maxZ:
 
 /** The player starts on the road outside the gate, facing north. */
 export const SPAWN = { x: 0.6, z: 36.4, yawDeg: 180 };
+
+/**
+ * Ambient life (world/AmbientFx.ts), placed on landmarks at the edges of the combat space: smoke from
+ * the camp fire and two wrecks, sparks from the generators and a gate floodlight, dust drifting over
+ * the main yard and the ruins. Kept sparse so combat stays readable.
+ */
+export const AMBIENT: AmbientEmitter[] = [
+  { kind: "smoke", x: -12.8, y: 0.3, z: 12.1, size: [0.6, 0.6], intensity: 1 },
+  { kind: "smoke", x: 11.9, y: 0.8, z: 16.4, size: [0.8, 0.8], intensity: 0.6 },
+  { kind: "smoke", x: -9.2, y: 0.9, z: -10.5, size: [1, 1], intensity: 0.7 },
+  { kind: "sparks", x: 12.3, y: 1.1, z: -8.9, every: 5 },
+  { kind: "sparks", x: 18.6, y: 1.1, z: -34.4, every: 7 },
+  { kind: "sparks", x: 6.4, y: 4.2, z: 28.9, every: 9 },
+  { kind: "dust", x: 0, y: 1.2, z: 14, size: [16, 16], intensity: 1 },
+  { kind: "dust", x: -14, y: 1.2, z: -12, size: [12, 12], intensity: 0.8 },
+];
 
 export const GROUND_SPEC: GroundSpec = {
   base: "sand",

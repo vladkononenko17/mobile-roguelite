@@ -397,7 +397,9 @@ for (const targetPath of targetPaths) {
     const rotations = new Map(joints.map((j) => [j, []]));
     const hipsPositions = [];
     for (const t of times) {
-      const sWorld = sourcePose(clip.source, t % src.duration);
+      // Clips as long as their source sample it directly (the last key is the source's last pose: a
+      // death must end lying down, not wrap to the standing first frame); longer ones loop it.
+      const sWorld = sourcePose(clip.source, t <= src.duration ? t : t % src.duration);
       // Retargeted world rotations, parents first; unmapped bones keep their rest local rotation.
       const world = new Map();
       for (const joint of joints) {
