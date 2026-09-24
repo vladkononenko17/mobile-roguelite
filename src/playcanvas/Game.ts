@@ -11,7 +11,7 @@ import {
   type RenderComponent,
 } from "playcanvas";
 import { CameraController } from "./camera/CameraController";
-import { CAMERA, CHARACTER, CHARACTERS, DEBUG, DEFAULT_WEAPON, LIGHTING, PLAYER, PROPS, WEAPONS, type CharacterId, type WeaponId } from "./config";
+import { CAMERA, CHARACTER, CHARACTERS, DEBUG, DEFAULT_WEAPON, LIGHTING, OUTPOST, PLAYER, WEAPONS, type CharacterId, type WeaponId } from "./config";
 import { KeyboardMoveInput } from "./input/KeyboardMoveInput";
 import { TouchJoystickInput } from "./input/TouchJoystickInput";
 import { CombinedMoveInput, type MoveInputSource } from "./input/MoveInput";
@@ -25,9 +25,9 @@ import { createContactShadow } from "./world/ContactShadow";
 import { CHARACTER_LIGHT_MASK, createLighting } from "./world/Environment";
 import { ColliderDebugView } from "./world/collision/ColliderDebugView";
 import { CollisionWorld } from "./world/collision/CollisionWorld";
-import { EnvironmentKit } from "./world/kit/EnvironmentKit";
-import { BOUNDS, buildCheckpointLevel, buildCheckpointProps, GROUND_SPEC, SPAWN } from "./world/level/CheckpointLevel";
-import { PropLibrary } from "./world/props/PropLibrary";
+import { BOUNDS, buildOutpostLevel, GROUND_SPEC, SPAWN } from "./world/level/OutpostLevel";
+import { ModelKit } from "./world/props/ModelKit";
+import { OUTPOST_MODELS, type OutpostModel } from "./world/props/OutpostKit";
 import { ResolutionGovernor } from "./perf/ResolutionGovernor";
 
 export interface GameOptions {
@@ -54,7 +54,7 @@ export class Game {
   private contactShadow!: Entity;
   private characterScale: number = CHARACTER.scale;
   private ground!: Ground;
-  private kit!: EnvironmentKit;
+  private kit!: ModelKit<OutpostModel>;
   readonly collision = new CollisionWorld();
   colliderDebug!: ColliderDebugView;
   private resolution!: ResolutionGovernor;
@@ -80,7 +80,7 @@ export class Game {
 
     this.resolution = new ResolutionGovernor(app);
     createLighting(app);
-    this.kit = new EnvironmentKit(app);
+    this.kit = new ModelKit(app, OUTPOST_MODELS, { name: "Outpost", batchCellMetres: OUTPOST.batchCellMetres, brightness: OUTPOST.brightness });
     this.ground = new Ground(app, GROUND_SPEC);
 
     const cameraEntity = new Entity("Camera");
@@ -95,22 +95,17 @@ export class Game {
       gammaCorrection: GAMMA_SRGB,
     });
     app.root.addChild(cameraEntity);
-    // Small textures; they stream in alongside the character download. Needs camera + lights.
+    // The ground is painted procedurally (no download). Needs camera + lights.
     const groundLoaded = this.ground.load();
-    const kitLoaded = this.kit.load();
-    const layout = buildCheckpointLevel(this.kit);
-    app.root.addChild(layout);
-    // Every kit piece that declared itself solid joins the static collision world.
-    this.collision.addStaticFrom(layout);
-    // Imported GLB props (~1 MB) download alongside the character; a failure only loses the props.
-    const props = new PropLibrary(app, this.kit.batchGroupId);
-    const propsLoaded = props.load(`${import.meta.env.BASE_URL}${PROPS.url}`).then(
+    // The environment kit (~3 MB) downloads alongside the character; the level is built from it and
+    // every placed model that declared itself solid joins the static collision world.
+    const levelLoaded = this.kit.load(`${import.meta.env.BASE_URL}${OUTPOST.url}`).then(
       () => {
-        const placed = buildCheckpointProps(props);
-        app.root.addChild(placed);
-        this.collision.addStaticFrom(placed);
+        const layout = buildOutpostLevel(this.kit);
+        app.root.addChild(layout);
+        this.collision.addStaticFrom(layout);
       },
-      (error: unknown) => console.warn("[Props] not loaded; the level runs without them.", error),
+      (error: unknown) => console.error("[Level] environment kit failed to load.", error),
     );
 
     // Weapons (~1.5 MB) download alongside the character; a failure only leaves the hands empty.
@@ -151,7 +146,7 @@ export class Game {
     console.info(`[PlayerAnimation] Idle=${this.animation.clipNames.Idle}, Walk=${this.animation.clipNames.Walk}, Run=${this.animation.clipNames.Run}`);
 
     this.setCharacterScale(this.characterScale);
-    await Promise.all([groundLoaded, kitLoaded, propsLoaded, weaponsLoaded]);
+    await Promise.all([groundLoaded, levelLoaded, weaponsLoaded]);
     this.weapons.onPoseChange = (clip) => this.animation.setUpperBodyPose(clip);
     // Attack: Space, or the on-screen button (shown only when the weapon has an attack clip).
     const attackButton = document.querySelector<HTMLElement>("[data-attack]");

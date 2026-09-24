@@ -100,59 +100,29 @@ export const DEFAULT_CHARACTER: CharacterId = "vanguard";
 import type { SurfaceTextures } from "./world/Surface";
 
 /**
- * Ground surfaces (1K PBR sets converted from the supplied .blend.zip files; EXR normal / roughness
- * as 8-bit JPG, displacement unused). The level (world/level) decides where each one goes.
+ * Stylized ground (world/Ground.ts). Surfaces are painted procedurally at load (no downloads, no
+ * normal maps): flat low-contrast colour fields with soft blotches and a few specks, matching the
+ * flat-shaded Atomic Realm kit. Colours are sRGB. The level decides where each surface goes.
  */
-
-/** Dusty dirt everywhere by default ("Damaged Road" set, which reads as packed brown earth). */
 export const GROUND = {
-  folder: "textures/road_damaged",
-  diffuse: "road_damaged_diff_1k.jpg",
-  normal: "road_damaged_nor_gl_1k.jpg",
-  roughnessMap: "road_damaged_rough_1k.jpg",
-  /** Metres covered by one repeat of the texture (large, so its dark blotches repeat less). */
-  tileMetres: 7,
-  /** Multiplier on the colour map; below 1 keeps the ground from competing with the hero. */
-  brightness: 0.85,
-  bumpiness: 1,
-} satisfies SurfaceTextures & Record<string, unknown>;
+  /** Metres covered by one repeat of the base / patch textures. */
+  tileMetres: 10,
+  patchTileMetres: 6,
+  /** Overall multiplier; the ground stays a little darker than the props and the hero. */
+  brightness: 0.7,
+  surfaces: {
+    /** Sun-baked sand: the default ground everywhere. */
+    sand: { base: "#a68f6b", dark: "#97805e", light: "#b39c78", speckDark: "#7f6a50", speckLight: "#c0ab88", specks: 650 },
+    /** Packed dirt: tracks and paths where people and vehicles went. */
+    dirt: { base: "#977554", dark: "#866647", light: "#a58462", speckDark: "#6f5842", speckLight: "#b39576", specks: 700 },
+    /** Poured concrete slabs (industrial yard). */
+    concrete: { base: "#7f7a72", dark: "#736e67", light: "#8a857c", speckDark: "#625e58", speckLight: "#96918a", specks: 450, slabs: 4, seam: "#5d5953" },
+    /** Scorched, infected soil (destroyed area). */
+    ash: { base: "#5e5450", dark: "#4f4643", light: "#6c605a", speckDark: "#3c3432", speckLight: "#6f7650", specks: 800 },
+  },
+} as const;
 
-/** Broken asphalt road ("Cracked Concrete" set darkened to an asphalt grey). */
-export const ROAD = {
-  folder: "textures/cracked_concrete",
-  diffuse: "cracked_concrete_diff_1k.jpg",
-  normal: "cracked_concrete_nor_gl_1k.jpg",
-  roughnessMap: "cracked_concrete_rough_1k.jpg",
-  bumpiness: 1,
-  tileMetres: 4,
-  brightness: 0.52,
-  tint: [1.0, 0.96, 0.9] as const,
-  /** The road edge blends into the dirt over [halfWidth - edgeInner, halfWidth + edgeOuter]; only
-   * these two thin strips are transparent. The mask repeats every maskPeriod metres. */
-  edgeInner: 0.6,
-  edgeOuter: 1.1,
-  maskPeriod: 23,
-} satisfies SurfaceTextures & Record<string, unknown>;
-
-/** Poured concrete pads (the yard floor): same set as the road, lighter and warmer. */
-export const PAD = {
-  brightness: 0.68,
-  tint: [1.0, 0.95, 0.86] as const,
-};
-
-/** "Rocky Terrain" set, used for irregular rocky patches placed by the level. */
-export const ROCKY = {
-  folder: "textures/rocky_terrain",
-  diffuse: "rocky_terrain_diff_1k.jpg",
-  normal: "rocky_terrain_nor_gl_1k.jpg",
-  roughnessMap: "rocky_terrain_rough_1k.jpg",
-  bumpiness: 1.2,
-  tileMetres: 5,
-  /** Relative to the ground brightness; the busy grass-and-rock texture is toned down. */
-  brightness: 0.64,
-  /** Pulls the saturated grass and orange slabs towards dusty olive-grey. */
-  tint: [0.92, 0.84, 0.72] as const,
-} satisfies SurfaceTextures & Record<string, unknown>;
+export type GroundSurface = keyof typeof GROUND.surfaces;
 
 /**
  * Environment-kit materials (world/kit). Every kit mesh carries UVs in metres, so `tileMetres` is
@@ -216,13 +186,19 @@ export const KIT = {
 };
 
 /**
- * CC0 GLB props from 3dassets.dev ("FPS Survival Forest Outpost"), merged into one file by
- * scripts/build-props.mjs, which also mutes their colours (saturation is baked there). This
- * brightness is applied on top at load, for quick tuning without rebuilding the file.
+ * Level 1 environment kit: Atomic Realm (primary), CitySurvivalLite and 3dassets.dev CC0 props,
+ * merged into one GLB by scripts/build-outpost-kit.mjs with every non-road material baked to
+ * vertex colours on a single "palette" material (see that script).
  */
-export const PROPS = {
-  url: "models/props/wasteland-props.glb",
-  brightness: 1,
+export const OUTPOST = {
+  url: "models/outpost/outpost-kit.glb",
+  /** Multiplier on the palette; the Atomic Realm colours are bright and sunny, and the hero should
+   * stay the most saturated thing on screen. */
+  brightness: 0.86,
+  /** Static batching cell: pieces sharing a material within this many metres merge into one draw.
+   * The portrait gameplay view is only ~7 x 13 m, so small cells let the camera skip most of the
+   * level's triangles for a few extra draw calls. */
+  batchCellMetres: 12,
 };
 
 export const CAMERA = {
@@ -320,10 +296,11 @@ export const LIGHTING = {
   /** Warm key light from the camera's front-left so the visible side of the hero is lit and
    * his shadow falls up-right, away from the joystick thumb. */
   sun: {
-    color: [1.0, 0.87, 0.7] as const,
-    intensity: 2.6,
-    // A little lower than before for longer shadows and more readable depth (not the final pass).
-    elevationDeg: 42,
+    // Warm late-afternoon sun: low enough for long readable shadows, not so low that tall walls
+    // throw the play space into shade.
+    color: [1.0, 0.86, 0.68] as const,
+    intensity: 2.5,
+    elevationDeg: 38,
     azimuthDeg: 318,
     // PCF3 (4 hardware-filtered taps) at 1024 over an 18 m range: ~2 cm texels near the hero,
     // a fraction of the PCF5 / 2048 / 22 m cost per pixel and per shadow pass.
@@ -360,9 +337,10 @@ export const LIGHTING = {
    * whole screen and IBL cost ~25% of its shading for what is, on rough flat ground, only a soft
    * sky tint. Calibrated to match the IBL-lit ground's average colour. */
   groundAmbient: [0.79, 0.95, 1.04] as const,
-  clearColor: [0.4, 0.31, 0.24] as const,
-  fogStart: 16,
-  fogEnd: 42,
+  /** Dusty sand-coloured haze: only the far edge of the view fades (the map view turns fog off). */
+  clearColor: [0.62, 0.52, 0.4] as const,
+  fogStart: 22,
+  fogEnd: 60,
 };
 
 export const DEBUG = {

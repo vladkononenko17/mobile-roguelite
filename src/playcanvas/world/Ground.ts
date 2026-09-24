@@ -2,234 +2,232 @@ import {
   ADDRESS_CLAMP_TO_EDGE,
   ADDRESS_REPEAT,
   BLEND_NORMAL,
-  calculateTangents,
+  Color,
   Entity,
+  FILTER_LINEAR,
+  FILTER_LINEAR_MIPMAP_LINEAR,
   Layer,
-  Mesh,
   MeshInstance,
   PIXELFORMAT_RGBA8,
-  SEMANTIC_TANGENT,
   StandardMaterial,
   Texture,
   type AppBase,
   type CameraComponent,
   type LightComponent,
+  type Mesh,
 } from "playcanvas";
-import { GROUND, PAD, ROAD, ROCKY } from "../config";
-import { createGroundTexture, GROUND_SIZE } from "./Arena";
+import { GROUND, type GroundSurface } from "../config";
+import { GROUND_SIZE } from "./Arena";
 import { groundQuadMesh } from "./kit/KitMesh";
-import type { GroundSpec } from "./level/CheckpointLevel";
-import { applySurface, setSurfaceTiling, setSurfaceTint } from "./Surface";
+import { setSurfaceTiling } from "./Surface";
 
 const HALF = GROUND_SIZE / 2;
 
-function maskTexture(app: AppBase, name: string, canvas: HTMLCanvasElement, repeatU: boolean): Texture {
+/** Where each ground surface goes (the level provides this). */
+export interface GroundSpec {
+  /** Surface under everything. */
+  base: GroundSurface;
+  /** Opaque rectangles (e.g. poured concrete floors), axis-aligned, metres. */
+  pads: { x0: number; z0: number; x1: number; z1: number; surface: GroundSurface }[];
+  /** Soft irregular patches (transparent blob masks) blended over the base: tracks, scorched
+   * soil, dust. Centre and size in metres. */
+  patches: { x: number; z: number; w: number; d: number; surface: GroundSurface; seed?: number }[];
+}
+
+/** Small deterministic RNG so the painted textures are identical on every load. */
+function rng(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+/**
+ * Paints a tileable stylized surface: flat base colour, large soft blotches (drawn with wrap-around
+ * so the tile is seamless), then small specks. Concrete also gets slab seams. The result reads as
+ * hand-painted low-poly ground rather than a photo texture.
+ */
+function paintSurface(surface: GroundSurface, seed: number): HTMLCanvasElement {
+  const style = GROUND.surfaces[surface] as (typeof GROUND.surfaces)[GroundSurface] & { slabs?: number; seam?: string };
+  const size = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const random = rng(seed);
+  ctx.fillStyle = style.base;
+  ctx.fillRect(0, 0, size, size);
+  const wrapped = (draw: (ox: number, oy: number) => void) => {
+    for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) draw(ox, oy);
+  };
+  // Large, low-contrast blotches.
+  for (let i = 0; i < 26; i++) {
+    const x = random() * size, y = random() * size, r = 40 + random() * 110;
+    const colour = random() < 0.5 ? style.dark : style.light;
+    const alpha = 0.25 + random() * 0.3;
+    wrapped((ox, oy) => {
+      const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+      g.addColorStop(0, colour);
+      g.addColorStop(1, colour + "00");
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = g;
+      ctx.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
+    });
+  }
+  ctx.globalAlpha = 1;
+  if (style.slabs && style.seam) {
+    // Slab seams, slightly irregular, plus a few hairline cracks.
+    const step = size / style.slabs;
+    ctx.strokeStyle = style.seam;
+    ctx.lineWidth = 3;
+    for (let i = 0; i <= style.slabs; i++) {
+      ctx.beginPath(); ctx.moveTo(i * step, 0); ctx.lineTo(i * step, size); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i * step); ctx.lineTo(size, i * step); ctx.stroke();
+    }
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 7; i++) {
+      let x = random() * size, y = random() * size;
+      ctx.beginPath(); ctx.moveTo(x, y);
+      for (let k = 0; k < 4; k++) { x += (random() - 0.5) * 60; y += (random() - 0.5) * 60; ctx.lineTo(x, y); }
+      ctx.stroke();
+    }
+  }
+  // Specks: pebbles and grit, a mix of darker and lighter dots.
+  for (let i = 0; i < style.specks; i++) {
+    const x = random() * size, y = random() * size, r = 0.8 + random() * (random() < 0.08 ? 4 : 1.8);
+    ctx.fillStyle = random() < 0.6 ? style.speckDark : style.speckLight;
+    ctx.globalAlpha = 0.5 + random() * 0.5;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  return canvas;
+}
+
+function canvasTexture(app: AppBase, name: string, canvas: HTMLCanvasElement, repeat: boolean): Texture {
   const texture = new Texture(app.graphicsDevice, {
     name,
     format: PIXELFORMAT_RGBA8,
     mipmaps: true,
-    addressU: repeatU ? ADDRESS_REPEAT : ADDRESS_CLAMP_TO_EDGE,
-    addressV: ADDRESS_CLAMP_TO_EDGE,
+    minFilter: FILTER_LINEAR_MIPMAP_LINEAR,
+    magFilter: FILTER_LINEAR,
+    addressU: repeat ? ADDRESS_REPEAT : ADDRESS_CLAMP_TO_EDGE,
+    addressV: repeat ? ADDRESS_REPEAT : ADDRESS_CLAMP_TO_EDGE,
   });
   texture.setSource(canvas);
   return texture;
 }
 
-/**
- * Road edge alpha: U runs along the road (tileable, one repeat per ROAD.maskPeriod metres), V
- * across the edge strip (0 = inner, fully road; 1 = outer, fully dirt). The fade line wanders so
- * the edge reads as crumbled asphalt rather than a clean border.
- */
-function createRoadEdgeMask(app: AppBase): Texture {
-  const width = 512, height = 32;
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d")!;
-  const image = ctx.createImageData(width, height);
-  for (let x = 0; x < width; x++) {
-    const u = (x / width) * Math.PI * 2;
-    // Integer frequencies keep the mask seamless along U.
-    const wobble = Math.sin(u * 3 + 0.7) * 0.5 + Math.sin(u * 7 + 2.1) * 0.3 + Math.sin(u * 19 + 4.0) * 0.14 + Math.sin(u * 41 + 1.3) * 0.06;
-    const centre = 0.5 + wobble * 0.3;
-    for (let y = 0; y < height; y++) {
-      const v = (y + 0.5) / height;
-      const t = Math.min(1, Math.max(0, (v - (centre - 0.2)) / 0.4));
-      const i = (y * width + x) * 4;
-      image.data[i] = image.data[i + 1] = image.data[i + 2] = 255;
-      image.data[i + 3] = Math.round((1 - t * t * (3 - 2 * t)) * 255);
-    }
-  }
-  ctx.putImageData(image, 0, 0);
-  return maskTexture(app, "road-edge-mask", canvas, true);
-}
-
-/** Irregular soft blob (UV1 0..1 over a patch quad) for rocky patches. */
-function createPatchMask(app: AppBase): Texture {
+/** Irregular soft blob (UV1 0..1 over a patch quad); each seed gives a different outline. */
+function createPatchMask(app: AppBase, seed: number): Texture {
   const size = 128;
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext("2d")!;
   const image = ctx.createImageData(size, size);
+  const random = rng(seed);
+  const phase = [random() * 6.28, random() * 6.28, random() * 6.28];
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const dx = (x + 0.5) / size - 0.5, dy = (y + 0.5) / size - 0.5;
       const angle = Math.atan2(dy, dx);
-      const radius = 0.34 + Math.sin(angle * 3 + 0.4) * 0.05 + Math.sin(angle * 5 + 2.2) * 0.035 + Math.sin(angle * 11 + 1.1) * 0.02;
-      const d = Math.hypot(dx, dy);
-      const t = Math.min(1, Math.max(0, (d - (radius - 0.12)) / 0.16));
+      const radius = 0.33 + Math.sin(angle * 3 + phase[0]) * 0.06 + Math.sin(angle * 5 + phase[1]) * 0.04 + Math.sin(angle * 9 + phase[2]) * 0.025;
+      const t = Math.min(1, Math.max(0, (Math.hypot(dx, dy) - (radius - 0.1)) / 0.14));
       const i = (y * size + x) * 4;
       image.data[i] = image.data[i + 1] = image.data[i + 2] = 255;
       image.data[i + 3] = Math.round((1 - t * t * (3 - 2 * t)) * 255);
     }
   }
   ctx.putImageData(image, 0, 0);
-  return maskTexture(app, "rock-patch-mask", canvas, false);
-}
-
-/** Triangle strip between two polylines, UV0 = world metres, UV1 = (along / period, across). */
-function stripMesh(app: AppBase, inner: number[], outer: number[], along: number[], period: number, v0: number, v1: number): Mesh {
-  const positions: number[] = [], normals: number[] = [], uvs: number[] = [], uv1: number[] = [], indices: number[] = [];
-  const n = along.length;
-  for (let i = 0; i < n; i++) {
-    for (const [pts, v] of [[inner, v0], [outer, v1]] as const) {
-      const x = pts[i * 2], z = pts[i * 2 + 1];
-      positions.push(x, 0, z);
-      normals.push(0, 1, 0);
-      uvs.push(x, z);
-      uv1.push(along[i] / period, v);
-    }
-  }
-  for (let i = 0; i < n - 1; i++) {
-    const a = i * 2, b = a + 1, c = a + 2, d = a + 3;
-    // Wind so the face points up whichever side of the centreline the strip lies on.
-    const ax = positions[a * 3], az = positions[a * 3 + 2];
-    const bx = positions[b * 3], bz = positions[b * 3 + 2];
-    const cx = positions[c * 3], cz = positions[c * 3 + 2];
-    const up = (bz - az) * (cx - ax) - (bx - ax) * (cz - az) > 0;
-    if (up) indices.push(a, b, c, b, d, c);
-    else indices.push(a, c, b, b, c, d);
-  }
-  const mesh = new Mesh(app.graphicsDevice);
-  mesh.setPositions(positions);
-  mesh.setNormals(normals);
-  mesh.setUvs(0, uvs);
-  mesh.setUvs(1, uv1);
-  mesh.setVertexStream(SEMANTIC_TANGENT, calculateTangents(positions, normals, uvs, indices), 4);
-  mesh.setIndices(indices);
-  mesh.update();
-  return mesh;
+  return canvasTexture(app, `patch-mask-${seed}`, canvas, false);
 }
 
 /**
  * Level ground, all with UVs in world metres so surfaces keep their texel density:
- * - dirt: one opaque quad under everything;
- * - road: an opaque strip following the level's road path, plus two thin transparent edge strips
- *   whose mask crumbles the asphalt into the dirt;
- * - pads: opaque concrete floors (the yard);
- * - rocky patches: small transparent quads with an irregular blob mask.
- * Transparent pieces sit on their own layer after the opaque pass and before the World transparent
- * pass, so the hero's contact shadow still draws over them. Only the thin road edges and the
- * patches are transparent, which keeps overdraw low; the ground skips image-based lighting.
+ * - base: one opaque quad under everything;
+ * - pads: opaque rectangles (concrete floors);
+ * - patches: transparent quads with irregular blob masks (tracks, scorched soil).
+ * Every surface is painted procedurally (config GROUND). Transparent pieces sit on their own layer
+ * after the opaque pass and before the World transparent pass, so the hero's contact shadow still
+ * draws over them. The ground skips image-based lighting and has no normal maps.
  */
 export class Ground {
-  private dirtTile: number = GROUND.tileMetres;
-  private rockTile: number = ROCKY.tileMetres;
+  private baseTile: number = GROUND.tileMetres;
+  private patchTile: number = GROUND.patchTileMetres;
   private brightness: number = GROUND.brightness;
-  private readonly dirt = new StandardMaterial();
-  private readonly road = new StandardMaterial();
-  private readonly roadEdge = new StandardMaterial();
-  private readonly pad = new StandardMaterial();
-  private readonly rock = new StandardMaterial();
+  private readonly textures = new Map<GroundSurface, Texture>();
+  private readonly opaque = new Map<GroundSurface, StandardMaterial>();
+  private readonly patchMaterials: StandardMaterial[] = [];
 
   constructor(private readonly app: AppBase, private readonly spec: GroundSpec) {
-    for (const m of [this.dirt, this.road, this.roadEdge, this.pad, this.rock]) m.useSkybox = false;
-    // Procedural dirt until the texture set loads (and if it fails).
-    this.dirt.diffuseMap = createGroundTexture(app);
-    this.dirt.gloss = 0.1;
-    this.dirt.useMetalness = true;
-    setSurfaceTiling(this.dirt, 6);
-    this.addMesh("Dirt", this.dirt, groundQuadMesh(app.graphicsDevice, -HALF, -HALF, HALF, HALF), 0);
+    this.addMesh("Ground", this.opaqueMaterial(spec.base), groundQuadMesh(app.graphicsDevice, -HALF, -HALF, HALF, HALF), 0);
   }
 
-  get tileSize(): number { return this.dirtTile; }
-  get rockTileSize(): number { return this.rockTile; }
+  get tileSize(): number { return this.baseTile; }
+  get rockTileSize(): number { return this.patchTile; }
   get tint(): number { return this.brightness; }
 
-  /** Loads the surface textures and builds the road, pads and patches. Needs camera + lights. */
+  /** Builds pads and patches. Needs camera + lights (the patch layer is added to them). */
   async load(): Promise<void> {
     const app = this.app;
     const overlay = this.createOverlayLayer();
-    const warn = (what: string) => (error: unknown) => console.warn(`[Ground] ${what} failed to load.`, error);
-    await Promise.all([
-      applySurface(app, this.dirt, GROUND).then(() => this.applyDirt(), warn("Dirt textures")),
-      Promise.all([applySurface(app, this.road, ROAD), applySurface(app, this.roadEdge, ROAD), applySurface(app, this.pad, ROAD)]).then(() => {
-        this.buildRoad(overlay);
-        for (const p of this.spec.pads) this.addMesh("ConcretePad", this.pad, groundQuadMesh(app.graphicsDevice, p.x0, p.z0, p.x1, p.z1), 0.004);
-        this.applyRoad();
-      }, warn("Road textures")),
-      applySurface(app, this.rock, ROCKY).then(() => {
-        const rock = this.rock;
-        rock.opacityMap = createPatchMask(app);
-        rock.opacityMapChannel = "a";
-        rock.opacityMapUv = 1;
-        rock.blendType = BLEND_NORMAL;
-        rock.depthWrite = false;
-        for (const p of this.spec.rockPatches) {
-          this.addMesh("RockPatch", rock, groundQuadMesh(app.graphicsDevice, p.x - p.w / 2, p.z - p.d / 2, p.x + p.w / 2, p.z + p.d / 2), 0.001, [overlay.id]);
-        }
-        this.applyRock();
-      }, warn("Rocky terrain")),
-    ]);
-  }
-
-  setTileSize(metres: number): void { this.dirtTile = metres; this.applyDirt(); }
-  setRockTileSize(metres: number): void { this.rockTile = metres; this.applyRock(); }
-
-  setBrightness(value: number): void {
-    this.brightness = value;
-    this.applyDirt();
-    this.applyRoad();
-    this.applyRock();
-  }
-
-  private buildRoad(overlay: Layer): void {
-    const { roadCentreX, roadHalfWidth } = this.spec;
-    const step = 0.75;
-    const core = [[], []] as number[][];
-    const edgeL = [[], []] as number[][];
-    const edgeR = [[], []] as number[][];
-    const along: number[] = [];
-    let distance = 0;
-    let prevX = roadCentreX(-HALF), prevZ = -HALF;
-    for (let z = -HALF; z <= HALF + 1e-6; z += step) {
-      const x = roadCentreX(z);
-      distance += Math.hypot(x - prevX, z - prevZ);
-      prevX = x; prevZ = z;
-      // Unit normal to the centreline in the ground plane (points towards +X).
-      const slope = (roadCentreX(z + 0.01) - roadCentreX(z - 0.01)) / 0.02;
-      const len = Math.hypot(1, slope);
-      const nx = 1 / len, nz = -slope / len;
-      const hw = roadHalfWidth(z);
-      const inner = hw - ROAD.edgeInner, outer = hw + ROAD.edgeOuter;
-      core[0].push(x - nx * inner, z - nz * inner);
-      core[1].push(x + nx * inner, z + nz * inner);
-      edgeL[0].push(x - nx * inner, z - nz * inner);
-      edgeL[1].push(x - nx * outer, z - nz * outer);
-      edgeR[0].push(x + nx * inner, z + nz * inner);
-      edgeR[1].push(x + nx * outer, z + nz * outer);
-      along.push(distance);
+    for (const pad of this.spec.pads) {
+      this.addMesh("GroundPad", this.opaqueMaterial(pad.surface), groundQuadMesh(app.graphicsDevice, pad.x0, pad.z0, pad.x1, pad.z1), 0.004);
     }
-    const app = this.app;
-    this.addMesh("Road", this.road, stripMesh(app, core[0], core[1], along, ROAD.maskPeriod, 0, 0), 0.002);
-    const edge = this.roadEdge;
-    edge.opacityMap = createRoadEdgeMask(app);
-    edge.opacityMapChannel = "a";
-    edge.opacityMapUv = 1;
-    edge.blendType = BLEND_NORMAL;
-    edge.depthWrite = false;
-    this.addMesh("RoadEdge", edge, stripMesh(app, edgeL[0], edgeL[1], along, ROAD.maskPeriod, 0, 1), 0.002, [overlay.id]);
-    this.addMesh("RoadEdge", edge, stripMesh(app, edgeR[0], edgeR[1], along, ROAD.maskPeriod, 0, 1), 0.002, [overlay.id]);
+    // A handful of mask shapes is enough; patches cycle through them.
+    const masks = [11, 23, 37, 41].map((seed) => createPatchMask(app, seed));
+    const bySurfaceAndMask = new Map<string, StandardMaterial>();
+    this.spec.patches.forEach((p, i) => {
+      const maskIndex = (p.seed ?? i) % masks.length;
+      const key = `${p.surface}:${maskIndex}`;
+      let material = bySurfaceAndMask.get(key);
+      if (!material) {
+        material = this.createMaterial(p.surface);
+        material.opacityMap = masks[maskIndex];
+        material.opacityMapChannel = "a";
+        material.opacityMapUv = 1;
+        material.blendType = BLEND_NORMAL;
+        material.depthWrite = false;
+        bySurfaceAndMask.set(key, material);
+        this.patchMaterials.push(material);
+      }
+      // Tiny height steps keep overlapping patches from z-fighting.
+      this.addMesh("GroundPatch", material, groundQuadMesh(app.graphicsDevice, p.x - p.w / 2, p.z - p.d / 2, p.x + p.w / 2, p.z + p.d / 2), 0.001 + (i % 8) * 0.0004, [overlay.id]);
+    });
+    this.apply();
+  }
+
+  setTileSize(metres: number): void { this.baseTile = metres; this.apply(); }
+  setRockTileSize(metres: number): void { this.patchTile = metres; this.apply(); }
+  setBrightness(value: number): void { this.brightness = value; this.apply(); }
+
+  private texture(surface: GroundSurface): Texture {
+    let texture = this.textures.get(surface);
+    if (!texture) {
+      texture = canvasTexture(this.app, `ground-${surface}`, paintSurface(surface, surface.length * 97 + 7), true);
+      this.textures.set(surface, texture);
+    }
+    return texture;
+  }
+
+  private createMaterial(surface: GroundSurface): StandardMaterial {
+    const material = new StandardMaterial();
+    material.name = `ground-${surface}`;
+    material.useSkybox = false;
+    material.useMetalness = true;
+    material.metalness = 0;
+    material.gloss = 0.08;
+    material.diffuseMap = this.texture(surface);
+    return material;
+  }
+
+  private opaqueMaterial(surface: GroundSurface): StandardMaterial {
+    let material = this.opaque.get(surface);
+    if (!material) {
+      material = this.createMaterial(surface);
+      this.opaque.set(surface, material);
+      this.applyTo(material, this.baseTile);
+    }
+    return material;
   }
 
   private addMesh(name: string, material: StandardMaterial, mesh: Mesh, y: number, layers?: number[]): void {
@@ -255,18 +253,14 @@ export class Ground {
     return overlay;
   }
 
-  private applyDirt(): void {
-    setSurfaceTiling(this.dirt, this.dirtTile);
-    setSurfaceTint(this.dirt, this.brightness);
+  private applyTo(material: StandardMaterial, tile: number): void {
+    setSurfaceTiling(material, tile);
+    material.diffuse = new Color(this.brightness, this.brightness, this.brightness);
+    material.update();
   }
 
-  private applyRoad(): void {
-    for (const m of [this.road, this.roadEdge]) setSurfaceTint(m, ROAD.brightness * this.brightness / GROUND.brightness, ROAD.tint);
-    setSurfaceTint(this.pad, PAD.brightness * this.brightness / GROUND.brightness, PAD.tint);
-  }
-
-  private applyRock(): void {
-    setSurfaceTiling(this.rock, this.rockTile);
-    setSurfaceTint(this.rock, this.brightness * ROCKY.brightness, ROCKY.tint);
+  private apply(): void {
+    for (const material of this.opaque.values()) this.applyTo(material, this.baseTile);
+    for (const material of this.patchMaterials) this.applyTo(material, this.patchTile);
   }
 }
