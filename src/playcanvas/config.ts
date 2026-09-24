@@ -171,13 +171,16 @@ export const WEAPONS = {
       stock: [0, 0.005, 0.28],
     },
     sniper: { label: "Sniper rifle", class: "rifle", node: "sniper_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
-    // Grip y -0.06..0, z ~0.03-0.09, 2.8 cm wide; slide above it. The support (left) palm sits on the
-    // left side of the grip, over the right fingers.
+    // Grip y -0.06..0, z ~0.03-0.09, 2.8 cm wide; slide above it. Two-handed support grip: the left
+    // palm sits on the FRONT-LEFT of the grip, a little low (under the trigger guard), over the right
+    // hand's fingers, facing back-right into the grip; its fingers point forward-right and wrap around
+    // the front of the shooting hand. (A support palm flat on the grip's left side left the fingers
+    // sticking straight forward past the gun: an open hand floating beside it from the top camera.)
     pistol: {
       label: "Pistol", class: "pistol", node: "pistol_1", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.03, 0.06], axis: [0, 0.96, -0.28], palm: [0.9, 0.08, 0.28], radius: 0.016 },
-        left: { position: [0, -0.03, 0.06], axis: [0, 0.96, -0.28], palm: [-0.9, 0.08, 0.28], radius: 0.042, rollRangeDeg: 20 },
+        left: { position: [0, -0.045, 0.05], axis: [0, 0.96, -0.28], palm: [-0.7, -0.05, -0.7], radius: 0.045, rollRangeDeg: 15 },
       },
     },
     knife: { label: "Knife", class: "axe", node: "tactical_knife", position: [0, 0.08, 0.01], rotation: [90, 0, 0], rollDeg: 0, attack: "Attack" },
@@ -213,14 +216,14 @@ export const WEAPONS = {
       label: "Pistol (East)", class: "pistol", node: "Pistol_Full_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.07, 0.06], axis: [0, 0.98, -0.21], palm: [0.9, 0.09, 0.42], radius: 0.016 },
-        left: { position: [0, -0.07, 0.06], axis: [0, 0.98, -0.21], palm: [-0.9, 0.09, 0.42], radius: 0.042, rollRangeDeg: 20 },
+        left: { position: [0, -0.085, 0.055], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.045, rollRangeDeg: 15 },
       },
     },
     eastPistolCompact: {
       label: "Compact pistol (East)", class: "pistol", node: "Pistol_Compact_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.055, 0.03], axis: [0, 0.98, -0.21], palm: [0.9, 0.09, 0.42], radius: 0.016 },
-        left: { position: [0, -0.055, 0.03], axis: [0, 0.98, -0.21], palm: [-0.9, 0.09, 0.42], radius: 0.042, rollRangeDeg: 20 },
+        left: { position: [0, -0.07, 0.025], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.045, rollRangeDeg: 15 },
       },
     },
     // Low poly axe (handle along -Y, head at the top, blade toward -X), held ~0.62 m down the handle

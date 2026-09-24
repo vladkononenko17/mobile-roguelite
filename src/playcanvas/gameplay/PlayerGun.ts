@@ -1,5 +1,5 @@
-import { Vec3 } from "playcanvas";
-import { PLAYER_COMBAT, type WeaponStats } from "./config";
+import { Vec3, type CameraComponent } from "playcanvas";
+import { TARGETING, type WeaponStats } from "./config";
 import type { Effects } from "./Effects";
 import type { Enemy, EnemyManager } from "./EnemyManager";
 import { blocked } from "./NavField";
@@ -11,12 +11,26 @@ import type { CollisionWorld } from "../world/collision/CollisionWorld";
 const WALL_STEP = 0.4;
 const SHOT_HEIGHT = 1.25;
 
+/** Screen-space debug info for the targeting overlay (CSS pixels of the canvas). */
+export interface TargetingDebug {
+  /** The inner combat viewport. */
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  /** The current target's aim point on screen and its distance (null: no target). */
+  target: { x: number; y: number; distance: number; label: string } | null;
+}
+
 /**
- * The hero's gun: auto-aim and auto-fire, made for one-thumb mobile play. The target is the best
- * enemy in range and in line of sight, preferring those ahead of where the player is steering, so
- * movement decides what gets shot; the hero turns to it (the legs keep running) and fires when
- * facing it. Hitscan bullets with spread, pellets and penetration; walls stop bullets. Magazine and
- * reload from the weapon stats (PlayerStats applies upgrades).
+ * The hero's gun: auto-aim and auto-fire, made for one-thumb mobile play. Only enemies the player can
+ * see are ever targeted: candidates are alive enemies whose chest point is inside the inner combat
+ * viewport of the gameplay camera (TARGETING margins), in weapon range and in line of sight, and the
+ * nearest one is picked. The target is then kept (no flicker between equals) while it stays valid,
+ * with a little slack and a very short grace at the viewport edge; off-screen enemies never become
+ * targets, and with no valid target the gun does not fire. The hero turns to the target (the legs
+ * keep running) and fires when facing it. Hitscan bullets with spread, pellets and penetration; walls
+ * stop bullets. Magazine and reload from the weapon stats (PlayerStats applies upgrades).
  */
 export class PlayerGun {
   target: Enemy | null = null;
@@ -31,6 +45,12 @@ export class PlayerGun {
   private readonly muzzle = new Vec3();
   private readonly end = new Vec3();
   private readonly hits: { enemy: Enemy; t: number }[] = [];
+  private readonly aimPoint = new Vec3();
+  private readonly screen = new Vec3();
+  /** Seconds the current target has been outside the (slack) viewport. */
+  private hidden = 0;
+  /** Filled every update for the debug overlay. */
+  readonly debug: TargetingDebug = { left: 0, top: 0, right: 0, bottom: 0, target: null };
 
   /** Damage number / feedback hook: (world position, amount, crit). */
   onHit: (position: Vec3, amount: number, crit: boolean) => void = () => {};
@@ -42,6 +62,7 @@ export class PlayerGun {
     private readonly effects: Effects,
     private readonly collision: CollisionWorld,
     private readonly stats: PlayerStats,
+    private readonly camera: CameraComponent,
   ) {}
 
   /** Refills the magazine (new weapon, new level). */
@@ -63,6 +84,7 @@ export class PlayerGun {
     this.cooldown -= dt;
     if (!active || !stats) {
       this.target = null;
+      this.debug.target = null;
       player.aimYawDeg = null;
       return;
     }
@@ -74,7 +96,8 @@ export class PlayerGun {
     if (this.reloading <= 0 && this.ammo < stats.magazine && (this.ammo <= 0 || this.idle > 1.5)) this.reloading = stats.reloadSeconds;
     const position = player.entity.getPosition();
     this.origin.set(position.x, SHOT_HEIGHT * scale, position.z);
-    this.target = this.pickTarget(position.x, position.z, stats, player);
+    this.target = this.pickTarget(position.x, position.z, stats, dt);
+    this.updateDebug(position.x, position.z);
     if (!this.target) {
       this.idle += dt;
       player.aimYawDeg = null;
@@ -90,33 +113,63 @@ export class PlayerGun {
     this.fire(stats, tx, tz, weapon);
   }
 
-  private pickTarget(x: number, z: number, stats: WeaponStats, player: PlayerController): Enemy | null {
-    // Preferred direction: where the player steers, else where the hero faces.
-    let px = player.moveDirection.x, pz = player.moveDirection.z;
-    if (px === 0 && pz === 0) {
-      const yaw = (player.yawDeg * Math.PI) / 180;
-      px = Math.sin(yaw);
-      pz = Math.cos(yaw);
+  /**
+   * The current target while it stays valid (alive, in range, in sight, on screen within the slack
+   * and grace), else the nearest valid enemy inside the combat viewport, else null.
+   */
+  private pickTarget(x: number, z: number, stats: WeaponStats, dt: number): Enemy | null {
+    const current = this.target;
+    if (current && this.valid(current, x, z, stats)) {
+      this.hidden = this.onScreen(current, TARGETING.keepSlack) ? 0 : this.hidden + dt;
+      if (this.hidden <= TARGETING.graceSeconds) return current;
     }
-    const half = (PLAYER_COMBAT.aimHalfAngleDeg * Math.PI) / 180;
+    this.hidden = 0;
     let best: Enemy | null = null;
-    let bestScore = Infinity;
-    // Keep the current target while it stays valid (no flicker between equals).
+    let bestDistance = Infinity;
     for (const e of this.enemies.alive) {
-      if (e.state === "dead") continue;
-      const dx = e.position.x - x, dz = e.position.z - z;
-      const d = Math.hypot(dx, dz);
-      if (d > stats.range + e.def.radius) continue;
-      const angle = Math.acos(Math.max(-1, Math.min(1, (dx * px + dz * pz) / (d || 1))));
-      let score = d + (angle > half ? PLAYER_COMBAT.aimAnglePenalty * 2 : 0) + angle * PLAYER_COMBAT.aimAnglePenalty * 0.5;
-      if (e === this.target) score -= 1.5;
-      if (e.def.boss) score -= 0.5;
-      if (score >= bestScore) continue;
-      if (!this.lineOfSight(x, z, e.position.x, e.position.z)) continue;
+      const d = Math.hypot(e.position.x - x, e.position.z - z);
+      if (d >= bestDistance || e === current) continue;
+      if (!this.valid(e, x, z, stats) || !this.onScreen(e, 0)) continue;
       best = e;
-      bestScore = score;
+      bestDistance = d;
     }
     return best;
+  }
+
+  /** Alive, in weapon range and in line of sight (screen visibility is checked separately). */
+  private valid(e: Enemy, x: number, z: number, stats: WeaponStats): boolean {
+    if (!e.active || e.state === "dead") return false;
+    if (Math.hypot(e.position.x - x, e.position.z - z) > stats.range + e.def.radius) return false;
+    return this.lineOfSight(x, z, e.position.x, e.position.z);
+  }
+
+  /** Whether the enemy's chest point is inside the combat viewport grown by `slack` (fraction). */
+  private onScreen(e: Enemy, slack: number): boolean {
+    this.aimPoint.set(e.position.x, TARGETING.aimHeight * e.scale, e.position.z);
+    const s = this.camera.worldToScreen(this.aimPoint, this.screen);
+    if (s.z <= 0) return false;
+    const { width, height } = this.camera.system.app.graphicsDevice.clientRect;
+    return (
+      s.x >= width * (TARGETING.marginX - slack) && s.x <= width * (1 - TARGETING.marginX + slack) &&
+      s.y >= height * (TARGETING.marginTop - slack) && s.y <= height * (1 - TARGETING.marginBottom + slack)
+    );
+  }
+
+  private updateDebug(x: number, z: number): void {
+    const { width, height } = this.camera.system.app.graphicsDevice.clientRect;
+    const d = this.debug;
+    d.left = width * TARGETING.marginX;
+    d.right = width * (1 - TARGETING.marginX);
+    d.top = height * TARGETING.marginTop;
+    d.bottom = height * (1 - TARGETING.marginBottom);
+    const t = this.target;
+    if (!t) {
+      d.target = null;
+      return;
+    }
+    this.aimPoint.set(t.position.x, TARGETING.aimHeight * t.scale, t.position.z);
+    const s = this.camera.worldToScreen(this.aimPoint, this.screen);
+    d.target = { x: s.x, y: s.y, distance: Math.hypot(t.position.x - x, t.position.z - z), label: t.def.label };
   }
 
   private lineOfSight(x0: number, z0: number, x1: number, z1: number): boolean {

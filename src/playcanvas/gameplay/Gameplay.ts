@@ -13,6 +13,7 @@ import { PlayerGun } from "./PlayerGun";
 import { Pickups, type PickupKind } from "./Pickups";
 import { PlayerStats } from "./PlayerStats";
 import { SpawnDirector } from "./SpawnDirector";
+import { TargetDebug } from "../ui/TargetDebug";
 import { applyUpgrade, availableUpgrades, rollUpgrades } from "./Upgrades";
 
 interface Bounds {
@@ -65,6 +66,7 @@ export class Gameplay {
   private navTimer = 0;
   private clearTimer = 0;
   private readonly params = new URLSearchParams(location.search);
+  private readonly targetDebug = new TargetDebug();
 
   constructor(
     private readonly app: AppBase,
@@ -84,7 +86,7 @@ export class Gameplay {
     this.nav = new NavField(collision, bounds);
     this.enemies = new EnemyManager(app, collision, this.nav, this.hazards);
     this.director = new SpawnDirector(this.enemies, this.nav, bounds);
-    this.gun = new PlayerGun(this.enemies, this.effects, collision, this.stats);
+    this.gun = new PlayerGun(this.enemies, this.effects, collision, this.stats, camera.camera!);
     this.enemies.onPlayerHit = (damage) => this.hurtPlayer(damage);
     this.hazards.onImpact = (position, radius, damage) => {
       const p = this.player.entity.getPosition();
@@ -347,5 +349,6 @@ export class Gameplay {
     const boss = d.boss && d.boss.state !== "dead" ? d.boss : null;
     this.hud.setBoss(boss ? boss.def.label : null, boss ? boss.hp / boss.maxHp : 0);
     this.hud.update(dt, this.camera.camera!);
+    this.targetDebug.update(this.gun.debug);
   }
 }

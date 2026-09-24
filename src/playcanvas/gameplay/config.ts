@@ -12,17 +12,29 @@ export const PLAYER_COMBAT = {
   maxHp: 100,
   /** Seconds of invulnerability after taking a hit. */
   hitInvulnerability: 0.45,
-  /** Auto-aim: targets are searched within the weapon range; enemies in front (within this half
-   * angle of the hero's movement / facing) are preferred, so steering decides what gets shot. */
-  aimHalfAngleDeg: 75,
-  /** Extra "distance" (m) charged per radian away from the preferred direction when picking. */
-  aimAnglePenalty: 4,
   /** The hero turns toward the target this fast while shooting (per second, exponential). */
   aimTurnSharpness: 18,
   /** Pickup attraction radius and speed. */
   magnetRadius: 2.6,
   magnetSpeed: 11,
   pickupRadius: 0.7,
+};
+
+/**
+ * Auto-aim eligibility: an enemy can only become (or stay) the gun's target while its chest point is
+ * inside an inner "combat viewport" of the gameplay camera, i.e. clearly visible on screen, never
+ * off-screen. Margins are fractions of the canvas size; the top margin also clears the corner HUD.
+ */
+export const TARGETING = {
+  marginX: 0.06,
+  marginTop: 0.12,
+  marginBottom: 0.09,
+  /** The current target is kept while inside the viewport grown by this fraction (no edge flicker). */
+  keepSlack: 0.025,
+  /** ...and for at most this long after it leaves even that (then it is dropped). */
+  graceSeconds: 0.15,
+  /** Height of the enemy's aim point (chest) above its feet, per unit of enemy scale (m). */
+  aimHeight: 1.0,
 };
 
 /* ------------------------------------------------------------------------------------------------
