@@ -129,16 +129,14 @@ export type CharacterId = keyof typeof CHARACTERS;
  * along the hand with the weapon's top facing the back of the hand. `rollDeg` then turns the weapon
  * about the hand's finger axis; -43° keeps a rifle upright (not canted) in the Vanguard's aiming
  * pose (Run_and_Shoot). `position` is in hand-bone space (metres, before the character scale).
- * `pose` is the clip played on the arms and torso while the weapon is held (null = normal arms;
- * "@idle" = the character's own idle clip, a calm base for a `hold`);
+ * `class` picks the weapon class (WEAPON_CLASSES: pose and hand behaviour);
  * `attack` is the full-body clip played once by the attack action (Space / on-screen button).
  * Optional `scale` resizes the weapon.
  *
  * Optional `grips` (weapon space, muzzle -Z; see GripFrame) define how hands hold it: `right` is the
  * handle the right hand holds (the pistol grip; it goes on the hand's WeaponSocket), `left` the
  * second hand's grip (a rifle's handguard, a pistol's support grip over the right hand, later an axe's
- * lower handle). The grip pose is `pose` + `hold`: a rifle aims with its upper-body clip, a pistol
- * uses a ready `hold` over the character's idle upper body. On a
+ * lower handle). How the weapon is held (pose, placement, IK) comes from its class. On a
  * character with `hands`, the weapon is parented to the right hand's WeaponSocket so its right grip
  * sits in the palm (the right hand leads, the weapon follows it); the left hand is put on the left
  * grip by IK and both hands' fingers wrap the handles (player/WeaponHands.ts). Markers named
@@ -148,49 +146,87 @@ export type CharacterId = keyof typeof CHARACTERS;
 export const WEAPONS = {
   url: "models/weapons/weapons.glb",
   handBone: "mixamorig:RightHand",
+  // Grip frames below were measured on each model (weapon space: muzzle -Z, top +Y; metres). `stock`
+  // is the centre of the butt plate (shoulder-held classes).
   list: {
     // "assetpack-free" (textured)
-    // Two-handed. Measured on the model: the pistol grip is 4.2 cm wide and slants back from
-    // (y 0, z 0.04) to (y -0.07, z 0.075); the handguard is a 3 x 7 cm slab (y 0.063-0.13) from
-    // z -0.32 to -0.14. The right palm sits on the right side of the pistol grip (knuckles pointing
-    // forward along the gun, the heel of the hand behind it); the left
-    // palm under and to the left of the handguard.
+    // Pistol grip 4.2 cm wide, slanting back from (y 0, z 0.04) to (y -0.07, z 0.075); handguard a
+    // 3 x 7 cm slab (y 0.063-0.13) from z -0.32 to -0.14. Right palm on the right side of the pistol
+    // grip, left palm under and to the left of the handguard.
     rifle: {
-      label: "Assault rifle", node: "assault_rifle_2", position: [-0.0057, 0.0893, 0.0247], rotation: [80.8, -42.19, 13.56], rollDeg: 0, pose: "Run_and_Shoot", attack: null,
+      label: "Assault rifle", class: "rifle", node: "assault_rifle_2", position: [-0.0057, 0.0893, 0.0247], rotation: [80.8, -42.19, 13.56], rollDeg: 0, attack: null,
       grips: {
         right: { position: [0, -0.035, 0.058], axis: [0, 0.88, -0.47], palm: [0.85, 0.25, 0.47], radius: 0.021 },
         left: { position: [0, 0.096, -0.23], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
       },
     },
-    shotgun: { label: "Shotgun", node: "shotgun_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
-    sniper: { label: "Sniper rifle", node: "sniper_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
-    // Two-handed ready stance (not the rifle clip): the upper body plays the character's own idle
-    // over the legs, and arm IK holds the pistol in front of the upper chest, pointing where the hero
-    // faces. Measured on the model: grip y -0.06..0, z ~0.03-0.09, 2.8 cm wide; slide above it.
-    // `left` is the support hand: its palm on the left side of the grip, over the right fingers.
+    // 86 cm pump gun: pistol grip y -0.08..-0.01 (z 0.05-0.13, top further back), pump / fore-end
+    // under the barrel z -0.26..-0.09 (y 0-0.05), butt plate at z 0.29.
+    shotgun: {
+      label: "Shotgun", class: "shotgun", node: "shotgun_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.04, 0.083], axis: [0, 0.864, 0.504], palm: [0.85, -0.26, 0.45], radius: 0.02 },
+        left: { position: [0, 0.025, -0.15], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
+      },
+      stock: [0, 0.005, 0.28],
+    },
+    sniper: { label: "Sniper rifle", class: "rifle", node: "sniper_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
+    // Grip y -0.06..0, z ~0.03-0.09, 2.8 cm wide; slide above it. The support (left) palm sits on the
+    // left side of the grip, over the right fingers.
     pistol: {
-      label: "Pistol", node: "pistol_1", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "@idle", attack: null,
+      label: "Pistol", class: "pistol", node: "pistol_1", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.03, 0.06], axis: [0, 0.96, -0.28], palm: [0.9, 0.08, 0.28], radius: 0.016 },
         left: { position: [0, -0.03, 0.06], axis: [0, 0.96, -0.28], palm: [-0.9, 0.08, 0.28], radius: 0.042, rollRangeDeg: 20 },
       },
-      hold: { chest: [-0.02, -0.01, 0.36], pitchDeg: -4 },
     },
-    knife: { label: "Knife", node: "tactical_knife", position: [0, 0.08, 0.01], rotation: [90, 0, 0], rollDeg: 0, pose: null, attack: "Attack" },
-    grenade: { label: "Grenade", node: "frag_grenade", position: [0, 0.09, -0.01], rotation: [90, 0, 0], rollDeg: 0, pose: null, attack: null },
+    knife: { label: "Knife", class: "axe", node: "tactical_knife", position: [0, 0.08, 0.01], rotation: [90, 0, 0], rollDeg: 0, attack: "Attack" },
+    grenade: { label: "Grenade", class: "axe", node: "frag_grenade", position: [0, 0.09, -0.01], rotation: [90, 0, 0], rollDeg: 0, attack: null },
     // "Flat Guns East" (flat colours)
-    eastRifle: { label: "Rifle (East)", node: "Rifle_Assault_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
-    eastBattleRifle: { label: "Battle rifle (East)", node: "Rifle_Battle_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
-    eastSmg: { label: "SMG (East)", node: "SMG_Full_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
-    eastSmgCompact: { label: "Compact SMG (East)", node: "SMG_Compact_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
-    eastShotgun: { label: "Auto shotgun (East)", node: "Shotgun_Auto_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
-    eastPumpShotgun: { label: "Pump shotgun (East)", node: "Shotgun_Pump_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
-    eastSniper: { label: "Sniper (East)", node: "Sniper_Rifle_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
-    eastMarksman: { label: "Marksman rifle (East)", node: "Sniper_Material_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
-    eastPistol: { label: "Pistol (East)", node: "Pistol_Full_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
-    eastPistolCompact: { label: "Compact pistol (East)", node: "Pistol_Compact_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
-    // Low poly axe: head up past the thumb, gripped ~0.6 m down the handle.
-    axe: { label: "Axe", node: "low_poly_axe", position: [0, 0.08, 0.62], rotation: [90, 0, 0], rollDeg: 0, pose: null, attack: "Axe_Spin_Attack" },
+    eastRifle: { label: "Rifle (East)", class: "rifle", node: "Rifle_Assault_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
+    eastBattleRifle: { label: "Battle rifle (East)", class: "rifle", node: "Rifle_Battle_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
+    eastSmg: { label: "SMG (East)", class: "rifle", node: "SMG_Full_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
+    eastSmgCompact: { label: "Compact SMG (East)", class: "rifle", node: "SMG_Compact_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
+    // Box-magazine auto shotgun: pistol grip y -0.12..-0.02 at z ~0.2, fore-end z -0.28..-0.05, butt z 0.39.
+    eastShotgun: {
+      label: "Auto shotgun (East)", class: "shotgun", node: "Shotgun_Auto_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.07, 0.205], axis: [0, 0.98, -0.2], palm: [0.85, 0.1, 0.5], radius: 0.02 },
+        left: { position: [0, 0.02, -0.11], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
+      },
+      stock: [0, 0, 0.39],
+    },
+    // Straight-stock pump gun (no pistol grip): the right hand takes the stock's wrist at z ~0.2;
+    // pump z -0.29..-0.08 under the barrel; butt z 0.42, low (y -0.045).
+    eastPumpShotgun: {
+      label: "Pump shotgun (East)", class: "shotgun", node: "Shotgun_Pump_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.02, 0.2], axis: [0, 0.97, 0.24], palm: [0.85, -0.13, 0.5], radius: 0.02 },
+        left: { position: [0, 0, -0.12], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+      },
+      stock: [0, -0.045, 0.42],
+    },
+    eastSniper: { label: "Sniper (East)", class: "rifle", node: "Sniper_Rifle_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
+    eastMarksman: { label: "Marksman rifle (East)", class: "rifle", node: "Sniper_Material_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
+    // Grip y -0.11..-0.03 at z ~0.06 (full) / y -0.09..-0.02 at z ~0.03 (compact).
+    eastPistol: {
+      label: "Pistol (East)", class: "pistol", node: "Pistol_Full_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.07, 0.06], axis: [0, 0.98, -0.21], palm: [0.9, 0.09, 0.42], radius: 0.016 },
+        left: { position: [0, -0.07, 0.06], axis: [0, 0.98, -0.21], palm: [-0.9, 0.09, 0.42], radius: 0.042, rollRangeDeg: 20 },
+      },
+    },
+    eastPistolCompact: {
+      label: "Compact pistol (East)", class: "pistol", node: "Pistol_Compact_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.055, 0.03], axis: [0, 0.98, -0.21], palm: [0.9, 0.09, 0.42], radius: 0.016 },
+        left: { position: [0, -0.055, 0.03], axis: [0, 0.98, -0.21], palm: [-0.9, 0.09, 0.42], radius: 0.042, rollRangeDeg: 20 },
+      },
+    },
+    // Low poly axe (handle along -Y, head at the top, blade toward -X), held ~0.62 m down the handle
+    // with the legacy placement: that carry keeps the head away from the body in idle and run, while a
+    // grip-fitted hold swung the head up by the character's head. Locomotion and attack clips move it.
+    axe: { label: "Axe", class: "axe", node: "low_poly_axe", position: [0, 0.08, 0.62], rotation: [90, 0, 0], rollDeg: 0, attack: "Axe_Spin_Attack" },
   },
 } satisfies {
   url: string;
@@ -198,23 +234,73 @@ export const WEAPONS = {
   list: Record<string, WeaponDef>;
 };
 
+/**
+ * Weapon classes: how a kind of weapon is carried. The class sets the pose and the hand behaviour;
+ * each weapon in WEAPONS sets its exact grips (and stock). Only weapons with `grips` (on characters
+ * with `hands`) are placed by the class `hold`; the others hang from the hand with their legacy
+ * transform and only get the class `pose`.
+ */
+export type WeaponClass = "pistol" | "rifle" | "shotgun" | "axe" | "heavy";
+
+export interface WeaponClassProfile {
+  /** Upper-body clip over locomotion: a clip name, "@idle" (the character's own idle, a calm base
+   * for IK holds) or null (plain locomotion arms). */
+  pose: string | null;
+  /**
+   * How a gripped weapon is placed each frame:
+   * - "clip": the right palm stays where the upper-body clip puts it and the hand turns into a grip
+   *   that aims along the animated hand (the rifle; uses the spine aim twist);
+   * - "chest": the right grip is held at `anchor` (right / up / forward of the chest bone, in the
+   *   hero's facing frame), aiming along the facing;
+   * - "shoulder": the weapon's `stock` sits at `anchor` (from the right shoulder joint), aiming along
+   *   the facing;
+   * - "hand": the weapon simply follows the animated right hand (melee: attacks move it freely).
+   */
+  hold: "clip" | "chest" | "shoulder" | "hand";
+  /** Metres before the character scale (see `hold`). */
+  anchor?: Vec3Tuple;
+  /** Aim pitch standing still and at running speed (degrees, negative = muzzle down). */
+  pitchDeg?: number;
+  runPitchDeg?: number;
+  /** Anchor shift at running speed (a lowered ready carry), metres before the character scale. */
+  runAnchorShift?: Vec3Tuple;
+  /** Left arm IK onto the weapon's left grip. */
+  leftHandIK: boolean;
+  /** Procedural finger wrap around the grips. */
+  fingerGrip: boolean;
+  /** Spine twist so a clip-aimed weapon points where the hero faces. */
+  aimTwist: boolean;
+}
+
+export const WEAPON_CLASSES: Record<WeaponClass, WeaponClassProfile> = {
+  // Compact two-handed ready stance in front of the upper chest, over the character's idle upper body.
+  pistol: { pose: "@idle", hold: "chest", anchor: [-0.02, -0.01, 0.36], pitchDeg: -4, runPitchDeg: -4, leftHandIK: true, fingerGrip: true, aimTwist: false },
+  // The aiming clip drives the arms; hands are fitted to the rifle.
+  rifle: { pose: "Run_and_Shoot", hold: "clip", leftHandIK: true, fingerGrip: true, aimTwist: true },
+  // Stock in the right shoulder pocket (inside the shoulder joint), level; at a run the stock drops
+  // off the shoulder toward the chest and the muzzle dips into a low ready carry across the body.
+  shotgun: {
+    pose: "@idle", hold: "shoulder", anchor: [-0.05, -0.03, 0.04], pitchDeg: -2, runPitchDeg: -16, runAnchorShift: [-0.07, -0.06, 0.02],
+    leftHandIK: true, fingerGrip: true, aimTwist: false,
+  },
+  // One-handed melee: locomotion (and attack clips) move the arm; the fingers close on the handle.
+  axe: { pose: null, hold: "hand", leftHandIK: false, fingerGrip: true, aimTwist: false },
+  // Hip-carried heavy weapon (minigun), both hands; no weapon uses it yet.
+  heavy: { pose: "@idle", hold: "chest", anchor: [0.1, -0.3, 0.32], pitchDeg: 0, runPitchDeg: -6, leftHandIK: true, fingerGrip: true, aimTwist: false },
+};
 
 export interface WeaponDef {
   label: string;
+  class: WeaponClass;
   node: string;
+  /** Legacy placement in the hand (weapons without `grips`, or characters without `hands`). */
   position: Vec3Tuple;
   rotation: Vec3Tuple;
   rollDeg: number;
   scale?: number;
   grips?: { right: WeaponGrip; left?: WeaponGrip };
-  /**
-   * "Ready" hold instead of an aiming clip (needs `grips` and character `hands`): the right palm
-   * (the pistol grip) is held at `chest` (metres, before the character scale: right / up / forward
-   * of the chest bone in the hero's facing frame) and the weapon points along the facing, pitched by
-   * `pitchDeg`. Use with `pose: "@idle"` so the upper body is calm while the legs keep moving.
-   */
-  hold?: { chest: Vec3Tuple; pitchDeg: number };
-  pose: string | null;
+  /** Butt plate centre (weapon space), for shoulder-held classes. */
+  stock?: Vec3Tuple;
   attack: string | null;
 }
 

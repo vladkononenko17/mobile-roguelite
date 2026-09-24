@@ -22,6 +22,7 @@ import { PlayerController } from "./player/PlayerController";
 import { WeaponHands } from "./player/WeaponHands";
 import { WeaponHolder } from "./player/WeaponHolder";
 import { DebugPanel, type TuneParam } from "./ui/DebugPanel";
+import { WeaponTuner } from "./ui/WeaponTuner";
 import { Ground } from "./world/Ground";
 import { createContactShadow } from "./world/ContactShadow";
 import { CHARACTER_LIGHT_MASK, createLighting } from "./world/Environment";
@@ -54,6 +55,7 @@ export class Game {
   private model!: Entity;
   private aimTwist: AimTwist | null = null;
   private weaponHands: WeaponHands | null = null;
+  private weaponTuner: WeaponTuner | null = null;
   weapons!: WeaponHolder;
   private contactShadow!: Entity;
   private characterScale: number = CHARACTER.scale;
@@ -154,7 +156,10 @@ export class Game {
     this.weapons.onPoseChange = (clip) => this.animation.setUpperBodyPose(clip);
     // Attack: Space, or the on-screen button (shown only when the weapon has an attack clip).
     const attackButton = document.querySelector<HTMLElement>("[data-attack]");
-    this.weapons.onChange = () => attackButton?.classList.toggle("hidden", !this.weapons.attackClip);
+    this.weapons.onChange = () => {
+      attackButton?.classList.toggle("hidden", !this.weapons.attackClip);
+      this.weaponTuner?.refresh();
+    };
     const attack = () => {
       const clip = this.weapons.attackClip;
       if (clip && !this.animation.acting) this.animation.playAction(clip);
@@ -173,6 +178,16 @@ export class Game {
     this.options.debugRoot.querySelector("[data-grips]")?.addEventListener("click", () => {
       if (this.weaponHands) this.weaponHands.debug = !this.weaponHands.debug;
     });
+    // Weapon tuner: live grip / socket sliders for the held weapon (also shows the grip frames).
+    const tunerRoot = this.options.debugRoot.querySelector<HTMLElement>("[data-weapon-tuner]");
+    if (tunerRoot) {
+      this.weaponTuner = new WeaponTuner(tunerRoot, this.weapons);
+      this.options.debugRoot.querySelector("[data-weapon-tune]")?.addEventListener("click", () => {
+        tunerRoot.hidden = !tunerRoot.hidden;
+        if (this.weaponHands) this.weaponHands.debug = !tunerRoot.hidden;
+        this.weaponTuner?.refresh();
+      });
+    }
     this.setupWeaponSelect();
 
     this.colliderDebug = new ColliderDebugView(app, this.collision, playerRoot, () => this.player.radius);
@@ -200,9 +215,10 @@ export class Game {
     // where the hero faces (the weapon follows the right hand's WeaponSocket), then left-arm IK onto
     // the weapon's LeftHandGrip and the finger grip on both hands.
     const aimWeight = this.animation.upperBodyWeight;
-    // Only clip-aimed weapons need the twist; a ready hold aims along the facing by itself.
-    this.aimTwist?.apply(this.weapons.entity !== null && !this.weapons.hold, this.player.yawDeg, aimWeight, dt);
-    this.weaponHands?.update(this.weapons, aimWeight, this.player.yawDeg);
+    // Only clip-aimed classes need the twist; the other holds aim along the facing by themselves.
+    this.aimTwist?.apply(this.weapons.profile?.aimTwist ?? false, this.player.yawDeg, aimWeight, dt);
+    const runBlend = Math.min(1, this.player.speed / PLAYER.runSpeed);
+    this.weaponHands?.update(this.weapons, aimWeight, this.player.yawDeg, runBlend);
     const device = this.app.graphicsDevice;
     this.camera.update(dt, device.width / Math.max(1, device.height));
 

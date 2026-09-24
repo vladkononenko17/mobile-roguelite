@@ -1,5 +1,5 @@
 import { Entity, Mat4, Quat, Vec3, type AppBase, type Asset, type ContainerResource, type RenderComponent, type StandardMaterial } from "playcanvas";
-import { WEAPONS, type CharacterModel, type WeaponDef, type WeaponGrip, type WeaponId } from "../config";
+import { WEAPON_CLASSES, WEAPONS, type CharacterModel, type WeaponClassProfile, type WeaponDef, type WeaponGrip, type WeaponId } from "../config";
 import { gripMatrix } from "./GripFrame";
 import { CHARACTER_LIGHT_MASK } from "../world/Environment";
 
@@ -23,6 +23,9 @@ export class WeaponHolder {
   private socketEntity: Entity | null = null;
   private held: Entity | null = null;
   private readonly markers = new Map<GripSide, Entity>();
+  private stockMarker: Entity | null = null;
+  /** Runtime replacements for WEAPONS entries (the tune panel's weapon tuner). */
+  private readonly overrides = new Map<WeaponId, WeaponDef>();
   private readonly handRoll = new Quat();
   current: WeaponId | null = null;
 
@@ -89,12 +92,13 @@ export class WeaponHolder {
     this.markers.clear();
     this.current = id;
     const template = id ? this.templates.get(id) : undefined;
-    this.onPoseChange(id && template && this.hand ? WEAPONS.list[id].pose : null);
+    this.stockMarker = null;
+    this.onPoseChange(id && template && this.hand ? WEAPON_CLASSES[this.definition(id).class].pose : null);
     if (!id || !template || !this.hand) {
       this.onChange();
       return;
     }
-    const def: WeaponDef = WEAPONS.list[id];
+    const def = this.definition(id);
     const scale = def.scale ?? 1;
     const held = new Entity(`weapon-${id}`);
     held.addChild(template.clone());
@@ -109,6 +113,11 @@ export class WeaponHolder {
         setLocalFromMatrix(marker, gripMatrix(frame));
         held.addChild(marker);
         this.markers.set(side, marker);
+      }
+      if (def.stock) {
+        this.stockMarker = new Entity("Stock");
+        this.stockMarker.setLocalPosition(def.stock[0], def.stock[1], def.stock[2]);
+        held.addChild(this.stockMarker);
       }
       this.socketEntity.addChild(held);
     } else {
@@ -127,7 +136,7 @@ export class WeaponHolder {
 
   /** The held weapon's one-shot attack clip, if it has one. */
   get attackClip(): string | null {
-    return this.current && this.held ? WEAPONS.list[this.current].attack : null;
+    return this.current && this.held ? this.definition(this.current).attack : null;
   }
 
   /**
@@ -136,13 +145,35 @@ export class WeaponHolder {
    */
   grip(side: GripSide): { marker: Entity; def: WeaponGrip } | null {
     const marker = this.markers.get(side);
-    const def = this.current ? (WEAPONS.list[this.current] as WeaponDef).grips?.[side] : undefined;
+    const def = this.current ? this.definition(this.current).grips?.[side] : undefined;
     return marker && def ? { marker, def } : null;
   }
 
-  /** The held weapon's ready hold, when it is held by grips and has one. */
-  get hold(): WeaponDef["hold"] {
-    return this.current && this.markers.size ? (WEAPONS.list[this.current] as WeaponDef).hold : undefined;
+  /** The effective definition of `id` (a tuner override, else WEAPONS). */
+  definition(id: WeaponId): WeaponDef {
+    return this.overrides.get(id) ?? WEAPONS.list[id];
+  }
+
+  /** Replaces `id`'s definition at runtime (null restores WEAPONS) and re-equips it if held. */
+  setOverride(id: WeaponId, def: WeaponDef | null): void {
+    if (def) this.overrides.set(id, def);
+    else this.overrides.delete(id);
+    if (this.current === id) this.equip(id);
+  }
+
+  /** The held weapon's class profile (null when empty-handed). */
+  get profile(): WeaponClassProfile | null {
+    return this.current && this.held ? WEAPON_CLASSES[this.definition(this.current).class] : null;
+  }
+
+  /** True when the held weapon is placed by its grips (so its class hold and IK apply). */
+  get gripped(): boolean {
+    return this.markers.size > 0;
+  }
+
+  /** The held weapon's butt-plate marker (shoulder-held classes). */
+  get stock(): Entity | null {
+    return this.stockMarker;
   }
 
   /** The right hand's WeaponSocket (null for characters without `hands`). */
