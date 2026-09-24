@@ -5,7 +5,8 @@
 //
 // Each <zombie.glb> is a character FBX of the pack converted with FBX2glTF (`FBX2glTF --binary`);
 // it is written to <out dir>/<name in lower case>.glb. The pack's colour palette <palette.png>
-// (every face samples one flat swatch) is embedded at a quarter of its size.
+// (every face samples one flat swatch) is recoloured into zombie skins (see SKINS), written at a
+// quarter of its size to <out dir>/skins/<skin>.webp; the GLBs embed the first skin.
 //
 // Clips come from <animation source.glb> (the Vanguard GLB, Mixamo "mixamorig:" bones) retargeted
 // the same way as scripts/build-survivor.mjs: limb bones follow the source's world bone directions
@@ -245,11 +246,73 @@ const CLIPS = [
 
 /* ---------------------------------------------------------------------------------------------- */
 
+/* ----------------------------------------------------------------------------------------------
+ * Zombie skins: the pack's palette is a sheet of flat colour swatches (every face samples one), so a
+ * recoloured copy of that one small image re-dresses every model at once. Each skin turns healthy
+ * skin tones into sick / bruised / decayed flesh, clothes and hair into dirty, desaturated colours
+ * pulled toward the skin's hue, highlights into grime, and blood into dried dark brown. The game
+ * picks a skin per spawn (shared textures, one material per model and skin).
+ * -------------------------------------------------------------------------------------------- */
+
+const SKINS = {
+  // Gray / olive green skin, olive clothes.
+  green: { flesh: [0.47, 0.55, 0.36], cloth: [0.9, 1.0, 0.72] },
+  // Darker desaturated green.
+  darkgreen: { flesh: [0.28, 0.38, 0.24], cloth: [0.78, 0.95, 0.72] },
+  // Pale gray-green with bruised purple patches, muted purple clothes.
+  purple: { flesh: [0.54, 0.58, 0.49], cloth: [0.7, 0.58, 0.78], bruise: [0.36, 0.26, 0.4] },
+  // Dark brown / gray, decomposed.
+  brown: { flesh: [0.3, 0.29, 0.23], cloth: [0.85, 0.75, 0.62] },
+};
+
+function hsl(r, g, b) {
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+
+function recolor(r, g, b, skin) {
+  const [h, s, l] = hsl(r, g, b);
+  const lum = 0.3 * r + 0.59 * g + 0.11 * b;
+  const mixed = (a, c, t) => a.map((v, i) => v + (c[i] - v) * t);
+  if (h <= 38 && s >= 0.2 && s <= 0.85 && l >= 0.45 && l <= 0.9) {
+    // Human skin tone -> sick flesh, keeping the swatch's relative shading.
+    let flesh = skin.flesh.map((v) => v * (0.8 + 0.6 * (l - 0.65)));
+    if (skin.bruise) flesh = mixed(flesh, skin.bruise, Math.min(1, Math.max(0, (0.72 - l) * 2.5)));
+    return flesh;
+  }
+  if ((h < 15 || h > 335) && s > 0.4 && l < 0.45) {
+    // Blood -> dried dark red-brown.
+    return [0.3, 0.11, 0.08].map((v) => v * (0.6 + l));
+  }
+  // Clothes / hair: mostly desaturated, tinted toward the skin's palette, highlights turned to grime.
+  // Strongly saturated clothes (red shirts, blue jeans) lose more colour.
+  const desat = mixed([r, g, b], [lum, lum, lum], 0.72 + 0.18 * s);
+  const grime = 0.88 - 0.4 * lum;
+  return desat.map((v, i) => v * skin.cloth[i] * grime);
+}
+
 const palette = await sharp(palettePath).metadata();
-const paletteImage = await sharp(palettePath)
-  .resize(Math.round(palette.width / 4), Math.round(palette.height / 4))
-  .png({ palette: true, colours: 256 })
-  .toBuffer();
+const small = { width: Math.round(palette.width / 4), height: Math.round(palette.height / 4) };
+const raw = await sharp(palettePath).resize(small.width, small.height).removeAlpha().raw().toBuffer();
+const skinImages = {};
+for (const [id, skin] of Object.entries(SKINS)) {
+  const out = Buffer.alloc(raw.length);
+  for (let i = 0; i < raw.length; i += 3) {
+    const c = recolor(raw[i] / 255, raw[i + 1] / 255, raw[i + 2] / 255, skin);
+    for (let k = 0; k < 3; k++) out[i + k] = Math.round(Math.min(1, Math.max(0, c[k])) * 255);
+  }
+  const image = sharp(out, { raw: { width: small.width, height: small.height, channels: 3 } });
+  skinImages[id] = await image.clone().png({ palette: true, colours: 256 }).toBuffer();
+  fs.mkdirSync(path.join(outDir, "skins"), { recursive: true });
+  await image.clone().webp({ lossless: true }).toFile(path.join(outDir, "skins", `${id}.webp`));
+}
+console.log(`wrote skins: ${Object.keys(SKINS).join(", ")} (${small.width}x${small.height})`);
+// The GLBs carry the first skin, so a body is never drawn with the human palette.
+const paletteImage = skinImages[Object.keys(SKINS)[0]];
 fs.mkdirSync(outDir, { recursive: true });
 
 for (const targetPath of targetPaths) {

@@ -1,10 +1,10 @@
-import { Vec3, type AnimTrack, type AppBase, type Asset, type ContainerResource, type Entity } from "playcanvas";
+import { Vec3, type AnimTrack, type AppBase, type Asset, type ContainerResource, type Entity, type Texture } from "playcanvas";
 import { WEAPONS, type WeaponId } from "../config";
 import type { PlayerController } from "../player/PlayerController";
 import type { WeaponHolder } from "../player/WeaponHolder";
 import type { Hud } from "../ui/Hud";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
-import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_VISUALS, LEVELS, RUN_START, SHOP, WEAPON_STATS, type EnemyVisualId, type ShopItem } from "./config";
+import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, LEVELS, RUN_START, SHOP, WEAPON_STATS, type EnemySkinId, type EnemyVisualId, type ShopItem } from "./config";
 import { Effects } from "./Effects";
 import { EnemyManager, type BodySource, type Enemy } from "./EnemyManager";
 import { Hazards } from "./Hazards";
@@ -34,6 +34,16 @@ async function loadBody(app: AppBase, url: string): Promise<BodySource> {
   const resource = asset.resource as ContainerResource;
   const animations = (resource as unknown as { animations: Asset[] }).animations ?? [];
   return { resource, tracks: animations.map((a) => a.resource as AnimTrack) };
+}
+
+async function loadTexture(app: AppBase, url: string): Promise<Texture> {
+  const asset = await new Promise<Asset>((resolve, reject) => {
+    app.assets.loadFromUrl(url, "texture", (error, loaded) => {
+      if (error || !loaded) reject(new Error(`Failed to load ${url}: ${error}`));
+      else resolve(loaded);
+    });
+  });
+  return asset.resource as Texture;
 }
 
 /**
@@ -95,7 +105,13 @@ export class Gameplay {
         (error: unknown) => console.warn(`[Gameplay] enemy look ${visual} failed to load.`, error),
       );
     const first = new Set(ENEMIES.walker.visuals);
-    await Promise.all([...first].map((v) => load(v, ENEMY_LIMITS.prebuild)));
+    const skins = (Object.keys(ENEMY_SKINS) as EnemySkinId[]).map((skin) =>
+      loadTexture(this.app, `${base}${ENEMY_SKINS[skin]}`).then(
+        (texture) => this.enemies.addSkin(skin, texture),
+        (error: unknown) => console.warn(`[Gameplay] enemy skin ${skin} failed to load.`, error),
+      ),
+    );
+    await Promise.all([...[...first].map((v) => load(v, ENEMY_LIMITS.prebuild)), ...skins]);
     const rest = new Set(Object.values(ENEMIES).flatMap((def) => def.visuals).filter((v) => !first.has(v)));
     for (const visual of rest) void load(visual, visual === "vanguard" ? 1 : 2);
     this.startRun();
@@ -158,7 +174,7 @@ export class Gameplay {
     this.player.aimYawDeg = null;
     this.hud.openModal({
       title: "YOU DIED",
-      text: `${this.director.level.label} · ${this.stats.kills} kills · ${this.stats.scrap} scrap`,
+      text: `${this.director.level.label} · ${this.stats.kills} kills · $${this.stats.cash}`,
       actions: [{ label: "Restart run", onClick: () => this.startRun() }],
     });
   }
@@ -184,7 +200,7 @@ export class Gameplay {
     this.player.aimYawDeg = null;
     this.hud.openModal({
       title: "RUN COMPLETE",
-      text: `The outpost is quiet. ${this.stats.kills} kills · ${this.stats.scrap} scrap left.`,
+      text: `The outpost is quiet. ${this.stats.kills} kills · $${this.stats.cash} left.`,
       actions: [{ label: "New run", onClick: () => this.startRun() }],
     });
   }
@@ -206,7 +222,7 @@ export class Gameplay {
     });
   }
 
-  /** Between levels: spend scrap. */
+  /** Between levels: spend cash. */
   private openShop(next: number): void {
     this.phase = "shop";
     const s = this.stats;
@@ -215,18 +231,18 @@ export class Gameplay {
     this.hud.openModal({
       title: "SHOP",
       compact: true,
-      text: `Scrap: ${s.scrap} · HP ${Math.ceil(s.hp)}/${s.maxHp} · ${WEAPONS.list[s.weapon]?.label ?? s.weapon}`,
+      text: `Cash: $${s.cash} · HP ${Math.ceil(s.hp)}/${s.maxHp} · ${WEAPONS.list[s.weapon]?.label ?? s.weapon}`,
       cards: items.map((item) => ({
-        title: `${item.title} — ${item.cost}`,
+        title: `${item.title} — $${item.cost}`,
         text: soldOut(item) ? (item.weapon ? "Owned" : "HP full") : item.text,
         tag: item.weapon ? "weapon" : "",
         kind: item.weapon ? "weapon" : "player",
-        disabled: soldOut(item) || s.scrap < item.cost,
+        disabled: soldOut(item) || s.cash < item.cost,
       })),
       onCard: (i) => {
         const item = items[i];
-        if (s.scrap < item.cost || soldOut(item)) return;
-        s.scrap -= item.cost;
+        if (s.cash < item.cost || soldOut(item)) return;
+        s.cash -= item.cost;
         this.buy(item);
         this.openShop(next);
       },
@@ -253,16 +269,16 @@ export class Gameplay {
     const { x, z } = enemy.position;
     const drops = enemy.def.drops;
     if (enemy.def.boss) {
-      const pieces = DROPS.bossScrapPieces;
-      for (let i = 0; i < pieces; i++) this.pickups.drop("scrap", x, z, Math.ceil(enemy.def.scrap / pieces));
-    } else if (Math.random() < drops.scrap) this.pickups.drop("scrap", x, z, enemy.def.scrap);
+      const pieces = DROPS.bossCashPieces;
+      for (let i = 0; i < pieces; i++) this.pickups.drop("cash", x, z, Math.ceil(enemy.def.cash / pieces));
+    } else if (Math.random() < drops.cash) this.pickups.drop("cash", x, z, enemy.def.cash);
     if (Math.random() < drops.health) this.pickups.drop("health", x, z);
     if (Math.random() < drops.upgrade) this.pickups.drop("upgrade", x, z);
   }
 
   private collect(kind: PickupKind, value: number): void {
     const s = this.stats;
-    if (kind === "scrap") s.scrap += value;
+    if (kind === "cash") s.cash += value;
     else if (kind === "health") {
       s.heal(s.maxHp * DROPS.healthFraction);
       this.hud.showBanner("+HP", 0.6);
@@ -309,7 +325,7 @@ export class Gameplay {
     const s = this.stats;
     const d = this.director;
     this.hud.setHp(s.hp, s.maxHp);
-    this.hud.setScrap(s.scrap);
+    this.hud.setCash(s.cash);
     const ws = s.weaponStats();
     const label = WEAPONS.list[s.weapon]?.label ?? s.weapon;
     this.hud.setWeapon(label, this.gun.ammo, ws?.magazine ?? 0, this.gun.reloading > 0);

@@ -8,6 +8,9 @@ const CSS = `
 #hud .bar > span { position: absolute; inset: 0; text-align: center; font-size: 11px; line-height: 16px; text-shadow: 0 1px 2px #000; }
 #hud .level .bar > i { background: #e8a92f; }
 #hud .chips { display: flex; gap: 8px; justify-content: flex-end; }
+#hud .chip.cash { color: #8fe08a; font-variant-numeric: tabular-nums; }
+#hud .chip.cash.pop { animation: cash-pop 0.25s ease-out; }
+@keyframes cash-pop { 50% { transform: scale(1.18); } }
 #hud .chip { background: rgba(20, 15, 12, 0.6); border: 1px solid rgba(243, 231, 211, 0.35); border-radius: 8px; padding: 2px 8px; white-space: nowrap; }
 #hud .gear { pointer-events: auto; background: rgba(20, 15, 12, 0.6); border: 1px solid rgba(243, 231, 211, 0.35); color: inherit; border-radius: 8px; font: inherit; padding: 2px 8px; }
 #hud .boss { position: absolute; left: 12%; right: 12%; top: calc(max(10px, env(safe-area-inset-top)) + 58px); display: none; text-align: center; font-size: 12px; text-shadow: 0 1px 2px #000; }
@@ -55,7 +58,7 @@ interface Floater {
 }
 
 /**
- * Mobile gameplay HUD (DOM over the canvas): HP, level and its progress, scrap, weapon and ammo, the
+ * Mobile gameplay HUD (DOM over the canvas): HP, level and its progress, cash, weapon and ammo, the
  * boss health bar, floating damage numbers, a hurt flash and banners; plus the modal overlay used by
  * the level-clear, upgrade, shop and end screens (large touch targets). Debug stats hide behind the
  * gear button (or ?debug=1).
@@ -67,7 +70,7 @@ export class Hud {
   private readonly hpText: HTMLElement;
   private readonly level: HTMLElement;
   private readonly levelText: HTMLElement;
-  private readonly scrap: HTMLElement;
+  private readonly cash: HTMLElement;
   private readonly weapon: HTMLElement;
   private readonly boss: HTMLElement;
   private readonly bossBar: HTMLElement;
@@ -88,7 +91,7 @@ export class Hud {
       <div class="hurt"></div>
       <div class="top">
         <div class="bar hp"><i></i><span></span></div>
-        <div class="chips"><span class="chip scrap"></span><button type="button" class="gear" aria-label="debug">⚙</button></div>
+        <div class="chips"><span class="chip cash"></span><button type="button" class="gear" aria-label="debug">⚙</button></div>
         <div class="level"><div class="bar"><i></i><span></span></div></div>
         <div class="chips"><span class="chip weapon"></span></div>
       </div>
@@ -103,7 +106,7 @@ export class Hud {
     this.hpText = q(".hp > span");
     this.level = q(".level .bar > i");
     this.levelText = q(".level .bar > span");
-    this.scrap = q(".scrap");
+    this.cash = q(".cash");
     this.weapon = q(".weapon");
     this.boss = q(".boss");
     this.bossName = q(".boss > span");
@@ -131,8 +134,18 @@ export class Hud {
     this.levelText.textContent = `${label} · ${right}`;
   }
 
-  setScrap(amount: number): void {
-    this.scrap.textContent = `SCRAP ${amount}`;
+  private shownCash = -1;
+
+  setCash(amount: number): void {
+    if (amount === this.shownCash) return;
+    // A short pop when cash comes in (not on the first draw or when spending).
+    if (amount > this.shownCash && this.shownCash >= 0) {
+      this.cash.classList.remove("pop");
+      void this.cash.offsetWidth;
+      this.cash.classList.add("pop");
+    }
+    this.shownCash = amount;
+    this.cash.textContent = `$ ${amount}`;
   }
 
   setWeapon(label: string, ammo: number, magazine: number, reloading: boolean): void {

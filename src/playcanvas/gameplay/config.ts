@@ -69,6 +69,17 @@ export type EnemyVisualId =
   | "zombieMaleCasual" | "zombieMaleFarmer" | "zombieFemaleCasual" | "zombieFemaleOffice" | "zombieScientist"
   | "vanguard";
 
+/** Zombie colour skins: recoloured copies of the zombie pack's swatch palette (one small texture
+ * each, shared by every zombie model), built by scripts/build-zombies.mjs. */
+export type EnemySkinId = "green" | "darkgreen" | "purple" | "brown";
+
+export const ENEMY_SKINS: Record<EnemySkinId, string> = {
+  green: "models/zombies/skins/green.webp",
+  darkgreen: "models/zombies/skins/darkgreen.webp",
+  purple: "models/zombies/skins/purple.webp",
+  brown: "models/zombies/skins/brown.webp",
+};
+
 /** Clip names inside an enemy GLB. Several deaths: one is picked at random. */
 export interface EnemyClips {
   idle: string;
@@ -89,6 +100,8 @@ export interface EnemyVisual {
   clips: EnemyClips;
   /** Ground speed (m/s) at which the move clip, at rate 1 and scale 1, does not slide its feet. */
   moveSpeed: number;
+  /** Colour skins this model can wear (one is picked per spawn); none = its own texture. */
+  skins?: EnemySkinId[];
 }
 
 const ZOMBIE_CLIPS: EnemyClips = {
@@ -99,6 +112,7 @@ const ZOMBIE_CLIPS: EnemyClips = {
 /** Low-Poly Zombie Asset Pack bodies, built by scripts/build-zombies.mjs (see SOURCES.md). */
 const zombie = (file: string, scale: number): EnemyVisual => ({
   url: `models/zombies/${file}.glb`, scale, clips: ZOMBIE_CLIPS, moveSpeed: 1.35,
+  skins: ["green", "darkgreen", "purple", "brown"],
 });
 
 export const ENEMY_VISUALS: Record<EnemyVisualId, EnemyVisual> = {
@@ -137,9 +151,9 @@ export interface EnemyDef {
   /** Wind-up before the hit lands (the player can step out). */
   attackWindup: number;
   attackCooldown: number;
-  /** Scrap (currency) value when it drops scrap. */
-  scrap: number;
-  drops: { scrap: number; health: number; upgrade: number };
+  /** Cash (currency) value when it drops cash. */
+  cash: number;
+  drops: { cash: number; health: number; upgrade: number };
   boss?: boolean;
   /** Thrower / tank projectile. */
   projectile?: { damage: number; speed: number; radius: number; cooldown: number; minRange: number; maxRange: number };
@@ -156,37 +170,37 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
   walker: {
     label: "Walker", visuals: WALKER_LOOKS, scale: 1.1, scaleJitter: 0.05, behavior: "chaser",
     maxHp: 30, speed: 1.35, radius: 0.36, damage: 9, attackRange: 1.15, attackWindup: 0.42, attackCooldown: 1.2,
-    scrap: 1, drops: { scrap: 0.4, health: 0.025, upgrade: 0.006 },
+    cash: 1, drops: { cash: 0.4, health: 0.025, upgrade: 0.006 },
   },
   // Runner and Thrower: placeholder zombie looks until the Walker horde is signed off.
   runner: {
     label: "Runner", visuals: WALKER_LOOKS, scale: 1.0, scaleJitter: 0.03, behavior: "chaser",
     maxHp: 22, speed: 3.9, radius: 0.34, damage: 7, attackRange: 1.1, attackWindup: 0.3, attackCooldown: 0.9,
-    scrap: 1, drops: { scrap: 0.45, health: 0.03, upgrade: 0.008 },
+    cash: 1, drops: { cash: 0.45, health: 0.03, upgrade: 0.008 },
   },
   thrower: {
     label: "Thrower", visuals: ["zombieScientist"], scale: 1.15, behavior: "thrower",
     maxHp: 55, speed: 1.1, radius: 0.38, damage: 8, attackRange: 1.15, attackWindup: 0.45, attackCooldown: 1.4,
-    scrap: 2, drops: { scrap: 0.6, health: 0.05, upgrade: 0.012 },
+    cash: 2, drops: { cash: 0.6, health: 0.05, upgrade: 0.012 },
     clips: { special: "Zombie_Attack" },
     projectile: { damage: 14, speed: 5.5, radius: 1.3, cooldown: 3.6, minRange: 5, maxRange: 11 },
   },
   brute: {
     label: "Brute", visuals: ["vanguard"], scale: 1.75, tint: [0.72, 0.62, 0.55], behavior: "chaser", boss: true,
     maxHp: 240, speed: 1.05, radius: 0.7, damage: 24, attackRange: 1.9, attackWindup: 0.7, attackCooldown: 1.6,
-    scrap: 25, drops: { scrap: 1, health: 1, upgrade: 0 },
+    cash: 25, drops: { cash: 1, health: 1, upgrade: 0 },
   },
   charger: {
     label: "Charger", visuals: ["vanguard"], scale: 1.55, tint: [0.95, 0.6, 0.45], behavior: "charger", boss: true,
     maxHp: 420, speed: 1.6, radius: 0.62, damage: 18, attackRange: 1.8, attackWindup: 0.55, attackCooldown: 1.4,
-    scrap: 40, drops: { scrap: 1, health: 1, upgrade: 0 },
+    cash: 40, drops: { cash: 1, health: 1, upgrade: 0 },
     clips: { special: "Rifle_Charge_inplace" },
     charge: { cooldown: 5, telegraph: 1.0, speed: 12, distance: 13, recover: 1.6, damage: 28 },
   },
   tank: {
     label: "Mutant Tank", visuals: ["vanguard"], scale: 2.05, tint: [0.66, 0.55, 0.78], behavior: "tank", boss: true,
     maxHp: 900, speed: 0.95, radius: 0.85, damage: 30, attackRange: 2.2, attackWindup: 0.8, attackCooldown: 1.8,
-    scrap: 60, drops: { scrap: 1, health: 1, upgrade: 0 },
+    cash: 60, drops: { cash: 1, health: 1, upgrade: 0 },
     clips: { special: "Charged_Ground_Slam" },
     projectile: { damage: 20, speed: 6, radius: 1.8, cooldown: 5.5, minRange: 4, maxRange: 13 },
     slam: { cooldown: 6, telegraph: 1.1, radius: 3.6, damage: 32, triggerRange: 3.4 },
@@ -272,8 +286,8 @@ export const SPAWNING = {
 export const DROPS = {
   /** Health pickup heals this fraction of max HP. */
   healthFraction: 0.18,
-  /** Bosses drop this many scrap pickups (their `scrap` value is split between them). */
-  bossScrapPieces: 8,
+  /** Bosses drop this many cash pickups (their `cash` value is split between them). */
+  bossCashPieces: 8,
   /** Pickups vanish after this long (s). */
   lifetime: 25,
   pool: 40,

@@ -8,7 +8,7 @@ import type { WeaponId } from "../config";
 export class PlayerStats {
   maxHp = PLAYER_COMBAT.maxHp;
   hp = PLAYER_COMBAT.maxHp;
-  scrap = 0;
+  cash = 0;
   /** Fraction of incoming damage removed (0..0.75). */
   armor = 0;
   damageMult = 1;

@@ -1,5 +1,5 @@
-import { Entity, Vec3, type AnimTrack, type AppBase, type ContainerResource, type MeshInstance, type RenderComponent, type StandardMaterial } from "playcanvas";
-import { ENEMIES, ENEMY_LIMITS, ENEMY_VISUALS, type EnemyClips, type EnemyDef, type EnemyId, type EnemyVisualId } from "./config";
+import { Entity, Vec3, type AnimTrack, type Texture, type AppBase, type ContainerResource, type MeshInstance, type RenderComponent, type StandardMaterial } from "playcanvas";
+import { ENEMIES, ENEMY_LIMITS, ENEMY_VISUALS, type EnemyClips, type EnemyDef, type EnemyId, type EnemySkinId, type EnemyVisualId } from "./config";
 import type { Hazards } from "./Hazards";
 import type { NavField } from "./NavField";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
@@ -18,6 +18,8 @@ export interface Enemy {
   def: EnemyDef;
   /** The look this body wears (fixed per pooled body). */
   visual: EnemyVisualId;
+  /** Colour skin worn this spawn (null: the model's own texture). */
+  skin: EnemySkinId | null;
   /** The visual's clips with the type's overrides. */
   clips: EnemyClips;
   /** Type scale x visual scale x per-spawn jitter. */
@@ -74,6 +76,7 @@ export class EnemyManager {
   private readonly pools = new Map<string, Pool>();
   private readonly materials = new Map<string, { normal: StandardMaterial; flash: StandardMaterial }>();
   private bodyCount = 0;
+  private readonly skins = new Map<EnemySkinId, Texture>();
   private readonly root = new Entity("Enemies");
   private readonly steer = { x: 0, z: 0 };
   private readonly tmp = new Vec3();
@@ -99,6 +102,11 @@ export class EnemyManager {
     const pool: Pool = { visual, source, free: [], baseMaterial: null, bodies: new Set() };
     this.pools.set(visual, pool);
     for (let i = 0; i < count; i++) pool.free.push(this.build(pool));
+  }
+
+  /** Registers a loaded colour skin texture (spawns pick among the loaded ones). */
+  addSkin(skin: EnemySkinId, texture: Texture): void {
+    this.skins.set(skin, texture);
   }
 
   hasVisual(visual: EnemyVisualId): boolean {
@@ -137,7 +145,7 @@ export class EnemyManager {
     const first = meshes[0]?.material as StandardMaterial;
     pool.baseMaterial ??= first;
     const enemy: Enemy = {
-      id: "walker", def: ENEMIES.walker, visual: pool.visual, clips: ENEMY_VISUALS[pool.visual].clips, scale: 1,
+      id: "walker", def: ENEMIES.walker, visual: pool.visual, skin: null, clips: ENEMY_VISUALS[pool.visual].clips, scale: 1,
       root, model, meshes, normalMaterial: first, flashMaterial: first,
       active: false, hp: 1, maxHp: 1, damageScale: 1, position: new Vec3(), push: new Vec3(),
       state: "move", stateTime: 0, cooldown: 0, specialCooldown: 0, flash: 0, yaw: 0, dirX: 0, dirZ: 1, hitDone: false, marker: null, stuck: 0,
@@ -147,18 +155,20 @@ export class EnemyManager {
     return enemy;
   }
 
-  private materialsFor(id: EnemyId, base: StandardMaterial): { normal: StandardMaterial; flash: StandardMaterial } {
-    const key = `${id}/${base.name}/${base.id}`;
+  /** Materials per type, model and skin (shared by every body wearing that combination). */
+  private materialsFor(id: EnemyId, base: StandardMaterial, skin: EnemySkinId | null): { normal: StandardMaterial; flash: StandardMaterial } {
+    const key = `${id}/${base.name}/${base.id}/${skin}`;
     let m = this.materials.get(key);
     if (!m) {
       const tint = ENEMIES[id].tint;
-      const normal = tint ? (base.clone() as StandardMaterial) : base;
-      if (tint) {
-        normal.diffuse.set(tint[0], tint[1], tint[2]);
-        normal.update();
-      }
+      const texture = skin ? this.skins.get(skin) : undefined;
+      const normal = tint || texture ? (base.clone() as StandardMaterial) : base;
+      if (tint) normal.diffuse.set(tint[0], tint[1], tint[2]);
+      if (texture) normal.diffuseMap = texture;
+      if (normal !== base) normal.update();
       const flash = base.clone() as StandardMaterial;
       flash.diffuse.set(1, 1, 1);
+      if (texture) flash.diffuseMap = texture;
       flash.emissive.set(0.9, 0.35, 0.25);
       flash.update();
       m = { normal, flash };
@@ -209,7 +219,9 @@ export class EnemyManager {
     enemy.hitReact = 0;
     enemy.hitCooldown = 0;
     // Materials (per type) and animation clips.
-    const mats = this.materialsFor(id, pool.baseMaterial!);
+    const skins = (visual.skins ?? []).filter((k) => this.skins.has(k));
+    enemy.skin = skins.length ? skins[Math.floor(Math.random() * skins.length)] : null;
+    const mats = this.materialsFor(id, pool.baseMaterial!, enemy.skin);
     enemy.normalMaterial = mats.normal;
     enemy.flashMaterial = mats.flash;
     for (const mi of enemy.meshes) mi.material = mats.normal;

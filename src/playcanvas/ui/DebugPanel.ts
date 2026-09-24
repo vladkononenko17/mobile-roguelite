@@ -26,8 +26,8 @@ export interface TuneParam {
   derived?: boolean;
 }
 
-// v3: saved values from the closer camera no longer apply.
-const STORAGE_KEY = "dustline3d.tune.v3";
+// v4: saved values from the closer cameras no longer apply.
+const STORAGE_KEY = "dustline3d.tune.v4";
 
 function decimals(step: number): number {
   return step >= 1 ? 0 : Math.min(3, Math.ceil(-Math.log10(step)));
