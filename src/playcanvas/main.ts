@@ -1,5 +1,6 @@
 import { CHARACTERS, DEFAULT_CHARACTER, type CharacterId } from "./config";
 import { Game } from "./Game";
+import { pickBiome } from "./world/level/Biomes";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#app-canvas")!;
 const loading = document.querySelector<HTMLElement>("#loading")!;
@@ -36,6 +37,7 @@ const game = new Game({
   canvas,
   debugRoot: document.querySelector<HTMLElement>("#debug")!,
   character,
+  biome: pickBiome(),
   onProgress: (loaded, total) => {
     const mb = (loaded / 1048576).toFixed(1);
     const name = CHARACTERS[character].label;

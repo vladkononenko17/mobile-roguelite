@@ -10,7 +10,7 @@ import {
   Texture,
   type AppBase,
 } from "playcanvas";
-import { LIGHTING } from "../config";
+import type { LightingSpec } from "../config";
 
 type RGB = readonly [number, number, number];
 
@@ -33,7 +33,7 @@ function aimLight(entity: Entity, elevationDeg: number, azimuthDeg: number): voi
  * This gives PBR metals something to reflect and a directional ambient term without shipping
  * an HDRI. Replace with a real HDR once the art direction is locked.
  */
-function createEnvironmentAtlas(app: AppBase): Texture {
+function createEnvironmentAtlas(app: AppBase, LIGHTING: LightingSpec): Texture {
   const size = 32;
   const { zenith, horizon, ground, intensity } = LIGHTING.environment;
   const sun = sunDirection(LIGHTING.sun.elevationDeg, LIGHTING.sun.azimuthDeg);
@@ -95,9 +95,9 @@ export const CHARACTER_LIGHT_MASK = 8;
 
 /** Sun (PCF3 shadows) for everything; bounce fill and rim for the hero only (light mask); image-
  * based ambient and distance fog. */
-export function createLighting(app: AppBase): { sun: Entity } {
+export function createLighting(app: AppBase, LIGHTING: LightingSpec): { sun: Entity } {
   const scene = app.scene;
-  scene.envAtlas = createEnvironmentAtlas(app);
+  scene.envAtlas = createEnvironmentAtlas(app, LIGHTING);
   scene.skyboxIntensity = 1;
   scene.exposure = LIGHTING.exposure;
   // Only used by materials with useSkybox = false (the ground).

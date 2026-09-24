@@ -4,7 +4,8 @@ import type { PlayerController } from "../player/PlayerController";
 import type { WeaponHolder } from "../player/WeaponHolder";
 import type { Hud } from "../ui/Hud";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
-import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, RUN_START, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, WEAPON_STATS, upgradeText, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag } from "./config";
+import type { Placement2D } from "../world/level/Biome";
+import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, WEAPON_STATS, upgradeText, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag } from "./config";
 import { Effects } from "./Effects";
 import { EnemyManager, isAlive, type BodySource, type Enemy } from "./EnemyManager";
 import { Hazards } from "./Hazards";
@@ -86,6 +87,8 @@ export class Gameplay {
     private readonly weapons: WeaponHolder,
     private readonly hud: Hud,
     private readonly characterScale: () => number,
+    /** Where every wave starts (the map's open area). */
+    private readonly runStart: Placement2D,
     private readonly onTeleport: () => void = () => {},
   ) {
     this.effects = new Effects(app);
@@ -159,12 +162,13 @@ export class Gameplay {
   startWave(index: number): void {
     this.enemies.clear();
     this.pickups.clear();
-    // Every wave starts in the open yard.
-    this.player.entity.setPosition(RUN_START.x, 0, RUN_START.z);
-    this.player.yawDeg = RUN_START.yawDeg;
+    // Every wave starts in the map's open area.
+    const start = this.runStart;
+    this.player.entity.setPosition(start.x, 0, start.z);
+    this.player.yawDeg = start.yawDeg;
     this.player.velocity.set(0, 0, 0);
     this.onTeleport();
-    this.nav.build(RUN_START.x, RUN_START.z);
+    this.nav.build(start.x, start.z);
     this.hazards.reset();
     this.combat.reset();
     if (index > 0) this.stats.rerolls += LEVEL_UP.rerollsPerWave;

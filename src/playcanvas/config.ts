@@ -346,6 +346,10 @@ export const GROUND = {
     concrete: { base: "#7f7a72", dark: "#736e67", light: "#8a857c", speckDark: "#625e58", speckLight: "#96918a", specks: 450, slabs: 4, seam: "#5d5953" },
     /** Scorched, infected soil (destroyed area). */
     ash: { base: "#5e5450", dark: "#4f4643", light: "#6c605a", speckDark: "#3c3432", speckLight: "#6f7650", specks: 800 },
+    /** Facility deck plates (2 m panels with seams): the ORION station floor between the rooms. */
+    deck: { base: "#454c55", dark: "#3a4049", light: "#4f5761", speckDark: "#2d3239", speckLight: "#5d6570", specks: 260, slabs: 5, seam: "#262a30" },
+    /** Oil, soot and dried blood trodden into the facility floor. */
+    grime: { base: "#48463f", dark: "#3d3b35", light: "#524f47", speckDark: "#2e2926", speckLight: "#5e3a33", specks: 700 },
   },
 } as const;
 
@@ -425,6 +429,18 @@ export const OUTPOST = {
   /** Static batching cell: pieces sharing a material within this many metres merge into one draw.
    * The portrait gameplay view is only ~12 x 18 m, so small cells let the camera skip most of the
    * level's triangles for a few extra draw calls. */
+  batchCellMetres: 12,
+};
+
+/**
+ * Chapter 2 environment kit: the Molten Maps SciFi pack (CC0), merged into one GLB by
+ * scripts/build-facility-kit.mjs (colours graded darker and cooler at build time; see that script).
+ */
+export const FACILITY = {
+  url: "models/facility/facility-kit.glb",
+  brightness: 1,
+  /** Screens and light strips (the "glow" material). */
+  glowIntensity: 1.2,
   batchCellMetres: 12,
 };
 
@@ -558,13 +574,42 @@ export const IDLE = {
   hipDropMetres: 0.008,
 };
 
-export const LIGHTING = {
+type RGB = readonly [number, number, number];
+
+/** A directional light: colour, intensity and direction (elevation above the horizon, azimuth 0 =
+ * towards the camera, 90 = screen right). */
+interface DirectionalSpec {
+  color: RGB;
+  intensity: number;
+  elevationDeg: number;
+  azimuthDeg: number;
+}
+
+/** Lighting of one biome (world/Environment.ts). */
+export interface LightingSpec {
+  /** Key light for everything, with PCF3 shadows. */
+  sun: DirectionalSpec & { shadowResolution: number; shadowDistance: number; shadowBias: number; normalOffsetBias: number; shadowIntensity: number };
+  /** Hero-only shadowless fill and rim (light mask). */
+  fill: DirectionalSpec;
+  rim: DirectionalSpec;
+  /** Procedural sky used only for image-based ambient and metal reflections. */
+  environment: { zenith: RGB; horizon: RGB; ground: RGB; intensity: number };
+  exposure: number;
+  /** Constant ambient for the ground (which skips image-based lighting). */
+  groundAmbient: RGB;
+  /** Background and fog colour. */
+  clearColor: RGB;
+  fogStart: number;
+  fogEnd: number;
+}
+
+export const LIGHTING: LightingSpec = {
   /** Warm key light from the camera's front-left so the visible side of the hero is lit and
    * his shadow falls up-right, away from the joystick thumb. */
   sun: {
     // Warm late-afternoon sun: low enough for long readable shadows, not so low that tall walls
     // throw the play space into shade.
-    color: [1.0, 0.86, 0.68] as const,
+    color: [1.0, 0.86, 0.68],
     intensity: 2.5,
     elevationDeg: 38,
     azimuthDeg: 318,
@@ -578,34 +623,77 @@ export const LIGHTING = {
   /** Cool shadowless bounce from the opposite side so the shadow side keeps its shape. Fill and rim
    * only light the hero (light mask), so the ground and environment pay for a single light. */
   fill: {
-    color: [0.55, 0.68, 0.95] as const,
+    color: [0.55, 0.68, 0.95],
     intensity: 0.35,
     elevationDeg: 25,
     azimuthDeg: 140,
   },
   /** Shadowless back light that outlines head and shoulders against the ground. */
   rim: {
-    color: [1.0, 0.8, 0.6] as const,
+    color: [1.0, 0.8, 0.6],
     intensity: 1.3,
     elevationDeg: 30,
     azimuthDeg: 190,
   },
   /** Procedural dusty sky used only for image-based ambient + metal reflections. */
   environment: {
-    zenith: [0.32, 0.45, 0.62] as const,
-    horizon: [1.0, 0.72, 0.46] as const,
-    ground: [0.3, 0.22, 0.15] as const,
+    zenith: [0.32, 0.45, 0.62],
+    horizon: [1.0, 0.72, 0.46],
+    ground: [0.3, 0.22, 0.15],
     intensity: 0.55,
   },
   exposure: 1.0,
   /** Constant ambient for the ground, which skips image-based lighting: the ground covers the
    * whole screen and IBL cost ~25% of its shading for what is, on rough flat ground, only a soft
    * sky tint. Calibrated to match the IBL-lit ground's average colour. */
-  groundAmbient: [0.79, 0.95, 1.04] as const,
+  groundAmbient: [0.79, 0.95, 1.04],
   /** Dusty sand-coloured haze: only the far edge of the view fades (the map view turns fog off). */
-  clearColor: [0.62, 0.52, 0.4] as const,
+  clearColor: [0.62, 0.52, 0.4],
   fogStart: 31,
   fogEnd: 82,
+};
+
+/**
+ * ORION research facility (Chapter 2): cold overhead strip lighting instead of a sun, dark steel
+ * haze, and a cool rim so the hero separates from the blue-grey decks. Screens and light strips
+ * are self-lit (the kit's "glow" material) and coloured floor light pools come from AmbientFx.
+ */
+export const FACILITY_LIGHTING: LightingSpec = {
+  sun: {
+    // Overhead ceiling panels: high and slightly behind, so walls throw short shadows up-screen.
+    color: [0.8, 0.9, 1.0],
+    intensity: 1.7,
+    elevationDeg: 62,
+    azimuthDeg: 330,
+    shadowResolution: 1024,
+    shadowDistance: 30,
+    shadowBias: 0.2,
+    normalOffsetBias: 0.04,
+    shadowIntensity: 0.72,
+  },
+  fill: {
+    color: [0.55, 0.75, 1.0],
+    intensity: 0.45,
+    elevationDeg: 25,
+    azimuthDeg: 140,
+  },
+  rim: {
+    color: [0.62, 0.86, 1.0],
+    intensity: 1.5,
+    elevationDeg: 30,
+    azimuthDeg: 190,
+  },
+  environment: {
+    zenith: [0.2, 0.28, 0.4],
+    horizon: [0.3, 0.42, 0.52],
+    ground: [0.08, 0.1, 0.13],
+    intensity: 0.6,
+  },
+  exposure: 1.0,
+  groundAmbient: [0.42, 0.52, 0.66],
+  clearColor: [0.045, 0.06, 0.08],
+  fogStart: 31,
+  fogEnd: 78,
 };
 
 export const DEBUG = {

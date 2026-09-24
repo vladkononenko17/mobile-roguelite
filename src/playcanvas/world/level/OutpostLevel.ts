@@ -3,7 +3,9 @@ import { Entity } from "playcanvas";
 import type { GroundSpec } from "../Ground";
 import type { ModelKit, SpawnOptions } from "../props/ModelKit";
 import { declareCollider } from "../collision/CollisionWorld";
-import type { OutpostModel } from "../props/OutpostKit";
+import { OUTPOST_MODELS, type OutpostModel } from "../props/OutpostKit";
+import { LIGHTING, OUTPOST } from "../../config";
+import type { Biome, LevelBounds } from "./Biome";
 
 /**
  * LEVEL 1 - "Dustline Outpost": an abandoned industrial compound fortified by survivors, 48 x 80 m,
@@ -31,13 +33,6 @@ import type { OutpostModel } from "../props/OutpostKit";
  * Only layout data and small placement helpers live here; models, colliders and batching come from
  * the kit (ModelKit + OutpostKit), the ground from world/Ground.ts.
  */
-
-export interface LevelBounds {
-  minX: number;
-  maxX: number;
-  minZ: number;
-  maxZ: number;
-}
 
 export const BOUNDS: LevelBounds = { minX: -23.4, maxX: 23.4, minZ: -39.4, maxZ: 39.4 };
 
@@ -359,3 +354,18 @@ export function buildOutpostLevel(kit: ModelKit<OutpostModel>): Entity {
 
   return root;
 }
+
+/** Chapter 1: the Dustline outpost. */
+export const OUTPOST_BIOME: Biome<OutpostModel> = {
+  id: "outpost",
+  label: "Dustline Outpost",
+  kit: { url: OUTPOST.url, models: OUTPOST_MODELS, brightness: OUTPOST.brightness, batchCellMetres: OUTPOST.batchCellMetres },
+  lighting: LIGHTING,
+  ground: GROUND_SPEC,
+  bounds: BOUNDS,
+  spawn: SPAWN,
+  // Every wave starts in the open main yard.
+  runStart: { x: 0, z: 14, yawDeg: 180 },
+  ambient: AMBIENT,
+  build: buildOutpostLevel,
+};

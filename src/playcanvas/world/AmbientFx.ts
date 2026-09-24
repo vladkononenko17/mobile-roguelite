@@ -5,11 +5,17 @@ import {
 
 /**
  * One ambient emitter placed by a level (a biome lists its own): drifting dust motes over an area,
- * a smoke column / wisp from a fire or wreck, or occasional spark bursts from a generator or lamp.
- * Positions are world metres; `size` is the area (dust) or the emitter spread (smoke / sparks).
+ * a smoke column / wisp from a fire or wreck (or steam from a vent), occasional spark bursts from a
+ * generator or lamp, or a coloured pool of light on the floor under a screen or lamp (optionally
+ * pulsing, for alarms). Positions are world metres; `size` is the area (dust, glow) or the emitter
+ * spread (smoke / sparks).
  */
 export interface AmbientEmitter {
-  kind: "dust" | "smoke" | "sparks";
+  kind: "dust" | "smoke" | "sparks" | "glow";
+  /** Tint (linear 0..1): dust and smoke colour, glow light colour. */
+  color?: [number, number, number];
+  /** Glow: pulses per second (0 = steady). */
+  pulse?: number;
   x: number;
   y?: number;
   z: number;
@@ -51,9 +57,13 @@ export class AmbientFx {
   private readonly bursts: Burst[] = [];
   private readonly emitters: { entity: Entity; reach: number }[] = [];
   private readonly sparks: Spark[] = [];
+  private readonly pulses: { material: StandardMaterial; rate: number; base: number; phase: number }[] = [];
+  private readonly glowMaterials = new Map<string, StandardMaterial>();
+  private glowTexture: Texture | null = null;
+  private time = 0;
   private readonly tmp = new Vec3();
 
-  constructor(app: AppBase, emitters: AmbientEmitter[]) {
+  constructor(private readonly app: AppBase, emitters: AmbientEmitter[]) {
     app.root.addChild(this.root);
     const sprite = softDot(app);
     const hot = new StandardMaterial();
@@ -80,6 +90,11 @@ export class AmbientFx {
     this.emitters.push({ entity, reach: Math.max(...(e.size ?? [1, 1])) / 2 });
     const k = e.intensity ?? 1;
     const [sx, sz] = e.size ?? [1, 1];
+    if (e.kind === "glow") {
+      this.addGlow(entity, e);
+      return;
+    }
+    const [cr, cg, cb] = e.color ?? [1, 1, 1];
     const common = { colorMap: sprite, depthWrite: false, lighting: false, localSpace: false, emitterShape: EMITTERSHAPE_BOX };
     if (e.kind === "dust") {
       // Sun-lit motes drifting sideways, fading in and out (additive, so they read on any ground).
@@ -89,7 +104,7 @@ export class AmbientFx {
         velocityGraph: new CurveSet([[0, 0.12], [0, 0.02], [0, 0.05]]), velocityGraph2: new CurveSet([[0, 0.28], [0, 0.08], [0, -0.05]]),
         scaleGraph: new Curve([0, 0.07, 1, 0.1]), scaleGraph2: new Curve([0, 0.1, 1, 0.14]),
         alphaGraph: new Curve([0, 0, 0.3, 0.55, 0.7, 0.55, 1, 0]),
-        colorGraph: new CurveSet([[0, 0.55], [0, 0.48], [0, 0.36]]),
+        colorGraph: new CurveSet([[0, 0.55 * cr], [0, 0.48 * cg], [0, 0.36 * cb]]),
       });
     } else if (e.kind === "smoke") {
       // Soft grey puffs rising and widening, drifting with a light wind.
@@ -100,7 +115,7 @@ export class AmbientFx {
         velocityGraph2: new CurveSet([[0, 0.15, 1, 0.45], [0, 0.9, 1, 1.2], [0, 0.05, 1, 0.15]]),
         scaleGraph: new Curve([0, 0.5, 1, 2.0]), scaleGraph2: new Curve([0, 0.7, 1, 2.6]),
         alphaGraph: new Curve([0, 0, 0.15, 0.5 * Math.min(1, k), 1, 0]),
-        colorGraph: new CurveSet([[0, 0.5, 1, 0.72], [0, 0.47, 1, 0.68], [0, 0.43, 1, 0.62]]),
+        colorGraph: new CurveSet([[0, 0.5 * cr, 1, 0.72 * cr], [0, 0.47 * cg, 1, 0.68 * cg], [0, 0.43 * cb, 1, 0.62 * cb]]),
         startAngle: 0, startAngle2: 360,
       });
     } else {
@@ -108,6 +123,36 @@ export class AmbientFx {
       const every = e.every ?? 6;
       this.bursts.push({ entity, every, timer: every * (0.3 + Math.random()) });
     }
+  }
+
+  /**
+   * A pool of coloured light on the floor: an additive quad with a soft falloff, just above the
+   * ground decals. Steady pools of the same colour share a material; pulsing ones own theirs.
+   */
+  private addGlow(entity: Entity, e: AmbientEmitter): void {
+    const [r, g, b] = e.color ?? [0.4, 0.7, 1];
+    const k = e.intensity ?? 1;
+    const key = `${r},${g},${b},${k}`;
+    let material = e.pulse ? undefined : this.glowMaterials.get(key);
+    if (!material) {
+      this.glowTexture ??= softGlow(this.app);
+      material = new StandardMaterial();
+      material.diffuse.set(0, 0, 0);
+      material.emissive = new Color(r * k, g * k, b * k);
+      material.emissiveMap = this.glowTexture;
+      material.useLighting = false;
+      material.useSkybox = false;
+      material.useFog = true;
+      material.blendType = BLEND_ADDITIVE;
+      material.depthWrite = false;
+      material.update();
+      if (e.pulse) this.pulses.push({ material, rate: e.pulse, base: k, phase: Math.random() * 6.28 });
+      else this.glowMaterials.set(key, material);
+    }
+    const [sx, sz] = e.size ?? [4, 4];
+    entity.setPosition(e.x, e.y ?? 0.035, e.z);
+    entity.setLocalScale(sx, 1, sz);
+    entity.addComponent("render", { type: "plane", material, castShadows: false, receiveShadows: false });
   }
 
   private burst(at: Vec3): void {
@@ -125,6 +170,14 @@ export class AmbientFx {
 
   /** `focus`: the hero; only emitters near it simulate and draw (at most a few at a time). */
   update(dt: number, focus: Vec3): void {
+    this.time += dt;
+    for (const p of this.pulses) {
+      // Alarm beacon: a sharp rise and a slower fall each cycle.
+      const t = (this.time * p.rate + p.phase / 6.28) % 1;
+      const level = 0.25 + 0.75 * Math.pow(Math.max(0, Math.sin(t * Math.PI)), 2);
+      p.material.emissiveIntensity = p.base * level;
+      p.material.update();
+    }
     for (const { entity, reach } of this.emitters) {
       const p = entity.getPosition();
       const d = Math.hypot(p.x - focus.x, p.z - focus.z) - reach;
@@ -164,6 +217,26 @@ function softDot(app: AppBase): Texture {
   g.addColorStop(0, "rgba(255,255,255,1)");
   g.addColorStop(0.45, "rgba(255,255,255,0.55)");
   g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
+  const texture = new Texture(app.graphicsDevice, { format: PIXELFORMAT_SRGBA8, mipmaps: true });
+  texture.setSource(canvas);
+  return texture;
+}
+
+/** Opaque white-to-black radial falloff for additive light pools (emissive map). */
+function softGlow(app: AppBase): Texture {
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, size, size);
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  g.addColorStop(0, "rgb(255,255,255)");
+  g.addColorStop(0.35, "rgb(150,150,150)");
+  g.addColorStop(0.7, "rgb(40,40,40)");
+  g.addColorStop(1, "rgb(0,0,0)");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, size, size);
   const texture = new Texture(app.graphicsDevice, { format: PIXELFORMAT_SRGBA8, mipmaps: true });

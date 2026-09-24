@@ -1,4 +1,4 @@
-import { BoundingBox, Color, Entity, type AppBase, type Asset, type ContainerResource, type RenderComponent, type StandardMaterial } from "playcanvas";
+import { BLEND_NORMAL, BoundingBox, Color, Entity, type AppBase, type Asset, type ContainerResource, type RenderComponent, type StandardMaterial } from "playcanvas";
 import { declareCollider, type ColliderShape } from "../collision/CollisionWorld";
 
 /**
@@ -48,14 +48,16 @@ export class ModelKit<Id extends string> {
   constructor(
     private readonly app: AppBase,
     private readonly defs: Record<Id, KitModelDef>,
-    options: { name: string; batchCellMetres: number; brightness: number },
+    options: { name: string; batchCellMetres: number; brightness: number; glowIntensity?: number },
   ) {
     this.casterGroup = app.batcher.addGroup(`${options.name}-casters`, false, options.batchCellMetres).id;
     this.flatGroup = app.batcher.addGroup(`${options.name}-flat`, false, options.batchCellMetres).id;
     this.brightness = options.brightness;
+    this.glowIntensity = options.glowIntensity ?? 1;
   }
 
   private readonly brightness: number;
+  private readonly glowIntensity: number;
 
   async load(url: string): Promise<void> {
     const asset = await new Promise<Asset>((resolve, reject) => {
@@ -85,6 +87,8 @@ export class ModelKit<Id extends string> {
         render.castShadows = shadows;
         render.receiveShadows = true;
         render.batchGroupId = shadows ? this.casterGroup : this.flatGroup;
+        // Glass lets light through.
+        for (const meshInstance of render.meshInstances) if (meshInstance.material.name === "glass") meshInstance.castShadow = false;
       }
       this.templates.set(id, { entity, footprint: footprintOf(entity) });
     }
@@ -134,14 +138,33 @@ export class ModelKit<Id extends string> {
     return root;
   }
 
-  /** "palette" carries its colours per vertex (see scripts/build-outpost-kit.mjs). */
+  /**
+   * "palette" carries its colours per vertex (see scripts/build-outpost-kit.mjs). Kits may also
+   * have "glow" (self-lit vertex colours: screens, light strips) and "glass" (translucent vertex
+   * colours) - see scripts/build-facility-kit.mjs.
+   */
   private prepareMaterial(material: StandardMaterial): void {
-    if (material.name === "palette") {
-      material.diffuseVertexColor = true;
-      material.diffuseVertexColorChannel = "rgb";
-    }
-    material.diffuse = new Color(this.brightness, this.brightness, this.brightness);
+    const k = this.brightness;
     material.emissive = new Color(0, 0, 0);
+    if (material.name === "glow") {
+      material.diffuse = new Color(0, 0, 0);
+      material.emissiveVertexColor = true;
+      material.emissiveVertexColorChannel = "rgb";
+      material.emissive = new Color(this.glowIntensity, this.glowIntensity, this.glowIntensity);
+      material.useLighting = false;
+      material.useSkybox = false;
+    } else {
+      if (material.name === "palette" || material.name === "glass") {
+        material.diffuseVertexColor = true;
+        material.diffuseVertexColorChannel = "rgb";
+      }
+      material.diffuse = new Color(k, k, k);
+    }
+    if (material.name === "glass") {
+      material.opacity = 0.32;
+      material.blendType = BLEND_NORMAL;
+      material.depthWrite = false;
+    }
     material.update();
   }
 }

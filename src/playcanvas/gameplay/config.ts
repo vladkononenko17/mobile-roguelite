@@ -349,8 +349,6 @@ export function xpToNext(level: number): number {
   return level <= table.length ? table[level - 1] : table[table.length - 1] + (level - table.length) * XP.growth;
 }
 
-/** Where each run (and wave) starts: the open main yard in the middle of the outpost. */
-export const RUN_START = { x: 0, z: 14, yawDeg: 180 };
 
 export const SPAWNING = {
   /** Groups appear just outside the visible area (so they walk in soon, never pop in on screen): a

@@ -17,3 +17,5 @@ assets-src/city-survival-lite/
 assets-src/survivor-v3/
 # Low-Poly Zombie Asset Pack: keep the raw pack local only (built GLBs are in public/models/zombies/)
 assets-src/zombies-lowpoly/
+# Molten Maps SciFi pack (CC0, `space` release): raw GLBs stay local; the built kit is public/models/facility/
+assets-src/molten-scifi/

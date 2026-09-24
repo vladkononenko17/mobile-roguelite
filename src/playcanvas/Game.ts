@@ -12,7 +12,7 @@ import {
 } from "playcanvas";
 import { CameraController } from "./camera/CameraController";
 import { Gameplay } from "./gameplay/Gameplay";
-import { CAMERA, CHARACTER, CHARACTERS, DEBUG, DEFAULT_WEAPON, LIGHTING, OUTPOST, PLAYER, WEAPONS, type CharacterId, type CharacterModel, type WeaponId } from "./config";
+import { CAMERA, CHARACTER, CHARACTERS, DEBUG, DEFAULT_WEAPON, PLAYER, WEAPONS, type CharacterId, type CharacterModel, type WeaponId } from "./config";
 import { KeyboardMoveInput } from "./input/KeyboardMoveInput";
 import { TouchJoystickInput } from "./input/TouchJoystickInput";
 import { CombinedMoveInput, type MoveInputSource } from "./input/MoveInput";
@@ -30,16 +30,17 @@ import { createContactShadow } from "./world/ContactShadow";
 import { CHARACTER_LIGHT_MASK, createLighting } from "./world/Environment";
 import { ColliderDebugView } from "./world/collision/ColliderDebugView";
 import { CollisionWorld } from "./world/collision/CollisionWorld";
-import { AMBIENT, BOUNDS, buildOutpostLevel, GROUND_SPEC, SPAWN } from "./world/level/OutpostLevel";
+import type { Biome } from "./world/level/Biome";
+import { BIOMES, isBiomeId, switchBiome, type BiomeId } from "./world/level/Biomes";
 import { AmbientFx } from "./world/AmbientFx";
 import { ModelKit } from "./world/props/ModelKit";
-import { OUTPOST_MODELS, type OutpostModel } from "./world/props/OutpostKit";
 import { ResolutionGovernor } from "./perf/ResolutionGovernor";
 
 export interface GameOptions {
   canvas: HTMLCanvasElement;
   debugRoot: HTMLElement;
   character: CharacterId;
+  biome: BiomeId;
   onProgress: (loaded: number, total: number) => void;
 }
 
@@ -66,7 +67,8 @@ export class Game {
   private contactShadow!: Entity;
   private characterScale: number = CHARACTER.scale;
   private ground!: Ground;
-  private kit!: ModelKit<OutpostModel>;
+  private kit!: ModelKit<string>;
+  readonly biome: Biome;
   readonly collision = new CollisionWorld();
   colliderDebug!: ColliderDebugView;
   private resolution!: ResolutionGovernor;
@@ -76,6 +78,7 @@ export class Game {
   private readonly debugStats = { fps: 0, state: "", clip: "", speed: 0, x: 0, z: 0, yaw: 0, pixelRatio: 1, width: 0, height: 0, drawCalls: 0, triangles: 0, shadowCalls: 0 };
 
   constructor(private readonly options: GameOptions) {
+    this.biome = BIOMES[options.biome];
     this.app = new Application(options.canvas, {
       graphicsDeviceOptions: { antialias: true, alpha: false, powerPreference: "high-performance" },
     });
@@ -91,12 +94,13 @@ export class Game {
     app.start();
 
     this.resolution = new ResolutionGovernor(app);
-    createLighting(app);
-    this.kit = new ModelKit(app, OUTPOST_MODELS, { name: "Outpost", batchCellMetres: OUTPOST.batchCellMetres, brightness: OUTPOST.brightness });
-    this.ground = new Ground(app, GROUND_SPEC);
+    const biome = this.biome;
+    createLighting(app, biome.lighting);
+    this.kit = new ModelKit(app, biome.kit.models, { name: biome.id, ...biome.kit });
+    this.ground = new Ground(app, biome.ground);
 
     const cameraEntity = new Entity("Camera");
-    const [r, g, b] = LIGHTING.clearColor;
+    const [r, g, b] = biome.lighting.clearColor;
     cameraEntity.addComponent("camera", {
       clearColor: new Color(r, g, b),
       fov: CAMERA.fovDeg,
@@ -111,12 +115,12 @@ export class Game {
     const groundLoaded = this.ground.load();
     // The environment kit (~3 MB) downloads alongside the character; the level is built from it and
     // every placed model that declared itself solid joins the static collision world.
-    const levelLoaded = this.kit.load(`${import.meta.env.BASE_URL}${OUTPOST.url}`).then(
+    const levelLoaded = this.kit.load(`${import.meta.env.BASE_URL}${biome.kit.url}`).then(
       () => {
-        const layout = buildOutpostLevel(this.kit);
+        const layout = biome.build(this.kit);
         app.root.addChild(layout);
         this.collision.addStaticFrom(layout);
-        this.ambient = new AmbientFx(app, AMBIENT);
+        this.ambient = new AmbientFx(app, biome.ambient);
       },
       (error: unknown) => console.error("[Level] environment kit failed to load.", error),
     );
@@ -137,8 +141,8 @@ export class Game {
 
     // Player root sits on the ground and owns position/yaw; the GLB hierarchy stays untouched below it.
     const playerRoot = new Entity("Player");
-    playerRoot.setPosition(SPAWN.x, 0, SPAWN.z);
-    playerRoot.setEulerAngles(0, SPAWN.yawDeg, 0);
+    playerRoot.setPosition(biome.spawn.x, 0, biome.spawn.z);
+    playerRoot.setEulerAngles(0, biome.spawn.yawDeg, 0);
     playerRoot.addChild(character.model);
     this.contactShadow = createContactShadow(app);
     playerRoot.addChild(this.contactShadow);
@@ -196,13 +200,14 @@ export class Game {
       });
     }
     this.setupWeaponSelect();
+    this.setupBiomeSelect();
 
     this.colliderDebug = new ColliderDebugView(app, this.collision, playerRoot, () => this.player.radius);
     this.colliderDebug.enabled = DEBUG.DEBUG_COLLIDERS || new URLSearchParams(location.search).get("colliders") === "1";
     this.options.debugRoot.querySelector("[data-colliders]")?.addEventListener("click", () => {
       this.colliderDebug.enabled = !this.colliderDebug.enabled;
     });
-    this.player.bounds = BOUNDS;
+    this.player.bounds = biome.bounds;
 
     // DEV MAP VIEW: tune panel button, the M key, or ?map=1.
     this.options.debugRoot.querySelector("[data-mapview]")?.addEventListener("click", () => this.setMapView(!this.camera.mapView));
@@ -213,7 +218,7 @@ export class Game {
 
     // The roguelite run on this arena (enemies, combat, levels). ?sandbox=1 skips it.
     if (new URLSearchParams(location.search).get("sandbox") !== "1") {
-      this.gameplay = new Gameplay(app, this.camera.entity, this.collision, BOUNDS, this.player, this.weapons, new Hud(), () => this.characterScale, () => this.camera.snap());
+      this.gameplay = new Gameplay(app, this.camera.entity, this.collision, biome.bounds, this.player, this.weapons, new Hud(), () => this.characterScale, biome.runStart, () => this.camera.snap());
       this.gameplay.init().catch((error: unknown) => console.error("[Gameplay] failed to start.", error));
     }
     app.on("update", this.update, this);
@@ -320,7 +325,16 @@ export class Game {
     });
   }
 
+  /** Tune-panel map picker (reloads with ?biome=<id>). */
+  private setupBiomeSelect(): void {
+    const select = this.options.debugRoot.querySelector<HTMLSelectElement>("[data-biome]");
+    if (!select) return;
+    for (const [id, biome] of Object.entries(BIOMES)) select.add(new Option(biome.label, id, false, id === this.biome.id));
+    select.addEventListener("change", () => { if (isBiomeId(select.value)) switchBiome(select.value); });
+  }
+
   setMapView(on: boolean): void {
+    const BOUNDS = this.biome.bounds;
     const sun = (this.app.root.findByName("Sun") as Entity).light!;
     if (on) {
       this.camera.mapView = {
@@ -334,7 +348,7 @@ export class Game {
     } else {
       this.camera.mapView = null;
       this.app.scene.fog.type = FOG_LINEAR;
-      sun.shadowDistance = LIGHTING.sun.shadowDistance;
+      sun.shadowDistance = this.biome.lighting.sun.shadowDistance;
     }
   }
 
