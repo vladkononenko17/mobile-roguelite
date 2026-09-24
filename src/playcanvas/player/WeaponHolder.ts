@@ -27,6 +27,7 @@ export class WeaponHolder {
   /** Runtime replacements for WEAPONS entries (the tune panel's weapon tuner). */
   private readonly overrides = new Map<WeaponId, WeaponDef>();
   private readonly handRoll = new Quat();
+  private readonly muzzleLocal = new Vec3(0, 0, -0.3);
   current: WeaponId | null = null;
 
   /** Called with the held weapon's upper-body clip (or null) whenever the weapon changes. */
@@ -131,7 +132,37 @@ export class WeaponHolder {
       this.hand.addChild(held);
     }
     this.held = held;
+    this.measureMuzzle(held);
     this.onChange();
+  }
+
+  /** Finds the muzzle: the front-most (-Z) point of the weapon's meshes, in the weapon's space. */
+  private measureMuzzle(held: Entity): void {
+    const inverse = held.getWorldTransform().clone().invert();
+    const corner = new Vec3();
+    const local = new Vec3();
+    let best = Infinity;
+    let sumY = 0, count = 0;
+    for (const render of held.findComponents("render") as RenderComponent[]) {
+      for (const mi of render.meshInstances) {
+        const box = mi.aabb;
+        const c = box.center, h = box.halfExtents;
+        for (let i = 0; i < 8; i++) {
+          corner.set(c.x + (i & 1 ? h.x : -h.x), c.y + (i & 2 ? h.y : -h.y), c.z + (i & 4 ? h.z : -h.z));
+          inverse.transformPoint(corner, local);
+          if (local.z < best) best = local.z;
+          sumY += local.y;
+          count++;
+        }
+      }
+    }
+    this.muzzleLocal.set(0, count ? sumY / count : 0, Number.isFinite(best) ? best : -0.3);
+  }
+
+  /** World position of the held weapon's muzzle (null when empty-handed). */
+  muzzle(out: Vec3): Vec3 | null {
+    if (!this.held) return null;
+    return this.held.getWorldTransform().transformPoint(this.muzzleLocal, out);
   }
 
   /** The held weapon's one-shot attack clip, if it has one. */

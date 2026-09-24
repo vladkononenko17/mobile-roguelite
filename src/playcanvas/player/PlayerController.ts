@@ -21,6 +21,15 @@ export class PlayerController {
   readonly velocity = new Vec3();
   /** Current facing in degrees around +Y. */
   yawDeg = 0;
+  /** While set (combat aiming), the hero turns to face this yaw instead of the movement direction. */
+  aimYawDeg: number | null = null;
+  aimTurnSharpness = 18;
+  /** Movement speed multiplier (upgrades). */
+  speedMultiplier = 1;
+  /** When false, input is ignored (menus, death). */
+  controlsEnabled = true;
+  /** Unit ground direction the player is steering toward (zero when not steering). */
+  readonly moveDirection = new Vec3();
   /** Collision circle radius (metres); set from PLAYER.colliderRadius x character scale. */
   radius = PLAYER.colliderRadius;
   /** Safety clamp for the player position (the level's own colliders are the real edge). */
@@ -45,6 +54,7 @@ export class PlayerController {
 
   update(dt: number): void {
     this.moveInput.read(this.input);
+    if (!this.controlsEnabled) this.input.set(0, 0);
     let magnitude = Math.min(1, this.input.length());
     if (magnitude < PLAYER.inputDeadZone) magnitude = 0;
 
@@ -59,7 +69,9 @@ export class PlayerController {
     const dirX = ix * cos - iy * sin;
     const dirZ = -ix * sin - iy * cos;
 
-    const targetSpeed = magnitude * PLAYER.runSpeed;
+    const targetSpeed = magnitude * PLAYER.runSpeed * this.speedMultiplier;
+    if (magnitude > 0) this.moveDirection.set(dirX, 0, dirZ);
+    else this.moveDirection.set(0, 0, 0);
     this.targetVelocity.set(dirX * targetSpeed, 0, dirZ * targetSpeed);
 
     const sharpness = targetSpeed > this.velocity.length() ? PLAYER.acceleration : PLAYER.deceleration;
@@ -67,8 +79,13 @@ export class PlayerController {
     this.velocity.lerp(this.velocity, this.targetVelocity, blend);
     if (magnitude === 0 && this.velocity.lengthSq() < 1e-4) this.velocity.set(0, 0, 0);
 
-    // Face where the player is asking to go, not where momentum carries them.
-    if (magnitude > 0) {
+    // Face the aim target while shooting; otherwise where the player is asking to go (not where
+    // momentum carries them).
+    if (this.aimYawDeg !== null) {
+      const turnBlend = 1 - Math.exp(-this.aimTurnSharpness * dt);
+      this.yawDeg += deltaAngle(this.yawDeg, this.aimYawDeg) * turnBlend;
+      this.yawDeg = ((this.yawDeg % 360) + 360) % 360;
+    } else if (magnitude > 0) {
       const targetYaw = Math.atan2(dirX, dirZ) * math.RAD_TO_DEG;
       const turnBlend = 1 - Math.exp(-PLAYER.turnSharpness * dt);
       this.yawDeg += deltaAngle(this.yawDeg, targetYaw) * turnBlend;

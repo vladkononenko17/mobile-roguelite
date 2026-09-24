@@ -11,6 +11,7 @@ import {
   type RenderComponent,
 } from "playcanvas";
 import { CameraController } from "./camera/CameraController";
+import { Gameplay } from "./gameplay/Gameplay";
 import { CAMERA, CHARACTER, CHARACTERS, DEBUG, DEFAULT_WEAPON, LIGHTING, OUTPOST, PLAYER, WEAPONS, type CharacterId, type CharacterModel, type WeaponId } from "./config";
 import { KeyboardMoveInput } from "./input/KeyboardMoveInput";
 import { TouchJoystickInput } from "./input/TouchJoystickInput";
@@ -22,6 +23,7 @@ import { PlayerController } from "./player/PlayerController";
 import { WeaponHands } from "./player/WeaponHands";
 import { WeaponHolder } from "./player/WeaponHolder";
 import { DebugPanel, type TuneParam } from "./ui/DebugPanel";
+import { Hud } from "./ui/Hud";
 import { WeaponTuner } from "./ui/WeaponTuner";
 import { Ground } from "./world/Ground";
 import { createContactShadow } from "./world/ContactShadow";
@@ -56,6 +58,8 @@ export class Game {
   private aimTwist: AimTwist | null = null;
   private weaponHands: WeaponHands | null = null;
   private weaponTuner: WeaponTuner | null = null;
+  /** The roguelite run (null in the ?sandbox=1 movement sandbox). */
+  gameplay: Gameplay | null = null;
   weapons!: WeaponHolder;
   private contactShadow!: Entity;
   private characterScale: number = CHARACTER.scale;
@@ -203,6 +207,12 @@ export class Game {
     if (new URLSearchParams(location.search).get("map") === "1") this.setMapView(true);
 
     this.debug = new DebugPanel(this.options.debugRoot, this.tuneParams());
+
+    // The roguelite run on this arena (enemies, combat, levels). ?sandbox=1 skips it.
+    if (new URLSearchParams(location.search).get("sandbox") !== "1") {
+      this.gameplay = new Gameplay(app, this.camera.entity, this.collision, BOUNDS, this.player, this.weapons, new Hud(), () => this.characterScale);
+      this.gameplay.init().catch((error: unknown) => console.error("[Gameplay] failed to start.", error));
+    }
     app.on("update", this.update, this);
   }
 
@@ -219,6 +229,8 @@ export class Game {
     this.aimTwist?.apply(this.weapons.profile?.aimTwist ?? false, this.player.yawDeg, aimWeight, dt);
     const runBlend = Math.min(1, this.player.speed / PLAYER.runSpeed);
     this.weaponHands?.update(this.weapons, aimWeight, this.player.yawDeg, runBlend);
+    // Combat after the hands are posed (tracers start at the posed muzzle).
+    this.gameplay?.update(dt);
     const device = this.app.graphicsDevice;
     this.camera.update(dt, device.width / Math.max(1, device.height));
 
