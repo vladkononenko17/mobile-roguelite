@@ -1,5 +1,5 @@
 import { Entity, Quat, Vec3, type AppBase, type Asset, type ContainerResource, type RenderComponent, type StandardMaterial } from "playcanvas";
-import { WEAPONS, type WeaponId } from "../config";
+import { WEAPONS, type WeaponDef, type WeaponId, type WeaponSocket } from "../config";
 import { CHARACTER_LIGHT_MASK } from "../world/Environment";
 
 /**
@@ -68,13 +68,19 @@ export class WeaponHolder {
       this.onChange();
       return;
     }
-    const { position, rotation, rollDeg } = WEAPONS.list[id];
+    const { position, rotation, rollDeg, scale = 1, sockets = {} }: WeaponDef = WEAPONS.list[id];
     const held = new Entity(`weapon-${id}`);
     held.addChild(template.clone());
     held.setLocalPosition(position[0], position[1], position[2]);
     // Roll about the hand's finger axis (+Y) after the base grip rotation.
     const grip = new Quat().setFromEulerAngles(rotation[0], rotation[1], rotation[2]);
     held.setLocalRotation(new Quat().setFromAxisAngle(Vec3.UP, rollDeg).mul(grip));
+    held.setLocalScale(scale, scale, scale);
+    for (const [name, point] of Object.entries(sockets) as [WeaponSocket, [number, number, number]][]) {
+      const socket = new Entity(name);
+      socket.setLocalPosition(point[0], point[1], point[2]);
+      held.addChild(socket);
+    }
     this.hand.addChild(held);
     this.held = held;
     this.onChange();
@@ -83,6 +89,14 @@ export class WeaponHolder {
   /** The held weapon's one-shot attack clip, if it has one. */
   get attackClip(): string | null {
     return this.current && this.held ? WEAPONS.list[this.current].attack : null;
+  }
+
+  /**
+   * A socket on the held weapon (see WEAPONS sockets), e.g. `leftHandGrip` as the target for
+   * left-hand IK. Null when nothing is held or the weapon has no such socket.
+   */
+  socket(name: WeaponSocket): Entity | null {
+    return (this.held?.findByName(name) as Entity | null) ?? null;
   }
 
   /** The held weapon's root (for tuning its grip). */

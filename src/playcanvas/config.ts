@@ -61,13 +61,23 @@ export type CharacterId = keyof typeof CHARACTERS;
  * pose (Run_and_Shoot). `position` is in hand-bone space (metres, before the character scale).
  * `pose` is the clip played on the arms and torso while the weapon is held (null = normal arms);
  * `attack` is the full-body clip played once by the attack action (Space / on-screen button).
+ * Optional `scale` resizes the weapon. Optional `sockets` are points in the weapon's own space
+ * (muzzle -Z): `rightHandGrip` where the right palm holds it, `leftHandGrip` where the left palm
+ * supports it. They become child entities of the held weapon (WeaponHolder.socket) for left-hand IK.
  */
 export const WEAPONS = {
   url: "models/weapons/weapons.glb",
   handBone: "mixamorig:RightHand",
   list: {
     // "assetpack-free" (textured)
-    rifle: { label: "Assault rifle", node: "assault_rifle_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
+    // Two-handed: pistol grip in the right palm, handguard on the left palm in Run_and_Shoot. The
+    // transform places `rightHandGrip` on the right palm and aims the grip -> `leftHandGrip` line at
+    // the left palm (measured from the clip; the palms stay ~0.31 m apart in hand space), rolled to
+    // bring the butt toward the shoulder while keeping the rifle close to upright.
+    rifle: {
+      label: "Assault rifle", node: "assault_rifle_2", position: [-0.0394, 0.1168, -0.013], rotation: [40.14, -52.92, 77.24], rollDeg: 0, pose: "Run_and_Shoot", attack: null,
+      sockets: { rightHandGrip: [0, -0.02, 0.045], leftHandGrip: [0, 0.06, -0.257] },
+    },
     shotgun: { label: "Shotgun", node: "shotgun_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
     sniper: { label: "Sniper rifle", node: "sniper_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
     pistol: { label: "Pistol", node: "pistol_1", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
@@ -90,8 +100,23 @@ export const WEAPONS = {
 } satisfies {
   url: string;
   handBone: string;
-  list: Record<string, { label: string; node: string; position: [number, number, number]; rotation: [number, number, number]; rollDeg: number; pose: string | null; attack: string | null }>;
+  list: Record<string, WeaponDef>;
 };
+
+type Vec3Tuple = [number, number, number];
+export type WeaponSocket = "rightHandGrip" | "leftHandGrip";
+
+export interface WeaponDef {
+  label: string;
+  node: string;
+  position: Vec3Tuple;
+  rotation: Vec3Tuple;
+  rollDeg: number;
+  scale?: number;
+  sockets?: Partial<Record<WeaponSocket, Vec3Tuple>>;
+  pose: string | null;
+  attack: string | null;
+}
 
 export type WeaponId = keyof typeof WEAPONS.list;
 export const DEFAULT_WEAPON: WeaponId | null = "rifle";
