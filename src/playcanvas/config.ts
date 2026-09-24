@@ -302,6 +302,21 @@ export const ANIMATION = {
   maxPlaybackRate: 1.35,
 };
 
+/**
+ * Aim correction while a gun is held (player/AimTwist.ts): the spine twists so the gun points where
+ * the hero faces. `share` splits the twist over the spine bones (lower back to chest).
+ */
+export const AIM = {
+  maxTwistDeg: 30,
+  /** Higher follows faster; ~8 settles in a quarter second. */
+  smoothing: 8,
+  spine: [
+    { bone: "mixamorig:Spine", share: 0.3 },
+    { bone: "mixamorig:Spine1", share: 0.35 },
+    { bone: "mixamorig:Spine2", share: 0.35 },
+  ],
+};
+
 /** Procedural breathing idle generated from the rest pose (see player/BreathingIdle.ts). */
 export const IDLE = {
   procedural: true,
