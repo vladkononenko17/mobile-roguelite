@@ -181,7 +181,7 @@ export class Gameplay {
     this.player.aimYawDeg = null;
     this.hud.openModal({
       title: "YOU DIED",
-      text: `${this.director.level.label} · ${this.stats.kills} kills · $${this.stats.cash}`,
+      text: `${this.director.level.label} · ${this.stats.kills} kills · ${this.stats.cash}$`,
       actions: [{ label: "Restart run", onClick: () => this.startRun() }],
     });
   }
@@ -207,7 +207,7 @@ export class Gameplay {
     this.player.aimYawDeg = null;
     this.hud.openModal({
       title: "RUN COMPLETE",
-      text: `The outpost is quiet. ${this.stats.kills} kills · $${this.stats.cash} left.`,
+      text: `The outpost is quiet. ${this.stats.kills} kills · ${this.stats.cash}$ left.`,
       actions: [{ label: "New run", onClick: () => this.startRun() }],
     });
   }
@@ -238,9 +238,9 @@ export class Gameplay {
     this.hud.openModal({
       title: "SHOP",
       compact: true,
-      text: `Cash: $${s.cash} · HP ${Math.ceil(s.hp)}/${s.maxHp} · ${WEAPONS.list[s.weapon]?.label ?? s.weapon}`,
+      text: `Cash: ${s.cash}$ · HP ${Math.ceil(s.hp)}/${s.maxHp} · ${WEAPONS.list[s.weapon]?.label ?? s.weapon}`,
       cards: items.map((item) => ({
-        title: `${item.title} — $${item.cost}`,
+        title: `${item.title} — ${item.cost}$`,
         text: soldOut(item) ? (item.weapon ? "Owned" : "HP full") : item.text,
         tag: item.weapon ? "weapon" : "",
         kind: item.weapon ? "weapon" : "player",

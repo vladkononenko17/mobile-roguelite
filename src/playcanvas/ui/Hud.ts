@@ -233,8 +233,8 @@ export class Hud {
     // A pop and flash when cash comes in (not on the first draw or when spending).
     if (amount > this.shownCash && this.shownCash >= 0) restartAnimation(this.money, "pop");
     this.shownCash = amount;
-    // GTA III money: eight zero-padded digits.
-    const text = `$${String(Math.max(0, Math.floor(amount))).padStart(8, "0")}`;
+    // Just the amount, growing with the run: "0$", "20$", "1250$".
+    const text = `${Math.max(0, Math.floor(amount))}$`;
     for (const el of this.moneyText) el.textContent = text;
   }
 
