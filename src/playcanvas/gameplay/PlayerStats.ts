@@ -1,4 +1,4 @@
-import { PLAYER_COMBAT, WEAPON_STATS, xpToNext, type UpgradeId, type WeaponStats } from "./config";
+import { LEVEL_UP, PLAYER_COMBAT, WEAPON_STATS, xpToNext, type UpgradeId, type UpgradeTag, type WeaponStats } from "./config";
 import type { WeaponId } from "../config";
 
 /**
@@ -21,6 +21,33 @@ export class PlayerStats {
   moveSpeedMult = 1;
   penetration = 0;
   critChance = 0;
+  /** Crit damage multiplier; crits pierce this many extra enemies. */
+  critMult = 2;
+  critPierce = 0;
+  healOnKill = 0;
+  // Behaviour upgrades (read by gameplay/Combat.ts; 0 = off).
+  /** Burn damage per second applied by hits; burning enemies take +this fraction damage. */
+  burnDps = 0;
+  burnVulnerability = 0;
+  /** 1: burning enemies set nearby ones on fire when they die. */
+  fireSpread = 0;
+  /** Chance that a kill explodes, its damage, and whether explosions ignite. */
+  explodeChance = 0;
+  explodeDamage = 12;
+  explosionsIgnite = 0;
+  /** Extra enemies a bullet bounces to; extra bullets per shot. */
+  ricochet = 0;
+  extraBullets = 0;
+  /** Chain lightning: chance per hit and targets per arc. */
+  chainChance = 0;
+  chainTargets = 2;
+  drones = 0;
+  /** Multiplies drone, arc and shock damage. */
+  techDamageMult = 1;
+  /** Fraction of speed removed from hit enemies. */
+  slowPct = 0;
+  /** Damage of the reload shock pulse (0 = off). */
+  shockDamage = 0;
   /** Every 5th bullet deals bonus damage (0 = off, 1 = on). */
   fifthShot = 0;
   /** Chance per kill to heal `vampireHeal`. */
@@ -29,6 +56,12 @@ export class PlayerStats {
   weapon: WeaponId = "pistol";
   readonly owned = new Set<WeaponId>(["pistol"]);
   readonly upgrades = new Map<UpgradeId, number>();
+  /** Upgrades removed from the level-up offers for this run. */
+  readonly banished = new Set<UpgradeId>();
+  /** Highest synergy tier reached per tag (its effects already applied). */
+  readonly synergyTiers = new Map<UpgradeTag, number>();
+  rerolls = LEVEL_UP.rerolls;
+  banishes = LEVEL_UP.banishes;
   invulnerable = 0;
   kills = 0;
   /** Character level and XP toward the next one. */

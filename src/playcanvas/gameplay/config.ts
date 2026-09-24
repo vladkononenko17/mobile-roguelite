@@ -386,12 +386,17 @@ export const DROPS = {
 
 export type UpgradeId =
   | "rapidFire" | "heavyRounds" | "extendedMag" | "vitality" | "quickHands" | "piercing" | "adrenaline"
+  | "incendiary" | "volatile" | "ricochet" | "splitShot" | "headhunter" | "chainLightning" | "drone" | "cryo" | "shockReload" | "bloodthirst"
+  | "dragonsBreath"
   | "armor" | "crit" | "medkit" | "fifthShot" | "vampire";
 
-/** PlayerStats numbers an upgrade may change. */
+/** PlayerStats numbers an upgrade (or a synergy tier) may change. */
 export type UpgradeStat =
   | "damageMult" | "fireRateMult" | "reloadTimeMult" | "magazineBonus" | "moveSpeedMult" | "penetration"
-  | "critChance" | "armor" | "maxHp" | "fifthShot" | "vampireChance";
+  | "critChance" | "critMult" | "critPierce" | "armor" | "maxHp" | "fifthShot" | "vampireChance" | "healOnKill"
+  | "burnDps" | "burnVulnerability" | "fireSpread" | "explodeChance" | "explodeDamage" | "explosionsIgnite"
+  | "ricochet" | "extraBullets"
+  | "chainChance" | "chainTargets" | "drones" | "techDamageMult" | "slowPct" | "shockDamage";
 
 /**
  * One effect: `add` or `mul` a stat (clamped to `max` / `min`); `heal` restores HP (absolute) and
@@ -405,11 +410,14 @@ export type UpgradeEffect =
 /** Where an upgrade can be offered: level-up cards and/or rare world pickups. */
 export type UpgradePool = "levelUp" | "drop";
 
+/** Build families: owning several upgrades of one tag unlocks its synergy tiers (SYNERGIES). */
+export type UpgradeTag = "fire" | "precision" | "tech";
+
 /**
  * One upgrade, pure data: presentation (name, stat line, value, icon, category colour, rarity), its
- * effects per stack, the stack limit and the pools it appears in. Upgrades.ts applies effects
- * generically; the level-up cards, pickup badges and toasts draw from these fields. A new upgrade is
- * one entry here (plus an icon if none fits).
+ * effects per stack, the stack limit, its build tags and the pools it appears in. Upgrades.ts applies
+ * effects generically; combat reads the resulting PlayerStats numbers (gameplay/Combat.ts). The
+ * level-up cards, pickup badges and toasts draw from these fields. A new upgrade is one entry here.
  */
 export interface UpgradeDef {
   id: UpgradeId;
@@ -426,29 +434,57 @@ export interface UpgradeDef {
   maxStacks?: number;
   /** Default: both pools. */
   pools?: UpgradePool[];
+  tags?: UpgradeTag[];
+  /** Evolution: only offered once these upgrades have these many stacks; then always offered first. */
+  requires?: { id: UpgradeId; stacks: number }[];
 }
 
 export const UPGRADES: UpgradeDef[] = [
-  // Level-up pool.
-  { id: "rapidFire", name: "Rapid Fire", stat: "Fire Rate", value: "+15%", icon: "rapid", category: "weapon", rarity: "common", maxStacks: 5,
+  // ---- Level-up pool: stats.
+  { id: "rapidFire", name: "Rapid Fire", stat: "Fire Rate", value: "+15%", icon: "bullets", category: "weapon", rarity: "common", maxStacks: 5, tags: ["precision"],
     effects: [{ stat: "fireRateMult", op: "mul", value: 1.15 }] },
   { id: "heavyRounds", name: "Heavy Rounds", stat: "Weapon Damage", value: "+20%", icon: "bullet", category: "weapon", rarity: "common", maxStacks: 5,
     effects: [{ stat: "damageMult", op: "mul", value: 1.2 }] },
-  { id: "extendedMag", name: "Extended Magazine", stat: "Magazine", value: "+3 rounds", icon: "magazine", category: "weapon", rarity: "common", maxStacks: 4,
+  { id: "extendedMag", name: "Extended Magazine", stat: "Magazine", value: "+3 rounds", icon: "magazine", category: "weapon", rarity: "common", maxStacks: 4, tags: ["tech"],
     effects: [{ stat: "magazineBonus", op: "add", value: 3 }] },
   { id: "vitality", name: "Vitality", stat: "Max HP", value: "+20", icon: "heart", category: "player", rarity: "common", maxStacks: 5,
     effects: [{ stat: "maxHp", op: "add", value: 20 }, { heal: 20 }] },
-  { id: "quickHands", name: "Quick Hands", stat: "Reload Time", value: "-20%", icon: "reload", category: "weapon", rarity: "common", maxStacks: 3,
+  { id: "quickHands", name: "Quick Hands", stat: "Reload Time", value: "-20%", icon: "reload", category: "weapon", rarity: "common", maxStacks: 3, tags: ["tech"],
     effects: [{ stat: "reloadTimeMult", op: "mul", value: 0.8 }] },
-  { id: "piercing", name: "Piercing Round", stat: "Bullets Pierce", value: "+1 enemy", icon: "pierce", category: "weapon", rarity: "rare", maxStacks: 3,
+  { id: "piercing", name: "Piercing Round", stat: "Bullets Pierce", value: "+1 enemy", icon: "pierce", category: "weapon", rarity: "rare", maxStacks: 3, tags: ["precision"],
     effects: [{ stat: "penetration", op: "add", value: 1 }] },
   { id: "adrenaline", name: "Adrenaline", stat: "Movement Speed", value: "+10%", icon: "boot", category: "player", rarity: "common", maxStacks: 3,
     effects: [{ stat: "moveSpeedMult", op: "mul", value: 1.1 }] },
-  // Rare world pickups only.
+  // ---- Level-up pool: behaviour-changing.
+  { id: "incendiary", name: "Incendiary Rounds", stat: "Hits Set Enemies on Fire", value: "+4 burn/s", icon: "flame", category: "special", rarity: "rare", maxStacks: 3, tags: ["fire"],
+    effects: [{ stat: "burnDps", op: "add", value: 4 }] },
+  { id: "volatile", name: "Volatile Corpses", stat: "Kills Explode (18 dmg)", value: "+30% chance", icon: "burst", category: "special", rarity: "rare", maxStacks: 3, tags: ["fire"],
+    effects: [{ stat: "explodeChance", op: "add", value: 0.3, max: 1 }, { stat: "explodeDamage", op: "add", value: 6 }] },
+  { id: "ricochet", name: "Ricochet", stat: "Bullets Bounce to", value: "+1 enemy", icon: "ricochet", category: "weapon", rarity: "rare", maxStacks: 3, tags: ["precision"],
+    effects: [{ stat: "ricochet", op: "add", value: 1 }] },
+  { id: "splitShot", name: "Split Shot", stat: "Bullets per Shot", value: "+1", icon: "split", category: "weapon", rarity: "epic", maxStacks: 2, tags: ["precision"],
+    effects: [{ stat: "extraBullets", op: "add", value: 1 }] },
+  { id: "headhunter", name: "Headhunter", stat: "Crit Chance +8%", value: "Crit Damage +50%", icon: "target", category: "weapon", rarity: "common", maxStacks: 3, tags: ["precision"],
+    effects: [{ stat: "critChance", op: "add", value: 0.08, max: 0.7 }, { stat: "critMult", op: "add", value: 0.5 }] },
+  { id: "chainLightning", name: "Chain Lightning", stat: "Hits Arc to 2 Enemies", value: "+15% chance", icon: "rapid", category: "special", rarity: "rare", maxStacks: 3, tags: ["tech"],
+    effects: [{ stat: "chainChance", op: "add", value: 0.15, max: 1 }] },
+  { id: "drone", name: "Sentry Drone", stat: "Orbiting Drone", value: "+1 drone", icon: "drone", category: "special", rarity: "epic", maxStacks: 3, tags: ["tech"],
+    effects: [{ stat: "drones", op: "add", value: 1 }] },
+  { id: "cryo", name: "Cryo Rounds", stat: "Hits Slow Enemies", value: "+15% slow", icon: "snowflake", category: "special", rarity: "common", maxStacks: 3, tags: ["tech"],
+    effects: [{ stat: "slowPct", op: "add", value: 0.15, max: 0.6 }] },
+  { id: "shockReload", name: "Shock Reload", stat: "Reloading Blasts Nearby", value: "+25 damage", icon: "pulse", category: "special", rarity: "rare", maxStacks: 2, tags: ["tech"],
+    effects: [{ stat: "shockDamage", op: "add", value: 25 }] },
+  { id: "bloodthirst", name: "Bloodthirst", stat: "Heal on Kill", value: "+1 HP", icon: "drop", category: "player", rarity: "common", maxStacks: 3,
+    effects: [{ stat: "healOnKill", op: "add", value: 1 }] },
+  // ---- Evolution (offered once its requirements are met).
+  { id: "dragonsBreath", name: "Dragon's Breath", stat: "Kills Explode in Flames ·", value: "Burn x2", icon: "flame", category: "special", rarity: "epic", maxStacks: 1, pools: ["levelUp"], tags: ["fire"],
+    requires: [{ id: "incendiary", stacks: 3 }, { id: "volatile", stacks: 1 }],
+    effects: [{ stat: "burnDps", op: "mul", value: 2 }, { stat: "explodeChance", op: "add", value: 1, max: 1 }, { stat: "explosionsIgnite", op: "add", value: 1, max: 1 }, { stat: "explodeDamage", op: "add", value: 10 }] },
+  // ---- Rare world pickups only.
   { id: "armor", name: "Scrap Plating", stat: "Damage Resistance", value: "+10%", icon: "shield", category: "player", rarity: "common", maxStacks: 5, pools: ["drop"],
     effects: [{ stat: "armor", op: "add", value: 0.1, max: 0.6 }] },
   { id: "crit", name: "Steady Hand", stat: "Critical Chance", value: "+10%", icon: "target", category: "weapon", rarity: "rare", maxStacks: 5, pools: ["drop"],
-    effects: [{ stat: "critChance", op: "add", value: 0.1, max: 0.6 }] },
+    effects: [{ stat: "critChance", op: "add", value: 0.1, max: 0.7 }] },
   { id: "medkit", name: "Field Medkit", stat: "Restore HP", value: "30%", icon: "medkit", category: "player", rarity: "common", pools: ["drop"],
     effects: [{ healFraction: 0.3 }] },
   { id: "fifthShot", name: "Fifth Shot", stat: "Every 5th Bullet", value: "+150% damage", icon: "star", category: "special", rarity: "epic", maxStacks: 1, pools: ["drop"],
@@ -456,6 +492,67 @@ export const UPGRADES: UpgradeDef[] = [
   { id: "vampire", name: "Scavenger", stat: "Heal 5 HP on Kill", value: "6% chance", icon: "drop", category: "special", rarity: "rare", maxStacks: 3, pools: ["drop"],
     effects: [{ stat: "vampireChance", op: "add", value: 0.06, max: 0.2 }] },
 ];
+
+/**
+ * Synergies: each upgrade stack with a tag counts toward that tag; reaching a tier's count applies its
+ * effects once (the level-up screen shows progress, a toast announces the tier).
+ */
+export interface SynergyTier {
+  count: number;
+  name: string;
+  text: string;
+  effects: UpgradeEffect[];
+}
+
+export const SYNERGIES: Record<UpgradeTag, { label: string; color: string; icon: UpgradeIcon; tiers: SynergyTier[] }> = {
+  fire: {
+    label: "Fire", color: "#e8653a", icon: "flame",
+    tiers: [
+      { count: 3, name: "Kindling", text: "Burning enemies take +25% damage", effects: [{ stat: "burnVulnerability", op: "add", value: 0.25 }] },
+      { count: 5, name: "Wildfire", text: "Burning enemies spread fire when they die", effects: [{ stat: "fireSpread", op: "add", value: 1, max: 1 }] },
+    ],
+  },
+  precision: {
+    label: "Precision", color: "#e8c35a", icon: "target",
+    tiers: [
+      { count: 3, name: "Marksman", text: "Crit Chance +10%", effects: [{ stat: "critChance", op: "add", value: 0.1, max: 0.8 }] },
+      { count: 5, name: "Deadeye", text: "Crits pierce +1 enemy", effects: [{ stat: "critPierce", op: "add", value: 1 }] },
+    ],
+  },
+  tech: {
+    label: "Tech", color: "#4fb8ff", icon: "drone",
+    tiers: [
+      { count: 3, name: "Overcharge", text: "Drones, arcs and shocks +30% damage", effects: [{ stat: "techDamageMult", op: "mul", value: 1.3 }] },
+      { count: 5, name: "Overclock", text: "+1 drone, arcs hit +1 enemy", effects: [{ stat: "drones", op: "add", value: 1 }, { stat: "chainTargets", op: "add", value: 1 }] },
+    ],
+  },
+};
+
+/** Level-up screen: rerolls and banishes per run (+ rerolls gained at every wave start). */
+export const LEVEL_UP = { rerolls: 2, rerollsPerWave: 1, banishes: 2 };
+
+/**
+ * Tuning of the behaviour upgrades (the per-stack numbers are in UPGRADES; these are the fixed ones).
+ */
+export const COMBAT_FX = {
+  burnSeconds: 3,
+  burnTick: 0.5,
+  explodeRadius: 2.2,
+  /** Explosions triggered per frame at most (chain reactions spread over frames). */
+  maxExplosionsPerFrame: 6,
+  ricochetRange: 5.5,
+  ricochetDamage: 0.7,
+  splitSpreadDeg: 8,
+  chainRange: 4.5,
+  chainDamage: 0.6,
+  droneDamage: 9,
+  droneInterval: 0.9,
+  droneRange: 9,
+  slowSeconds: 1.5,
+  shockRadius: 3,
+  shockKnockback: 0.6,
+  fireSpreadRadius: 2.2,
+};
 
 /** "Damage Resistance +10%" */
 export const upgradeText = (u: UpgradeDef): string => `${u.stat} ${u.value}`;

@@ -1,6 +1,7 @@
 import { Vec3 } from "playcanvas";
 import type { ScreenProjector } from "../camera/ScreenProjector";
-import { TARGETING, type WeaponStats } from "./config";
+import { COMBAT_FX, TARGETING, type WeaponStats } from "./config";
+import type { Combat } from "./Combat";
 import type { Effects } from "./Effects";
 import { isAlive, type Enemy, type EnemyManager } from "./EnemyManager";
 import { blocked } from "./NavField";
@@ -53,10 +54,6 @@ export class PlayerGun {
   /** Filled every update for the debug overlay. */
   readonly debug: TargetingDebug = { left: 0, top: 0, right: 0, bottom: 0, target: null };
 
-  /** Damage number / feedback hook: (world position, amount, crit). */
-  onHit: (position: Vec3, amount: number, crit: boolean) => void = () => {};
-  /** Called with the enemy after a killing shot. */
-  onKill: (enemy: Enemy) => void = () => {};
 
   constructor(
     private readonly enemies: EnemyManager,
@@ -64,6 +61,7 @@ export class PlayerGun {
     private readonly collision: CollisionWorld,
     private readonly stats: PlayerStats,
     private readonly camera: ScreenProjector,
+    private readonly combat: Combat,
   ) {}
 
   /** Refills the magazine (new weapon, new level). */
@@ -94,7 +92,12 @@ export class PlayerGun {
       if (this.reloading <= 0) this.ammo = stats.magazine;
     }
     // Empty: reload at once. Partly empty with nothing to shoot for a moment: top up.
-    if (this.reloading <= 0 && this.ammo < stats.magazine && (this.ammo <= 0 || this.idle > 1.5)) this.reloading = stats.reloadSeconds;
+    if (this.reloading <= 0 && this.ammo < stats.magazine && (this.ammo <= 0 || this.idle > 1.5)) {
+      this.reloading = stats.reloadSeconds;
+      // Shock Reload: a pulse around the hero as the magazine drops.
+      const p = player.entity.getPosition();
+      this.combat.shockwave(p.x, p.z);
+    }
     const position = player.entity.getPosition();
     this.origin.set(position.x, SHOT_HEIGHT * scale, position.z);
     this.target = this.pickTarget(position.x, position.z, stats, dt);
@@ -155,6 +158,20 @@ export class PlayerGun {
     );
   }
 
+  /** Nearest living enemy within `range` of (x, z) that is visible in the combat viewport (drones). */
+  nearestVisible(x: number, z: number, range: number): Enemy | null {
+    let best: Enemy | null = null;
+    let bestDistance = range;
+    for (const e of this.enemies.alive) {
+      if (!isAlive(e)) continue;
+      const d = Math.hypot(e.position.x - x, e.position.z - z);
+      if (d >= bestDistance || !this.onScreen(e, 0)) continue;
+      best = e;
+      bestDistance = d;
+    }
+    return best;
+  }
+
   private updateDebug(x: number, z: number): void {
     const { width, height } = this.camera;
     const d = this.debug;
@@ -200,8 +217,12 @@ export class PlayerGun {
     // A casing flies out to the right (the hero faces the target when firing).
     this.effects.casing(muzzle, -Math.cos(baseAngle), Math.sin(baseAngle));
     const bonus = this.stats.fifthShot && this.shotCount % 5 === 0 ? 2.5 : 1;
-    for (let p = 0; p < stats.pellets; p++) {
-      const spread = ((Math.random() * 2 - 1) * stats.spreadDeg * Math.PI) / 180;
+    // Split Shot adds bullets fanned out around the aim (+-8, +-16 degrees...).
+    const extra = Math.round(this.stats.extraBullets);
+    const bullets = stats.pellets + extra;
+    for (let p = 0; p < bullets; p++) {
+      const fan = p < stats.pellets ? 0 : Math.ceil((p - stats.pellets + 1) / 2) * (p % 2 ? 1 : -1) * COMBAT_FX.splitSpreadDeg;
+      const spread = (((Math.random() * 2 - 1) * stats.spreadDeg + fan) * Math.PI) / 180;
       const angle = baseAngle + spread;
       const dx = Math.sin(angle), dz = Math.cos(angle);
       const range = this.wallDistance(dx, dz, stats.range);
@@ -210,13 +231,12 @@ export class PlayerGun {
       let pierce = stats.penetration;
       for (const hit of this.hits) {
         const crit = Math.random() < this.stats.critChance;
-        const vulnerable = this.enemies.vulnerable(hit.enemy) ? 1.5 : 1;
-        const amount = Math.round(stats.damage * bonus * (crit ? 2 : 1) * vulnerable);
+        const amount = stats.damage * bonus * (crit ? this.stats.critMult : 1);
         const point = this.end.set(this.origin.x + dx * hit.t, muzzle.y, this.origin.z + dz * hit.t);
         this.effects.bloodHit(point, dx, dz);
-        this.onHit(point, amount, crit || bonus > 1);
-        if (this.enemies.damage(hit.enemy, amount, this.origin.x, this.origin.z, stats.knockback)) this.onKill(hit.enemy);
+        this.combat.bulletHit(hit.enemy, amount, crit || bonus > 1, this.origin.x, this.origin.z, stats.knockback);
         travel = hit.t;
+        if (crit) pierce += Math.round(this.stats.critPierce);
         if (pierce-- <= 0) break;
       }
       this.end.set(this.origin.x + dx * travel, muzzle.y, this.origin.z + dz * travel);

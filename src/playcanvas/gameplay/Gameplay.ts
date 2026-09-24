@@ -4,7 +4,7 @@ import type { PlayerController } from "../player/PlayerController";
 import type { WeaponHolder } from "../player/WeaponHolder";
 import type { Hud } from "../ui/Hud";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
-import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, RUN_START, WAVES, XP, SHOP, WEAPON_STATS, upgradeText, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeId } from "./config";
+import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, RUN_START, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, WEAPON_STATS, upgradeText, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag } from "./config";
 import { Effects } from "./Effects";
 import { EnemyManager, isAlive, type BodySource, type Enemy } from "./EnemyManager";
 import { Hazards } from "./Hazards";
@@ -14,8 +14,10 @@ import { Pickups, type PickupKind } from "./Pickups";
 import { PlayerStats } from "./PlayerStats";
 import { SpawnDirector } from "./SpawnDirector";
 import { TargetDebug } from "../ui/TargetDebug";
+import { Combat } from "./Combat";
+import { Drones } from "./Drones";
 import { ScreenProjector } from "../camera/ScreenProjector";
-import { applyUpgrade, availableUpgrades, rollUpgrades, upgradeStacks } from "./Upgrades";
+import { applyUpgrade, availableUpgrades, rollUpgrades, tagCounts, upgradeStacks, type SynergyReached } from "./Upgrades";
 
 interface Bounds {
   minX: number;
@@ -72,6 +74,8 @@ export class Gameplay {
   private readonly params = new URLSearchParams(location.search);
   private readonly targetDebug = new TargetDebug();
   private readonly projector: ScreenProjector;
+  private readonly combat: Combat;
+  private readonly drones: Drones;
 
   constructor(
     private readonly app: AppBase,
@@ -92,14 +96,16 @@ export class Gameplay {
     this.enemies = new EnemyManager(app, collision, this.nav, this.hazards);
     this.director = new SpawnDirector(this.enemies, this.nav, bounds);
     this.projector = new ScreenProjector(camera.camera!);
-    this.gun = new PlayerGun(this.enemies, this.effects, collision, this.stats, this.projector);
+    this.combat = new Combat(this.enemies, this.effects, this.stats);
+    this.combat.onHit = (position, amount, style) => this.hud.damageNumber(position, String(amount), style);
+    this.gun = new PlayerGun(this.enemies, this.effects, collision, this.stats, this.projector, this.combat);
+    this.drones = new Drones(app, this.effects, this.combat, this.gun);
     this.enemies.onPlayerHit = (damage) => this.hurtPlayer(damage);
     this.hazards.onImpact = (position, radius, damage) => {
       const p = this.player.entity.getPosition();
       if (Math.hypot(p.x - position.x, p.z - position.z) <= radius) this.hurtPlayer(damage);
       this.effects.spark(position, radius * 0.8);
     };
-    this.gun.onHit = (position, amount, crit) => this.hud.damageNumber(position, String(amount), crit ? "crit" : "normal");
     this.enemies.onDeath = (enemy) => this.onEnemyDeath(enemy);
     this.enemies.onStranded = (enemy) => this.director.relocate(enemy, this.player.entity.getPosition(), this.projector);
   }
@@ -160,6 +166,8 @@ export class Gameplay {
     this.onTeleport();
     this.nav.build(RUN_START.x, RUN_START.z);
     this.hazards.reset();
+    this.combat.reset();
+    if (index > 0) this.stats.rerolls += LEVEL_UP.rerollsPerWave;
     this.director.start(index);
     this.gun.reset();
     this.phase = "combat";
@@ -228,36 +236,91 @@ export class Gameplay {
    * Level-up: the game pauses (time scale 0), three upgrade cards from the level-up pool; the pick is
    * applied and play resumes (several pending level-ups are chosen one after another).
    */
+  private offers: UpgradeDef[] = [];
+
+  /**
+   * Level-up: the game pauses (time scale 0) and three upgrade cards from the level-up pool are
+   * offered (evolutions first when unlocked); the player can reroll all or banish one (limited per
+   * run), then picks one: it is applied (with any synergy tier it completes) and play resumes.
+   * Several pending level-ups are chosen one after another.
+   */
   private openLevelUp(): void {
-    const offers = rollUpgrades(this.stats, XP.choices, "levelUp");
-    if (!offers.length) {
+    this.offers = rollUpgrades(this.stats, XP.choices, "levelUp");
+    if (!this.offers.length) {
       this.pendingLevelUps = 0;
       return;
     }
     this.choosing = true;
     this.app.timeScale = 0;
     this.player.aimYawDeg = null;
-    const level = this.stats.level - this.pendingLevelUps + 1;
-    this.hud.openModal({
-      title: "LEVEL UP",
-      text: `Level ${level} · choose one`,
-      levelUp: true,
-      cards: offers.map((u) => {
-        const stacks = upgradeStacks(this.stats, u.id);
+    this.showLevelUp();
+  }
+
+  private showLevelUp(): void {
+    const s = this.stats;
+    const counts = tagCounts(s);
+    this.hud.openLevelUp({
+      level: s.level - this.pendingLevelUps + 1,
+      cards: this.offers.map((u) => {
+        const stacks = upgradeStacks(s, u.id);
         return {
-          title: u.name, text: upgradeText(u), kind: u.category, icon: u.icon,
+          name: u.name, text: upgradeText(u), icon: u.icon, category: u.category, evolution: !!u.requires,
           tag: stacks > 0 ? `Lv ${stacks} → ${stacks + 1}` : u.rarity === "common" ? "new" : `new · ${u.rarity}`,
+          tags: (u.tags ?? []).map((t) => ({ label: SYNERGIES[t].label, color: SYNERGIES[t].color })),
         };
       }),
-      onCard: (i) => {
-        const def = applyUpgrade(this.stats, offers[i].id);
-        this.pendingLevelUps--;
-        this.hud.closeModal();
-        this.choosing = false;
-        this.app.timeScale = 1;
-        this.hud.showUpgrade(def, this.player.entity);
+      synergies: (Object.keys(SYNERGIES) as UpgradeTag[]).map((tag) => {
+        const tier = s.synergyTiers.get(tag) ?? 0;
+        const next = SYNERGIES[tag].tiers[tier];
+        return { label: SYNERGIES[tag].label, color: SYNERGIES[tag].color, count: counts[tag], next: next ? next.count : null, tier };
+      }),
+      rerolls: s.rerolls,
+      banishes: s.banishes,
+      onPick: (i) => this.pickLevelUp(i),
+      onReroll: () => {
+        if (s.rerolls <= 0) return;
+        s.rerolls--;
+        const fresh = rollUpgrades(s, XP.choices, "levelUp", this.offers.map((u) => u.id));
+        // Not enough new options left: allow repeats of the current ones.
+        this.offers = fresh.length >= Math.min(XP.choices, this.offers.length) ? fresh : rollUpgrades(s, XP.choices, "levelUp");
+        this.showLevelUp();
+      },
+      onBanish: (i) => {
+        if (s.banishes <= 0) return;
+        s.banishes--;
+        s.banished.add(this.offers[i].id);
+        const [replacement] = rollUpgrades(s, 1, "levelUp", this.offers.map((u) => u.id));
+        if (replacement) this.offers[i] = replacement;
+        else this.offers.splice(i, 1);
+        if (!this.offers.length) this.offers = rollUpgrades(s, XP.choices, "levelUp");
+        if (!this.offers.length) {
+          this.pickLevelUp(-1);
+          return;
+        }
+        this.showLevelUp();
       },
     });
+  }
+
+  /** Applies offer `i` (-1: nothing left to offer), closes the screen and resumes play. */
+  private pickLevelUp(i: number): void {
+    this.pendingLevelUps--;
+    this.hud.closeModal();
+    this.choosing = false;
+    this.app.timeScale = 1;
+    if (i >= 0) this.announce(applyUpgrade(this.stats, this.offers[i].id));
+  }
+
+  /** Upgrade toast, then a toast per synergy tier it completed. */
+  private announce(result: { def: UpgradeDef; synergies: SynergyReached[] }): void {
+    this.hud.showUpgrade(result.def, this.player.entity);
+    for (const { tag, tier, level } of result.synergies) {
+      const syn = SYNERGIES[tag];
+      this.hud.showUpgrade({
+        name: `${syn.label} synergy ${"I".repeat(level)} · ${tier.name}`, stat: tier.text, value: "", icon: syn.icon,
+        category: "special", rarity: "common", color: syn.color,
+      }, this.player.entity);
+    }
   }
 
   /** Between waves: spend cash. */
@@ -303,6 +366,7 @@ export class Gameplay {
   /** Called exactly once per enemy death (EnemyManager.die): XP, heal-on-kill, drops. */
   private onEnemyDeath(enemy: Enemy): void {
     this.stats.kills++;
+    if (this.stats.healOnKill > 0) this.stats.heal(this.stats.healOnKill);
     this.pendingLevelUps += this.stats.gainXp(enemy.def.xp);
     if (this.stats.vampireChance > 0 && Math.random() < this.stats.vampireChance) this.stats.heal(this.stats.vampireHeal);
     // Drops: most zombies leave nothing, so the ground stays readable.
@@ -333,7 +397,7 @@ export class Gameplay {
     } else {
       // The pickup carries the upgrade it shows; reroll if that one got maxed out meanwhile.
       const pick = upgrade && availableUpgrades(s, "drop").some((u) => u.id === upgrade) ? upgrade : rollUpgrades(s, 1, "drop")[0]?.id;
-      if (pick) this.hud.showUpgrade(applyUpgrade(s, pick), this.player.entity);
+      if (pick) this.announce(applyUpgrade(s, pick));
     }
   }
 
@@ -356,6 +420,7 @@ export class Gameplay {
       this.player.speedMultiplier = this.stats.moveSpeedMult;
       this.director.update(dt, position, this.projector);
       this.enemies.update(dt, position, this.stats.alive);
+      this.combat.update(dt);
       this.hazards.update(dt);
       if (this.director.phase === "complete") this.waveComplete();
     } else if (this.phase === "cleared") {
@@ -364,6 +429,7 @@ export class Gameplay {
       if (this.clearTimer <= 0 && !this.choosing) this.afterWave();
     }
     this.gun.update(dt, this.player, this.weapons, this.characterScale(), combat && this.stats.alive);
+    this.drones.update(dt, position, this.stats.drones, this.characterScale(), combat && this.stats.alive);
     if (combat || this.phase === "cleared") this.pickups.update(dt, position, this.characterScale(), this.phase === "cleared");
     this.effects.update(dt);
     // Level-ups wait for combat (or the wave-complete pause) and a living hero.

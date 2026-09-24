@@ -4,12 +4,25 @@
  * No image files; each icon is a few hundred bytes.
  */
 export type UpgradeIcon =
-  | "shield" | "heart" | "medkit" | "bullet" | "rapid" | "magazine" | "reload" | "boot" | "target" | "pierce" | "star" | "drop";
+  | "shield" | "heart" | "medkit" | "bullet" | "rapid" | "magazine" | "reload" | "boot" | "target" | "pierce" | "star" | "drop"
+  | "flame" | "burst" | "ricochet" | "split" | "bullets" | "drone" | "snowflake" | "pulse";
 
 export type UpgradeCategory = "weapon" | "player" | "special";
 export type UpgradeRarity = "common" | "rare" | "epic";
 
 const circle = (cx: number, cy: number, r: number) => `M${cx - r} ${cy}A${r} ${r} 0 1 0 ${cx + r} ${cy}A${r} ${r} 0 1 0 ${cx - r} ${cy}Z`;
+/** A small cartridge centred on x. */
+const cartridge = (x: number) => `M${x} 3C${x + 2} 4.5 ${x + 2.4} 6.5 ${x + 2.4} 9V10H${x - 2.4}V9C${x - 2.4} 6.5 ${x - 2} 4.5 ${x} 3Z M${x - 2.4} 11.3H${x + 2.4}V20.5H${x - 2.4}Z`;
+/** Snowflake: three crossing bars with tips (drawn nonzero). */
+const snowflake = (() => {
+  const bars: string[] = [];
+  for (const deg of [90, 30, 150]) {
+    const a = (deg * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a), l = 10, w = 1.2;
+    const p = [[l * c - w * s, l * s + w * c], [l * c + w * s, l * s - w * c], [-l * c + w * s, -l * s - w * c], [-l * c - w * s, -l * s + w * c]];
+    bars.push(`M${p.map(([x, y]) => `${(12 + x).toFixed(2)} ${(12 - y).toFixed(2)}`).join("L")}Z`);
+  }
+  return bars.join(" ");
+})();
 
 export const ICON_PATHS: Record<UpgradeIcon, string> = {
   shield: "M12 1.8L20.5 5V11C20.5 16.6 16.9 20.8 12 22.3C7.1 20.8 3.5 16.6 3.5 11V5Z M12 5.2L7 7.1V11C7 14.4 9 17.3 12 18.6Z",
@@ -24,7 +37,19 @@ export const ICON_PATHS: Record<UpgradeIcon, string> = {
   pierce: "M1.5 10.6H15V6.5L22.5 12L15 17.5V13.4H1.5Z",
   star: "M12 1.5L15 8.2L22.2 8.9L16.8 13.7L18.4 20.8L12 17.1L5.6 20.8L7.2 13.7L1.8 8.9L9 8.2Z",
   drop: "M12 1.8S4.5 10.3 4.5 15C4.5 19.2 7.9 22.4 12 22.4S19.5 19.2 19.5 15C19.5 10.3 12 1.8 12 1.8Z",
+  flame: "M12.4 1.5C13.6 5.6 19 8.2 19 14.2A7 7 0 0 1 5 14.2C5 10.6 7.2 8.5 8.3 6.4C8.8 9 9.9 10.3 11.3 10.9C10.9 7.6 11.4 4.5 12.4 1.5Z M12 21A3.2 3.2 0 0 0 15.2 17.8C15.2 15.6 13.4 14.6 12.6 12.8C11.4 14.7 8.8 15.5 8.8 17.8A3.2 3.2 0 0 0 12 21Z",
+  burst: "M12 1L14.2 7.4L20.5 4.3L17.4 10.2L23 12L17.4 13.8L20.5 19.7L14.2 16.6L12 23L9.8 16.6L3.5 19.7L6.6 13.8L1 12L6.6 10.2L3.5 4.3L9.8 7.4Z",
+  ricochet: "M2 18.5L8.5 7.5L13.5 14L18 7.2L16 6L22 3.5L21.6 10L19.7 8.9L13.7 17.8L8.8 11.3L4.6 19.8Z",
+  split: "M10.8 22V12.9L5.7 7.8L4 9.5V3H10.5L8.8 4.7L12 7.9L15.2 4.7L13.5 3H20V9.5L18.3 7.8L13.2 12.9V22Z",
+  bullets: `${cartridge(5)} ${cartridge(12)} ${cartridge(19)}`,
+  drone: `M10.8 6.8H13.2V10.8H17.2V13.2H13.2V17.2H10.8V13.2H6.8V10.8H10.8Z ${circle(12, 3.6, 2.6)} ${circle(12, 20.4, 2.6)} ${circle(3.6, 12, 2.6)} ${circle(20.4, 12, 2.6)}`,
+  snowflake,
+  pulse: `${circle(12, 12, 10.5)} ${circle(12, 12, 8.6)} ${circle(12, 12, 6.4)} ${circle(12, 12, 4.5)} ${circle(12, 12, 2.3)}`,
 };
+
+/** Icons drawn with the nonzero rule (overlapping parts); the rest use even-odd (cut-outs). */
+const NONZERO = new Set<UpgradeIcon>(["snowflake", "drone"]);
+const fillRule = (icon: UpgradeIcon): CanvasFillRule => (NONZERO.has(icon) ? "nonzero" : "evenodd");
 
 /** Accent colour per category (HUD disc, world badge, glow). */
 export const CATEGORY_COLORS: Record<UpgradeCategory, string> = {
@@ -35,7 +60,7 @@ export const CATEGORY_COLORS: Record<UpgradeCategory, string> = {
 
 /** Inline SVG markup for the HUD. */
 export function iconSvg(icon: UpgradeIcon): string {
-  return `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="${ICON_PATHS[icon]}"/></svg>`;
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="${fillRule(icon)}" d="${ICON_PATHS[icon]}"/></svg>`;
 }
 
 /**
@@ -70,7 +95,7 @@ export function badgeCanvas(icon: UpgradeIcon, category: UpgradeCategory, size =
   ctx.strokeStyle = "rgba(20, 12, 6, 0.75)";
   ctx.stroke(path);
   ctx.fillStyle = "#ffffff";
-  ctx.fill(path, "evenodd");
+  ctx.fill(path, fillRule(icon));
   ctx.restore();
   return canvas;
 }

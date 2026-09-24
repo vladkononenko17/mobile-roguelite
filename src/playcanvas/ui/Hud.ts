@@ -81,6 +81,8 @@ const CSS = `
 #hud .dmg.crit { color: #f0c24a; font-size: 20px; }
 #hud .dmg.player { color: #e0553e; }
 #hud .dmg.heal { color: #9fcf78; font-size: 17px; }
+#hud .dmg.burn { color: #f08a3c; font-size: 13px; }
+#hud .dmg.tech { color: #8fd0ff; font-size: 14px; }
 #hud .upgrade { --c: #ffb13b; position: absolute; left: 50%; top: 19%; transform: translateX(-50%); max-width: min(52vw, 280px); display: flex; flex-direction: column; align-items: center; gap: 7px; opacity: 0; }
 #hud .upgrade.show { animation: up-life 1.6s ease-out forwards; }
 #hud .upgrade .disc { position: relative; width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center; border: 2px solid rgba(255, 250, 235, 0.9);
@@ -128,6 +130,19 @@ const CSS = `
 #overlay .panel.levelup .card:nth-child(3) { animation-delay: 0.12s; }
 #overlay .panel.levelup .card:active { transform: scale(0.98); }
 #overlay .panel.levelup .card b { font: 800 19px "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.04em; }
+#overlay .panel.levelup .card { position: relative; cursor: pointer; padding-right: 44px; box-sizing: border-box; }
+#overlay .panel.levelup .card.evolution { border-color: #f2c14e; box-shadow: 0 0 16px rgba(242, 193, 78, 0.45), inset 0 0 12px rgba(242, 193, 78, 0.15); }
+#overlay .panel.levelup .card.evolution .tag { color: #f2c14e; opacity: 1; }
+#overlay .panel.levelup .card .tag { position: absolute; right: 40px; top: 12px; float: none; }
+#overlay .panel.levelup .card .tags { display: flex; gap: 5px; margin-top: 6px; }
+#overlay .panel.levelup .card .tags i { font: 700 10px "Barlow Condensed", system-ui, sans-serif; font-style: normal; letter-spacing: 0.14em; text-transform: uppercase; color: var(--c); border: 1px solid var(--c); border-radius: 2px; padding: 1px 5px; opacity: 0.9; }
+#overlay .panel.levelup .card .banish { position: absolute; right: 6px; top: 6px; width: 30px; height: 30px; border-radius: 4px; border: 1px solid rgba(243, 231, 211, 0.3); background: rgba(0, 0, 0, 0.35); color: rgba(243, 231, 211, 0.7); font: 700 14px system-ui; padding: 0; }
+#overlay .panel.levelup .syns { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin: -4px 0 12px; }
+#overlay .panel.levelup .syn { font: 700 11px "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.12em; text-transform: uppercase; color: var(--c); border: 1px solid var(--c); border-radius: 3px; padding: 2px 7px; background: rgba(0, 0, 0, 0.35); }
+#overlay .panel.levelup .actions { align-items: center; gap: 14px; }
+#overlay .panel.levelup .reroll { padding: 10px 18px; border-radius: 6px; border: 1px solid #d6a23c; background: rgba(40, 32, 20, 0.95); color: #efc55a; font: 800 15px "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.1em; text-transform: uppercase; }
+#overlay .panel.levelup .reroll:disabled { opacity: 0.35; }
+#overlay .panel.levelup .banish-left { font: 700 12px "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.65; }
 @keyframes lvl-pop { 0% { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
 @keyframes card-in { 0% { transform: translateY(14px); opacity: 0; } 100% { transform: none; opacity: 1; } }
 #overlay .card:disabled { opacity: 0.4; }
@@ -167,6 +182,33 @@ export interface UpgradeNotice {
   icon: UpgradeIcon;
   category: UpgradeCategory;
   rarity: UpgradeRarity;
+  /** Accent colour override (synergy tiers use their tag colour). */
+  color?: string;
+}
+
+/** One card of the level-up screen. */
+export interface LevelUpCard {
+  name: string;
+  text: string;
+  icon: UpgradeIcon;
+  category: UpgradeCategory;
+  /** "new", "new · rare", "Lv 1 → 2"... */
+  tag: string;
+  /** Build tags (label + colour). */
+  tags: { label: string; color: string }[];
+  evolution: boolean;
+}
+
+export interface LevelUpScreen {
+  level: number;
+  cards: LevelUpCard[];
+  /** Synergy progress per tag: owned count / next tier count (null when maxed). */
+  synergies: { label: string; color: string; count: number; next: number | null; tier: number }[];
+  rerolls: number;
+  banishes: number;
+  onPick: (index: number) => void;
+  onReroll: () => void;
+  onBanish: (index: number) => void;
 }
 
 interface Floater {
@@ -375,7 +417,7 @@ export class Hud {
     if (anchor) {
       this.pulseAnchor = anchor;
       this.pulseTime = 0.7;
-      this.pulse.style.setProperty("--c", CATEGORY_COLORS[notice.category]);
+      this.pulse.style.setProperty("--c", notice.color ?? CATEGORY_COLORS[notice.category]);
       this.pulse.classList.remove("show");
       void this.pulse.offsetWidth;
       this.pulse.classList.add("show");
@@ -388,7 +430,7 @@ export class Hud {
     if (!notice) return;
     this.upgradeShowing = true;
     const el = this.upgrade;
-    el.style.setProperty("--c", CATEGORY_COLORS[notice.category]);
+    el.style.setProperty("--c", notice.color ?? CATEGORY_COLORS[notice.category]);
     el.querySelector(".disc")!.innerHTML = iconSvg(notice.icon);
     el.querySelector(".card i")!.textContent = notice.rarity === "common" ? "" : notice.rarity.toUpperCase();
     el.querySelector(".card b")!.textContent = notice.name;
@@ -412,7 +454,7 @@ export class Hud {
   }
 
   /** Floating number at a world position. */
-  damageNumber(position: Vec3, text: string, kind: "normal" | "crit" | "player" | "heal" = "normal"): void {
+  damageNumber(position: Vec3, text: string, kind: "normal" | "crit" | "player" | "heal" | "burn" | "tech" = "normal"): void {
     const f = this.floaters.find((x) => x.life <= 0) ?? this.floaters.reduce((a, b) => (a.life < b.life ? a : b));
     f.position.copy(position);
     f.life = 0.7;
@@ -490,6 +532,44 @@ export class Hud {
       }
       panel.append(actions);
     }
+    this.overlay.replaceChildren(panel);
+    this.overlay.classList.add("open");
+  }
+
+  /**
+   * The level-up choice (the game is paused underneath): synergy progress chips, three cards (icon,
+   * name, stat, build tags, stack level; evolutions highlighted), a small banish button per card and a
+   * reroll button, both with their remaining counts.
+   */
+  openLevelUp(o: LevelUpScreen): void {
+    const panel = document.createElement("div");
+    panel.className = "panel levelup";
+    const esc = (t: string) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+    const chips = o.synergies
+      .map((t) => `<span class="syn" style="--c:${t.color}">${esc(t.label)} ${t.next === null ? "MAX" : `${t.count}/${t.next}`}${t.tier ? ` · ${"I".repeat(t.tier)}` : ""}</span>`)
+      .join("");
+    panel.innerHTML = `<h2>LEVEL UP</h2><p>Level ${o.level} · choose one</p><div class="syns">${chips}</div><div class="cards"></div>
+      <div class="actions"><button type="button" class="reroll">↻ Reroll <b>${o.rerolls}</b></button><span class="banish-left">✕ banish · ${o.banishes} left</span></div>`;
+    const cards = panel.querySelector(".cards")!;
+    o.cards.forEach((c, i) => {
+      const card = document.createElement("div");
+      card.className = `card ${c.category}${c.evolution ? " evolution" : ""}`;
+      card.setAttribute("role", "button");
+      card.style.setProperty("--c", CATEGORY_COLORS[c.category]);
+      card.innerHTML = `<span class="ci">${iconSvg(c.icon)}</span><span class="tag">${esc(c.evolution ? "EVOLUTION" : c.tag)}</span><b>${esc(c.name)}</b><small>${esc(c.text)}</small>
+        <span class="tags">${c.tags.map((t) => `<i style="--c:${t.color}">${esc(t.label)}</i>`).join("")}</span>
+        ${o.banishes > 0 ? `<button type="button" class="banish" aria-label="banish">✕</button>` : ""}`;
+      card.addEventListener("click", () => o.onPick(i));
+      card.querySelector(".banish")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        o.onBanish(i);
+      });
+      cards.append(card);
+    });
+    const reroll = panel.querySelector<HTMLButtonElement>(".reroll")!;
+    reroll.disabled = o.rerolls <= 0;
+    reroll.addEventListener("click", () => o.onReroll());
+    if (o.banishes <= 0) panel.querySelector<HTMLElement>(".banish-left")!.style.display = "none";
     this.overlay.replaceChildren(panel);
     this.overlay.classList.add("open");
   }

@@ -63,6 +63,12 @@ export interface Enemy {
   hitCooldown: number;
   /** How many times die() ran for this spawn (must stay <= 1; checked by tests). */
   deaths: number;
+  /** Status effects (gameplay/Combat.ts): burning (time left, damage per second, tick timer), slowed. */
+  burnTime: number;
+  burnDps: number;
+  burnTick: number;
+  slowTime: number;
+  slowPct: number;
 }
 
 interface Pool {
@@ -161,7 +167,7 @@ export class EnemyManager {
       root, model, meshes, normalMaterial: first, flashMaterial: first,
       active: false, hp: 1, maxHp: 1, damageScale: 1, position: new Vec3(), push: new Vec3(),
       state: "move", stateTime: 0, cooldown: 0, specialCooldown: 0, flash: 0, yaw: 0, dirX: 0, dirZ: 1, hitDone: false, marker: null, stuck: 0,
-      hitReact: 0, hitCooldown: 0, deaths: 0,
+      hitReact: 0, hitCooldown: 0, deaths: 0, burnTime: 0, burnDps: 0, burnTick: 0, slowTime: 0, slowPct: 0,
     };
     pool.bodies.add(enemy);
     return enemy;
@@ -231,6 +237,7 @@ export class EnemyManager {
     enemy.hitReact = 0;
     enemy.hitCooldown = 0;
     enemy.deaths = 0;
+    enemy.burnTime = enemy.burnDps = enemy.burnTick = enemy.slowTime = enemy.slowPct = 0;
     // Materials (per type) and animation clips.
     const skins = (visual.skins ?? []).filter((k) => this.skins.has(k));
     enemy.skin = skins.length ? skins[Math.floor(Math.random() * skins.length)] : null;
@@ -285,7 +292,13 @@ export class EnemyManager {
 
   /** Move clip playback rate that matches the feet to the ground speed. */
   private moveRate(enemy: Enemy): number {
-    return enemy.def.speed / (ENEMY_VISUALS[enemy.visual].moveSpeed * enemy.scale);
+    return (enemy.def.speed * this.slowFactor(enemy)) / (ENEMY_VISUALS[enemy.visual].moveSpeed * enemy.scale);
+  }
+
+  /** 1, or less while slowed (bosses resist half of it). */
+  private slowFactor(enemy: Enemy): number {
+    if (enemy.slowTime <= 0) return 1;
+    return 1 - enemy.slowPct * (enemy.def.boss ? 0.5 : 1);
   }
 
   /**
@@ -393,6 +406,7 @@ export class EnemyManager {
     enemy.cooldown -= dt;
     enemy.specialCooldown -= dt;
     enemy.hitCooldown -= dt;
+    if (enemy.slowTime > 0) enemy.slowTime -= dt;
     if (enemy.hitReact > 0) {
       enemy.hitReact -= dt;
       if (enemy.hitReact <= 0 && enemy.state === "move") enemy.model.anim!.baseLayer!.transition("Move", 0.15);
@@ -458,8 +472,8 @@ export class EnemyManager {
             moveZ = toZ;
           }
         }
-        // Staggered while flinching.
-        speed = enemy.hitReact > 0 ? def.speed * 0.3 : def.speed;
+        // Staggered while flinching; slowed by cryo hits.
+        speed = (enemy.hitReact > 0 ? def.speed * 0.3 : def.speed) * this.slowFactor(enemy);
         break;
       }
       case "attack": {

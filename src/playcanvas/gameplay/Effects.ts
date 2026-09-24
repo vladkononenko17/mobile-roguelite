@@ -1,4 +1,4 @@
-import { BLEND_ADDITIVE, BLEND_NORMAL, Color, Entity, PIXELFORMAT_RGBA8, StandardMaterial, Texture, Vec3, type AppBase, type MeshInstance } from "playcanvas";
+import { BLEND_ADDITIVE, BLEND_ADDITIVEALPHA, BLEND_NORMAL, Color, Entity, PIXELFORMAT_RGBA8, StandardMaterial, Texture, Vec3, type AppBase, type MeshInstance } from "playcanvas";
 
 /** A small moving particle (blood droplet, dust puff, shell casing): ballistic, then gone. */
 interface Bit {
@@ -20,6 +20,23 @@ interface Decal {
 }
 
 const DECAL_LIFE = 9;
+
+/** An expanding flat ring on the ground (explosions, shock pulses), fading out. */
+interface Ring {
+  entity: Entity;
+  mesh: MeshInstance;
+  life: number;
+  total: number;
+  radius: number;
+}
+
+/** A blast ball that swells, then collapses. */
+interface Blast {
+  entity: Entity;
+  life: number;
+  total: number;
+  radius: number;
+}
 
 interface Pooled {
   entity: Entity;
@@ -68,9 +85,15 @@ export class Effects {
   private readonly dust: Bit[] = [];
   private readonly casings: Bit[] = [];
   private readonly decals: Decal[] = [];
+  private readonly fire: Bit[] = [];
+  private readonly frost: Bit[] = [];
+  private readonly bolts: Pooled[] = [];
+  private readonly rings: Ring[] = [];
+  private readonly blasts: Blast[] = [];
   private nextDecal = 0;
   private readonly root = new Entity("Effects");
   private readonly tmp = new Vec3();
+  private readonly tmp2 = new Vec3();
 
   constructor(app: AppBase) {
     app.root.addChild(this.root);
@@ -80,6 +103,39 @@ export class Effects {
     for (let i = 0; i < 28; i++) this.blood.push(this.bit("blood", "box", bloodMat));
     for (let i = 0; i < 12; i++) this.dust.push(this.bit("dust", "sphere", dustMat));
     for (let i = 0; i < 10; i++) this.casings.push(this.bit("casing", "cylinder", brass));
+    const flame = glow(new Color(1, 0.48, 0.12));
+    const ice = glow(new Color(0.45, 0.75, 1));
+    const bolt = glow(new Color(0.55, 0.8, 1));
+    const blast = glow(new Color(1, 0.55, 0.18));
+    for (let i = 0; i < 36; i++) this.fire.push(this.bit("fire", "sphere", flame));
+    for (let i = 0; i < 16; i++) this.frost.push(this.bit("frost", "sphere", ice));
+    for (let i = 0; i < 36; i++) this.bolts.push(this.make("bolt", "box", bolt));
+    for (let i = 0; i < 8; i++) {
+      const entity = new Entity("blast");
+      entity.addComponent("render", { type: "sphere", material: blast, castShadows: false, receiveShadows: false });
+      entity.enabled = false;
+      this.root.addChild(entity);
+      this.blasts.push({ entity, life: 0, total: 1, radius: 1 });
+    }
+    const ringTexture = ringCanvasTexture(app);
+    for (const [color, count] of [[new Color(1, 0.55, 0.2), 6], [new Color(0.45, 0.8, 1), 3]] as const) {
+      const m = new StandardMaterial();
+      m.diffuse.set(0, 0, 0);
+      m.emissive.copy(color);
+      m.useLighting = false;
+      m.opacityMap = ringTexture;
+      m.opacityMapChannel = "a";
+      m.blendType = BLEND_ADDITIVEALPHA;
+      m.depthWrite = false;
+      m.update();
+      for (let i = 0; i < count; i++) {
+        const entity = new Entity(color.b > 0.5 ? "ring-shock" : "ring-fire");
+        entity.addComponent("render", { type: "plane", material: m, castShadows: false, receiveShadows: false });
+        entity.enabled = false;
+        this.root.addChild(entity);
+        this.rings.push({ entity, mesh: entity.render!.meshInstances[0], life: 0, total: 1, radius: 1 });
+      }
+    }
     const decalMat = new StandardMaterial();
     decalMat.diffuse.set(0, 0, 0);
     decalMat.emissive.set(0.28, 0.03, 0.02);
@@ -166,6 +222,63 @@ export class Effects {
     this.launch(this.casings, position, rightX * s + (Math.random() - 0.5) * 0.4, 1.6 + Math.random() * 0.8, rightZ * s + (Math.random() - 0.5) * 0.4, 0.5, 0.03, 9);
   }
 
+  /** A small flame licking up from a burning enemy. */
+  flame(position: Vec3): void {
+    this.launch(this.fire, position, (Math.random() - 0.5) * 0.5, 0.9 + Math.random() * 0.6, (Math.random() - 0.5) * 0.5, 0.35 + Math.random() * 0.15, 0.09 + Math.random() * 0.05, -1.5);
+  }
+
+  /** A pale-blue fleck on a slowed enemy. */
+  frostPuff(position: Vec3): void {
+    this.launch(this.frost, position, (Math.random() - 0.5) * 0.4, 0.3 + Math.random() * 0.3, (Math.random() - 0.5) * 0.4, 0.4, 0.06, 0);
+  }
+
+  /** A jagged electric arc from `from` to `to` (three kinked segments). */
+  lightning(from: Vec3, to: Vec3): void {
+    const a = this.tmp, b = this.tmp2;
+    a.copy(from);
+    for (let i = 1; i <= 3; i++) {
+      const t = i / 3;
+      b.lerp(from, to, t);
+      if (i < 3) b.set(b.x + (Math.random() - 0.5) * 0.5, b.y + (Math.random() - 0.5) * 0.4, b.z + (Math.random() - 0.5) * 0.5);
+      const p = this.take(this.bolts);
+      const length = a.distance(b);
+      if (length > 0.02) {
+        p.entity.enabled = true;
+        p.entity.setPosition((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+        p.entity.lookAt(b);
+        p.life = p.total = 0.14;
+        p.length = length;
+        p.width = 0.05;
+        p.entity.setLocalScale(p.width, p.width, length);
+      }
+      a.copy(b);
+    }
+  }
+
+  /** An explosion: a swelling orange blast and a fire ring on the ground (`radius` m). */
+  explosion(position: Vec3, radius: number): void {
+    let b = this.blasts[0];
+    for (const x of this.blasts) if (!x.entity.enabled || x.life < b.life) b = x;
+    b.entity.enabled = true;
+    b.entity.setPosition(position.x, 0.6, position.z);
+    b.life = b.total = 0.32;
+    b.radius = radius * 0.8;
+    this.ring(position, radius, false);
+    for (let i = 0; i < 5; i++) this.flame(this.tmp.set(position.x + (Math.random() - 0.5) * radius, 0.3, position.z + (Math.random() - 0.5) * radius));
+  }
+
+  /** An expanding ring on the ground: fire (explosions) or electric blue (shock pulses). */
+  ring(position: Vec3, radius: number, shock: boolean): void {
+    const name = shock ? "ring-shock" : "ring-fire";
+    let r: Ring | null = null;
+    for (const x of this.rings) if (x.entity.name === name && (!r || !x.entity.enabled || x.life < r.life)) r = x;
+    if (!r) return;
+    r.entity.enabled = true;
+    r.entity.setPosition(position.x, 0.06, position.z);
+    r.life = r.total = shock ? 0.4 : 0.35;
+    r.radius = radius;
+  }
+
   /** A blood pool left where a zombie died (fades out after a few seconds). */
   bloodDecal(x: number, z: number, scale = 1): void {
     const d = this.decals[this.nextDecal];
@@ -222,7 +335,30 @@ export class Effects {
   }
 
   update(dt: number): void {
-    for (const pool of [this.blood, this.dust, this.casings]) {
+    for (const b of this.blasts) {
+      if (!b.entity.enabled) continue;
+      b.life -= dt;
+      if (b.life <= 0) {
+        b.entity.enabled = false;
+        continue;
+      }
+      const t = 1 - b.life / b.total;
+      const s = b.radius * 2 * (t < 0.4 ? t / 0.4 : 1 - (t - 0.4) / 0.6 * 0.9);
+      b.entity.setLocalScale(s, s * 0.7, s);
+    }
+    for (const r of this.rings) {
+      if (!r.entity.enabled) continue;
+      r.life -= dt;
+      if (r.life <= 0) {
+        r.entity.enabled = false;
+        continue;
+      }
+      const t = 1 - r.life / r.total;
+      const s = r.radius * 2 * (0.3 + 0.7 * Math.sqrt(t));
+      r.entity.setLocalScale(s, 1, s);
+      r.mesh.setParameter("material_opacity", 1 - t);
+    }
+    for (const pool of [this.blood, this.dust, this.casings, this.fire, this.frost]) {
       for (const b of pool) {
         if (!b.entity.enabled) continue;
         b.life -= dt;
@@ -264,7 +400,7 @@ export class Effects {
         p.entity.setLocalScale(s, s, s);
       }
     }
-    for (const p of this.tracers) {
+    for (const p of [...this.tracers, ...this.bolts]) {
       if (!p.entity.enabled) continue;
       p.life -= dt;
       if (p.life <= 0) {
@@ -295,6 +431,24 @@ function splatTexture(app: AppBase): Texture {
     blob(32 + Math.cos(a) * 12, 32 + Math.sin(a) * 12, 6 + (i % 3) * 2);
     blob(32 + Math.cos(a) * (22 + (i % 2) * 5), 32 + Math.sin(a) * (22 + (i % 2) * 5), 1.5 + (i % 3));
   }
+  const texture = new Texture(app.graphicsDevice, { format: PIXELFORMAT_RGBA8, mipmaps: true });
+  texture.setSource(canvas);
+  return texture;
+}
+
+/** A soft ring (alpha) for ground pulses. */
+function ringCanvasTexture(app: AppBase): Texture {
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const g = ctx.createRadialGradient(32, 32, 18, 32, 32, 32);
+  g.addColorStop(0, "rgba(255,255,255,0)");
+  g.addColorStop(0.55, "rgba(255,255,255,0.9)");
+  g.addColorStop(0.8, "rgba(255,255,255,0.5)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, size, size);
   const texture = new Texture(app.graphicsDevice, { format: PIXELFORMAT_RGBA8, mipmaps: true });
   texture.setSource(canvas);
   return texture;
