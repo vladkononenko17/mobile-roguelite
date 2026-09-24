@@ -13,3 +13,5 @@ assets-src/shs-monsters/
 !assets-src/**/*.png
 # CitySurvivalLite: licence forbids sharing the raw files; keep local only
 assets-src/city-survival-lite/
+# Zombie Apocalypse Survivor (Unity Asset Store package): keep the raw files local only
+assets-src/survivor-v3/

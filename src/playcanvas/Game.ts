@@ -11,12 +11,13 @@ import {
   type RenderComponent,
 } from "playcanvas";
 import { CameraController } from "./camera/CameraController";
-import { CAMERA, CHARACTER, CHARACTERS, DEBUG, DEFAULT_WEAPON, LIGHTING, OUTPOST, PLAYER, WEAPONS, type CharacterId, type WeaponId } from "./config";
+import { CAMERA, CHARACTER, CHARACTERS, DEBUG, DEFAULT_WEAPON, FINGER_GRIP, LIGHTING, OUTPOST, PLAYER, WEAPONS, type CharacterId, type CharacterModel, type WeaponId } from "./config";
 import { KeyboardMoveInput } from "./input/KeyboardMoveInput";
 import { TouchJoystickInput } from "./input/TouchJoystickInput";
 import { CombinedMoveInput, type MoveInputSource } from "./input/MoveInput";
 import { AimTwist } from "./player/AimTwist";
 import { loadCharacter } from "./player/CharacterLoader";
+import { FingerGrip } from "./player/FingerGrip";
 import { LeftHandIK } from "./player/LeftHandIK";
 import { PlayerAnimationController } from "./player/PlayerAnimationController";
 import { PlayerController } from "./player/PlayerController";
@@ -54,6 +55,8 @@ export class Game {
   private model!: Entity;
   private aimTwist: AimTwist | null = null;
   private leftHandIK: LeftHandIK | null = null;
+  private rightFingers: FingerGrip | null = null;
+  private leftFingers: FingerGrip | null = null;
   weapons!: WeaponHolder;
   private contactShadow!: Entity;
   private characterScale: number = CHARACTER.scale;
@@ -165,9 +168,12 @@ export class Game {
       attack();
     });
     window.addEventListener("keydown", (event) => { if (event.code === "Space") attack(); });
-    this.weapons.attachTo(character.model);
+    const handRoll: CharacterModel["handRollDeg"] = "handRollDeg" in characterModel ? characterModel.handRollDeg : undefined;
+    this.weapons.attachTo(character.model, handRoll?.right);
     this.aimTwist = new AimTwist(character.model);
-    this.leftHandIK = new LeftHandIK(character.model);
+    this.leftHandIK = new LeftHandIK(character.model, handRoll?.left);
+    this.rightFingers = new FingerGrip(character.model, "Right");
+    this.leftFingers = new FingerGrip(character.model, "Left");
     this.setupWeaponSelect();
 
     this.colliderDebug = new ColliderDebugView(app, this.collision, playerRoot, () => this.player.radius);
@@ -195,7 +201,11 @@ export class Game {
     // where the hero faces, then put the left hand on the weapon.
     const aimWeight = this.animation.upperBodyWeight;
     this.aimTwist?.apply(this.weapons.entity, this.player.yawDeg, aimWeight, dt);
-    this.leftHandIK?.apply(this.weapons.socket("leftHandGrip"), aimWeight);
+    const support = this.weapons.socket("leftHandGrip");
+    this.leftHandIK?.apply(support, aimWeight);
+    // Close the hands on the weapon.
+    this.rightFingers?.apply(FINGER_GRIP.weaponDeg, this.weapons.entity ? 1 : 0);
+    this.leftFingers?.apply(FINGER_GRIP.supportDeg, support ? aimWeight : 0);
     const device = this.app.graphicsDevice;
     this.camera.update(dt, device.width / Math.max(1, device.height));
 

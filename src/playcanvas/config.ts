@@ -13,10 +13,29 @@ export interface CharacterModel {
   clips?: Partial<typeof ANIMATION.clips>;
   /** Build the breathing idle from the idle clip (for models whose only "idle" is a static rest pose). */
   proceduralIdle?: boolean;
+  /**
+   * How this rig's hand bones are rolled about their own axis (+Y, along the fingers) relative to
+   * the Vanguard's, in degrees. Weapon grips and sockets are authored on the Vanguard's hands; the
+   * weapon holder and left-hand IK undo this roll so they fit any rig. Printed by the build script.
+   */
+  handRollDeg?: { left: number; right: number };
 }
 
 /** Character GLBs selectable from the tune panel. All use a Mixamo-style rig with Walking / Running clips. */
 export const CHARACTERS = {
+  survivor: {
+    label: "Survivor (V3)",
+    // "Zombie Apocalypse Survivor" (Mixamo rig) built by scripts/build-survivor.mjs: its own three
+    // Mixamo idles plus every Vanguard clip retargeted onto it (same bone names, bone directions
+    // matched, so the weapon poses carry over). Texture resized to 2048 WebP.
+    url: "models/survivor/survivor.glb",
+    // Vanguard's clips on ~3% longer legs.
+    walkNativeSpeed: 1.49,
+    runNativeSpeed: 4.72,
+    clips: { idle: "Survivor_Idle" },
+    proceduralIdle: false,
+    handRollDeg: { left: -237.0, right: -116.8 },
+  },
   vanguard: {
     label: "Ironclad Vanguard",
     // Unmodified mesh, rig and all 17 animations; textures resized to max 2048 and stored as WebP
@@ -125,7 +144,7 @@ export interface WeaponDef {
 
 export type WeaponId = keyof typeof WEAPONS.list;
 export const DEFAULT_WEAPON: WeaponId | null = "rifle";
-export const DEFAULT_CHARACTER: CharacterId = "vanguard";
+export const DEFAULT_CHARACTER: CharacterId = "survivor";
 
 import type { SurfaceTextures } from "./world/Surface";
 
@@ -315,6 +334,17 @@ export const AIM = {
     { bone: "mixamorig:Spine1", share: 0.35 },
     { bone: "mixamorig:Spine2", share: 0.35 },
   ],
+};
+
+/**
+ * Extra finger bend (degrees per joint, knuckle to tip) on top of the animation while holding a
+ * weapon (player/FingerGrip.ts; only rigs with finger joints, e.g. the Survivor).
+ */
+export const FINGER_GRIP = {
+  /** Right hand around any held weapon's grip. */
+  weaponDeg: [50, 65, 50],
+  /** Left hand under a two-handed weapon's handguard. */
+  supportDeg: [30, 40, 30],
 };
 
 /** Procedural breathing idle generated from the rest pose (see player/BreathingIdle.ts). */

@@ -7,8 +7,8 @@ const loadingText = document.querySelector<HTMLElement>("#loading-text")!;
 const loadingBar = document.querySelector<HTMLElement>("#loading-bar")!;
 const modelSelect = document.querySelector<HTMLSelectElement>("[data-model]")!;
 
-// Versioned so a remembered choice from before the Vanguard became the default does not stick.
-const MODEL_KEY = "dustline3d.model.v2";
+// Versioned so a remembered choice from before the Survivor (V3) became the default does not stick.
+const MODEL_KEY = "dustline3d.model.v3";
 const isCharacterId = (value: string | null): value is CharacterId => value !== null && value in CHARACTERS;
 
 // ?model=<id> wins, then the last choice made in this browser, then the default.

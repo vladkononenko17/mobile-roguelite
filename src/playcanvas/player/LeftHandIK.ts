@@ -37,7 +37,11 @@ export class LeftHandIK {
   private readonly q2 = new Quat();
   private readonly handRotation = new Quat();
 
-  constructor(model: Entity) {
+  /** Undoes the rig's left-hand roll relative to the Vanguard's hand, which sockets are authored on. */
+  private readonly handRoll = new Quat();
+
+  constructor(model: Entity, handRollDeg = 0) {
+    this.handRoll.setFromAxisAngle(Vec3.UP, handRollDeg);
     this.clavicle = model.findByName("mixamorig:LeftShoulder");
     this.upperArm = model.findByName("mixamorig:LeftArm");
     this.foreArm = model.findByName("mixamorig:LeftForeArm");
@@ -52,7 +56,7 @@ export class LeftHandIK {
     weight = Math.min(1, weight);
 
     const t = this.t.lerp(hand.getPosition(), target.getPosition(), weight);
-    this.handRotation.slerp(hand.getRotation(), target.getRotation(), weight);
+    this.handRotation.slerp(hand.getRotation(), this.q.copy(target.getRotation()).mul(this.handRoll), weight);
     const l1 = foreArm.getPosition().distance(upperArm.getPosition());
     const l2 = hand.getPosition().distance(foreArm.getPosition());
     if (this.clavicle) this.reachWithClavicle(this.clavicle, upperArm.getPosition(), t, (l1 + l2) * MAX_REACH);

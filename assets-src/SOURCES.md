@@ -11,5 +11,6 @@
 | `monsters-glb/` | Birb, Cactoro, Wizard, GreenBlob as GLB (converted from the supplied glTF; texture embedded). 9 clips each: Idle, Walk, Bite_Front, HitRecieve, Death, Jump, Dance, Yes, No. Authored large (1.9-3.6 m tall), to be scaled down in game | no licence file supplied |
 | `monsters-fbx/` | Same creature family as FBX: Alien, Birb, Cactoro, GreenBlob, GreenSpikyBlob, Ninja, Wizard, plus their shared 32x32 palette `Atlas_Monsters.png` (extracted from the glTF). Alien, GreenSpikyBlob and Ninja exist only here | no licence file supplied |
 | `shs-monsters/` (git-ignored, local only) | "SHS Monsters Pack" by Small Hearth Studios: alien grunt/leader/undercover, minotaur, orc, skeleton, skeleton mage/warrior, werewolf (OBJ + gradient palette) | Free use incl. commercial; raw files must not be redistributed, so they stay out of the repo. Attribution appreciated: "Assets created by Small Hearth Studios" |
+| `survivor-v3/` (git-ignored, local only) | "Zombie Apocalypse Survivor Male" by Codersan (Unity package plus the extracted FBX, texture and three Mixamo idles). Built into `public/models/survivor/survivor.glb` by `scripts/build-survivor.mjs` (FBX converted with FBX2glTF first) | Store asset: use in projects; raw files not redistributed |
 
 Planned use: weapon attachments, minigun and monsters as later unlocks / modifications based on level success.

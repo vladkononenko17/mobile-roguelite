@@ -11,6 +11,7 @@ export class WeaponHolder {
   private hand: Entity | null = null;
   private held: Entity | null = null;
   private readonly sockets = new Map<WeaponSocket, Entity>();
+  private readonly handRoll = new Quat();
   current: WeaponId | null = null;
 
   /** Called with the held weapon's upper-body clip (or null) whenever the weapon changes. */
@@ -51,8 +52,12 @@ export class WeaponHolder {
     }
   }
 
-  /** Binds to a character model; the weapon follows its right-hand bone. */
-  attachTo(model: Entity): void {
+  /**
+   * Binds to a character model; the weapon follows its right-hand bone. `handRollDeg` is the rig's
+   * right-hand roll relative to the Vanguard's hand, which the weapon grips are authored on.
+   */
+  attachTo(model: Entity, handRollDeg = 0): void {
+    this.handRoll.setFromAxisAngle(Vec3.UP, -handRollDeg);
     this.hand = model.findByName(WEAPONS.handBone) as Entity | null;
     if (!this.hand) console.warn(`[Weapons] ${WEAPONS.handBone} not found on the character.`);
     if (this.current) this.equip(this.current);
@@ -73,10 +78,11 @@ export class WeaponHolder {
     const { position, rotation, rollDeg, scale = 1, sockets = {} }: WeaponDef = WEAPONS.list[id];
     const held = new Entity(`weapon-${id}`);
     held.addChild(template.clone());
-    held.setLocalPosition(position[0], position[1], position[2]);
+    // Grip in the Vanguard's hand frame, then turned into this rig's hand frame.
+    held.setLocalPosition(this.handRoll.transformVector(new Vec3(position[0], position[1], position[2])));
     // Roll about the hand's finger axis (+Y) after the base grip rotation.
     const grip = new Quat().setFromEulerAngles(rotation[0], rotation[1], rotation[2]);
-    held.setLocalRotation(new Quat().setFromAxisAngle(Vec3.UP, rollDeg).mul(grip));
+    held.setLocalRotation(this.handRoll.clone().mul(new Quat().setFromAxisAngle(Vec3.UP, rollDeg)).mul(grip));
     held.setLocalScale(scale, scale, scale);
     for (const [name, { position: p, rotation: r = [0, 0, 0] }] of Object.entries(sockets) as [WeaponSocket, NonNullable<WeaponDef["sockets"]>[WeaponSocket] & {}][]) {
       const socket = new Entity(name);
