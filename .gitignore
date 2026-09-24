@@ -15,3 +15,5 @@ assets-src/shs-monsters/
 assets-src/city-survival-lite/
 # Zombie Apocalypse Survivor (Unity Asset Store package): keep the raw files local only
 assets-src/survivor-v3/
+# Low-Poly Zombie Asset Pack: keep the raw pack local only (built GLBs are in public/models/zombies/)
+assets-src/zombies-lowpoly/

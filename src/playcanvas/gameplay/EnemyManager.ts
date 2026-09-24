@@ -1,10 +1,11 @@
 import { Entity, Vec3, type AnimTrack, type AppBase, type ContainerResource, type MeshInstance, type RenderComponent, type StandardMaterial } from "playcanvas";
-import { ENEMIES, ENEMY_LIMITS, type EnemyDef, type EnemyId } from "./config";
+import { ENEMIES, ENEMY_LIMITS, ENEMY_VISUALS, type EnemyClips, type EnemyDef, type EnemyId, type EnemyVisualId } from "./config";
 import type { Hazards } from "./Hazards";
 import type { NavField } from "./NavField";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
+import { createContactShadow } from "../world/ContactShadow";
 
-/** A loaded character GLB that enemy bodies are cloned from. */
+/** A loaded enemy GLB that bodies are cloned from. */
 export interface BodySource {
   resource: ContainerResource;
   tracks: AnimTrack[];
@@ -15,6 +16,12 @@ type State = "move" | "attack" | "telegraph" | "charge" | "recover" | "throw" | 
 export interface Enemy {
   id: EnemyId;
   def: EnemyDef;
+  /** The look this body wears (fixed per pooled body). */
+  visual: EnemyVisualId;
+  /** The visual's clips with the type's overrides. */
+  clips: EnemyClips;
+  /** Type scale x visual scale x per-spawn jitter. */
+  scale: number;
   root: Entity;
   model: Entity;
   meshes: MeshInstance[];
@@ -39,20 +46,26 @@ export interface Enemy {
   marker: ReturnType<Hazards["ring"]>;
   /** Seconds spent somewhere the player cannot be reached from (outside the arena, inside a wall). */
   stuck: number;
+  /** Hit flinch time left, and the time until the next flinch may start. */
+  hitReact: number;
+  hitCooldown: number;
 }
 
 interface Pool {
+  visual: EnemyVisualId;
   source: BodySource;
   free: Enemy[];
-  /** The GLB's own material, the base for the per-type tinted copies. */
+  /** The GLB's own material, the base for the per-type (tinted) and hit-flash copies. */
   baseMaterial: StandardMaterial | null;
   bodies: Set<Enemy>;
 }
 
 /**
- * Enemies: pooled bodies cloned from the already loaded character GLBs (tinted per type, sharing one
- * material per type; a second material flashes on hits), each with a tiny anim graph (Move / Attack /
- * Death / Special). Behaviour per type from ENEMIES (`chaser`, `charger`, `thrower`, `tank`): chase
+ * Enemies: pooled bodies, one pool per look (ENEMY_VISUALS, e.g. each zombie model), sharing one
+ * material per type and look (a second material flashes on hits), each with a tiny anim graph (Move /
+ * Attack / Hit / Death / Special). Looks are data: a type lists its visuals and every spawn picks one,
+ * so the behaviour code never knows which model it drives. Behaviour per type from ENEMIES
+ * (`chaser`, `charger`, `thrower`, `tank`): chase
  * along the NavField, separate from each other, slide along walls, wind up and hit in melee, plus
  * the bosses' specials. No physics engine; everything is a circle on the ground plane.
  */
@@ -60,8 +73,7 @@ export class EnemyManager {
   readonly alive: Enemy[] = [];
   private readonly pools = new Map<string, Pool>();
   private readonly materials = new Map<string, { normal: StandardMaterial; flash: StandardMaterial }>();
-  /** Set when the boss rig failed to load: bosses use the survivor body. */
-  bossFallback = false;
+  private bodyCount = 0;
   private readonly root = new Entity("Enemies");
   private readonly steer = { x: 0, z: 0 };
   private readonly tmp = new Vec3();
@@ -74,7 +86,7 @@ export class EnemyManager {
   onStranded: (enemy: Enemy) => void = () => {};
 
   constructor(
-    app: AppBase,
+    private readonly app: AppBase,
     private readonly collision: CollisionWorld,
     private readonly nav: NavField,
     private readonly hazards: Hazards,
@@ -82,25 +94,25 @@ export class EnemyManager {
     app.root.addChild(this.root);
   }
 
-  /** Registers a body source ("survivor", "vanguard") and pre-builds `count` pooled bodies. */
-  addSource(name: string, source: BodySource, count: number): void {
-    const pool: Pool = { source, free: [], baseMaterial: null, bodies: new Set() };
-    this.pools.set(name, pool);
-    for (let i = 0; i < count; i++) {
-      const enemy = this.build(pool, i);
-      pool.bodies.add(enemy);
-      pool.free.push(enemy);
-    }
+  /** Registers a loaded look and pre-builds `count` pooled bodies (more are built on demand). */
+  addVisual(visual: EnemyVisualId, source: BodySource, count: number): void {
+    const pool: Pool = { visual, source, free: [], baseMaterial: null, bodies: new Set() };
+    this.pools.set(visual, pool);
+    for (let i = 0; i < count; i++) pool.free.push(this.build(pool));
   }
 
-  hasSource(name: string): boolean {
-    return this.pools.has(name);
+  hasVisual(visual: EnemyVisualId): boolean {
+    return this.pools.has(visual);
   }
 
-  private build(pool: Pool, index: number): Enemy {
-    const root = new Entity(`enemy-${index}`);
+  private build(pool: Pool): Enemy {
+    const root = new Entity(`enemy-${pool.visual}-${this.bodyCount++}`);
     const model = pool.source.resource.instantiateRenderEntity({ castShadows: false, receiveShadows: true });
     root.addChild(model);
+    // No sun shadows for the horde; a soft blob keeps each body planted (one shared material).
+    const blob = createContactShadow(this.app, 0.4);
+    blob.setLocalScale(1.0, 1, 1.0);
+    root.addChild(blob);
     const meshes: MeshInstance[] = [];
     for (const render of model.findComponents("render") as RenderComponent[]) {
       // No shadow casting for the horde (a shadow pass per enemy is the costliest part on mobile).
@@ -112,7 +124,10 @@ export class EnemyManager {
     anim.loadStateGraph({
       layers: [{
         name: "Base",
-        states: [{ name: "START" }, { name: "Move", speed: 1, loop: true }, { name: "Attack", speed: 1, loop: false }, { name: "Death", speed: 1, loop: false }, { name: "Special", speed: 1, loop: true }],
+        states: [
+          { name: "START" }, { name: "Move", speed: 1, loop: true }, { name: "Attack", speed: 1, loop: false }, { name: "Hit", speed: 1, loop: false },
+          { name: "Death", speed: 1, loop: false }, { name: "Special", speed: 1, loop: true },
+        ],
         transitions: [{ from: "START", to: "Move", time: 0 }],
       }],
       parameters: {},
@@ -121,21 +136,27 @@ export class EnemyManager {
     this.root.addChild(root);
     const first = meshes[0]?.material as StandardMaterial;
     pool.baseMaterial ??= first;
-    return {
-      id: "walker", def: ENEMIES.walker, root, model, meshes, normalMaterial: first, flashMaterial: first,
+    const enemy: Enemy = {
+      id: "walker", def: ENEMIES.walker, visual: pool.visual, clips: ENEMY_VISUALS[pool.visual].clips, scale: 1,
+      root, model, meshes, normalMaterial: first, flashMaterial: first,
       active: false, hp: 1, maxHp: 1, damageScale: 1, position: new Vec3(), push: new Vec3(),
       state: "move", stateTime: 0, cooldown: 0, specialCooldown: 0, flash: 0, yaw: 0, dirX: 0, dirZ: 1, hitDone: false, marker: null, stuck: 0,
+      hitReact: 0, hitCooldown: 0,
     };
+    pool.bodies.add(enemy);
+    return enemy;
   }
 
   private materialsFor(id: EnemyId, base: StandardMaterial): { normal: StandardMaterial; flash: StandardMaterial } {
     const key = `${id}/${base.name}/${base.id}`;
     let m = this.materials.get(key);
     if (!m) {
-      const [r, g, b] = ENEMIES[id].tint;
-      const normal = base.clone() as StandardMaterial;
-      normal.diffuse.set(r, g, b);
-      normal.update();
+      const tint = ENEMIES[id].tint;
+      const normal = tint ? (base.clone() as StandardMaterial) : base;
+      if (tint) {
+        normal.diffuse.set(tint[0], tint[1], tint[2]);
+        normal.update();
+      }
       const flash = base.clone() as StandardMaterial;
       flash.diffuse.set(1, 1, 1);
       flash.emissive.set(0.9, 0.35, 0.25);
@@ -146,15 +167,32 @@ export class EnemyManager {
     return m;
   }
 
-  /** Spawns `id` at (x, z); returns null if its pool is empty or not loaded yet. */
+  /** A loaded look for `id` (random among its variants), or null if none is loaded / the cap is hit. */
+  private pickPool(id: EnemyId): Pool | null {
+    const def = ENEMIES[id];
+    if (!def.boss && this.livingRegular >= ENEMY_LIMITS.pool) return null;
+    const loaded = def.visuals.map((v) => this.pools.get(v)).filter((p): p is Pool => !!p);
+    if (!loaded.length) return null;
+    return loaded[Math.floor(Math.random() * loaded.length)];
+  }
+
+  private get livingRegular(): number {
+    let n = 0;
+    for (const e of this.alive) if (!e.def.boss) n++;
+    return n;
+  }
+
+  /** Spawns `id` at (x, z); returns null if none of its looks is loaded yet or the cap is hit. */
   spawn(id: EnemyId, x: number, z: number, hpScale = 1, damageScale = 1): Enemy | null {
     const def = ENEMIES[id];
-    // Bosses fall back to the survivor rig if the boss rig is not loaded (yet / at all).
-    const pool = this.pools.get(def.model) ?? (def.model !== "survivor" && this.bossFallback ? this.pools.get("survivor") : undefined);
-    const enemy = pool?.free.pop();
-    if (!pool || !enemy) return null;
+    const pool = this.pickPool(id);
+    if (!pool) return null;
+    const enemy = pool.free.pop() ?? this.build(pool);
+    const visual = ENEMY_VISUALS[pool.visual];
     enemy.id = id;
     enemy.def = def;
+    enemy.clips = def.clips ? { ...visual.clips, ...def.clips } : visual.clips;
+    enemy.scale = def.scale * visual.scale * (1 + (Math.random() * 2 - 1) * (def.scaleJitter ?? 0));
     enemy.maxHp = enemy.hp = Math.round(def.maxHp * hpScale);
     enemy.damageScale = damageScale;
     enemy.active = true;
@@ -168,6 +206,8 @@ export class EnemyManager {
     enemy.hitDone = false;
     enemy.marker = null;
     enemy.stuck = 0;
+    enemy.hitReact = 0;
+    enemy.hitCooldown = 0;
     // Materials (per type) and animation clips.
     const mats = this.materialsFor(id, pool.baseMaterial!);
     enemy.normalMaterial = mats.normal;
@@ -175,13 +215,17 @@ export class EnemyManager {
     for (const mi of enemy.meshes) mi.material = mats.normal;
     const anim = enemy.model.anim!;
     const track = (name: string) => pool.source.tracks.find((t) => t.name === name) ?? pool.source.tracks[0];
-    anim.assignAnimation("Move", track(def.clips.move));
-    anim.assignAnimation("Attack", track(def.clips.attack));
-    anim.assignAnimation("Death", track(def.clips.death));
-    anim.assignAnimation("Special", track(def.clips.special ?? def.clips.move));
-    anim.speed = def.moveAnimRate;
+    const clips = enemy.clips;
+    anim.assignAnimation("Move", track(clips.move));
+    anim.assignAnimation("Attack", track(clips.attack));
+    anim.assignAnimation("Hit", track(clips.hit ?? clips.move));
+    anim.assignAnimation("Death", track(clips.death[Math.floor(Math.random() * clips.death.length)]));
+    anim.assignAnimation("Special", track(clips.special ?? clips.move));
+    anim.speed = this.moveRate(enemy);
     anim.baseLayer!.play("Move");
-    enemy.root.setLocalScale(def.scale, def.scale, def.scale);
+    // Start each body at a different point of its walk cycle so a group does not march in step.
+    anim.baseLayer!.activeStateCurrentTime = Math.random() * track(clips.move).duration;
+    enemy.root.setLocalScale(enemy.scale, enemy.scale, enemy.scale);
     enemy.root.setPosition(enemy.position);
     enemy.model.setLocalPosition(0, 0, 0);
     enemy.root.enabled = true;
@@ -204,7 +248,19 @@ export class EnemyManager {
       this.kill(enemy);
       return true;
     }
+    // Flinch (regular enemies walking, not too often; the attack wind-up is not interrupted).
+    if (enemy.clips.hit && !enemy.def.boss && enemy.state === "move" && enemy.hitCooldown <= 0) {
+      enemy.hitReact = ENEMY_LIMITS.hitReact;
+      enemy.hitCooldown = ENEMY_LIMITS.hitReactCooldown;
+      enemy.model.anim!.speed = 1;
+      enemy.model.anim!.baseLayer!.transition("Hit", 0.05);
+    }
     return false;
+  }
+
+  /** Move clip playback rate that matches the feet to the ground speed. */
+  private moveRate(enemy: Enemy): number {
+    return enemy.def.speed / (ENEMY_VISUALS[enemy.visual].moveSpeed * enemy.scale);
   }
 
   private kill(enemy: Enemy): void {
@@ -302,6 +358,11 @@ export class EnemyManager {
     }
     enemy.cooldown -= dt;
     enemy.specialCooldown -= dt;
+    enemy.hitCooldown -= dt;
+    if (enemy.hitReact > 0) {
+      enemy.hitReact -= dt;
+      if (enemy.hitReact <= 0 && enemy.state === "move") enemy.model.anim!.baseLayer!.transition("Move", 0.15);
+    }
     // Safety net: never leave an enemy stranded where it cannot reach the player.
     enemy.stuck = this.nav.isReachable(enemy.position.x, enemy.position.z) ? 0 : enemy.stuck + dt;
     if (enemy.stuck > 3) {
@@ -363,7 +424,8 @@ export class EnemyManager {
             moveZ = toZ;
           }
         }
-        speed = def.speed;
+        // Staggered while flinching.
+        speed = enemy.hitReact > 0 ? def.speed * 0.3 : def.speed;
         break;
       }
       case "attack": {
@@ -413,7 +475,7 @@ export class EnemyManager {
         if (!enemy.hitDone && enemy.stateTime >= 0.55) {
           enemy.hitDone = true;
           const p = def.projectile!;
-          this.tmp.set(enemy.position.x, 1.6 * def.scale, enemy.position.z);
+          this.tmp.set(enemy.position.x, 1.6 * enemy.scale, enemy.position.z);
           this.hazards.throw(this.tmp, player.x, player.z, p.speed, p.radius, p.damage * enemy.damageScale);
         }
         if (enemy.stateTime >= 1.1) this.backToMove(enemy, 0.3, def.projectile?.cooldown);
@@ -438,7 +500,7 @@ export class EnemyManager {
     const stepX = moveX * speed * dt + px, stepZ = moveZ * speed * dt + pz;
     if (stepX !== 0 || stepZ !== 0) this.collision.moveCircle(enemy.position, def.radius, stepX, stepZ);
     if (speed > 0 && (moveX !== 0 || moveZ !== 0)) this.face(enemy, moveX, moveZ, dt, enemy.state === "charge" ? 20 : 8);
-    if (enemy.state === "move") anim.speed = speed > 0 ? def.moveAnimRate : 0.3;
+    if (enemy.state === "move" && enemy.hitReact <= 0) anim.speed = speed > 0 ? this.moveRate(enemy) : 0.3;
     enemy.root.setPosition(enemy.position);
     enemy.root.setEulerAngles(0, enemy.yaw, 0);
   }
@@ -447,7 +509,8 @@ export class EnemyManager {
     this.setState(enemy, "move");
     enemy.cooldown = cooldown;
     if (specialCooldown !== undefined) enemy.specialCooldown = specialCooldown;
-    enemy.model.anim!.speed = enemy.def.moveAnimRate;
+    enemy.hitReact = 0;
+    enemy.model.anim!.speed = this.moveRate(enemy);
     enemy.model.anim!.baseLayer!.transition("Move", 0.2);
   }
 
@@ -484,9 +547,10 @@ export class EnemyManager {
     return this.alive.filter((e) => e.def.boss && e.state !== "dead");
   }
 
-  /** Whether a pooled body for `id` is free (and its model is loaded). */
+  /** Whether `id` can spawn now (one of its looks is loaded, under the enemy cap). */
   canSpawn(id: EnemyId): boolean {
-    const pool = this.pools.get(ENEMIES[id].model) ?? (this.bossFallback ? this.pools.get("survivor") : undefined);
-    return !!pool && pool.free.length > 0;
+    const def = ENEMIES[id];
+    if (!def.boss && this.livingRegular >= ENEMY_LIMITS.pool) return false;
+    return def.visuals.some((v) => this.pools.has(v));
   }
 }

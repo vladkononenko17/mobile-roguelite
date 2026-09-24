@@ -61,13 +61,71 @@ export const WEAPON_STATS: Partial<Record<WeaponId, WeaponStats>> = {
 export type EnemyId = "walker" | "runner" | "thrower" | "brute" | "charger" | "tank";
 export type EnemyBehavior = "chaser" | "charger" | "thrower" | "tank";
 
+/* Enemy look and behaviour are separate: an EnemyDef (AI, stats) lists the EnemyVisuals (model +
+ * animation set) its bodies are drawn with, so one behaviour can wear several variant models
+ * (Walker A / B / C...) and a model can be swapped without touching the AI. */
+
+export type EnemyVisualId =
+  | "zombieMaleCasual" | "zombieMaleFarmer" | "zombieFemaleCasual" | "zombieFemaleOffice" | "zombieScientist"
+  | "vanguard";
+
+/** Clip names inside an enemy GLB. Several deaths: one is picked at random. */
+export interface EnemyClips {
+  idle: string;
+  move: string;
+  attack: string;
+  /** Short flinch on a non-lethal hit (optional). */
+  hit?: string;
+  death: string[];
+  /** Charge / throw / slam wind-up (bosses, thrower). */
+  special?: string;
+}
+
+export interface EnemyVisual {
+  /** GLB under public/. */
+  url: string;
+  /** Uniform scale that brings the model to a common ~1.75 m height before the type's own scale. */
+  scale: number;
+  clips: EnemyClips;
+  /** Ground speed (m/s) at which the move clip, at rate 1 and scale 1, does not slide its feet. */
+  moveSpeed: number;
+}
+
+const ZOMBIE_CLIPS: EnemyClips = {
+  idle: "Zombie_Idle", move: "Zombie_Walk", attack: "Zombie_Attack", hit: "Zombie_Hit",
+  death: ["Zombie_Death", "Zombie_DeathForward"],
+};
+
+/** Low-Poly Zombie Asset Pack bodies, built by scripts/build-zombies.mjs (see SOURCES.md). */
+const zombie = (file: string, scale: number): EnemyVisual => ({
+  url: `models/zombies/${file}.glb`, scale, clips: ZOMBIE_CLIPS, moveSpeed: 1.35,
+});
+
+export const ENEMY_VISUALS: Record<EnemyVisualId, EnemyVisual> = {
+  zombieMaleCasual: zombie("zombie_male_casual", 0.98),
+  zombieMaleFarmer: zombie("zombie_male_farmer", 1.04),
+  zombieFemaleCasual: zombie("zombie_female_casual", 1.05),
+  zombieFemaleOffice: zombie("zombie_female_office", 1.08),
+  zombieScientist: zombie("zombie_male_scientist", 1.02),
+  /** Boss rig (Meshy "Ironclad Vanguard", Mixamo clips). */
+  vanguard: {
+    url: "models/vanguard/Meshy_AI_Ironclad_Vanguard_All_Animations_2k.glb", scale: 1,
+    clips: { idle: "Idle_10", move: "Walking", attack: "Attack", death: ["dying_backwards"] },
+    moveSpeed: 1.3,
+  },
+};
+
 export interface EnemyDef {
   label: string;
-  /** Which character GLB the body comes from ("survivor" is the default hero model, already loaded). */
-  model: "survivor" | "vanguard";
+  /** Variant looks; each spawn picks one at random (from those loaded). */
+  visuals: EnemyVisualId[];
+  /** Type scale on top of the visual's own scale, and the random +- fraction per spawn. */
   scale: number;
-  /** Multiplies the body texture (a zombie skin tone), and the hit-flash colour. */
-  tint: [number, number, number];
+  scaleJitter?: number;
+  /** Optional colour multiplier on the body texture (bosses). */
+  tint?: [number, number, number];
+  /** Per-type clip overrides (on top of the visual's clips). */
+  clips?: Partial<EnemyClips>;
   behavior: EnemyBehavior;
   maxHp: number;
   speed: number;
@@ -83,10 +141,6 @@ export interface EnemyDef {
   scrap: number;
   drops: { scrap: number; health: number; upgrade: number };
   boss?: boolean;
-  /** Clip names (the survivor / vanguard GLBs share the same retargeted set). */
-  clips: { move: string; attack: string; death: string; special?: string };
-  /** Animation playback rate for the move clip at `speed`. */
-  moveAnimRate: number;
   /** Thrower / tank projectile. */
   projectile?: { damage: number; speed: number; radius: number; cooldown: number; minRange: number; maxRange: number };
   /** Charger dash. */
@@ -95,46 +149,45 @@ export interface EnemyDef {
   slam?: { cooldown: number; telegraph: number; radius: number; damage: number; triggerRange: number };
 }
 
-const CLIPS_WALK = { move: "Walking", attack: "Attack", death: "dying_backwards" };
+const WALKER_LOOKS: EnemyVisualId[] = ["zombieMaleCasual", "zombieMaleFarmer", "zombieFemaleCasual", "zombieFemaleOffice"];
 
 export const ENEMIES: Record<EnemyId, EnemyDef> = {
+  // Hero is ~1.95 m (1.70 m model x 1.15); walkers are 0.9 - 1.0x of that, hunched.
   walker: {
-    label: "Walker", model: "survivor", scale: 1.1, tint: [0.62, 0.78, 0.55], behavior: "chaser",
+    label: "Walker", visuals: WALKER_LOOKS, scale: 1.1, scaleJitter: 0.05, behavior: "chaser",
     maxHp: 30, speed: 1.35, radius: 0.36, damage: 9, attackRange: 1.15, attackWindup: 0.42, attackCooldown: 1.2,
     scrap: 1, drops: { scrap: 0.4, health: 0.025, upgrade: 0.006 },
-    clips: CLIPS_WALK, moveAnimRate: 0.85,
   },
+  // Runner and Thrower: placeholder zombie looks until the Walker horde is signed off.
   runner: {
-    label: "Runner", model: "survivor", scale: 1.0, tint: [0.85, 0.55, 0.45], behavior: "chaser",
+    label: "Runner", visuals: WALKER_LOOKS, scale: 1.0, scaleJitter: 0.03, behavior: "chaser",
     maxHp: 22, speed: 3.9, radius: 0.34, damage: 7, attackRange: 1.1, attackWindup: 0.3, attackCooldown: 0.9,
     scrap: 1, drops: { scrap: 0.45, health: 0.03, upgrade: 0.008 },
-    clips: { move: "Running", attack: "Attack", death: "dying_backwards" }, moveAnimRate: 0.9,
   },
   thrower: {
-    label: "Thrower", model: "survivor", scale: 1.15, tint: [0.72, 0.8, 0.35], behavior: "thrower",
+    label: "Thrower", visuals: ["zombieScientist"], scale: 1.15, behavior: "thrower",
     maxHp: 55, speed: 1.1, radius: 0.38, damage: 8, attackRange: 1.15, attackWindup: 0.45, attackCooldown: 1.4,
     scrap: 2, drops: { scrap: 0.6, health: 0.05, upgrade: 0.012 },
-    clips: { move: "Walking", attack: "Attack", death: "dying_backwards", special: "Skill_03" }, moveAnimRate: 0.75,
+    clips: { special: "Zombie_Attack" },
     projectile: { damage: 14, speed: 5.5, radius: 1.3, cooldown: 3.6, minRange: 5, maxRange: 11 },
   },
   brute: {
-    label: "Brute", model: "vanguard", scale: 1.75, tint: [0.72, 0.62, 0.55], behavior: "chaser", boss: true,
+    label: "Brute", visuals: ["vanguard"], scale: 1.75, tint: [0.72, 0.62, 0.55], behavior: "chaser", boss: true,
     maxHp: 240, speed: 1.05, radius: 0.7, damage: 24, attackRange: 1.9, attackWindup: 0.7, attackCooldown: 1.6,
     scrap: 25, drops: { scrap: 1, health: 1, upgrade: 0 },
-    clips: { move: "Walking", attack: "Attack", death: "dying_backwards" }, moveAnimRate: 0.6,
   },
   charger: {
-    label: "Charger", model: "vanguard", scale: 1.55, tint: [0.95, 0.6, 0.45], behavior: "charger", boss: true,
+    label: "Charger", visuals: ["vanguard"], scale: 1.55, tint: [0.95, 0.6, 0.45], behavior: "charger", boss: true,
     maxHp: 420, speed: 1.6, radius: 0.62, damage: 18, attackRange: 1.8, attackWindup: 0.55, attackCooldown: 1.4,
     scrap: 40, drops: { scrap: 1, health: 1, upgrade: 0 },
-    clips: { move: "Walking", attack: "Attack", death: "dying_backwards", special: "Rifle_Charge_inplace" }, moveAnimRate: 0.8,
+    clips: { special: "Rifle_Charge_inplace" },
     charge: { cooldown: 5, telegraph: 1.0, speed: 12, distance: 13, recover: 1.6, damage: 28 },
   },
   tank: {
-    label: "Mutant Tank", model: "vanguard", scale: 2.05, tint: [0.66, 0.55, 0.78], behavior: "tank", boss: true,
+    label: "Mutant Tank", visuals: ["vanguard"], scale: 2.05, tint: [0.66, 0.55, 0.78], behavior: "tank", boss: true,
     maxHp: 900, speed: 0.95, radius: 0.85, damage: 30, attackRange: 2.2, attackWindup: 0.8, attackCooldown: 1.8,
     scrap: 60, drops: { scrap: 1, health: 1, upgrade: 0 },
-    clips: { move: "Walking", attack: "Attack", death: "dying_backwards", special: "Charged_Ground_Slam" }, moveAnimRate: 0.55,
+    clips: { special: "Charged_Ground_Slam" },
     projectile: { damage: 20, speed: 6, radius: 1.8, cooldown: 5.5, minRange: 4, maxRange: 13 },
     slam: { cooldown: 6, telegraph: 1.1, radius: 3.6, damage: 32, triggerRange: 3.4 },
   },
@@ -142,10 +195,13 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
 
 /** Pool / performance limits. */
 export const ENEMY_LIMITS = {
-  /** Pooled bodies per model (the maximum alive at once). */
+  /** Most regular enemies alive at once. */
   pool: 30,
-  /** Bosses kept ready (bigger model). */
-  bossPool: 1,
+  /** Bodies pre-built per visual when it loads; more are built on demand (up to `pool`). */
+  prebuild: 8,
+  /** Seconds a hit flinch lasts (and slows the enemy), and the minimum time between flinches. */
+  hitReact: 0.3,
+  hitReactCooldown: 0.7,
   /** Corpses linger this long, then sink and return to the pool. */
   corpseSeconds: 1.6,
   /** Enemies push each other apart within this factor of their radii. */

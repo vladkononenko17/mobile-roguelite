@@ -420,7 +420,7 @@ export const OUTPOST = {
    * stay the most saturated thing on screen. */
   brightness: 0.86,
   /** Static batching cell: pieces sharing a material within this many metres merge into one draw.
-   * The portrait gameplay view is only ~7 x 13 m, so small cells let the camera skip most of the
+   * The portrait gameplay view is only ~10 x 16 m, so small cells let the camera skip most of the
    * level's triangles for a few extra draw calls. */
   batchCellMetres: 12,
 };
@@ -428,10 +428,13 @@ export const OUTPOST = {
 export const CAMERA = {
   /** Downward tilt of the camera (0 = horizon, 90 = straight down). Because the hero sits below
    * the screen centre, the line of sight to him is a few degrees steeper than this. */
-  pitchDeg: 50,
+  pitchDeg: 52,
   /** Distance from the camera to the orbit pivot on the character, along the view direction.
-   * Camera height follows from pitch + distance (+ screen offset); the tune panel shows it. */
-  distance: 9.5,
+   * Camera height follows from pitch + distance (+ screen offset); the tune panel shows it.
+   * Arena shooter framing (measured on a 402x646 portrait phone): ~1.65x the ground area of the
+   * old 50 deg / 9.5 m view (about 10 x 16 m), the hero about 14% of the screen height (was ~20%),
+   * so hordes are visible coming from every side. */
+  distance: 13,
   /** Vertical field of view, used in both portrait and landscape. */
   fovDeg: 42,
   /** How far below the screen centre the character sits, as a fraction of screen height.
@@ -447,7 +450,7 @@ export const CAMERA = {
   /** World yaw of the camera. The camera does not rotate with the character. */
   yawDeg: 0,
   nearClip: 0.5,
-  farClip: 70,
+  farClip: 85,
 };
 
 export const CHARACTER = {
@@ -561,10 +564,9 @@ export const LIGHTING = {
     intensity: 2.5,
     elevationDeg: 38,
     azimuthDeg: 318,
-    // PCF3 (4 hardware-filtered taps) at 1024 over an 18 m range: ~2 cm texels near the hero,
-    // a fraction of the PCF5 / 2048 / 22 m cost per pixel and per shadow pass.
+    // PCF3 (4 hardware-filtered taps) at 1024 over the view's range from the farther arena camera.
     shadowResolution: 1024,
-    shadowDistance: 18,
+    shadowDistance: 26,
     shadowBias: 0.2,
     normalOffsetBias: 0.04,
     shadowIntensity: 0.78,
@@ -598,8 +600,8 @@ export const LIGHTING = {
   groundAmbient: [0.79, 0.95, 1.04] as const,
   /** Dusty sand-coloured haze: only the far edge of the view fades (the map view turns fog off). */
   clearColor: [0.62, 0.52, 0.4] as const,
-  fogStart: 22,
-  fogEnd: 60,
+  fogStart: 27,
+  fogEnd: 72,
 };
 
 export const DEBUG = {

@@ -8,11 +8,24 @@ import {
   type AppBase,
 } from "playcanvas";
 
+/** One material per opacity, shared by every contact shadow (the enemy horde has one each). */
+const materials = new Map<number, StandardMaterial>();
+
 /**
  * Soft dark ellipse under the feet. The sun shadow falls off to one side; this keeps the hero
  * visually planted on the ground from any angle, at the cost of one tiny transparent quad.
  */
 export function createContactShadow(app: AppBase, opacity = 0.45): Entity {
+  const entity = new Entity("ContactShadow");
+  entity.addComponent("render", { type: "plane", material: contactShadowMaterial(app, opacity), castShadows: false, receiveShadows: false });
+  // Unit quad; the owner scales it to the character's footprint.
+  entity.setLocalPosition(0, 0.015, 0);
+  return entity;
+}
+
+function contactShadowMaterial(app: AppBase, opacity: number): StandardMaterial {
+  const cached = materials.get(opacity);
+  if (cached) return cached;
   const size = 64;
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
@@ -37,10 +50,6 @@ export function createContactShadow(app: AppBase, opacity = 0.45): Entity {
   material.blendType = BLEND_NORMAL;
   material.depthWrite = false;
   material.update();
-
-  const entity = new Entity("ContactShadow");
-  entity.addComponent("render", { type: "plane", material, castShadows: false, receiveShadows: false });
-  // Unit quad; the owner scales it to the character's footprint.
-  entity.setLocalPosition(0, 0.015, 0);
-  return entity;
+  materials.set(opacity, material);
+  return material;
 }

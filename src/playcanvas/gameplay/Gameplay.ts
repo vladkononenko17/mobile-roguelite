@@ -1,10 +1,10 @@
 import { Vec3, type AnimTrack, type AppBase, type Asset, type ContainerResource, type Entity } from "playcanvas";
-import { CHARACTERS, WEAPONS, type WeaponId } from "../config";
+import { WEAPONS, type WeaponId } from "../config";
 import type { PlayerController } from "../player/PlayerController";
 import type { WeaponHolder } from "../player/WeaponHolder";
 import type { Hud } from "../ui/Hud";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
-import { DROPS, ENEMY_LIMITS, LEVELS, RUN_START, SHOP, WEAPON_STATS, type ShopItem } from "./config";
+import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_VISUALS, LEVELS, RUN_START, SHOP, WEAPON_STATS, type EnemyVisualId, type ShopItem } from "./config";
 import { Effects } from "./Effects";
 import { EnemyManager, type BodySource, type Enemy } from "./EnemyManager";
 import { Hazards } from "./Hazards";
@@ -86,18 +86,18 @@ export class Gameplay {
     this.enemies.onStranded = (enemy) => this.director.relocate(enemy, this.player.entity.getPosition(), this.camera.camera!);
   }
 
-  /** Loads enemy bodies (the survivor first, the bigger boss rig in the background) and starts the run. */
+  /** Loads the enemy looks (the walkers' before the run starts, the rest in the background). */
   async init(): Promise<void> {
     const base = import.meta.env.BASE_URL;
-    const survivor = await loadBody(this.app, `${base}${CHARACTERS.survivor.url}`);
-    this.enemies.addSource("survivor", survivor, ENEMY_LIMITS.pool);
-    loadBody(this.app, `${base}${CHARACTERS.vanguard.url}`).then(
-      (vanguard) => this.enemies.addSource("vanguard", vanguard, ENEMY_LIMITS.bossPool),
-      (error: unknown) => {
-        console.warn("[Gameplay] boss rig failed to load; bosses fall back to the survivor.", error);
-        this.enemies.bossFallback = true;
-      },
-    );
+    const load = (visual: EnemyVisualId, count: number) =>
+      loadBody(this.app, `${base}${ENEMY_VISUALS[visual].url}`).then(
+        (body) => this.enemies.addVisual(visual, body, count),
+        (error: unknown) => console.warn(`[Gameplay] enemy look ${visual} failed to load.`, error),
+      );
+    const first = new Set(ENEMIES.walker.visuals);
+    await Promise.all([...first].map((v) => load(v, ENEMY_LIMITS.prebuild)));
+    const rest = new Set(Object.values(ENEMIES).flatMap((def) => def.visuals).filter((v) => !first.has(v)));
+    for (const visual of rest) void load(visual, visual === "vanguard" ? 1 : 2);
     this.startRun();
   }
 
