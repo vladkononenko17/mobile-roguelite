@@ -46,6 +46,7 @@ interface Pool {
   free: Enemy[];
   /** The GLB's own material, the base for the per-type tinted copies. */
   baseMaterial: StandardMaterial | null;
+  bodies: Set<Enemy>;
 }
 
 /**
@@ -58,7 +59,9 @@ interface Pool {
 export class EnemyManager {
   readonly alive: Enemy[] = [];
   private readonly pools = new Map<string, Pool>();
-  private readonly materials = new Map<EnemyId, { normal: StandardMaterial; flash: StandardMaterial }>();
+  private readonly materials = new Map<string, { normal: StandardMaterial; flash: StandardMaterial }>();
+  /** Set when the boss rig failed to load: bosses use the survivor body. */
+  bossFallback = false;
   private readonly root = new Entity("Enemies");
   private readonly steer = { x: 0, z: 0 };
   private readonly tmp = new Vec3();
@@ -81,9 +84,13 @@ export class EnemyManager {
 
   /** Registers a body source ("survivor", "vanguard") and pre-builds `count` pooled bodies. */
   addSource(name: string, source: BodySource, count: number): void {
-    const pool: Pool = { source, free: [], baseMaterial: null };
+    const pool: Pool = { source, free: [], baseMaterial: null, bodies: new Set() };
     this.pools.set(name, pool);
-    for (let i = 0; i < count; i++) pool.free.push(this.build(pool, i));
+    for (let i = 0; i < count; i++) {
+      const enemy = this.build(pool, i);
+      pool.bodies.add(enemy);
+      pool.free.push(enemy);
+    }
   }
 
   hasSource(name: string): boolean {
@@ -118,7 +125,8 @@ export class EnemyManager {
   }
 
   private materialsFor(id: EnemyId, base: StandardMaterial): { normal: StandardMaterial; flash: StandardMaterial } {
-    let m = this.materials.get(id);
+    const key = `${id}/${base.name}/${base.id}`;
+    let m = this.materials.get(key);
     if (!m) {
       const [r, g, b] = ENEMIES[id].tint;
       const normal = base.clone() as StandardMaterial;
@@ -129,7 +137,7 @@ export class EnemyManager {
       flash.emissive.set(0.9, 0.35, 0.25);
       flash.update();
       m = { normal, flash };
-      this.materials.set(id, m);
+      this.materials.set(key, m);
     }
     return m;
   }
@@ -137,7 +145,8 @@ export class EnemyManager {
   /** Spawns `id` at (x, z); returns null if its pool is empty or not loaded yet. */
   spawn(id: EnemyId, x: number, z: number, hpScale = 1, damageScale = 1): Enemy | null {
     const def = ENEMIES[id];
-    const pool = this.pools.get(def.model);
+    // Bosses fall back to the survivor rig if the boss rig is not loaded (yet / at all).
+    const pool = this.pools.get(def.model) ?? (def.model !== "survivor" && this.bossFallback ? this.pools.get("survivor") : undefined);
     const enemy = pool?.free.pop();
     if (!pool || !enemy) return null;
     enemy.id = id;
@@ -208,7 +217,24 @@ export class EnemyManager {
     enemy.root.enabled = false;
     const i = this.alive.indexOf(enemy);
     if (i >= 0) this.alive.splice(i, 1);
-    this.pools.get(enemy.def.model)?.free.push(enemy);
+    this.poolOf(enemy)?.free.push(enemy);
+  }
+
+  private poolOf(enemy: Enemy): Pool | undefined {
+    for (const pool of this.pools.values()) if (pool.bodies.has(enemy)) return pool;
+    return undefined;
+  }
+
+  /** Kills every regular (non-boss) enemy without rewards (the level is over). */
+  killAll(): void {
+    for (const enemy of [...this.alive]) {
+      if (enemy.state === "dead") continue;
+      enemy.hp = 0;
+      this.setState(enemy, "dead");
+      this.hazards.clear(enemy.marker);
+      enemy.model.anim!.speed = 1;
+      enemy.model.anim!.baseLayer!.transition("Death", 0.1);
+    }
   }
 
   /** Removes every enemy immediately (new level / restart). */
@@ -456,7 +482,7 @@ export class EnemyManager {
 
   /** Whether a pooled body for `id` is free (and its model is loaded). */
   canSpawn(id: EnemyId): boolean {
-    const pool = this.pools.get(ENEMIES[id].model);
+    const pool = this.pools.get(ENEMIES[id].model) ?? (this.bossFallback ? this.pools.get("survivor") : undefined);
     return !!pool && pool.free.length > 0;
   }
 }

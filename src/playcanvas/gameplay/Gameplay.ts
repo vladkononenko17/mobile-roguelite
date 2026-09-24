@@ -4,14 +4,16 @@ import type { PlayerController } from "../player/PlayerController";
 import type { WeaponHolder } from "../player/WeaponHolder";
 import type { Hud } from "../ui/Hud";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
-import { ENEMY_LIMITS, LEVELS, WEAPON_STATS } from "./config";
+import { DROPS, ENEMY_LIMITS, LEVELS, RUN_START, WEAPON_STATS } from "./config";
 import { Effects } from "./Effects";
 import { EnemyManager, type BodySource, type Enemy } from "./EnemyManager";
 import { Hazards } from "./Hazards";
 import { NavField } from "./NavField";
 import { PlayerGun } from "./PlayerGun";
+import { Pickups, type PickupKind } from "./Pickups";
 import { PlayerStats } from "./PlayerStats";
 import { SpawnDirector } from "./SpawnDirector";
+import { applyUpgrade, rollUpgrades } from "./Upgrades";
 
 interface Bounds {
   minX: number;
@@ -48,8 +50,11 @@ export class Gameplay {
   readonly nav: NavField;
   private readonly effects: Effects;
   private readonly hazards: Hazards;
+  readonly pickups: Pickups;
   private readonly tmp = new Vec3();
   private navTimer = 0;
+  private clearTimer = 0;
+  private readonly params = new URLSearchParams(location.search);
 
   constructor(
     private readonly app: AppBase,
@@ -60,9 +65,12 @@ export class Gameplay {
     private readonly weapons: WeaponHolder,
     private readonly hud: Hud,
     private readonly characterScale: () => number,
+    private readonly onTeleport: () => void = () => {},
   ) {
     this.effects = new Effects(app);
     this.hazards = new Hazards(app);
+    this.pickups = new Pickups(app);
+    this.pickups.onCollect = (kind, value) => this.collect(kind, value);
     this.nav = new NavField(collision, bounds);
     this.enemies = new EnemyManager(app, collision, this.nav, this.hazards);
     this.director = new SpawnDirector(this.enemies, this.nav, bounds);
@@ -85,7 +93,10 @@ export class Gameplay {
     this.enemies.addSource("survivor", survivor, ENEMY_LIMITS.pool);
     loadBody(this.app, `${base}${CHARACTERS.vanguard.url}`).then(
       (vanguard) => this.enemies.addSource("vanguard", vanguard, ENEMY_LIMITS.bossPool),
-      (error: unknown) => console.warn("[Gameplay] boss rig failed to load; bosses fall back to the survivor.", error),
+      (error: unknown) => {
+        console.warn("[Gameplay] boss rig failed to load; bosses fall back to the survivor.", error);
+        this.enemies.bossFallback = true;
+      },
     );
     this.startRun();
   }
@@ -96,13 +107,23 @@ export class Gameplay {
     s.owned.clear();
     s.owned.add("pistol");
     s.upgrades.clear();
-    const requested = new URLSearchParams(location.search).get("weapon");
+    const requested = this.params.get("weapon");
     this.equip(requested && requested in WEAPON_STATS ? (requested as WeaponId) : "pistol");
-    this.startLevel(0);
+    // Debug: ?level=2 starts at level 2, ?levelTime=0.2 shortens every level's wave time.
+    this.director.durationScale = Number(this.params.get("levelTime")) || 1;
+    const level = Math.min(LEVELS.length, Math.max(1, Number(this.params.get("level")) || 1));
+    this.startLevel(level - 1);
   }
 
   startLevel(index: number): void {
     this.enemies.clear();
+    this.pickups.clear();
+    // Every level starts in the open yard.
+    this.player.entity.setPosition(RUN_START.x, 0, RUN_START.z);
+    this.player.yawDeg = RUN_START.yawDeg;
+    this.player.velocity.set(0, 0, 0);
+    this.onTeleport();
+    this.nav.build(RUN_START.x, RUN_START.z);
     this.hazards.reset();
     this.director.start(index);
     this.gun.reset();
@@ -141,10 +162,59 @@ export class Gameplay {
     });
   }
 
+  /** The level's boss is dead: the rest of the horde drops, leftover pickups fly to the hero. */
+  private levelCleared(): void {
+    this.phase = "cleared";
+    this.enemies.killAll();
+    this.hazards.reset();
+    this.clearTimer = 3;
+    this.hud.showBanner(`${this.director.level.label} CLEARED`, 2.6);
+  }
+
+  /** After the clear pause: the next level, or the end of the run. */
+  private afterLevel(): void {
+    const next = this.director.levelIndex + 1;
+    if (next >= LEVELS.length) {
+      this.phase = "complete";
+      this.player.controlsEnabled = false;
+      this.player.aimYawDeg = null;
+      this.hud.openModal({
+        title: "RUN COMPLETE",
+        text: `The outpost is quiet. ${this.stats.kills} kills · ${this.stats.scrap} scrap left.`,
+        actions: [{ label: "New run", onClick: () => this.startRun() }],
+      });
+      return;
+    }
+    this.startLevel(next);
+  }
+
   private onEnemyDeath(enemy: Enemy): void {
     this.stats.kills++;
     if (this.stats.vampireChance > 0 && Math.random() < this.stats.vampireChance) this.stats.heal(this.stats.vampireHeal);
-    void enemy;
+    // Drops: most zombies leave nothing, so the ground stays readable.
+    const { x, z } = enemy.position;
+    const drops = enemy.def.drops;
+    if (enemy.def.boss) {
+      const pieces = DROPS.bossScrapPieces;
+      for (let i = 0; i < pieces; i++) this.pickups.drop("scrap", x, z, Math.ceil(enemy.def.scrap / pieces));
+    } else if (Math.random() < drops.scrap) this.pickups.drop("scrap", x, z, enemy.def.scrap);
+    if (Math.random() < drops.health) this.pickups.drop("health", x, z);
+    if (Math.random() < drops.upgrade) this.pickups.drop("upgrade", x, z);
+  }
+
+  private collect(kind: PickupKind, value: number): void {
+    const s = this.stats;
+    if (kind === "scrap") s.scrap += value;
+    else if (kind === "health") {
+      s.heal(s.maxHp * DROPS.healthFraction);
+      this.hud.showBanner("+HP", 0.6);
+    } else {
+      const [pick] = rollUpgrades(s, 1);
+      if (pick) {
+        applyUpgrade(s, pick.id);
+        this.hud.showBanner(pick.title.toUpperCase() + " · " + pick.text, 2);
+      }
+    }
   }
 
   update(dt: number): void {
@@ -165,8 +235,14 @@ export class Gameplay {
       this.director.update(dt, position, this.camera.camera!);
       this.enemies.update(dt, position, this.stats.alive);
       this.hazards.update(dt);
+      if (this.director.phase === "cleared") this.levelCleared();
+    } else if (this.phase === "cleared") {
+      this.enemies.update(dt, position, false);
+      this.clearTimer -= dt;
+      if (this.clearTimer <= 0) this.afterLevel();
     }
     this.gun.update(dt, this.player, this.weapons, this.characterScale(), combat && this.stats.alive);
+    if (combat || this.phase === "cleared") this.pickups.update(dt, position, this.characterScale(), this.phase === "cleared");
     this.effects.update(dt);
     this.updateHud(dt);
   }
@@ -179,7 +255,7 @@ export class Gameplay {
     const ws = s.weaponStats();
     const label = WEAPONS.list[s.weapon]?.label ?? s.weapon;
     this.hud.setWeapon(label, this.gun.ammo, ws?.magazine ?? 0, this.gun.reloading > 0);
-    const remaining = Math.max(0, d.level.duration - d.time);
+    const remaining = Math.max(0, d.duration - d.time);
     const right = d.phase === "waves" ? `${Math.floor(remaining / 60)}:${String(Math.floor(remaining % 60)).padStart(2, "0")}` : d.phase === "boss" ? "BOSS" : "CLEAR";
     this.hud.setLevel(d.level.label, d.progress, right);
     const boss = d.boss && d.boss.state !== "dead" ? d.boss : null;

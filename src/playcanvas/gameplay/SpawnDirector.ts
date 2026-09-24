@@ -25,6 +25,8 @@ export class SpawnDirector {
   time = 0;
   phase: DirectorPhase = "waves";
   boss: Enemy | null = null;
+  /** Multiplies every level's wave time (debug: ?levelTime=0.2 for quick tests). */
+  durationScale = 1;
   private accumulator = 0;
   private readonly screen = new Vec3();
   private readonly world = new Vec3();
@@ -46,7 +48,12 @@ export class SpawnDirector {
 
   /** 0..1 through the level's wave time. */
   get progress(): number {
-    return Math.min(1, this.time / this.level.duration);
+    return Math.min(1, this.time / this.duration);
+  }
+
+  /** This level's wave time (s). */
+  get duration(): number {
+    return this.level.duration * this.durationScale;
   }
 
   update(dt: number, player: Vec3, camera: CameraComponent): void {
@@ -54,7 +61,7 @@ export class SpawnDirector {
     this.time += dt;
     const level = this.level;
     const t = this.progress;
-    if (this.phase === "waves" && this.time >= level.duration) {
+    if (this.phase === "waves" && this.time >= this.duration) {
       if (this.spawnBoss(player, camera)) this.phase = "boss";
     }
     if (this.phase === "boss" && this.boss && (this.boss.state === "dead" || !this.boss.active)) {

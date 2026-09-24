@@ -196,6 +196,9 @@ export const LEVELS: LevelDef[] = [
   },
 ];
 
+/** Where each run (and level) starts: the open main yard in the middle of the outpost. */
+export const RUN_START = { x: 0, z: 14, yawDeg: 180 };
+
 export const SPAWNING = {
   /** Spawn ring around the player (m). Candidates inside the camera view are rejected. */
   minDistance: 12,
