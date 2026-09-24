@@ -67,18 +67,21 @@ export type EnemyBehavior = "chaser" | "charger" | "thrower" | "tank";
  * (Walker A / B / C...) and a model can be swapped without touching the AI. */
 
 export type EnemyVisualId =
-  | "zombieMaleCasual" | "zombieMaleFarmer" | "zombieFemaleCasual" | "zombieFemaleOffice" | "zombieScientist"
+  | "zombieMaleCasual" | "zombieMaleFarmer" | "zombieFemaleCasual" | "zombieFemaleOffice"
+  | "zombieRunnerMale" | "zombieRunnerFemale" | "zombieThrower" | "zombieBrute"
   | "vanguard";
 
 /** Zombie colour skins: recoloured copies of the zombie pack's swatch palette (one small texture
  * each, shared by every zombie model), built by scripts/build-zombies.mjs. */
-export type EnemySkinId = "green" | "darkgreen" | "purple" | "brown";
+export type EnemySkinId = "green" | "darkgreen" | "purple" | "brown" | "toxic" | "brute";
 
 export const ENEMY_SKINS: Record<EnemySkinId, string> = {
   green: "models/zombies/skins/green.webp",
   darkgreen: "models/zombies/skins/darkgreen.webp",
   purple: "models/zombies/skins/purple.webp",
   brown: "models/zombies/skins/brown.webp",
+  toxic: "models/zombies/skins/toxic.webp",
+  brute: "models/zombies/skins/brute.webp",
 };
 
 /** Clip names inside an enemy GLB. Several deaths: one is picked at random. */
@@ -103,6 +106,8 @@ export interface EnemyVisual {
   moveSpeed: number;
   /** Colour skins this model can wear (one is picked per spawn); none = its own texture. */
   skins?: EnemySkinId[];
+  /** Width / depth factor on top of the scale: < 1 lean (runner), > 1 bulky (brute). */
+  bulk?: number;
 }
 
 const ZOMBIE_CLIPS: EnemyClips = {
@@ -110,18 +115,27 @@ const ZOMBIE_CLIPS: EnemyClips = {
   death: ["Zombie_Death", "Zombie_DeathForward"],
 };
 
+const HORDE_SKINS: EnemySkinId[] = ["green", "darkgreen", "purple", "brown"];
+
 /** Low-Poly Zombie Asset Pack bodies, built by scripts/build-zombies.mjs (see SOURCES.md). */
-const zombie = (file: string, scale: number): EnemyVisual => ({
-  url: `models/zombies/${file}.glb`, scale, clips: ZOMBIE_CLIPS, moveSpeed: 1.35,
-  skins: ["green", "darkgreen", "purple", "brown"],
+const zombie = (file: string, scale: number, extra: Partial<EnemyVisual> = {}): EnemyVisual => ({
+  url: `models/zombies/${file}.glb`, scale, clips: ZOMBIE_CLIPS, moveSpeed: 1.35, skins: HORDE_SKINS, ...extra,
 });
+/** Sprinting: the retargeted run clip (feet match ~4.3 m/s at scale 1). */
+const RUNNER: Partial<EnemyVisual> = { clips: { ...ZOMBIE_CLIPS, move: "Zombie_Run" }, moveSpeed: 4.3, bulk: 0.88 };
 
 export const ENEMY_VISUALS: Record<EnemyVisualId, EnemyVisual> = {
   zombieMaleCasual: zombie("zombie_male_casual", 0.98),
   zombieMaleFarmer: zombie("zombie_male_farmer", 1.04),
   zombieFemaleCasual: zombie("zombie_female_casual", 1.05),
   zombieFemaleOffice: zombie("zombie_female_office", 1.08),
-  zombieScientist: zombie("zombie_male_scientist", 1.02),
+  // Runner: the pack's lean sport bodies, sprinting.
+  zombieRunnerMale: zombie("zombie_male_sport", 1.0, RUNNER),
+  zombieRunnerFemale: zombie("zombie_female_sport", 1.12, RUNNER),
+  // Thrower: lab-coat zombie in a toxic yellow-green skin, a little swollen, lobbing with an overhand throw.
+  zombieThrower: zombie("zombie_male_scientist", 1.02, { skins: ["toxic"], bulk: 1.12, clips: { ...ZOMBIE_CLIPS, special: "Zombie_Throw" } }),
+  // Brute (boss): a big, bulked-out zombie in a dark bruised skin with a slow overhead smash.
+  zombieBrute: zombie("zombie_male_casual", 0.98, { skins: ["brute"], bulk: 1.28, clips: { ...ZOMBIE_CLIPS, attack: "Zombie_Smash", hit: undefined } }),
   /** Boss rig (Meshy "Ironclad Vanguard", Mixamo clips). */
   vanguard: {
     url: "models/vanguard/Meshy_AI_Ironclad_Vanguard_All_Animations_2k.glb", scale: 1,
@@ -173,21 +187,21 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
     maxHp: 30, speed: 1.35, radius: 0.36, damage: 9, attackRange: 1.15, attackWindup: 0.42, attackCooldown: 1.2,
     cash: 1, drops: { cash: 0.4, health: 0.025, upgrade: 0.006 },
   },
-  // Runner and Thrower: placeholder zombie looks until the Walker horde is signed off.
+  // Runner: lean and ~0.95x the hero, sprinting.
   runner: {
-    label: "Runner", visuals: WALKER_LOOKS, scale: 1.0, scaleJitter: 0.03, behavior: "chaser",
+    label: "Runner", visuals: ["zombieRunnerMale", "zombieRunnerFemale"], scale: 1.06, scaleJitter: 0.03, behavior: "chaser",
     maxHp: 22, speed: 3.9, radius: 0.34, damage: 7, attackRange: 1.1, attackWindup: 0.3, attackCooldown: 0.9,
     cash: 1, drops: { cash: 0.45, health: 0.03, upgrade: 0.008 },
   },
   thrower: {
-    label: "Thrower", visuals: ["zombieScientist"], scale: 1.15, behavior: "thrower",
+    label: "Thrower", visuals: ["zombieThrower"], scale: 1.12, behavior: "thrower",
     maxHp: 55, speed: 1.1, radius: 0.38, damage: 8, attackRange: 1.15, attackWindup: 0.45, attackCooldown: 1.4,
     cash: 2, drops: { cash: 0.6, health: 0.05, upgrade: 0.012 },
-    clips: { special: "Zombie_Attack" },
     projectile: { damage: 14, speed: 5.5, radius: 1.3, cooldown: 3.6, minRange: 5, maxRange: 11 },
   },
   brute: {
-    label: "Brute", visuals: ["vanguard"], scale: 1.75, tint: [0.72, 0.62, 0.55], behavior: "chaser", boss: true,
+    // ~1.4x the hero's height and much broader.
+    label: "Brute", visuals: ["zombieBrute"], scale: 1.55, behavior: "chaser", boss: true,
     maxHp: 240, speed: 1.05, radius: 0.7, damage: 24, attackRange: 1.9, attackWindup: 0.7, attackCooldown: 1.6,
     cash: 25, drops: { cash: 1, health: 1, upgrade: 0 },
   },

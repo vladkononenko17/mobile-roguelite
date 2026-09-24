@@ -237,7 +237,8 @@ export class EnemyManager {
     anim.baseLayer!.play("Move");
     // Start each body at a different point of its walk cycle so a group does not march in step.
     anim.baseLayer!.activeStateCurrentTime = Math.random() * track(clips.move).duration;
-    enemy.root.setLocalScale(enemy.scale, enemy.scale, enemy.scale);
+    const bulk = visual.bulk ?? 1;
+    enemy.root.setLocalScale(enemy.scale * bulk, enemy.scale, enemy.scale * bulk);
     enemy.root.setPosition(enemy.position);
     enemy.model.setLocalPosition(0, 0, 0);
     enemy.root.enabled = true;

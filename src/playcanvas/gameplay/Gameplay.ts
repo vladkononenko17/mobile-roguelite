@@ -99,8 +99,15 @@ export class Gameplay {
   /** Loads the enemy looks (the walkers' before the run starts, the rest in the background). */
   async init(): Promise<void> {
     const base = import.meta.env.BASE_URL;
+    // Looks may share a model file (walker and brute): each file downloads once.
+    const bodies = new Map<string, Promise<BodySource>>();
+    const body = (url: string) => {
+      let promise = bodies.get(url);
+      if (!promise) bodies.set(url, (promise = loadBody(this.app, `${base}${url}`)));
+      return promise;
+    };
     const load = (visual: EnemyVisualId, count: number) =>
-      loadBody(this.app, `${base}${ENEMY_VISUALS[visual].url}`).then(
+      body(ENEMY_VISUALS[visual].url).then(
         (body) => this.enemies.addVisual(visual, body, count),
         (error: unknown) => console.warn(`[Gameplay] enemy look ${visual} failed to load.`, error),
       );
@@ -113,7 +120,7 @@ export class Gameplay {
     );
     await Promise.all([...[...first].map((v) => load(v, ENEMY_LIMITS.prebuild)), ...skins]);
     const rest = new Set(Object.values(ENEMIES).flatMap((def) => def.visuals).filter((v) => !first.has(v)));
-    for (const visual of rest) void load(visual, visual === "vanguard" ? 1 : 2);
+    for (const visual of rest) void load(visual, ENEMY_LIMITS.prebuild / 4);
     this.startRun();
   }
 

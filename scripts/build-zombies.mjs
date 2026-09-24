@@ -16,7 +16,8 @@
 // posture is layered in model space (hunched spine, head hanging to one side, arms reaching forward,
 // limp wrists), and the melee and hit clips are keyed procedurally from that posture, so no
 // weapon or human-combat pose ends up on an enemy. Clips: Zombie_Idle, Zombie_Walk, Zombie_Attack,
-// Zombie_Hit, Zombie_Death, Zombie_DeathForward.
+// Zombie_Hit, Zombie_Death, Zombie_DeathForward, plus Zombie_Run (runner), Zombie_Throw (thrower) and
+// Zombie_Smash (brute).
 //
 // Not part of the normal build. Needs (npm i --no-save): three, @gltf-transform/core@4,
 // @gltf-transform/extensions@4, @gltf-transform/functions@4, sharp.
@@ -195,6 +196,27 @@ const blendArms = (side, lift, strike) => {
   return { upper: pick("upper"), lower: pick("lower"), hand: pick("hand") };
 };
 
+/**
+ * Two-arm overhead claw: arms rise until `windup` - 0.12 s, strike down landing at `windup`, then
+ * recover to the posture by `duration`. `heavy` deepens the wind-up lean and the lunge (the Brute).
+ */
+const clawAttack = (name, windup, duration, heavy = 1) => ({
+  name, source: "Idle_10", duration,
+  pose: (t) => {
+    const lift = smooth(0, windup - 0.12, t) * (1 - smooth(windup - 0.12, windup, t));
+    const strike = smooth(windup - 0.12, windup, t) * (1 - smooth(windup + 0.13, duration, t));
+    return {
+      pitch: (-14 * lift + 24 * strike) * heavy, yaw: 10 * strike, freedom: 0,
+      arms: { Left: blendArms(1, lift, strike), Right: blendArms(-1, lift, strike) },
+    };
+  },
+});
+
+// Thrower: right arm cocked back and up, then flung forward over the shoulder.
+const THROW_BACK = { upper: dir(-0.35, 0.65, -0.65), lower: dir(-0.1, 0.95, -0.2), hand: dir(0, 0.8, -0.6) };
+const THROW_FORE = { upper: dir(-0.15, 0.15, 1), lower: dir(-0.05, -0.25, 1), hand: dir(0, -0.6, 1) };
+const armMix = (a, b, c, u, v) => Object.fromEntries(["upper", "lower", "hand"].map((k) => [k, mix(mix(a[k], b[k], u), c[k], v)]));
+
 const CLIPS = [
   {
     // Swaying on the spot, arms hanging forward (legs from the source's straight rest pose).
@@ -219,15 +241,37 @@ const CLIPS = [
     },
   },
   {
-    // Melee: both arms rise (0 - 0.3 s), then claw down with a lunge (the hit lands ~0.42 s), then
-    // recover. Matches EnemyDef.attackWindup of the walker.
-    name: "Zombie_Attack", source: "Idle_10", duration: 1.0,
-    pose: (t) => {
-      const lift = smooth(0, 0.3, t) * (1 - smooth(0.3, 0.42, t));
-      const strike = smooth(0.3, 0.42, t) * (1 - smooth(0.55, 1.0, t));
+    // Runner sprint: the source run under a deep forward lean, arms flailing half-forward (much of
+    // the run's arm pump kept), head low.
+    name: "Zombie_Run", source: "Running",
+    pose: (t, d) => {
+      const s = Math.sin((2 * Math.PI * t) / d);
       return {
-        pitch: -14 * lift + 24 * strike, yaw: 10 * strike, freedom: 0,
-        arms: { Left: blendArms(1, lift, strike), Right: blendArms(-1, lift, strike) },
+        pitch: 16, sway: 5 * s, yaw: -4 * s, freedom: 0.45, headBack: -6,
+        arms: {
+          Left: { upper: dir(0.4, -0.3 + 0.2 * s, 0.8), lower: dir(0.15, 0.1, 1) },
+          Right: { upper: dir(-0.4, -0.3 - 0.2 * s, 0.8), lower: dir(-0.15, 0.1, 1) },
+        },
+      };
+    },
+  },
+  // Melee: arms rise, then claw down with a lunge; the hit lands at the wind-up time of EnemyDef.
+  clawAttack("Zombie_Attack", 0.42, 1.0),
+  // Brute: slower, heavier overhead smash (hit at 0.7 s).
+  clawAttack("Zombie_Smash", 0.7, 1.35, 1.4),
+  {
+    // Thrower: wind up (torso twists back, right arm cocked) and fling at ~0.52 s (the blob is
+    // released at 0.55 s of the throw state), then recover. The left arm reaches out for balance.
+    name: "Zombie_Throw", source: "Idle_10", duration: 1.1,
+    pose: (t) => {
+      const wind = smooth(0, 0.4, t) * (1 - smooth(0.4, 0.52, t));
+      const fling = smooth(0.4, 0.52, t) * (1 - smooth(0.7, 1.1, t));
+      return {
+        pitch: -10 * wind + 20 * fling, yaw: -28 * wind + 22 * fling, freedom: 0,
+        arms: {
+          Left: { upper: dir(0.55, -0.1 + 0.2 * wind, 0.8), lower: dir(0.35, 0.1, 1) },
+          Right: armMix(POSTURE.arms.Right, THROW_BACK, THROW_FORE, wind, fling),
+        },
       };
     },
   },
@@ -263,6 +307,10 @@ const SKINS = {
   purple: { flesh: [0.54, 0.58, 0.49], cloth: [0.7, 0.58, 0.78], bruise: [0.36, 0.26, 0.4] },
   // Dark brown / gray, decomposed.
   brown: { flesh: [0.3, 0.29, 0.23], cloth: [0.85, 0.75, 0.62] },
+  // Thrower: toxic yellow-green skin with purple sores, bilious clothes.
+  toxic: { flesh: [0.58, 0.7, 0.2], cloth: [0.85, 1.0, 0.5], bruise: [0.45, 0.24, 0.5] },
+  // Brute: dark bruised purple-gray, heavy and swollen-looking.
+  brute: { flesh: [0.29, 0.23, 0.33], cloth: [0.4, 0.33, 0.46], bruise: [0.2, 0.12, 0.24] },
 };
 
 function hsl(r, g, b) {
