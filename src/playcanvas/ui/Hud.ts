@@ -29,6 +29,10 @@ const CSS = `
 #overlay .card small { opacity: 0.8; font-weight: 500; }
 #overlay .card .tag { float: right; font-size: 11px; opacity: 0.7; text-transform: uppercase; }
 #overlay .card.weapon { border-color: #e8a92f; }
+#overlay .cards.compact { grid-template-columns: 1fr 1fr; gap: 8px; }
+#overlay .cards.compact .card { min-height: 58px; padding: 9px 10px; }
+#overlay .cards.compact .card b { font-size: 15px; }
+#overlay .cards.compact .card .tag { display: none; }
 #overlay .card.special { border-color: #9c3bd8; }
 #overlay .card:disabled { opacity: 0.4; }
 #overlay .actions { margin-top: 14px; display: flex; gap: 10px; justify-content: center; }
@@ -188,7 +192,7 @@ export class Hud {
   }
 
   /** Opens the modal with a title, text, optional cards (each a button) and optional actions. */
-  openModal(options: { title: string; text?: string; cards?: Card[]; onCard?: (index: number) => void; actions?: { label: string; onClick: () => void }[] }): void {
+  openModal(options: { title: string; text?: string; cards?: Card[]; compact?: boolean; onCard?: (index: number) => void; actions?: { label: string; onClick: () => void }[] }): void {
     const panel = document.createElement("div");
     panel.className = "panel";
     const h = document.createElement("h2");
@@ -201,7 +205,7 @@ export class Hud {
     }
     if (options.cards) {
       const cards = document.createElement("div");
-      cards.className = "cards";
+      cards.className = options.compact ? "cards compact" : "cards";
       options.cards.forEach((card, i) => {
         const b = document.createElement("button");
         b.type = "button";

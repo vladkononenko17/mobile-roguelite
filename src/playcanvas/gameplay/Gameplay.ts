@@ -4,7 +4,7 @@ import type { PlayerController } from "../player/PlayerController";
 import type { WeaponHolder } from "../player/WeaponHolder";
 import type { Hud } from "../ui/Hud";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
-import { DROPS, ENEMY_LIMITS, LEVELS, RUN_START, WEAPON_STATS } from "./config";
+import { DROPS, ENEMY_LIMITS, LEVELS, RUN_START, SHOP, WEAPON_STATS, type ShopItem } from "./config";
 import { Effects } from "./Effects";
 import { EnemyManager, type BodySource, type Enemy } from "./EnemyManager";
 import { Hazards } from "./Hazards";
@@ -22,7 +22,7 @@ interface Bounds {
   maxZ: number;
 }
 
-export type RunPhase = "loading" | "combat" | "cleared" | "dead" | "complete";
+export type RunPhase = "loading" | "combat" | "cleared" | "reward" | "shop" | "dead" | "complete";
 
 async function loadBody(app: AppBase, url: string): Promise<BodySource> {
   const asset = await new Promise<Asset>((resolve, reject) => {
@@ -171,21 +171,78 @@ export class Gameplay {
     this.hud.showBanner(`${this.director.level.label} CLEARED`, 2.6);
   }
 
-  /** After the clear pause: the next level, or the end of the run. */
+  /** After the clear pause: boss reward, shop, then the next level (or the end of the run). */
   private afterLevel(): void {
     const next = this.director.levelIndex + 1;
-    if (next >= LEVELS.length) {
-      this.phase = "complete";
-      this.player.controlsEnabled = false;
-      this.player.aimYawDeg = null;
-      this.hud.openModal({
-        title: "RUN COMPLETE",
-        text: `The outpost is quiet. ${this.stats.kills} kills · ${this.stats.scrap} scrap left.`,
-        actions: [{ label: "New run", onClick: () => this.startRun() }],
-      });
+    if (next < LEVELS.length) {
+      this.openReward(next);
       return;
     }
-    this.startLevel(next);
+    this.phase = "complete";
+    this.player.controlsEnabled = false;
+    this.player.aimYawDeg = null;
+    this.hud.openModal({
+      title: "RUN COMPLETE",
+      text: `The outpost is quiet. ${this.stats.kills} kills · ${this.stats.scrap} scrap left.`,
+      actions: [{ label: "New run", onClick: () => this.startRun() }],
+    });
+  }
+
+  /** Boss reward: choose one of three random upgrades. Combat is paused. */
+  private openReward(next: number): void {
+    this.phase = "reward";
+    this.player.controlsEnabled = false;
+    this.player.aimYawDeg = null;
+    const offers = rollUpgrades(this.stats, 3);
+    this.hud.openModal({
+      title: "CHOOSE AN UPGRADE",
+      text: `${this.director.level.label} boss down. Pick one:`,
+      cards: offers.map((u) => ({ title: u.title, text: u.text, tag: u.category, kind: u.category })),
+      onCard: (i) => {
+        applyUpgrade(this.stats, offers[i].id);
+        this.openShop(next);
+      },
+    });
+  }
+
+  /** Between levels: spend scrap. */
+  private openShop(next: number): void {
+    this.phase = "shop";
+    const s = this.stats;
+    const items = SHOP.filter((item) => !item.weapon || WEAPON_STATS[item.weapon]);
+    const soldOut = (item: ShopItem) => (item.weapon ? s.owned.has(item.weapon) : false) || (item.id === "heal" && s.hp >= s.maxHp);
+    this.hud.openModal({
+      title: "SHOP",
+      compact: true,
+      text: `Scrap: ${s.scrap} · HP ${Math.ceil(s.hp)}/${s.maxHp} · ${WEAPONS.list[s.weapon]?.label ?? s.weapon}`,
+      cards: items.map((item) => ({
+        title: `${item.title} — ${item.cost}`,
+        text: soldOut(item) ? (item.weapon ? "Owned" : "HP full") : item.text,
+        tag: item.weapon ? "weapon" : "",
+        kind: item.weapon ? "weapon" : "player",
+        disabled: soldOut(item) || s.scrap < item.cost,
+      })),
+      onCard: (i) => {
+        const item = items[i];
+        if (s.scrap < item.cost || soldOut(item)) return;
+        s.scrap -= item.cost;
+        this.buy(item);
+        this.openShop(next);
+      },
+      actions: [{ label: `Continue to ${LEVELS[next].label}`, onClick: () => this.startLevel(next) }],
+    });
+  }
+
+  private buy(item: ShopItem): void {
+    const s = this.stats;
+    switch (item.id) {
+      case "heal": s.hp = s.maxHp; break;
+      case "maxHp": s.maxHp += 25; s.heal(25); break;
+      case "armor": s.armor = Math.min(0.6, s.armor + 0.1); break;
+      case "damage": s.damageMult *= 1.1; break;
+      case "fireRate": s.fireRateMult *= 1.1; break;
+      default: if (item.weapon) this.equip(item.weapon);
+    }
   }
 
   private onEnemyDeath(enemy: Enemy): void {
