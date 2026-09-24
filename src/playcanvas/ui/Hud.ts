@@ -1,5 +1,6 @@
 import { Vec3, type CameraComponent, type Entity } from "playcanvas";
-import { CATEGORY_COLORS, iconSvg, type UpgradeCategory, type UpgradeIcon, type UpgradeRarity } from "./UpgradeIcons";
+import "@fontsource/barlow-condensed/latin-800.css";
+import { CATEGORY_COLORS, ICON_PATHS, iconSvg, type UpgradeCategory, type UpgradeIcon, type UpgradeRarity } from "./UpgradeIcons";
 
 const CSS = `
 #hud { position: fixed; inset: 0; pointer-events: none; font: 600 14px system-ui, sans-serif; color: #f3e7d3; z-index: 5; }
@@ -8,10 +9,29 @@ const CSS = `
 #hud .bar > i { position: absolute; inset: 0 auto 0 0; background: #d8463a; transition: width 0.15s; }
 #hud .bar > span { position: absolute; inset: 0; text-align: center; font-size: 11px; line-height: 16px; text-shadow: 0 1px 2px #000; }
 #hud .level .bar > i { background: #e8a92f; }
-#hud .chips { display: flex; gap: 8px; justify-content: flex-end; }
-#hud .chip.cash { color: #8fe08a; font-variant-numeric: tabular-nums; }
-#hud .chip.cash.pop { animation: cash-pop 0.25s ease-out; }
-@keyframes cash-pop { 50% { transform: scale(1.18); } }
+#hud .chips { display: flex; gap: 8px; justify-content: flex-start; }
+#hud .left { display: grid; gap: 6px; align-content: start; }
+/* GTA III style: money and health as big outlined numbers, top right. */
+#hud .gta { display: grid; justify-items: end; gap: 0; font: 800 30px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
+#hud .gta .money, #hud .gta .health { position: relative; display: grid; transform-origin: 100% 50%; }
+#hud .gta .money > *, #hud .gta .health > .num > * { grid-area: 1 / 1; }
+/* Outline layer under the fill layer (a stroke on gradient-clipped text is unreliable on Safari). */
+#hud .gta .o { color: #000; -webkit-text-stroke: 5px #000; text-shadow: 0 2px 3px rgba(0, 0, 0, 0.7); }
+#hud .gta .money .f { color: #58b83c; background: linear-gradient(100deg, #2f7d22 0%, #5cc23f 30%, #5cc23f 42%, #f2ffd8 50%, #5cc23f 58%, #5cc23f 70%, #2f7d22 100%);
+  background-size: 300% 100%; background-position: 100% 0; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: money-shine 3.2s ease-in-out infinite; }
+#hud .gta .money.pop { animation: money-pop 0.3s ease-out; }
+#hud .gta .money.pop .f { animation: money-shine 3.2s ease-in-out infinite, money-flash 0.45s ease-out; }
+@keyframes money-shine { 0%, 55% { background-position: 100% 0; } 100% { background-position: 0% 0; } }
+@keyframes money-flash { 0% { filter: brightness(1.9); } 100% { filter: brightness(1); } }
+@keyframes money-pop { 40% { transform: scale(1.12); } }
+#hud .gta .health { grid-auto-flow: column; align-items: center; gap: 5px; font-size: 26px; }
+#hud .gta .health svg { width: 20px; height: 20px; fill: #ff7aa2; stroke: #000; stroke-width: 2.4px; paint-order: stroke; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.6)); }
+#hud .gta .health .num { display: grid; }
+#hud .gta .health .f { color: #ff7aa2; }
+#hud .gta .health.low { animation: hp-blink 0.8s steps(2, jump-none) infinite; }
+#hud .gta .health.hit { animation: hp-hit 0.3s ease-out; }
+@keyframes hp-blink { 50% { opacity: 0.25; } }
+@keyframes hp-hit { 30% { transform: scale(1.15); filter: brightness(1.6); } }
 #hud .chip { background: rgba(20, 15, 12, 0.6); border: 1px solid rgba(243, 231, 211, 0.35); border-radius: 8px; padding: 2px 8px; white-space: nowrap; }
 #hud .gear { pointer-events: auto; background: rgba(20, 15, 12, 0.6); border: 1px solid rgba(243, 231, 211, 0.35); color: inherit; border-radius: 8px; font: inherit; padding: 2px 8px; }
 #hud .boss { position: absolute; left: 12%; right: 12%; top: calc(max(10px, env(safe-area-inset-top)) + 58px); display: none; text-align: center; font-size: 12px; text-shadow: 0 1px 2px #000; }
@@ -67,6 +87,13 @@ const CSS = `
 body:not(.debug-on) #debug { display: none; }
 `;
 
+/** Re-triggers a one-shot CSS animation class. */
+function restartAnimation(el: HTMLElement, cls: string): void {
+  el.classList.remove(cls);
+  void el.offsetWidth;
+  el.classList.add(cls);
+}
+
 export interface Card {
   title: string;
   text: string;
@@ -102,11 +129,12 @@ interface Floater {
 export class Hud {
   private readonly root: HTMLElement;
   private readonly overlay: HTMLElement;
-  private readonly hp: HTMLElement;
-  private readonly hpText: HTMLElement;
+  private readonly health: HTMLElement;
+  private readonly hpText: HTMLElement[];
   private readonly level: HTMLElement;
   private readonly levelText: HTMLElement;
-  private readonly cash: HTMLElement;
+  private readonly money: HTMLElement;
+  private readonly moneyText: HTMLElement[];
   private readonly weapon: HTMLElement;
   private readonly boss: HTMLElement;
   private readonly bossBar: HTMLElement;
@@ -132,10 +160,14 @@ export class Hud {
     this.root.innerHTML = `
       <div class="hurt"></div>
       <div class="top">
-        <div class="bar hp"><i></i><span></span></div>
-        <div class="chips"><span class="chip cash"></span><button type="button" class="gear" aria-label="debug">⚙</button></div>
-        <div class="level"><div class="bar"><i></i><span></span></div></div>
-        <div class="chips"><span class="chip weapon"></span></div>
+        <div class="left">
+          <div class="level"><div class="bar"><i></i><span></span></div></div>
+          <div class="chips"><span class="chip weapon"></span><button type="button" class="gear" aria-label="debug">⚙</button></div>
+        </div>
+        <div class="gta">
+          <div class="money"><span class="o"></span><span class="f"></span></div>
+          <div class="health"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICON_PATHS.heart}"/></svg><span class="num"><span class="o"></span><span class="f"></span></span></div>
+        </div>
       </div>
       <div class="boss"><span></span><div class="bar"><i></i></div></div>
       <div class="banner"></div>
@@ -146,11 +178,12 @@ export class Hud {
     this.overlay.id = "overlay";
     document.body.append(this.overlay);
     const q = (s: string) => this.root.querySelector<HTMLElement>(s)!;
-    this.hp = q(".hp > i");
-    this.hpText = q(".hp > span");
+    this.health = q(".gta .health");
+    this.hpText = [...this.health.querySelectorAll<HTMLElement>(".num > span")];
     this.level = q(".level .bar > i");
     this.levelText = q(".level .bar > span");
-    this.cash = q(".cash");
+    this.money = q(".gta .money");
+    this.moneyText = [...this.money.querySelectorAll<HTMLElement>(":scope > span")];
     this.weapon = q(".weapon");
     this.boss = q(".boss");
     this.bossName = q(".boss > span");
@@ -176,9 +209,16 @@ export class Hud {
     }
   }
 
+  private shownHp = -1;
+
+  /** Health as a plain number (GTA style); it blinks below a quarter and bumps when it drops. */
   setHp(hp: number, max: number): void {
-    this.hp.style.width = `${(100 * Math.max(0, hp)) / max}%`;
-    this.hpText.textContent = `${Math.ceil(Math.max(0, hp))} / ${max}`;
+    const value = Math.ceil(Math.max(0, hp));
+    if (value === this.shownHp) return;
+    if (value < this.shownHp) restartAnimation(this.health, "hit");
+    this.shownHp = value;
+    for (const el of this.hpText) el.textContent = String(value);
+    this.health.classList.toggle("low", value > 0 && value <= max * 0.25);
   }
 
   setLevel(label: string, progress: number, right: string): void {
@@ -190,14 +230,12 @@ export class Hud {
 
   setCash(amount: number): void {
     if (amount === this.shownCash) return;
-    // A short pop when cash comes in (not on the first draw or when spending).
-    if (amount > this.shownCash && this.shownCash >= 0) {
-      this.cash.classList.remove("pop");
-      void this.cash.offsetWidth;
-      this.cash.classList.add("pop");
-    }
+    // A pop and flash when cash comes in (not on the first draw or when spending).
+    if (amount > this.shownCash && this.shownCash >= 0) restartAnimation(this.money, "pop");
     this.shownCash = amount;
-    this.cash.textContent = `$ ${amount}`;
+    // GTA III money: eight zero-padded digits.
+    const text = `$${String(Math.max(0, Math.floor(amount))).padStart(8, "0")}`;
+    for (const el of this.moneyText) el.textContent = text;
   }
 
   setWeapon(label: string, ammo: number, magazine: number, reloading: boolean): void {
