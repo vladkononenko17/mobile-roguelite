@@ -200,8 +200,9 @@ export class Game {
     // where the hero faces (the weapon follows the right hand's WeaponSocket), then left-arm IK onto
     // the weapon's LeftHandGrip and the finger grip on both hands.
     const aimWeight = this.animation.upperBodyWeight;
-    this.aimTwist?.apply(this.weapons.entity !== null, this.player.yawDeg, aimWeight, dt);
-    this.weaponHands?.update(this.weapons, aimWeight);
+    // Only clip-aimed weapons need the twist; a ready hold aims along the facing by itself.
+    this.aimTwist?.apply(this.weapons.entity !== null && !this.weapons.hold, this.player.yawDeg, aimWeight, dt);
+    this.weaponHands?.update(this.weapons, aimWeight, this.player.yawDeg);
     const device = this.app.graphicsDevice;
     this.camera.update(dt, device.width / Math.max(1, device.height));
 

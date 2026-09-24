@@ -140,6 +140,11 @@ export class WeaponHolder {
     return marker && def ? { marker, def } : null;
   }
 
+  /** The held weapon's ready hold, when it is held by grips and has one. */
+  get hold(): WeaponDef["hold"] {
+    return this.current && this.markers.size ? (WEAPONS.list[this.current] as WeaponDef).hold : undefined;
+  }
+
   /** The right hand's WeaponSocket (null for characters without `hands`). */
   get socket(): Entity | null {
     return this.socketEntity;

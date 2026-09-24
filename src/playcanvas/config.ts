@@ -129,12 +129,16 @@ export type CharacterId = keyof typeof CHARACTERS;
  * along the hand with the weapon's top facing the back of the hand. `rollDeg` then turns the weapon
  * about the hand's finger axis; -43° keeps a rifle upright (not canted) in the Vanguard's aiming
  * pose (Run_and_Shoot). `position` is in hand-bone space (metres, before the character scale).
- * `pose` is the clip played on the arms and torso while the weapon is held (null = normal arms);
+ * `pose` is the clip played on the arms and torso while the weapon is held (null = normal arms;
+ * "@idle" = the character's own idle clip, a calm base for a `hold`);
  * `attack` is the full-body clip played once by the attack action (Space / on-screen button).
  * Optional `scale` resizes the weapon.
  *
  * Optional `grips` (weapon space, muzzle -Z; see GripFrame) define how hands hold it: `right` is the
- * handle the right hand holds (the pistol grip), `left` the support grip (the handguard). On a
+ * handle the right hand holds (the pistol grip; it goes on the hand's WeaponSocket), `left` the
+ * second hand's grip (a rifle's handguard, a pistol's support grip over the right hand, later an axe's
+ * lower handle). The grip pose is `pose` + `hold`: a rifle aims with its upper-body clip, a pistol
+ * uses a ready `hold` over the character's idle upper body. On a
  * character with `hands`, the weapon is parented to the right hand's WeaponSocket so its right grip
  * sits in the palm (the right hand leads, the weapon follows it); the left hand is put on the left
  * grip by IK and both hands' fingers wrap the handles (player/WeaponHands.ts). Markers named
@@ -160,7 +164,18 @@ export const WEAPONS = {
     },
     shotgun: { label: "Shotgun", node: "shotgun_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
     sniper: { label: "Sniper rifle", node: "sniper_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
-    pistol: { label: "Pistol", node: "pistol_1", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
+    // Two-handed ready stance (not the rifle clip): the upper body plays the character's own idle
+    // over the legs, and arm IK holds the pistol in front of the upper chest, pointing where the hero
+    // faces. Measured on the model: grip y -0.06..0, z ~0.03-0.09, 2.8 cm wide; slide above it.
+    // `left` is the support hand: its palm on the left side of the grip, over the right fingers.
+    pistol: {
+      label: "Pistol", node: "pistol_1", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "@idle", attack: null,
+      grips: {
+        right: { position: [0, -0.03, 0.06], axis: [0, 0.96, -0.28], palm: [0.9, 0.08, 0.28], radius: 0.016 },
+        left: { position: [0, -0.03, 0.06], axis: [0, 0.96, -0.28], palm: [-0.9, 0.08, 0.28], radius: 0.042, rollRangeDeg: 20 },
+      },
+      hold: { chest: [-0.02, -0.01, 0.36], pitchDeg: -4 },
+    },
     knife: { label: "Knife", node: "tactical_knife", position: [0, 0.08, 0.01], rotation: [90, 0, 0], rollDeg: 0, pose: null, attack: "Attack" },
     grenade: { label: "Grenade", node: "frag_grenade", position: [0, 0.09, -0.01], rotation: [90, 0, 0], rollDeg: 0, pose: null, attack: null },
     // "Flat Guns East" (flat colours)
@@ -192,6 +207,13 @@ export interface WeaponDef {
   rollDeg: number;
   scale?: number;
   grips?: { right: WeaponGrip; left?: WeaponGrip };
+  /**
+   * "Ready" hold instead of an aiming clip (needs `grips` and character `hands`): the right palm
+   * (the pistol grip) is held at `chest` (metres, before the character scale: right / up / forward
+   * of the chest bone in the hero's facing frame) and the weapon points along the facing, pitched by
+   * `pitchDeg`. Use with `pose: "@idle"` so the upper body is calm while the legs keep moving.
+   */
+  hold?: { chest: Vec3Tuple; pitchDeg: number };
   pose: string | null;
   attack: string | null;
 }
@@ -384,6 +406,8 @@ export const AIM = {
   /** Share of a gripping hand's extra roll that the forearm takes as a twist about its own axis
    * (pronation / supination) instead of the wrist (player/ArmIK.ts). */
   forearmTwistShare: 0.5,
+  /** Chest bone a weapon `hold` is anchored to. */
+  chestBone: "mixamorig:Spine2",
   /** How far arm IK may swing an elbow around the shoulder-wrist line to straighten the wrist. */
   elbowSwivelDeg: 75,
   /** Higher follows faster; ~8 settles in a quarter second. */

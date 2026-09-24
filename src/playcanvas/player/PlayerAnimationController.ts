@@ -28,6 +28,7 @@ export class PlayerAnimationController {
   strideScale = 1;
   private actionTime = 0;
   private actionDuration = 0;
+  private readonly idleTrack: AnimTrack;
 
   constructor(
     private readonly model: Entity,
@@ -48,6 +49,7 @@ export class PlayerAnimationController {
     if (!fallback) throw new Error("Character GLB contains no animation clips.");
     const resolved = { Idle: idle ?? fallback, Walk: walk ?? fallback, Run: run ?? fallback };
     this.clipNames = { Idle: resolved.Idle.name, Walk: resolved.Walk.name, Run: resolved.Run.name };
+    this.idleTrack = resolved.Idle;
 
     const t = ANIMATION.blendTime;
     const faster = (value: number) => [{ parameterName: "speed", predicate: ANIM_GREATER_THAN, value }];
@@ -115,13 +117,14 @@ export class PlayerAnimationController {
 
   /**
    * Plays `clipName` on the arms and torso only (e.g. a rifle-aiming clip while a gun is held),
-   * over the normal locomotion; null returns the whole body to locomotion.
+   * over the normal locomotion; "@idle" plays the character's idle there (a calm upper body for
+   * IK-held weapons); null returns the whole body to locomotion.
    */
   setUpperBodyPose(clipName: string | null): void {
     const anim = this.model.anim;
     const upper = anim?.findAnimationLayer("UpperBody");
     if (!anim || !upper) return;
-    const track = clipName ? findTrack(this.tracks, clipName) : undefined;
+    const track = clipName === "@idle" ? this.idleTrack : clipName ? findTrack(this.tracks, clipName) : undefined;
     if (clipName && !track) console.warn(`[PlayerAnimation] Upper-body clip ${clipName} not found.`);
     if (track) anim.assignAnimation("Pose", track, "UpperBody");
     upper.weight = track ? 1 : 0;

@@ -1,5 +1,5 @@
-import { Color, Mat4, Quat, Vec3, type AppBase, type Entity, type GraphNode } from "playcanvas";
-import { AIM, type CharacterModel } from "../config";
+import { Color, Mat4, Quat, Vec3, math, type AppBase, type Entity, type GraphNode } from "playcanvas";
+import { AIM, type CharacterModel, type WeaponDef } from "../config";
 import { FingerGrip } from "./FingerGrip";
 import { gripMatrix } from "./GripFrame";
 import { ArmIK } from "./ArmIK";
@@ -34,6 +34,8 @@ export class WeaponHands {
   private readonly leftPalmInverse = new Mat4();
   private readonly rightHand: GraphNode | null;
   private readonly leftHand: GraphNode | null;
+  private readonly chest: GraphNode | null;
+  private readonly aim = new Vec3();
   debug = false;
 
   // Scratch values.
@@ -61,6 +63,7 @@ export class WeaponHands {
     this.rightIK = new ArmIK(model, "Right");
     this.rightHand = model.findByName("mixamorig:RightHand");
     this.leftHand = model.findByName("mixamorig:LeftHand");
+    this.chest = model.findByName(AIM.chestBone);
     const fingers = character.fingers;
     this.rightFingers = fingers ? new FingerGrip(model, "Right", fingers) : null;
     this.leftFingers = fingers ? new FingerGrip(model, "Left", fingers) : null;
@@ -77,11 +80,11 @@ export class WeaponHands {
   }
 
   /** `weight`: how much the weapon pose shows (the upper-body layer weight). */
-  update(weapons: WeaponHolder, weight: number): void {
+  update(weapons: WeaponHolder, weight: number, facingYawDeg: number): void {
     const right = weapons.grip("right");
     const left = weapons.grip("left");
 
-    if (right && weapons.entity && this.character.hands && weight > 0) this.holdRight(weapons.entity, weight);
+    if (right && weapons.entity && this.character.hands && weight > 0) this.holdRight(weapons.entity, weight, weapons.hold, facingYawDeg);
 
     let targetValid = false;
     if (left && this.character.hands && weight > 0) {
@@ -100,12 +103,21 @@ export class WeaponHands {
    * animated aim (hand +Y) with its top up; desired wrist position = keeps the animated palm point
    * (the WeaponSocket) where it is. Right-arm IK then places the arm.
    */
-  private holdRight(weapon: Entity, weight: number): void {
+  private holdRight(weapon: Entity, weight: number, hold: WeaponDef["hold"], facingYawDeg: number): void {
     const hand = this.rightHand;
     if (!hand) return;
     const handWorld = hand.getWorldTransform();
-    // Desired weapon rotation: muzzle (-Z) along the animated aim, top (+Y) toward world up.
-    const z = this.a.copy(handWorld.getY(this.a)).normalize().mulScalar(-1);
+    const scale = handWorld.getScale(this.b).x;
+    // Aim: a clip-aimed weapon follows the animated aim (hand +Y); a held-ready one the facing.
+    const forward = this.aim;
+    if (hold) {
+      const yaw = facingYawDeg * math.DEG_TO_RAD, pitch = hold.pitchDeg * math.DEG_TO_RAD;
+      forward.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+    } else {
+      handWorld.getY(forward).normalize();
+    }
+    // Desired weapon rotation: muzzle (-Z) along the aim, top (+Y) toward world up.
+    const z = this.a.copy(forward).mulScalar(-1);
     const x = this.b.cross(Vec3.UP, z);
     if (x.lengthSq() < 1e-6) return;
     x.normalize();
@@ -117,13 +129,26 @@ export class WeaponHands {
     // weapon = hand * S with S constant (socket and grip), so hand = weapon * inverse(S).
     const handToWeapon = this.q2.copy(hand.getRotation()).invert().mul(weapon.getRotation());
     const desiredHand = this.q3.copy(desiredWeapon).mul(handToWeapon.invert());
-    // Wrist position that keeps the palm point: palm - desiredHand * (palm offset * scale).
-    const palm = handWorld.transformPoint(this.rightPalm, this.position);
-    const scale = handWorld.getScale(this.b).x;
+    // Palm point: where the animation put it, or for a ready hold in front of the chest.
+    const palm = this.position;
+    if (hold && this.chest) {
+      const yaw = facingYawDeg * math.DEG_TO_RAD;
+      const [right, up, ahead] = hold.chest;
+      // Hero's right = -(facing x up) for a +Z-facing model: (-cos, 0, sin) at yaw.
+      palm.copy(this.chest.getPosition()).add(this.a.set(
+        (-Math.cos(yaw) * right + Math.sin(yaw) * ahead) * scale,
+        up * scale,
+        (Math.sin(yaw) * right + Math.cos(yaw) * ahead) * scale,
+      ));
+    } else {
+      handWorld.transformPoint(this.rightPalm, palm);
+    }
+    // Wrist position that puts the palm point there: palm - desiredHand * (palm offset * scale).
     const offset = desiredHand.transformVector(this.a.copy(this.rightPalm).mulScalar(scale), this.a);
     this.origin.sub2(palm, offset);
     this.rightIK.apply(this.origin, desiredHand, weight, AIM.forearmTwistShare, AIM.elbowSwivelDeg);
   }
+
 
   /**
    * Left wrist target = LeftHandGrip, rolled about the handle axis, moved out to the handle surface,
