@@ -8,3 +8,6 @@ assets-src/atomic-realm/
 
 # SHS Monsters Pack: licence forbids sharing the raw files; keep local only
 assets-src/shs-monsters/
+
+# Source textures are real assets, not screenshots
+!assets-src/**/*.png
