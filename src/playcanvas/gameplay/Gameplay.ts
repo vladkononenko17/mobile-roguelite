@@ -342,7 +342,7 @@ export class Gameplay {
     const label = WEAPONS.list[s.weapon]?.label ?? s.weapon;
     this.hud.setWeapon(label, this.gun.ammo, ws?.magazine ?? 0, this.gun.reloading > 0);
     const remaining = Math.max(0, d.duration - d.time);
-    const right = d.phase === "waves" ? `${Math.floor(remaining / 60)}:${String(Math.floor(remaining % 60)).padStart(2, "0")}` : d.phase === "boss" ? "BOSS" : "CLEAR";
+    const right = d.phase === "waves" ? `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(Math.floor(remaining % 60)).padStart(2, "0")}` : d.phase === "boss" ? "BOSS" : "CLEAR";
     this.hud.setLevel(d.level.label, d.progress, right);
     const boss = d.boss && d.boss.state !== "dead" ? d.boss : null;
     this.hud.setBoss(boss ? boss.def.label : null, boss ? boss.hp / boss.maxHp : 0);

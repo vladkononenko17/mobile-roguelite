@@ -1,48 +1,78 @@
 import { Vec3, type CameraComponent, type Entity } from "playcanvas";
+import "@fontsource/barlow-condensed/latin-700.css";
 import "@fontsource/barlow-condensed/latin-800.css";
 import { CATEGORY_COLORS, ICON_PATHS, iconSvg, type UpgradeCategory, type UpgradeIcon, type UpgradeRarity } from "./UpgradeIcons";
 
 const CSS = `
-#hud { position: fixed; inset: 0; pointer-events: none; font: 600 14px system-ui, sans-serif; color: #f3e7d3; z-index: 5; }
-#hud .top { position: absolute; left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); top: max(10px, env(safe-area-inset-top)); display: grid; grid-template-columns: minmax(0, min(200px, 50%)) 1fr; gap: 6px 10px; align-items: start; }
-#hud .bar { position: relative; height: 16px; border-radius: 8px; background: rgba(20, 15, 12, 0.6); border: 1px solid rgba(243, 231, 211, 0.35); overflow: hidden; }
-#hud .bar > i { position: absolute; inset: 0 auto 0 0; background: #d8463a; transition: width 0.15s; }
-#hud .bar > span { position: absolute; inset: 0; text-align: center; font-size: 11px; line-height: 16px; text-shadow: 0 1px 2px #000; }
-#hud .level .bar > i { background: #e8a92f; }
-#hud .chips { display: flex; gap: 8px; justify-content: flex-start; }
-#hud .left { display: grid; gap: 6px; align-content: start; }
-/* GTA III style: money and health as big outlined numbers, top right. */
-#hud .gta { justify-self: end; min-width: 0; display: grid; justify-items: end; gap: 0; font: 800 30px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
-#hud .gta .money, #hud .gta .health { position: relative; display: grid; transform-origin: 100% 50%; }
-#hud .gta .money > *, #hud .gta .health > .num > * { grid-area: 1 / 1; }
-/* Outline layer under the fill layer (a stroke on gradient-clipped text is unreliable on Safari). */
-#hud .gta .o { color: #000; -webkit-text-stroke: 5px #000; text-shadow: 0 2px 3px rgba(0, 0, 0, 0.7); }
-#hud .gta .money .f { color: #58b83c; background: linear-gradient(100deg, #2f7d22 0%, #5cc23f 30%, #5cc23f 42%, #f2ffd8 50%, #5cc23f 58%, #5cc23f 70%, #2f7d22 100%);
-  background-size: 300% 100%; background-position: 100% 0; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: money-shine 3.2s ease-in-out infinite; }
-#hud .gta .money.pop { animation: money-pop 0.3s ease-out; }
-#hud .gta .money.pop .f { animation: money-shine 3.2s ease-in-out infinite, money-flash 0.45s ease-out; }
-@keyframes money-shine { 0%, 55% { background-position: 100% 0; } 100% { background-position: 0% 0; } }
-@keyframes money-flash { 0% { filter: brightness(1.9); } 100% { filter: brightness(1); } }
-@keyframes money-pop { 40% { transform: scale(1.12); } }
-#hud .gta .health { grid-auto-flow: column; align-items: center; gap: 5px; font-size: 26px; }
-#hud .gta .health svg { width: 20px; height: 20px; fill: #ff7aa2; stroke: #000; stroke-width: 2.4px; paint-order: stroke; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.6)); }
-#hud .gta .health .num { display: grid; }
-#hud .gta .health .f { color: #ff7aa2; }
-#hud .gta .health.low { animation: hp-blink 0.8s steps(2, jump-none) infinite; }
-#hud .gta .health.hit { animation: hp-hit 0.3s ease-out; }
-@keyframes hp-blink { 50% { opacity: 0.25; } }
-@keyframes hp-hit { 30% { transform: scale(1.15); filter: brightness(1.6); } }
-#hud .chip { background: rgba(20, 15, 12, 0.6); border: 1px solid rgba(243, 231, 211, 0.35); border-radius: 8px; padding: 2px 8px; white-space: nowrap; }
-#hud .gear { pointer-events: auto; background: rgba(20, 15, 12, 0.6); border: 1px solid rgba(243, 231, 211, 0.35); color: inherit; border-radius: 8px; font: inherit; padding: 2px 8px; }
-#hud .boss { position: absolute; left: 12%; right: 12%; top: calc(max(10px, env(safe-area-inset-top)) + 58px); display: none; text-align: center; font-size: 12px; text-shadow: 0 1px 2px #000; }
-#hud .boss .bar { height: 12px; margin-top: 2px; }
-#hud .boss .bar > i { background: #9c3bd8; }
-#hud .banner { position: absolute; left: 0; right: 0; top: 34%; text-align: center; font-size: 28px; letter-spacing: 0.06em; text-shadow: 0 2px 6px #000; opacity: 0; transition: opacity 0.3s; }
-#hud .hurt { position: absolute; inset: 0; box-shadow: inset 0 0 90px 30px rgba(200, 20, 10, 0.6); opacity: 0; transition: opacity 0.25s; }
-#hud .dmg { position: absolute; font-size: 15px; font-weight: 800; text-shadow: 0 1px 2px #000, 0 0 3px #000; transform: translate(-50%, -50%); white-space: nowrap; }
-#hud .dmg.crit { color: #ffd23a; font-size: 19px; }
-#hud .dmg.player { color: #ff5a4a; }
-#hud .dmg.heal { color: #7dff8a; font-size: 17px; }
+/* One HUD language: charcoal translucent plates with a thin highlight, cream text, road-line amber
+   accent, muted dollar green, dark red health; Barlow Condensed throughout. Top corners only. */
+#hud { --bg: rgba(23, 23, 20, 0.74); --bg2: rgba(36, 33, 27, 0.74); --line: rgba(239, 230, 210, 0.13); --hi: rgba(239, 230, 210, 0.22);
+  --cream: #ece3cf; --amber: #d6a23c; --green: #8fae6a; --red: #a33b30; --warn: #e2692a;
+  position: fixed; inset: 0; pointer-events: none; font: 700 13px/1 "Barlow Condensed", system-ui, sans-serif; color: var(--cream); z-index: 5;
+  font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+#hud .plate { position: relative; background: linear-gradient(180deg, var(--bg2), var(--bg)), repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.025) 0 2px, transparent 2px 5px);
+  border: 1px solid var(--line); border-top-color: var(--hi); border-radius: 3px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
+#hud .corner { position: absolute; top: max(10px, env(safe-area-inset-top)); display: grid; gap: 5px; }
+#hud .tl { left: max(10px, env(safe-area-inset-left)); justify-items: start; }
+#hud .tr { right: max(10px, env(safe-area-inset-right)); justify-items: end; }
+#hud .cap { font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
+/* Level + timer, with the level progress as the plate's bottom edge. */
+#hud .lvl { display: grid; gap: 2px; padding: 5px 10px 7px 9px; min-width: 66px; box-shadow: inset 2px 0 0 var(--amber), 0 2px 6px rgba(0, 0, 0, 0.45); }
+#hud .lvl .cap { color: var(--amber); }
+#hud .lvl .time { font-size: 24px; font-weight: 800; letter-spacing: 0.03em; }
+#hud .lvl .time.alert { color: var(--warn); font-size: 19px; letter-spacing: 0.1em; }
+#hud .lvl .prog { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(0, 0, 0, 0.45); overflow: hidden; border-radius: 0 0 3px 3px; }
+#hud .lvl .prog > i { position: absolute; inset: 0 auto 0 0; background: var(--amber); transition: width 0.3s linear; }
+/* Ammo: small weapon name, big magazine count, smaller capacity. */
+#hud .row { display: flex; gap: 5px; align-items: stretch; }
+#hud .ammo { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; align-items: end; column-gap: 6px; padding: 4px 9px 5px 7px; }
+#hud .ammo svg { grid-row: 1 / 3; width: 14px; height: 18px; fill: var(--amber); align-self: center; }
+#hud .ammo .cap { font-size: 8px; opacity: 0.6; letter-spacing: 0.2em; margin-bottom: 1px; }
+#hud .ammo .count { display: flex; align-items: baseline; gap: 3px; }
+#hud .ammo b { font-size: 21px; font-weight: 800; transition: color 0.2s; }
+#hud .ammo small { font-size: 12px; opacity: 0.55; }
+#hud .ammo.low b { color: var(--warn); animation: hud-pulse 0.9s ease-in-out infinite; }
+#hud .ammo.reloading b { opacity: 0.3; }
+#hud .ammo.reloading .cap { color: var(--amber); opacity: 1; animation: hud-blink 0.6s steps(2, jump-none) infinite; }
+#hud .gear { pointer-events: auto; width: 26px; height: 26px; align-self: center; padding: 0; display: grid; place-items: center; color: var(--cream); opacity: 0.75; }
+#hud .gear svg { width: 15px; height: 15px; }
+#hud .gear:active { opacity: 1; }
+/* Money: note icon + amount; pops, flashes and floats "+N" when cash comes in. */
+#hud .money { display: flex; align-items: center; gap: 6px; padding: 4px 9px 4px 7px; transform-origin: 100% 50%; }
+#hud .money svg { width: 19px; height: 13px; fill: var(--green); }
+#hud .money b { font-size: 19px; font-weight: 800; color: #b6c99a; min-width: 1ch; text-align: right; }
+#hud .money.pop { animation: money-pop 0.35s ease-out; }
+#hud .money.pop b { animation: money-flash 0.5s ease-out; }
+#hud .gain { position: absolute; right: calc(100% + 6px); top: 5px; font-size: 14px; font-weight: 800; color: #c9d98a; opacity: 0; }
+#hud .gain.show { animation: money-gain 0.8s ease-out forwards; }
+@keyframes money-pop { 35% { transform: scale(1.14); } }
+@keyframes money-flash { 0% { color: #f1dc86; text-shadow: 0 0 8px rgba(214, 190, 80, 0.8), 0 1px 2px #000; } 100% { color: #b6c99a; } }
+@keyframes money-gain { 0% { opacity: 0; transform: translateX(6px); } 20% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-10px); } }
+/* Health: heart + number over a short bar; brighter red and a pulse only when low. */
+#hud .health { display: grid; grid-template-columns: auto auto; align-items: center; gap: 4px 6px; padding: 4px 9px 6px 7px; min-width: 74px; justify-content: end; }
+#hud .health svg { width: 13px; height: 13px; fill: var(--red); }
+#hud .health b { font-size: 17px; font-weight: 800; text-align: right; }
+#hud .health .hpbar { grid-column: 1 / 3; height: 3px; background: rgba(0, 0, 0, 0.5); border-radius: 1px; overflow: hidden; position: relative; }
+#hud .health .hpbar > i { position: absolute; inset: 0 auto 0 0; background: var(--red); transition: width 0.2s; }
+#hud .health.low b { color: #e0553e; }
+#hud .health.low svg { fill: #e0553e; animation: hud-pulse 0.8s ease-in-out infinite; }
+#hud .health.low .hpbar > i { background: #d9432e; }
+#hud .health.hit { animation: hp-hit 0.3s ease-out; }
+@keyframes hp-hit { 30% { transform: translateX(-2px); } 60% { transform: translateX(2px); } }
+@keyframes hud-pulse { 50% { opacity: 0.55; transform: scale(0.92); } }
+@keyframes hud-blink { 50% { opacity: 0.35; } }
+/* Boss: a narrow plate at the top centre, just under the corner stacks. */
+#hud .boss { position: absolute; left: 50%; transform: translateX(-50%); width: min(46vw, 220px); top: calc(max(10px, env(safe-area-inset-top)) + 86px); display: none; padding: 4px 7px 6px; text-align: center; }
+#hud .boss > span { display: block; color: #d9a0a0; margin-bottom: 4px; }
+#hud .boss .bar { height: 5px; background: rgba(0, 0, 0, 0.5); border-radius: 1px; overflow: hidden; position: relative; }
+#hud .boss .bar > i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #7d2a22, #b8452f); transition: width 0.15s; }
+#hud .banner { position: absolute; left: 0; right: 0; top: 34%; text-align: center; font-size: 30px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; text-shadow: 0 2px 6px #000; opacity: 0; transition: opacity 0.3s; }
+#hud .banner::after { content: ""; display: block; width: 42px; height: 2px; margin: 7px auto 0; background: var(--amber); }
+#hud .hurt { position: absolute; inset: 0; box-shadow: inset 0 0 90px 30px rgba(170, 20, 10, 0.55); opacity: 0; transition: opacity 0.25s; }
+#hud .dmg { position: absolute; font-size: 16px; font-weight: 800; text-shadow: 0 1px 2px #000, 0 0 3px #000; transform: translate(-50%, -50%); white-space: nowrap; }
+#hud .dmg.crit { color: #f0c24a; font-size: 20px; }
+#hud .dmg.player { color: #e0553e; }
+#hud .dmg.heal { color: #9fcf78; font-size: 17px; }
 #hud .upgrade { --c: #ffb13b; position: absolute; left: 50%; top: 19%; transform: translateX(-50%); max-width: min(52vw, 280px); display: flex; flex-direction: column; align-items: center; gap: 7px; opacity: 0; }
 #hud .upgrade.show { animation: up-life 1.6s ease-out forwards; }
 #hud .upgrade .disc { position: relative; width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center; border: 2px solid rgba(255, 250, 235, 0.9);
@@ -87,6 +117,12 @@ const CSS = `
 body:not(.debug-on) #debug { display: none; }
 `;
 
+/** Settings cog: a dashed ring makes the teeth. */
+const GEAR_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="8.2" stroke-width="3.2" stroke-dasharray="3.2 3.24"/><circle cx="12" cy="12" r="5.6" stroke-width="2.4"/></svg>`;
+
+/** Banknote: a frame with a round seal in the middle. */
+const NOTE_SVG = `<svg viewBox="0 0 30 20" aria-hidden="true"><path fill-rule="evenodd" d="M1 2H29V18H1Z M3.5 4.5V15.5H26.5V4.5Z M15 6.2A3.8 3.8 0 1 1 14.99 6.2Z M5.5 8.5H8.5V11.5H5.5Z M21.5 8.5H24.5V11.5H21.5Z"/></svg>`;
+
 /** Re-triggers a one-shot CSS animation class. */
 function restartAnimation(el: HTMLElement, cls: string): void {
   el.classList.remove(cls);
@@ -130,12 +166,18 @@ export class Hud {
   private readonly root: HTMLElement;
   private readonly overlay: HTMLElement;
   private readonly health: HTMLElement;
-  private readonly hpText: HTMLElement[];
-  private readonly level: HTMLElement;
-  private readonly levelText: HTMLElement;
+  private readonly hpText: HTMLElement;
+  private readonly hpBar: HTMLElement;
+  private readonly levelFill: HTMLElement;
+  private readonly levelName: HTMLElement;
+  private readonly timer: HTMLElement;
   private readonly money: HTMLElement;
-  private readonly moneyText: HTMLElement[];
-  private readonly weapon: HTMLElement;
+  private readonly moneyText: HTMLElement;
+  private readonly gain: HTMLElement;
+  private readonly ammo: HTMLElement;
+  private readonly ammoName: HTMLElement;
+  private readonly ammoCount: HTMLElement;
+  private readonly ammoMax: HTMLElement;
   private readonly boss: HTMLElement;
   private readonly bossBar: HTMLElement;
   private readonly bossName: HTMLElement;
@@ -157,19 +199,21 @@ export class Hud {
     document.head.append(style);
     this.root = document.createElement("div");
     this.root.id = "hud";
+    const bulletSvg = `<svg viewBox="4 1 16 22" aria-hidden="true"><path d="${ICON_PATHS.bullet}"/></svg>`;
     this.root.innerHTML = `
       <div class="hurt"></div>
-      <div class="top">
-        <div class="left">
-          <div class="level"><div class="bar"><i></i><span></span></div></div>
-          <div class="chips"><span class="chip weapon"></span><button type="button" class="gear" aria-label="debug">⚙</button></div>
-        </div>
-        <div class="gta">
-          <div class="money"><span class="o"></span><span class="f"></span></div>
-          <div class="health"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICON_PATHS.heart}"/></svg><span class="num"><span class="o"></span><span class="f"></span></span></div>
+      <div class="corner tl">
+        <div class="plate lvl"><span class="cap"></span><span class="time"></span><div class="prog"><i></i></div></div>
+        <div class="row">
+          <div class="plate ammo">${bulletSvg}<span class="cap"></span><span class="count"><b></b><small></small></span></div>
+          <button type="button" class="plate gear" aria-label="settings">${GEAR_SVG}</button>
         </div>
       </div>
-      <div class="boss"><span></span><div class="bar"><i></i></div></div>
+      <div class="corner tr">
+        <div class="plate money">${NOTE_SVG}<b></b><span class="gain"></span></div>
+        <div class="plate health"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICON_PATHS.heart}"/></svg><b></b><div class="hpbar"><i></i></div></div>
+      </div>
+      <div class="plate boss"><span class="cap"></span><div class="bar"><i></i></div></div>
       <div class="banner"></div>
       <div class="pulse"></div>
       <div class="upgrade"><div class="disc"></div><div class="card"><i></i><b></b><small></small></div></div>`;
@@ -178,13 +222,19 @@ export class Hud {
     this.overlay.id = "overlay";
     document.body.append(this.overlay);
     const q = (s: string) => this.root.querySelector<HTMLElement>(s)!;
-    this.health = q(".gta .health");
-    this.hpText = [...this.health.querySelectorAll<HTMLElement>(".num > span")];
-    this.level = q(".level .bar > i");
-    this.levelText = q(".level .bar > span");
-    this.money = q(".gta .money");
-    this.moneyText = [...this.money.querySelectorAll<HTMLElement>(":scope > span")];
-    this.weapon = q(".weapon");
+    this.health = q(".health");
+    this.hpText = q(".health b");
+    this.hpBar = q(".health .hpbar > i");
+    this.levelFill = q(".lvl .prog > i");
+    this.levelName = q(".lvl .cap");
+    this.timer = q(".lvl .time");
+    this.money = q(".money");
+    this.moneyText = q(".money b");
+    this.gain = q(".money .gain");
+    this.ammo = q(".ammo");
+    this.ammoName = q(".ammo .cap");
+    this.ammoCount = q(".ammo b");
+    this.ammoMax = q(".ammo small");
     this.boss = q(".boss");
     this.bossName = q(".boss > span");
     this.bossBar = q(".boss .bar > i");
@@ -211,35 +261,57 @@ export class Hud {
 
   private shownHp = -1;
 
-  /** Health as a plain number (GTA style); it blinks below a quarter and bumps when it drops. */
+  private shownMaxHp = -1;
+
+  /** Heart, number and a short bar; turns brighter red and pulses at a quarter or less, shakes on hits. */
   setHp(hp: number, max: number): void {
     const value = Math.ceil(Math.max(0, hp));
-    if (value === this.shownHp) return;
+    if (value === this.shownHp && max === this.shownMaxHp) return;
     if (value < this.shownHp) restartAnimation(this.health, "hit");
     this.shownHp = value;
-    for (const el of this.hpText) el.textContent = String(value);
+    this.shownMaxHp = max;
+    this.hpText.textContent = String(value);
+    this.hpBar.style.width = `${Math.min(100, (100 * value) / max)}%`;
     this.health.classList.toggle("low", value > 0 && value <= max * 0.25);
   }
 
+  /** Level name small, the timer (or BOSS / CLEAR) large, progress along the plate's bottom edge. */
   setLevel(label: string, progress: number, right: string): void {
-    this.level.style.width = `${Math.round(progress * 100)}%`;
-    this.levelText.textContent = `${label} · ${right}`;
+    this.levelFill.style.width = `${Math.round(progress * 100)}%`;
+    if (this.levelName.textContent !== label) this.levelName.textContent = label;
+    if (this.timer.textContent !== right) {
+      this.timer.textContent = right;
+      this.timer.classList.toggle("alert", !/\d/.test(right));
+    }
   }
 
   private shownCash = -1;
 
   setCash(amount: number): void {
     if (amount === this.shownCash) return;
-    // A pop and flash when cash comes in (not on the first draw or when spending).
-    if (amount > this.shownCash && this.shownCash >= 0) restartAnimation(this.money, "pop");
+    // A pop, a gold-green flash and a floating "+N" when cash comes in (not on the first draw or
+    // when spending).
+    if (amount > this.shownCash && this.shownCash >= 0) {
+      restartAnimation(this.money, "pop");
+      this.gain.textContent = `+${Math.floor(amount - this.shownCash)}`;
+      restartAnimation(this.gain, "show");
+    }
     this.shownCash = amount;
-    // Just the amount, growing with the run: "0$", "20$", "1250$".
-    const text = `${Math.max(0, Math.floor(amount))}$`;
-    for (const el of this.moneyText) el.textContent = text;
+    this.moneyText.textContent = String(Math.max(0, Math.floor(amount)));
   }
 
+  private ammoKey = "";
+
+  /** Small weapon name, the magazine count large and the capacity small; warns when low. */
   setWeapon(label: string, ammo: number, magazine: number, reloading: boolean): void {
-    this.weapon.textContent = `${label} ${reloading ? "reloading…" : `${ammo}/${magazine}`}`;
+    const key = `${label}|${ammo}|${magazine}|${reloading}`;
+    if (key === this.ammoKey) return;
+    this.ammoKey = key;
+    this.ammoName.textContent = reloading ? "Reloading" : label;
+    this.ammoCount.textContent = String(ammo);
+    this.ammoMax.textContent = `/ ${magazine}`;
+    this.ammo.classList.toggle("reloading", reloading);
+    this.ammo.classList.toggle("low", !reloading && magazine > 0 && ammo <= magazine * 0.25);
   }
 
   setBoss(name: string | null, fraction = 0): void {
