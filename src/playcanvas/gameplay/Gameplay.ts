@@ -112,6 +112,7 @@ export class Gameplay {
     // Debug: ?level=2 starts at level 2, ?levelTime=0.2 shortens every level's wave time.
     this.director.durationScale = Number(this.params.get("levelTime")) || 1;
     const level = Math.min(LEVELS.length, Math.max(1, Number(this.params.get("level")) || 1));
+    this.params.delete("level"); // only for the first run; restarts begin at level 1
     this.startLevel(level - 1);
   }
 

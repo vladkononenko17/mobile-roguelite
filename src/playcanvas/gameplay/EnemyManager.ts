@@ -102,7 +102,11 @@ export class EnemyManager {
     const model = pool.source.resource.instantiateRenderEntity({ castShadows: false, receiveShadows: true });
     root.addChild(model);
     const meshes: MeshInstance[] = [];
-    for (const render of model.findComponents("render") as RenderComponent[]) meshes.push(...render.meshInstances);
+    for (const render of model.findComponents("render") as RenderComponent[]) {
+      // No shadow casting for the horde (a shadow pass per enemy is the costliest part on mobile).
+      render.castShadows = false;
+      meshes.push(...render.meshInstances);
+    }
     model.addComponent("anim", { activate: true });
     const anim = model.anim!;
     anim.loadStateGraph({
