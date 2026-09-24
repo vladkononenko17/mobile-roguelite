@@ -14,6 +14,7 @@ export class PlayerStats {
   damageMult = 1;
   fireRateMult = 1;
   reloadMult = 1;
+  magazineMult = 1;
   moveSpeedMult = 1;
   penetration = 0;
   critChance = 0;
@@ -41,6 +42,7 @@ export class PlayerStats {
       damage: base.damage * this.damageMult,
       fireRate: base.fireRate * this.fireRateMult,
       reloadSeconds: base.reloadSeconds / this.reloadMult,
+      magazine: Math.round(base.magazine * this.magazineMult),
       penetration: base.penetration + this.penetration,
     };
   }

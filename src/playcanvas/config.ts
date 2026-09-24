@@ -420,7 +420,7 @@ export const OUTPOST = {
    * stay the most saturated thing on screen. */
   brightness: 0.86,
   /** Static batching cell: pieces sharing a material within this many metres merge into one draw.
-   * The portrait gameplay view is only ~11 x 17 m, so small cells let the camera skip most of the
+   * The portrait gameplay view is only ~12 x 18 m, so small cells let the camera skip most of the
    * level's triangles for a few extra draw calls. */
   batchCellMetres: 12,
 };
@@ -431,10 +431,11 @@ export const CAMERA = {
   pitchDeg: 52,
   /** Distance from the camera to the orbit pivot on the character, along the view direction.
    * Camera height follows from pitch + distance (+ screen offset); the tune panel shows it.
-   * Arena shooter framing (measured on a 402x646 portrait phone): ~1.9x the ground area of the
-   * old 50 deg / 9.5 m view (about 11 x 17 m), the hero about 14% of the screen height (was ~20%),
-   * so hordes, boss attacks and projectiles are visible coming from every side. */
-  distance: 14.2,
+   * Arena shooter framing (measured on a 402x646 portrait phone): ~2.2x the ground area of the
+   * old 50 deg / 9.5 m view (about 12 x 18 m), the hero about 13% of the screen height, so hordes,
+   * boss attacks and projectiles are visible coming from every side. BASELINE: keep this distance
+   * unless a gameplay reason calls for a change. */
+  distance: 15.2,
   /** Vertical field of view, used in both portrait and landscape. */
   fovDeg: 42,
   /** How far below the screen centre the character sits, as a fraction of screen height.
@@ -450,7 +451,7 @@ export const CAMERA = {
   /** World yaw of the camera. The camera does not rotate with the character. */
   yawDeg: 0,
   nearClip: 0.5,
-  farClip: 90,
+  farClip: 95,
 };
 
 export const CHARACTER = {
@@ -566,7 +567,7 @@ export const LIGHTING = {
     azimuthDeg: 318,
     // PCF3 (4 hardware-filtered taps) at 1024 over the view's range from the farther arena camera.
     shadowResolution: 1024,
-    shadowDistance: 28,
+    shadowDistance: 30,
     shadowBias: 0.2,
     normalOffsetBias: 0.04,
     shadowIntensity: 0.78,
@@ -600,8 +601,8 @@ export const LIGHTING = {
   groundAmbient: [0.79, 0.95, 1.04] as const,
   /** Dusty sand-coloured haze: only the far edge of the view fades (the map view turns fog off). */
   clearColor: [0.62, 0.52, 0.4] as const,
-  fogStart: 29,
-  fogEnd: 78,
+  fogStart: 31,
+  fogEnd: 82,
 };
 
 export const DEBUG = {

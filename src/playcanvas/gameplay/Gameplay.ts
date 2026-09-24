@@ -4,7 +4,7 @@ import type { PlayerController } from "../player/PlayerController";
 import type { WeaponHolder } from "../player/WeaponHolder";
 import type { Hud } from "../ui/Hud";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
-import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, LEVELS, RUN_START, SHOP, WEAPON_STATS, type EnemySkinId, type EnemyVisualId, type ShopItem } from "./config";
+import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, LEVELS, RUN_START, SHOP, WEAPON_STATS, upgradeText, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeId } from "./config";
 import { Effects } from "./Effects";
 import { EnemyManager, type BodySource, type Enemy } from "./EnemyManager";
 import { Hazards } from "./Hazards";
@@ -13,7 +13,7 @@ import { PlayerGun } from "./PlayerGun";
 import { Pickups, type PickupKind } from "./Pickups";
 import { PlayerStats } from "./PlayerStats";
 import { SpawnDirector } from "./SpawnDirector";
-import { applyUpgrade, rollUpgrades } from "./Upgrades";
+import { applyUpgrade, availableUpgrades, rollUpgrades } from "./Upgrades";
 
 interface Bounds {
   minX: number;
@@ -80,7 +80,7 @@ export class Gameplay {
     this.effects = new Effects(app);
     this.hazards = new Hazards(app);
     this.pickups = new Pickups(app);
-    this.pickups.onCollect = (kind, value) => this.collect(kind, value);
+    this.pickups.onCollect = (kind, value, upgrade) => this.collect(kind, value, upgrade);
     this.nav = new NavField(collision, bounds);
     this.enemies = new EnemyManager(app, collision, this.nav, this.hazards);
     this.director = new SpawnDirector(this.enemies, this.nav, bounds);
@@ -214,7 +214,7 @@ export class Gameplay {
     this.hud.openModal({
       title: "CHOOSE AN UPGRADE",
       text: `${this.director.level.label} boss down. Pick one:`,
-      cards: offers.map((u) => ({ title: u.title, text: u.text, tag: u.category, kind: u.category })),
+      cards: offers.map((u) => ({ title: u.name, text: upgradeText(u), tag: u.rarity === "common" ? u.category : `${u.rarity} ${u.category}`, kind: u.category, icon: u.icon })),
       onCard: (i) => {
         applyUpgrade(this.stats, offers[i].id);
         this.openShop(next);
@@ -273,21 +273,26 @@ export class Gameplay {
       for (let i = 0; i < pieces; i++) this.pickups.drop("cash", x, z, Math.ceil(enemy.def.cash / pieces));
     } else if (Math.random() < drops.cash) this.pickups.drop("cash", x, z, enemy.def.cash);
     if (Math.random() < drops.health) this.pickups.drop("health", x, z);
-    if (Math.random() < drops.upgrade) this.pickups.drop("upgrade", x, z);
+    if (Math.random() < drops.upgrade) {
+      // Rolled now so the world badge shows which upgrade it is.
+      const [offer] = rollUpgrades(this.stats, 1);
+      if (offer) this.pickups.drop("upgrade", x, z, 0, offer.id);
+    }
   }
 
-  private collect(kind: PickupKind, value: number): void {
+  private collect(kind: PickupKind, value: number, upgrade: UpgradeId | null): void {
     const s = this.stats;
     if (kind === "cash") s.cash += value;
     else if (kind === "health") {
+      const before = s.hp;
       s.heal(s.maxHp * DROPS.healthFraction);
-      this.hud.showBanner("+HP", 0.6);
+      const p = this.player.entity.getPosition();
+      this.tmp.set(p.x, 2.1 * this.characterScale(), p.z);
+      this.hud.damageNumber(this.tmp, `+${Math.round(s.hp - before)} HP`, "heal");
     } else {
-      const [pick] = rollUpgrades(s, 1);
-      if (pick) {
-        applyUpgrade(s, pick.id);
-        this.hud.showBanner(pick.title.toUpperCase() + " · " + pick.text, 2);
-      }
+      // The pickup carries the upgrade it shows; reroll if that one got maxed out meanwhile.
+      const pick = upgrade && availableUpgrades(s).some((u) => u.id === upgrade) ? upgrade : rollUpgrades(s, 1)[0]?.id;
+      if (pick) this.hud.showUpgrade(applyUpgrade(s, pick), this.player.entity);
     }
   }
 

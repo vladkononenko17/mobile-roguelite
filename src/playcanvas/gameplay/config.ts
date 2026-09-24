@@ -2,6 +2,7 @@
 // the shop. Everything tunable lives here; the systems in this folder only read it.
 
 import type { WeaponId } from "../config";
+import type { UpgradeCategory, UpgradeIcon, UpgradeRarity } from "../ui/UpgradeIcons";
 
 /* ------------------------------------------------------------------------------------------------
  * Player combat
@@ -298,32 +299,47 @@ export const DROPS = {
  * ---------------------------------------------------------------------------------------------- */
 
 export type UpgradeId =
-  | "damage" | "fireRate" | "penetration" | "reload" | "crit"
+  | "damage" | "fireRate" | "penetration" | "reload" | "magazine" | "crit"
   | "maxHp" | "moveSpeed" | "armor" | "heal"
   | "fifthShot" | "vampire";
 
+/**
+ * One upgrade: its presentation (name, stat line, value, icon, category colour, rarity) and stacking.
+ * The effect itself lives in Upgrades.ts (keyed by id). The HUD toast, the reward cards and the
+ * world pickup badge are all drawn from these fields, so a new upgrade is one entry here plus one
+ * effect function.
+ */
 export interface UpgradeDef {
   id: UpgradeId;
-  title: string;
-  text: string;
-  category: "weapon" | "player" | "special";
+  /** Display name ("Scrap Plating"). */
+  name: string;
+  /** What it changes ("Damage Resistance") and by how much ("+10%"). */
+  stat: string;
+  value: string;
+  icon: UpgradeIcon;
+  category: UpgradeCategory;
+  rarity: UpgradeRarity;
   /** How many times it can be taken per run (default unlimited). */
   maxStacks?: number;
 }
 
 export const UPGRADES: UpgradeDef[] = [
-  { id: "damage", title: "Hollow Points", text: "+15% weapon damage", category: "weapon" },
-  { id: "fireRate", title: "Hair Trigger", text: "+15% fire rate", category: "weapon" },
-  { id: "penetration", title: "Piercing Rounds", text: "Bullets pass through +1 enemy", category: "weapon", maxStacks: 3 },
-  { id: "reload", title: "Speed Loader", text: "+10% reload speed", category: "weapon", maxStacks: 5 },
-  { id: "crit", title: "Steady Hand", text: "+10% critical chance (x2 damage)", category: "weapon", maxStacks: 5 },
-  { id: "maxHp", title: "Thick Skin", text: "+20 max HP", category: "player" },
-  { id: "moveSpeed", title: "Light Boots", text: "+10% movement speed", category: "player", maxStacks: 4 },
-  { id: "armor", title: "Scrap Plating", text: "+10% damage resistance", category: "player", maxStacks: 5 },
-  { id: "heal", title: "Field Dressing", text: "Heal 30% HP now", category: "player" },
-  { id: "fifthShot", title: "Fifth Shot", text: "Every 5th bullet deals +150% damage", category: "special", maxStacks: 1 },
-  { id: "vampire", title: "Scavenger", text: "Kills have a 6% chance to heal 5 HP", category: "special", maxStacks: 3 },
+  { id: "damage", name: "Hollow Points", stat: "Weapon Damage", value: "+15%", icon: "bullet", category: "weapon", rarity: "common" },
+  { id: "fireRate", name: "Hair Trigger", stat: "Fire Rate", value: "+15%", icon: "rapid", category: "weapon", rarity: "common" },
+  { id: "penetration", name: "Piercing Rounds", stat: "Bullets Pierce", value: "+1 enemy", icon: "pierce", category: "weapon", rarity: "rare", maxStacks: 3 },
+  { id: "reload", name: "Quick Hands", stat: "Reload Speed", value: "+10%", icon: "reload", category: "weapon", rarity: "common", maxStacks: 5 },
+  { id: "magazine", name: "Extended Mag", stat: "Magazine Capacity", value: "+25%", icon: "magazine", category: "weapon", rarity: "common", maxStacks: 3 },
+  { id: "crit", name: "Steady Hand", stat: "Critical Chance", value: "+10%", icon: "target", category: "weapon", rarity: "rare", maxStacks: 5 },
+  { id: "maxHp", name: "Thick Skin", stat: "Max HP", value: "+20", icon: "heart", category: "player", rarity: "common" },
+  { id: "moveSpeed", name: "Adrenaline", stat: "Movement Speed", value: "+10%", icon: "boot", category: "player", rarity: "common", maxStacks: 4 },
+  { id: "armor", name: "Scrap Plating", stat: "Damage Resistance", value: "+10%", icon: "shield", category: "player", rarity: "common", maxStacks: 5 },
+  { id: "heal", name: "Field Medkit", stat: "Restore HP", value: "30%", icon: "medkit", category: "player", rarity: "common" },
+  { id: "fifthShot", name: "Fifth Shot", stat: "Every 5th Bullet", value: "+150% damage", icon: "star", category: "special", rarity: "epic", maxStacks: 1 },
+  { id: "vampire", name: "Scavenger", stat: "Heal 5 HP on Kill", value: "6% chance", icon: "drop", category: "special", rarity: "rare", maxStacks: 3 },
 ];
+
+/** "Damage Resistance +10%" */
+export const upgradeText = (u: UpgradeDef): string => `${u.stat} ${u.value}`;
 
 export type ShopItemId = "heal" | "maxHp" | "armor" | "damage" | "fireRate" | "shotgun" | "rifle";
 

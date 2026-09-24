@@ -1,4 +1,5 @@
-import { Vec3, type CameraComponent } from "playcanvas";
+import { Vec3, type CameraComponent, type Entity } from "playcanvas";
+import { CATEGORY_COLORS, iconSvg, type UpgradeCategory, type UpgradeIcon, type UpgradeRarity } from "./UpgradeIcons";
 
 const CSS = `
 #hud { position: fixed; inset: 0; pointer-events: none; font: 600 14px system-ui, sans-serif; color: #f3e7d3; z-index: 5; }
@@ -21,6 +22,27 @@ const CSS = `
 #hud .dmg { position: absolute; font-size: 15px; font-weight: 800; text-shadow: 0 1px 2px #000, 0 0 3px #000; transform: translate(-50%, -50%); white-space: nowrap; }
 #hud .dmg.crit { color: #ffd23a; font-size: 19px; }
 #hud .dmg.player { color: #ff5a4a; }
+#hud .dmg.heal { color: #7dff8a; font-size: 17px; }
+#hud .upgrade { --c: #ffb13b; position: absolute; left: 50%; top: 19%; transform: translateX(-50%); max-width: min(52vw, 280px); display: flex; flex-direction: column; align-items: center; gap: 7px; opacity: 0; }
+#hud .upgrade.show { animation: up-life 1.6s ease-out forwards; }
+#hud .upgrade .disc { position: relative; width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center; border: 2px solid rgba(255, 250, 235, 0.9);
+  background: radial-gradient(circle at 50% 32%, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0) 55%), radial-gradient(circle, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.35)), var(--c);
+  box-shadow: 0 0 18px 3px var(--c), 0 2px 6px rgba(0, 0, 0, 0.6); }
+#hud .upgrade .disc svg { width: 38px; height: 38px; fill: #fff; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.7)); }
+#hud .upgrade .disc::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 3px solid var(--c); opacity: 0; }
+#hud .upgrade.show .disc { animation: up-pop 0.45s ease-out; }
+#hud .upgrade.show .disc::after { animation: up-ring 0.75s 0.12s ease-out; }
+#hud .upgrade .card { background: rgba(20, 15, 12, 0.78); border: 1px solid var(--c); border-radius: 10px; padding: 5px 12px 6px; text-align: center; line-height: 1.25; }
+#hud .upgrade .card b { display: block; font-size: 15px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; text-shadow: 0 1px 2px #000; }
+#hud .upgrade .card small { display: block; font-size: 12px; font-weight: 600; opacity: 0.9; }
+#hud .upgrade .card small em { font-style: normal; color: var(--c); }
+#hud .upgrade .card i { display: block; font-style: normal; font-size: 9px; letter-spacing: 0.14em; color: var(--c); }
+#hud .pulse { --c: #ffb13b; position: absolute; width: 110px; height: 70px; margin: -35px 0 0 -55px; border-radius: 50%; border: 3px solid var(--c); background: radial-gradient(closest-side, rgba(255, 255, 255, 0) 60%, var(--c)); opacity: 0; }
+#hud .pulse.show { animation: up-pulse 0.7s ease-out forwards; }
+@keyframes up-life { 0% { opacity: 0; } 8% { opacity: 1; } 78% { opacity: 1; transform: translateX(-50%); } 100% { opacity: 0; transform: translate(-50%, -12px); } }
+@keyframes up-pop { 0% { transform: scale(0.5); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+@keyframes up-ring { 0% { opacity: 0.9; transform: scale(0.85); } 100% { opacity: 0; transform: scale(1.9); } }
+@keyframes up-pulse { 0% { opacity: 0.9; transform: scale(0.3); } 100% { opacity: 0; transform: scale(1.7); } }
 #overlay { position: fixed; inset: 0; z-index: 6; display: none; align-items: center; justify-content: center; background: rgba(12, 8, 6, 0.72); font: 600 15px system-ui, sans-serif; color: #f3e7d3; padding: 16px; }
 #overlay.open { display: flex; }
 #overlay .panel { width: min(560px, 100%); max-height: 100%; overflow-y: auto; text-align: center; }
@@ -29,6 +51,8 @@ const CSS = `
 #overlay .cards { display: grid; gap: 10px; }
 #overlay .card { display: block; width: 100%; text-align: left; padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(243, 231, 211, 0.45); background: rgba(43, 34, 28, 0.95); color: inherit; font: inherit; min-height: 64px; }
 #overlay .card b { display: block; font-size: 17px; margin-bottom: 3px; }
+#overlay .card .ci { float: left; width: 38px; height: 38px; margin: 0 12px 0 0; border-radius: 50%; display: grid; place-items: center; border: 1px solid rgba(255, 250, 235, 0.8); box-shadow: 0 0 8px var(--c); background: radial-gradient(circle at 50% 32%, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 55%), var(--c); }
+#overlay .card .ci svg { width: 23px; height: 23px; fill: #fff; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.7)); }
 #overlay .card small { opacity: 0.8; font-weight: 500; }
 #overlay .card .tag { float: right; font-size: 11px; opacity: 0.7; text-transform: uppercase; }
 #overlay .card.weapon { border-color: #e8a92f; }
@@ -48,7 +72,19 @@ export interface Card {
   text: string;
   tag?: string;
   kind?: "weapon" | "player" | "special";
+  /** Upgrade icon shown in a category-coloured disc. */
+  icon?: UpgradeIcon;
   disabled?: boolean;
+}
+
+/** What the upgrade toast shows (an UpgradeDef fits). */
+export interface UpgradeNotice {
+  name: string;
+  stat: string;
+  value: string;
+  icon: UpgradeIcon;
+  category: UpgradeCategory;
+  rarity: UpgradeRarity;
 }
 
 interface Floater {
@@ -80,6 +116,12 @@ export class Hud {
   private readonly floaters: Floater[] = [];
   private readonly screen = new Vec3();
   private bannerTimer = 0;
+  private readonly upgrade: HTMLElement;
+  private readonly pulse: HTMLElement;
+  private readonly upgradeQueue: UpgradeNotice[] = [];
+  private upgradeShowing = false;
+  private pulseAnchor: Entity | null = null;
+  private pulseTime = 0;
 
   constructor() {
     const style = document.createElement("style");
@@ -96,7 +138,9 @@ export class Hud {
         <div class="chips"><span class="chip weapon"></span></div>
       </div>
       <div class="boss"><span></span><div class="bar"><i></i></div></div>
-      <div class="banner"></div>`;
+      <div class="banner"></div>
+      <div class="pulse"></div>
+      <div class="upgrade"><div class="disc"></div><div class="card"><i></i><b></b><small></small></div></div>`;
     document.body.append(this.root);
     this.overlay = document.createElement("div");
     this.overlay.id = "overlay";
@@ -113,6 +157,14 @@ export class Hud {
     this.bossBar = q(".boss .bar > i");
     this.banner = q(".banner");
     this.hurt = q(".hurt");
+    this.upgrade = q(".upgrade");
+    this.pulse = q(".pulse");
+    this.upgrade.addEventListener("animationend", (e) => {
+      if (e.target !== this.upgrade) return;
+      this.upgrade.classList.remove("show");
+      this.upgradeShowing = false;
+      this.nextUpgrade();
+    });
     if (new URLSearchParams(location.search).get("debug") === "1") document.body.classList.add("debug-on");
     q(".gear").addEventListener("click", () => document.body.classList.toggle("debug-on"));
     for (let i = 0; i < 24; i++) {
@@ -165,6 +217,43 @@ export class Hud {
     this.bannerTimer = seconds;
   }
 
+  /**
+   * Upgrade acquired: a category-coloured icon disc pops in above the action with a glow ring, a
+   * compact name / stat card under it, a ring pulse on the ground around `anchor` (the hero), then
+   * everything fades (~1.6 s). Gameplay keeps running; several notices play one after another.
+   */
+  showUpgrade(notice: UpgradeNotice, anchor: Entity | null = null): void {
+    this.upgradeQueue.push(notice);
+    if (anchor) {
+      this.pulseAnchor = anchor;
+      this.pulseTime = 0.7;
+      this.pulse.style.setProperty("--c", CATEGORY_COLORS[notice.category]);
+      this.pulse.classList.remove("show");
+      void this.pulse.offsetWidth;
+      this.pulse.classList.add("show");
+    }
+    if (!this.upgradeShowing) this.nextUpgrade();
+  }
+
+  private nextUpgrade(): void {
+    const notice = this.upgradeQueue.shift();
+    if (!notice) return;
+    this.upgradeShowing = true;
+    const el = this.upgrade;
+    el.style.setProperty("--c", CATEGORY_COLORS[notice.category]);
+    el.querySelector(".disc")!.innerHTML = iconSvg(notice.icon);
+    el.querySelector(".card i")!.textContent = notice.rarity === "common" ? "" : notice.rarity.toUpperCase();
+    el.querySelector(".card b")!.textContent = notice.name;
+    const small = el.querySelector(".card small")!;
+    small.textContent = `${notice.stat} `;
+    const em = document.createElement("em");
+    em.textContent = notice.value;
+    small.append(em);
+    el.classList.remove("show");
+    void el.offsetWidth;
+    el.classList.add("show");
+  }
+
   flashHurt(): void {
     this.hurt.style.transition = "none";
     this.hurt.style.opacity = "1";
@@ -175,7 +264,7 @@ export class Hud {
   }
 
   /** Floating number at a world position. */
-  damageNumber(position: Vec3, text: string, kind: "normal" | "crit" | "player" = "normal"): void {
+  damageNumber(position: Vec3, text: string, kind: "normal" | "crit" | "player" | "heal" = "normal"): void {
     const f = this.floaters.find((x) => x.life <= 0) ?? this.floaters.reduce((a, b) => (a.life < b.life ? a : b));
     f.position.copy(position);
     f.life = 0.7;
@@ -188,6 +277,12 @@ export class Hud {
     if (this.bannerTimer > 0) {
       this.bannerTimer -= dt;
       if (this.bannerTimer <= 0) this.banner.style.opacity = "0";
+    }
+    if (this.pulseTime > 0 && this.pulseAnchor) {
+      this.pulseTime -= dt;
+      camera.worldToScreen(this.pulseAnchor.getPosition(), this.screen);
+      this.pulse.style.left = `${this.screen.x}px`;
+      this.pulse.style.top = `${this.screen.y}px`;
     }
     for (const f of this.floaters) {
       if (f.life <= 0) continue;
@@ -224,7 +319,8 @@ export class Hud {
         b.type = "button";
         b.className = `card ${card.kind ?? ""}`;
         b.disabled = !!card.disabled;
-        b.innerHTML = `${card.tag ? `<span class="tag"></span>` : ""}<b></b><small></small>`;
+        b.innerHTML = `${card.icon ? `<span class="ci">${iconSvg(card.icon)}</span>` : ""}${card.tag ? `<span class="tag"></span>` : ""}<b></b><small></small>`;
+        if (card.icon && card.kind) b.style.setProperty("--c", CATEGORY_COLORS[card.kind]);
         if (card.tag) b.querySelector(".tag")!.textContent = card.tag;
         b.querySelector("b")!.textContent = card.title;
         b.querySelector("small")!.textContent = card.text;

@@ -10,6 +10,7 @@ const EFFECTS: Record<UpgradeId, (s: PlayerStats) => void> = {
   fireRate: (s) => { s.fireRateMult *= 1.15; },
   penetration: (s) => { s.penetration += 1; },
   reload: (s) => { s.reloadMult *= 1.1; },
+  magazine: (s) => { s.magazineMult += 0.25; },
   crit: (s) => { s.critChance = Math.min(0.6, s.critChance + 0.1); },
   maxHp: (s) => { s.maxHp += 20; s.heal(20); },
   moveSpeed: (s) => { s.moveSpeedMult *= 1.1; },
