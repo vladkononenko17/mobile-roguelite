@@ -143,6 +143,14 @@ export class PlayerAnimationController {
     return true;
   }
 
+  /** How much the upper-body weapon pose shows right now (0 while none, or under a full-body action). */
+  get upperBodyWeight(): number {
+    const anim = this.model.anim;
+    const upper = anim?.findAnimationLayer("UpperBody")?.weight ?? 0;
+    const action = anim?.findAnimationLayer("Action")?.weight ?? 0;
+    return upper * (1 - action);
+  }
+
   /** True while a one-shot action is playing. */
   get acting(): boolean {
     return this.actionTime < this.actionDuration;

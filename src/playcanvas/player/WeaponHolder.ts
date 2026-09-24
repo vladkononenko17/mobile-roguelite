@@ -10,6 +10,7 @@ export class WeaponHolder {
   private readonly templates = new Map<WeaponId, Entity>();
   private hand: Entity | null = null;
   private held: Entity | null = null;
+  private readonly sockets = new Map<WeaponSocket, Entity>();
   current: WeaponId | null = null;
 
   /** Called with the held weapon's upper-body clip (or null) whenever the weapon changes. */
@@ -61,6 +62,7 @@ export class WeaponHolder {
   equip(id: WeaponId | null): void {
     this.held?.destroy();
     this.held = null;
+    this.sockets.clear();
     this.current = id;
     const template = id ? this.templates.get(id) : undefined;
     this.onPoseChange(id && template && this.hand ? WEAPONS.list[id].pose : null);
@@ -76,10 +78,12 @@ export class WeaponHolder {
     const grip = new Quat().setFromEulerAngles(rotation[0], rotation[1], rotation[2]);
     held.setLocalRotation(new Quat().setFromAxisAngle(Vec3.UP, rollDeg).mul(grip));
     held.setLocalScale(scale, scale, scale);
-    for (const [name, point] of Object.entries(sockets) as [WeaponSocket, [number, number, number]][]) {
+    for (const [name, { position: p, rotation: r = [0, 0, 0] }] of Object.entries(sockets) as [WeaponSocket, NonNullable<WeaponDef["sockets"]>[WeaponSocket] & {}][]) {
       const socket = new Entity(name);
-      socket.setLocalPosition(point[0], point[1], point[2]);
+      socket.setLocalPosition(p[0], p[1], p[2]);
+      socket.setLocalEulerAngles(r[0], r[1], r[2]);
       held.addChild(socket);
+      this.sockets.set(name, socket);
     }
     this.hand.addChild(held);
     this.held = held;
@@ -96,7 +100,7 @@ export class WeaponHolder {
    * left-hand IK. Null when nothing is held or the weapon has no such socket.
    */
   socket(name: WeaponSocket): Entity | null {
-    return (this.held?.findByName(name) as Entity | null) ?? null;
+    return this.sockets.get(name) ?? null;
   }
 
   /** The held weapon's root (for tuning its grip). */

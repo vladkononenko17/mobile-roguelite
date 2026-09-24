@@ -16,6 +16,7 @@ import { KeyboardMoveInput } from "./input/KeyboardMoveInput";
 import { TouchJoystickInput } from "./input/TouchJoystickInput";
 import { CombinedMoveInput, type MoveInputSource } from "./input/MoveInput";
 import { loadCharacter } from "./player/CharacterLoader";
+import { LeftHandIK } from "./player/LeftHandIK";
 import { PlayerAnimationController } from "./player/PlayerAnimationController";
 import { PlayerController } from "./player/PlayerController";
 import { WeaponHolder } from "./player/WeaponHolder";
@@ -50,6 +51,7 @@ export class Game {
 
   private input!: MoveInputSource;
   private model!: Entity;
+  private leftHandIK: LeftHandIK | null = null;
   weapons!: WeaponHolder;
   private contactShadow!: Entity;
   private characterScale: number = CHARACTER.scale;
@@ -162,6 +164,7 @@ export class Game {
     });
     window.addEventListener("keydown", (event) => { if (event.code === "Space") attack(); });
     this.weapons.attachTo(character.model);
+    this.leftHandIK = new LeftHandIK(character.model);
     this.setupWeaponSelect();
 
     this.colliderDebug = new ColliderDebugView(app, this.collision, playerRoot, () => this.player.radius);
@@ -185,6 +188,8 @@ export class Game {
     this.resolution.update(rawDt);
     this.player.update(dt);
     this.animation.update(this.player.speed, dt);
+    // After the anim system has posed the skeleton this frame: left hand onto the weapon.
+    this.leftHandIK?.apply(this.weapons.socket("leftHandGrip"), this.animation.upperBodyWeight);
     const device = this.app.graphicsDevice;
     this.camera.update(dt, device.width / Math.max(1, device.height));
 
