@@ -39,6 +39,11 @@ export class ArmIK {
   private readonly handRotation = new Quat();
   private readonly animatedLocal = new Quat();
   private readonly forearmDir = new Vec3();
+  private readonly pole = new Vec3();
+  private readonly polePerp = new Vec3();
+  private readonly poleAxis = new Vec3();
+  private readonly poleSide = new Vec3();
+  private poleWeight = 0;
 
   constructor(model: Entity, side: "Left" | "Right") {
     this.clavicle = model.findByName(`mixamorig:${side}Shoulder`);
@@ -46,6 +51,16 @@ export class ArmIK {
     this.foreArm = model.findByName(`mixamorig:${side}ForeArm`);
     this.hand = model.findByName(`mixamorig:${side}Hand`);
     if (!this.upperArm || !this.foreArm || !this.hand) console.warn(`[ArmIK] ${side} arm bones not found; IK disabled.`);
+  }
+
+  /**
+   * Preferred elbow direction for the next `apply` (world, from the shoulder; null clears it). With a
+   * pole the elbow may swing all the way around the shoulder-wrist line toward it, e.g. out to the
+   * side so the upper arm stays readable instead of tucking against the ribs.
+   */
+  setPole(direction: Vec3 | null, weight = 1): void {
+    this.poleWeight = direction ? weight : 0;
+    if (direction) this.pole.copy(direction).normalize();
   }
 
   /** The animated hand (wrist) rotation, before this frame's IK. */
@@ -88,7 +103,8 @@ export class ArmIK {
     const cosShoulder = math.clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1);
     this.q.setFromAxisAngle(normal, Math.acos(cosShoulder) * math.RAD_TO_DEG);
     const desiredElbow = this.q.transformVector(toTarget, this.desiredElbow).mulScalar(l1).add(a);
-    if (swivelDeg > 0) this.swivelElbow(desiredElbow, a, t, toTarget, swivelDeg);
+    if (this.poleWeight > 0) this.swivelElbow(desiredElbow, a, t, toTarget, 180);
+    else if (swivelDeg > 0) this.swivelElbow(desiredElbow, a, t, toTarget, swivelDeg);
 
     this.rotateBone(upperArm, a, b, desiredElbow);
     this.rotateBone(foreArm, foreArm.getPosition(), hand.getPosition(), t);
@@ -100,6 +116,7 @@ export class ArmIK {
   private swivelElbow(elbow: Vec3, shoulder: Vec3, target: Vec3, axis: Vec3, rangeDeg: number): void {
     const handAxis = this.handRotation.transformVector(Vec3.UP, this.v);
     const start = this.u.sub2(elbow, shoulder);
+    if (this.poleWeight > 0) this.polePerp.copy(this.pole).sub(this.poleAxis.copy(axis).mulScalar(this.pole.dot(axis))).normalize();
     let bestCost = Infinity;
     let bestDeg = 0;
     for (let deg = -rangeDeg; deg <= rangeDeg; deg += SWIVEL_STEP_DEG) {
@@ -109,7 +126,14 @@ export class ArmIK {
       const bend = Math.acos(math.clamp(forearm.dot(handAxis), -1, 1));
       // Keep the elbow from lifting above the shoulder (a raised "chicken wing").
       const lift = Math.max(0, offset.y) * 20;
-      const cost = bend + lift + Math.abs(deg) * 0.002;
+      let cost = bend + lift + Math.abs(deg) * 0.002;
+      if (this.poleWeight > 0) {
+        // Preferred elbow direction: angle between the elbow's and the pole's offsets from the
+        // shoulder-wrist line.
+        const along = this.poleSide.copy(offset).sub(this.poleAxis.copy(axis).mulScalar(offset.dot(axis)));
+        const angle = Math.acos(math.clamp(along.normalize().dot(this.polePerp), -1, 1));
+        cost += angle * this.poleWeight;
+      }
       if (cost < bestCost) {
         bestCost = cost;
         bestDeg = deg;

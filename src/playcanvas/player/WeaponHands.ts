@@ -41,6 +41,7 @@ export class WeaponHands {
   private readonly chest: GraphNode | null;
   private readonly rightShoulder: GraphNode | null;
   private readonly aim = new Vec3();
+  private readonly pole = new Vec3();
   debug = false;
 
   // Scratch values.
@@ -95,6 +96,7 @@ export class WeaponHands {
     const left = weapons.grip("left");
     let targetValid = false;
     if (profile && weapons.gripped && this.character.hands) {
+      this.setElbowPoles(profile, facingYawDeg);
       if (right && weapons.entity && weight > 0 && profile.hold !== "hand") {
         this.holdRight(weapons, profile, weight, facingYawDeg, runBlend);
       }
@@ -109,6 +111,24 @@ export class WeaponHands {
       }
     }
     if (this.debug) this.draw(weapons, targetValid);
+  }
+
+  /** Elbow directions for both arms from the class profile (mirrored for the left arm). */
+  private setElbowPoles(profile: WeaponClassProfile, facingYawDeg: number): void {
+    const elbows = profile.elbows;
+    if (!elbows) {
+      this.rightIK.setPole(null);
+      this.leftIK.setPole(null);
+      return;
+    }
+    const yaw = facingYawDeg * math.DEG_TO_RAD;
+    const weight = profile.elbowWeight ?? 1;
+    // Hero's right = (-cos, 0, sin), forward = (sin, 0, cos) at yaw.
+    for (const [ik, side] of [[this.rightIK, 1], [this.leftIK, -1]] as const) {
+      const [out, up, ahead] = side < 0 && profile.elbowsLeft ? profile.elbowsLeft : elbows;
+      const r = out * side;
+      ik.setPole(this.pole.set(-Math.cos(yaw) * r + Math.sin(yaw) * ahead, up, Math.sin(yaw) * r + Math.cos(yaw) * ahead), weight);
+    }
   }
 
   /**

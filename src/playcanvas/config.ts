@@ -264,6 +264,15 @@ export interface WeaponClassProfile {
   runPitchDeg?: number;
   /** Anchor shift at running speed (a lowered ready carry), metres before the character scale. */
   runAnchorShift?: Vec3Tuple;
+  /**
+   * Where the elbows point (from the shoulders), in the hero's facing frame: [outward, up, forward],
+   * mirrored for the left arm; `elbowWeight` = how strongly (0 = elbows just straighten the wrists).
+   * Keeps upper arms out of the torso silhouette as seen from the top-down camera.
+   */
+  elbows?: Vec3Tuple;
+  /** Left elbow direction if it differs (a support arm crossing to the centre bulges outward). */
+  elbowsLeft?: Vec3Tuple;
+  elbowWeight?: number;
   /** Left arm IK onto the weapon's left grip. */
   leftHandIK: boolean;
   /** Procedural finger wrap around the grips. */
@@ -274,7 +283,11 @@ export interface WeaponClassProfile {
 
 export const WEAPON_CLASSES: Record<WeaponClass, WeaponClassProfile> = {
   // Compact two-handed ready stance in front of the upper chest, over the character's idle upper body.
-  pistol: { pose: "@idle", hold: "chest", anchor: [-0.02, -0.01, 0.36], pitchDeg: -4, runPitchDeg: -4, leftHandIK: true, fingerGrip: true, aimTwist: false },
+  // Elbows pushed out and a little down so both upper arms stay visible beside the torso from above.
+  pistol: {
+    pose: "@idle", hold: "chest", anchor: [-0.02, -0.01, 0.44], pitchDeg: -4, runPitchDeg: -4, elbows: [0.8, -0.55, 0.3], elbowsLeft: [0.2, -0.9, 0.5], elbowWeight: 2,
+    leftHandIK: true, fingerGrip: true, aimTwist: false,
+  },
   // The aiming clip drives the arms; hands are fitted to the rifle.
   rifle: { pose: "Run_and_Shoot", hold: "clip", leftHandIK: true, fingerGrip: true, aimTwist: true },
   // Stock in the right shoulder pocket (inside the shoulder joint), level; at a run the stock drops
