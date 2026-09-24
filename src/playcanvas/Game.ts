@@ -11,16 +11,15 @@ import {
   type RenderComponent,
 } from "playcanvas";
 import { CameraController } from "./camera/CameraController";
-import { CAMERA, CHARACTER, CHARACTERS, DEBUG, DEFAULT_WEAPON, FINGER_GRIP, LIGHTING, OUTPOST, PLAYER, WEAPONS, type CharacterId, type CharacterModel, type WeaponId } from "./config";
+import { CAMERA, CHARACTER, CHARACTERS, DEBUG, DEFAULT_WEAPON, LIGHTING, OUTPOST, PLAYER, WEAPONS, type CharacterId, type CharacterModel, type WeaponId } from "./config";
 import { KeyboardMoveInput } from "./input/KeyboardMoveInput";
 import { TouchJoystickInput } from "./input/TouchJoystickInput";
 import { CombinedMoveInput, type MoveInputSource } from "./input/MoveInput";
 import { AimTwist } from "./player/AimTwist";
 import { loadCharacter } from "./player/CharacterLoader";
-import { FingerGrip } from "./player/FingerGrip";
-import { LeftHandIK } from "./player/LeftHandIK";
 import { PlayerAnimationController } from "./player/PlayerAnimationController";
 import { PlayerController } from "./player/PlayerController";
+import { WeaponHands } from "./player/WeaponHands";
 import { WeaponHolder } from "./player/WeaponHolder";
 import { DebugPanel, type TuneParam } from "./ui/DebugPanel";
 import { Ground } from "./world/Ground";
@@ -54,9 +53,7 @@ export class Game {
   private input!: MoveInputSource;
   private model!: Entity;
   private aimTwist: AimTwist | null = null;
-  private leftHandIK: LeftHandIK | null = null;
-  private rightFingers: FingerGrip | null = null;
-  private leftFingers: FingerGrip | null = null;
+  private weaponHands: WeaponHands | null = null;
   weapons!: WeaponHolder;
   private contactShadow!: Entity;
   private characterScale: number = CHARACTER.scale;
@@ -168,12 +165,14 @@ export class Game {
       attack();
     });
     window.addEventListener("keydown", (event) => { if (event.code === "Space") attack(); });
-    const handRoll: CharacterModel["handRollDeg"] = "handRollDeg" in characterModel ? characterModel.handRollDeg : undefined;
-    this.weapons.attachTo(character.model, handRoll?.right);
+    const rig: CharacterModel = characterModel;
+    this.weapons.attachTo(character.model, rig);
     this.aimTwist = new AimTwist(character.model);
-    this.leftHandIK = new LeftHandIK(character.model, handRoll?.left);
-    this.rightFingers = new FingerGrip(character.model, "Right");
-    this.leftFingers = new FingerGrip(character.model, "Left");
+    this.weaponHands = new WeaponHands(app, character.model, rig);
+    this.weaponHands.debug = DEBUG.DEBUG_GRIPS || new URLSearchParams(location.search).get("grips") === "1";
+    this.options.debugRoot.querySelector("[data-grips]")?.addEventListener("click", () => {
+      if (this.weaponHands) this.weaponHands.debug = !this.weaponHands.debug;
+    });
     this.setupWeaponSelect();
 
     this.colliderDebug = new ColliderDebugView(app, this.collision, playerRoot, () => this.player.radius);
@@ -198,14 +197,11 @@ export class Game {
     this.player.update(dt);
     this.animation.update(this.player.speed, dt);
     // After the anim system has posed the skeleton this frame: turn the chest so the gun points
-    // where the hero faces, then put the left hand on the weapon.
+    // where the hero faces (the weapon follows the right hand's WeaponSocket), then left-arm IK onto
+    // the weapon's LeftHandGrip and the finger grip on both hands.
     const aimWeight = this.animation.upperBodyWeight;
-    this.aimTwist?.apply(this.weapons.entity, this.player.yawDeg, aimWeight, dt);
-    const support = this.weapons.socket("leftHandGrip");
-    this.leftHandIK?.apply(support, aimWeight);
-    // Close the hands on the weapon.
-    this.rightFingers?.apply(FINGER_GRIP.weaponDeg, this.weapons.entity ? 1 : 0);
-    this.leftFingers?.apply(FINGER_GRIP.supportDeg, support ? aimWeight : 0);
+    this.aimTwist?.apply(this.weapons.entity !== null, this.player.yawDeg, aimWeight, dt);
+    this.weaponHands?.update(this.weapons, aimWeight);
     const device = this.app.graphicsDevice;
     this.camera.update(dt, device.width / Math.max(1, device.height));
 

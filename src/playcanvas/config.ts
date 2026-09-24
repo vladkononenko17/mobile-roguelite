@@ -14,11 +14,46 @@ export interface CharacterModel {
   /** Build the breathing idle from the idle clip (for models whose only "idle" is a static rest pose). */
   proceduralIdle?: boolean;
   /**
-   * How this rig's hand bones are rolled about their own axis (+Y, along the fingers) relative to
-   * the Vanguard's, in degrees. Weapon grips and sockets are authored on the Vanguard's hands; the
-   * weapon holder and left-hand IK undo this roll so they fit any rig. Printed by the build script.
+   * Palm grip frames, one per hand, in that hand bone's own space (see GripFrame): `position` is
+   * the middle of the palm where a held handle touches it, `axis` runs across the palm from the
+   * little finger to the index finger, `palm` points from the handle into the palm. A weapon with
+   * `grips` is placed so its right grip meets `hands.right` (the WeaponSocket), and left-hand IK
+   * brings `hands.left` onto its left grip. Characters without `hands` use the weapons' legacy
+   * position / rotation.
+   */
+  hands?: { right: GripFrame; left: GripFrame };
+  /**
+   * Finger rig for the procedural grip (player/FingerGrip.ts). `rigid`: the whole finger is skinned
+   * to its first joint (bend only there, measure contact at the chain's tip). `curlAxis`: the local
+   * axis that bends a finger toward the palm. `thickness`: finger half-thickness (m, bone space).
+   */
+  fingers?: { rigid: boolean; curlAxis: Vec3Tuple; thickness: number };
+  /**
+   * Legacy weapon placement only (weapons without `grips`): this rig's hand-bone roll about +Y
+   * relative to the Vanguard's hand, which those transforms were authored on (degrees).
    */
   handRollDeg?: { left: number; right: number };
+}
+
+export type Vec3Tuple = [number, number, number];
+
+/**
+ * A grip as a frame, shared by weapons (the handle being held) and hands (the palm holding it).
+ * `axis` runs along the handle from the little-finger side to the index-finger side; `palm` points
+ * from the handle axis toward the palm (it is made perpendicular to `axis`). With X = axis x palm,
+ * these give a right-handed frame, so a weapon grip and a hand grip line up by matching frames.
+ */
+export interface GripFrame {
+  position: Vec3Tuple;
+  axis: Vec3Tuple;
+  palm: Vec3Tuple;
+}
+
+/** A weapon's grip: `position` on the handle's axis, `radius` from the axis to the surface the palm touches. */
+export interface WeaponGrip extends GripFrame {
+  radius: number;
+  /** The left hand may roll around the handle axis by up to this much to follow the animated wrist. */
+  rollRangeDeg?: number;
 }
 
 /** Character GLBs selectable from the tune panel. All use a Mixamo-style rig with Walking / Running clips. */
@@ -34,6 +69,16 @@ export const CHARACTERS = {
     runNativeSpeed: 4.72,
     clips: { idle: "Survivor_Idle" },
     proceduralIdle: false,
+    // Measured on the mesh (scripts in assets-src notes): palm surface z ~ +0.025 in hand space,
+    // knuckles at y 0.12, thumb on +x (right) / -x (left). The handle crosses the palm diagonally,
+    // the index end nearer the knuckles.
+    hands: {
+      right: { position: [0.005, 0.085, 0.03], axis: [0.966, 0.259, 0], palm: [0, 0, -1] },
+      left: { position: [-0.005, 0.085, 0.03], axis: [-0.966, 0.259, 0], palm: [0, 0, -1] },
+    },
+    // One finger bone per hand (HandIndex1) carries all four fingers; Index2-4 drive no vertices,
+    // and there are no thumb bones (the thumb is skinned to the hand).
+    fingers: { rigid: true, curlAxis: [1, 0, 0], thickness: 0.011 },
     handRollDeg: { left: -237.0, right: -116.8 },
   },
   vanguard: {
@@ -47,6 +92,12 @@ export const CHARACTERS = {
     // Rifle_Charge_inplace, Running_Reload, Axe_Spin_Attack, ...) are loaded but not used yet.
     clips: { idle: "Idle_10" },
     proceduralIdle: false,
+    // Sculpted fists (no finger bones). Palm frames derived from the rifle hold verified on this
+    // model (grip in the right fist, left fist under the handguard).
+    hands: {
+      right: { position: [0.036, 0.026, 0.023], axis: [-0.661, 0.464, 0.589], palm: [0.499, -0.314, 0.808] },
+      left: { position: [0.067, 0.071, 0.051], axis: [0.625, -0.026, 0.78], palm: [-0.775, -0.143, 0.616] },
+    },
   },
   brawler2k: {
     label: "Brawler (2K tex)",
@@ -80,26 +131,31 @@ export type CharacterId = keyof typeof CHARACTERS;
  * pose (Run_and_Shoot). `position` is in hand-bone space (metres, before the character scale).
  * `pose` is the clip played on the arms and torso while the weapon is held (null = normal arms);
  * `attack` is the full-body clip played once by the attack action (Space / on-screen button).
- * Optional `scale` resizes the weapon. Optional `sockets` are poses in the weapon's own space
- * (muzzle -Z) that become child entities of the held weapon (WeaponHolder.socket):
- * `rightHandGrip` marks where the right palm holds it; `leftHandGrip` is where the left hand bone
- * (wrist) goes and how it is turned when supporting the weapon. When a weapon has a `leftHandGrip`,
- * left-hand IK (player/LeftHandIK.ts) pulls the left hand onto it while the aiming pose plays.
+ * Optional `scale` resizes the weapon.
+ *
+ * Optional `grips` (weapon space, muzzle -Z; see GripFrame) define how hands hold it: `right` is the
+ * handle the right hand holds (the pistol grip), `left` the support grip (the handguard). On a
+ * character with `hands`, the weapon is parented to the right hand's WeaponSocket so its right grip
+ * sits in the palm (the right hand leads, the weapon follows it); the left hand is put on the left
+ * grip by IK and both hands' fingers wrap the handles (player/WeaponHands.ts). Markers named
+ * RightHandGrip / LeftHandGrip are created on the held weapon. `position` / `rotation` / `rollDeg`
+ * are the legacy placement used for characters without `hands`.
  */
 export const WEAPONS = {
   url: "models/weapons/weapons.glb",
   handBone: "mixamorig:RightHand",
   list: {
     // "assetpack-free" (textured)
-    // Two-handed: left-hand IK puts the left hand on `leftHandGrip`, the rear of the handguard (the
-    // hand's pose was measured from Run_and_Shoot with the palm under the handguard). The rifle is the
-    // usual grip turned 10° inward about the pistol grip, so the handguard stays within the Vanguard's
-    // short arm reach while the muzzle still points almost straight ahead.
+    // Two-handed. Measured on the model: the pistol grip is 4.2 cm wide and slants back from
+    // (y 0, z 0.04) to (y -0.07, z 0.075); the handguard is a 3 x 7 cm slab (y 0.063-0.13) from
+    // z -0.32 to -0.14. The right palm sits on the right side of the pistol grip (knuckles pointing
+    // forward along the gun, the heel of the hand behind it); the left
+    // palm under and to the left of the handguard.
     rifle: {
       label: "Assault rifle", node: "assault_rifle_2", position: [-0.0057, 0.0893, 0.0247], rotation: [80.8, -42.19, 13.56], rollDeg: 0, pose: "Run_and_Shoot", attack: null,
-      sockets: {
-        rightHandGrip: { position: [0, -0.02, 0.045] },
-        leftHandGrip: { position: [-0.0901, 0.0784, -0.1503], rotation: [178.11, 38.7, 67.05] },
+      grips: {
+        right: { position: [0, -0.035, 0.058], axis: [0, 0.88, -0.47], palm: [0.85, 0.25, 0.47], radius: 0.021 },
+        left: { position: [0, 0.096, -0.23], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
       },
     },
     shotgun: { label: "Shotgun", node: "shotgun_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, pose: "Run_and_Shoot", attack: null },
@@ -127,8 +183,6 @@ export const WEAPONS = {
   list: Record<string, WeaponDef>;
 };
 
-type Vec3Tuple = [number, number, number];
-export type WeaponSocket = "rightHandGrip" | "leftHandGrip";
 
 export interface WeaponDef {
   label: string;
@@ -137,7 +191,7 @@ export interface WeaponDef {
   rotation: Vec3Tuple;
   rollDeg: number;
   scale?: number;
-  sockets?: Partial<Record<WeaponSocket, { position: Vec3Tuple; rotation?: Vec3Tuple }>>;
+  grips?: { right: WeaponGrip; left?: WeaponGrip };
   pose: string | null;
   attack: string | null;
 }
@@ -326,7 +380,12 @@ export const ANIMATION = {
  * the hero faces. `share` splits the twist over the spine bones (lower back to chest).
  */
 export const AIM = {
-  maxTwistDeg: 30,
+  maxTwistDeg: 40,
+  /** Share of a gripping hand's extra roll that the forearm takes as a twist about its own axis
+   * (pronation / supination) instead of the wrist (player/ArmIK.ts). */
+  forearmTwistShare: 0.5,
+  /** How far arm IK may swing an elbow around the shoulder-wrist line to straighten the wrist. */
+  elbowSwivelDeg: 75,
   /** Higher follows faster; ~8 settles in a quarter second. */
   smoothing: 8,
   spine: [
@@ -337,14 +396,16 @@ export const AIM = {
 };
 
 /**
- * Extra finger bend (degrees per joint, knuckle to tip) on top of the animation while holding a
- * weapon (player/FingerGrip.ts; only rigs with finger joints, e.g. the Survivor).
+ * Procedural finger grip (player/FingerGrip.ts): each finger joint bends toward the palm, after the
+ * animation, until the finger meets the held handle (a cylinder around the weapon grip's axis).
  */
 export const FINGER_GRIP = {
-  /** Right hand around any held weapon's grip. */
-  weaponDeg: [50, 65, 50],
-  /** Left hand under a two-handed weapon's handguard. */
-  supportDeg: [30, 40, 30],
+  /** Upper limit per joint (degrees), so a finger never folds through the palm. */
+  maxCurlDeg: 95,
+  /** Search step (degrees). */
+  stepDeg: 3,
+  /** Right index finger on a trigger: bent this fraction of its wrap (only rigs with separate fingers). */
+  triggerCurl: 0.55,
 };
 
 /** Procedural breathing idle generated from the rest pose (see player/BreathingIdle.ts). */
@@ -422,6 +483,9 @@ export const DEBUG = {
   /** Show translucent collider footprints (also: "colliders" button in the tune panel, or
    * ?colliders=1 in the URL). Off by default. */
   DEBUG_COLLIDERS: false,
+  /** Draw the hand / weapon grip frames: RightHand, WeaponSocket, LeftHand, LeftHandGrip and the
+   * left-hand IK target (also: "grips" button in the tune panel, or ?grips=1). */
+  DEBUG_GRIPS: false,
 };
 
 export const RENDER = {
