@@ -79,3 +79,9 @@ GitHub Actions runs the tests, checks TypeScript, builds Vite, and publishes onl
 Version 0.1's Canvas implementation remains recoverable in Git history. Full rooms, multiple weapons, loot inventories, persistent progression, sound, and a production sprite atlas are not included in this vertical slice.
 
 The current art is an original code-drawn comic wasteland treatment used to validate feel and performance. The next production pass will replace it with a cohesive animated sprite atlas while keeping the same gameplay systems.
+
+## License
+
+Copyright © 2026 Vladyslav Kononenko. All rights reserved. This is proprietary software: no permission
+is granted to copy, modify, distribute or host the code or assets. See [LICENSE](LICENSE).
+Third-party assets remain the property of their owners (see `assets-src/SOURCES.md`).

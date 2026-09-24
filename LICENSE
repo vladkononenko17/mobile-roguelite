@@ -1,0 +1,20 @@
+Copyright (c) 2026 Vladyslav Kononenko. All rights reserved.
+
+This repository and everything in it, including the source code, game design, levels, text, and the
+built or processed assets (models, textures, animations, audio and icons), are proprietary and
+confidential works of Vladyslav Kononenko, except the third-party material noted below.
+
+No licence is granted. Without prior written permission from the copyright holder, you may not copy,
+reproduce, modify, merge, publish, distribute, sublicense, sell, host, rent, or create derivative
+works from any part of this repository or of the published game.
+
+GitHub's Terms of Service allow viewing and forking this repository on GitHub. That does not grant
+any other right, including any right to use, copy or redistribute the code or assets outside GitHub.
+
+Third-party material (for example the assets listed in assets-src/SOURCES.md and the npm
+dependencies) remains the property of its respective owners and is used under their own licences.
+Nothing in this file grants any rights to that material.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.
+
+For permission requests, contact the copyright holder through GitHub: https://github.com/vladkononenko17
