@@ -4,7 +4,7 @@ import { CATEGORY_COLORS, ICON_PATHS, iconSvg, type UpgradeCategory, type Upgrad
 
 const CSS = `
 #hud { position: fixed; inset: 0; pointer-events: none; font: 600 14px system-ui, sans-serif; color: #f3e7d3; z-index: 5; }
-#hud .top { position: absolute; left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); top: max(10px, env(safe-area-inset-top)); display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; }
+#hud .top { position: absolute; left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right)); top: max(10px, env(safe-area-inset-top)); display: grid; grid-template-columns: minmax(0, min(200px, 50%)) 1fr; gap: 6px 10px; align-items: start; }
 #hud .bar { position: relative; height: 16px; border-radius: 8px; background: rgba(20, 15, 12, 0.6); border: 1px solid rgba(243, 231, 211, 0.35); overflow: hidden; }
 #hud .bar > i { position: absolute; inset: 0 auto 0 0; background: #d8463a; transition: width 0.15s; }
 #hud .bar > span { position: absolute; inset: 0; text-align: center; font-size: 11px; line-height: 16px; text-shadow: 0 1px 2px #000; }
@@ -12,7 +12,7 @@ const CSS = `
 #hud .chips { display: flex; gap: 8px; justify-content: flex-start; }
 #hud .left { display: grid; gap: 6px; align-content: start; }
 /* GTA III style: money and health as big outlined numbers, top right. */
-#hud .gta { display: grid; justify-items: end; gap: 0; font: 800 30px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
+#hud .gta { justify-self: end; min-width: 0; display: grid; justify-items: end; gap: 0; font: 800 30px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; }
 #hud .gta .money, #hud .gta .health { position: relative; display: grid; transform-origin: 100% 50%; }
 #hud .gta .money > *, #hud .gta .health > .num > * { grid-area: 1 / 1; }
 /* Outline layer under the fill layer (a stroke on gradient-clipped text is unreliable on Safari). */
