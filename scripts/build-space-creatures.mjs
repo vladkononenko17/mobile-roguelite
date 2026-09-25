@@ -24,10 +24,10 @@ const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
 /** Output name, source, and skins: id -> sharp modulate (hue degrees, saturation, brightness). */
 const CREATURES = [
-  { name: "skitter", file: "Enemy_ExtraSmall.gltf", skins: { skitter_green: { hue: 0 }, skitter_violet: { hue: 150, saturation: 1.1 }, skitter_red: { hue: -90, saturation: 1.2, brightness: 0.9 } } },
+  { name: "skitter", file: "Enemy_ExtraSmall.gltf", skins: { skitter_green: { hue: 0 }, skitter_violet: { hue: 150, saturation: 1.1 }, skitter_red: { hue: -90, saturation: 1.2, brightness: 0.9 }, skitter_void: { brightness: 0.8, tint: "#8a4dff" } } },
   { name: "spitter", file: "Enemy_Small.gltf", skins: { spitter_toxic: { hue: 0 }, spitter_blue: { hue: 120 } } },
-  { name: "glub", file: "Enemy_Flying.gltf", skins: { glub_pink: { hue: 0 }, glub_teal: { hue: 160, saturation: 1.1 } } },
-  { name: "alienBrute", file: "Enemy_Large.gltf", skins: { brute_green: { hue: 0 }, brute_crimson: { hue: -110, saturation: 1.2, brightness: 0.85 }, brood_queen: { hue: 170, saturation: 1.3, brightness: 0.75 } } },
+  { name: "glub", file: "Enemy_Flying.gltf", skins: { glub_pink: { hue: 0 }, glub_teal: { hue: 160, saturation: 1.1 }, glub_void: { brightness: 0.75, tint: "#7a3cf0" } } },
+  { name: "alienBrute", file: "Enemy_Large.gltf", skins: { brute_green: { hue: 0 }, brute_crimson: { hue: -110, saturation: 1.2, brightness: 0.85 }, brood_queen: { hue: 170, saturation: 1.3, brightness: 0.75 }, brute_void: { brightness: 0.7, tint: "#6a35d8" } } },
   { name: "mech", file: "Mech_FinnTheFrog.gltf", skins: { mech_security: { hue: 0, saturation: 0.35, brightness: 0.8 }, mech_warden: { hue: -100, saturation: 1.3, brightness: 0.7 } } },
 ];
 
@@ -44,7 +44,10 @@ for (const c of CREATURES) {
     texture.setImage(img).setMimeType("image/webp");
     for (const id of skinIds) {
       const k = c.skins[id];
-      await sharp(resized).modulate({ hue: k.hue ?? 0, saturation: k.saturation ?? 1, brightness: k.brightness ?? 1 }).webp({ quality: 90 }).toFile(path.join(outDir, "skins", `${id}.webp`));
+      // `tint` recolours (keeps the shading, replaces the hue): the gate creatures' violet.
+      let img = sharp(resized).modulate({ hue: k.hue ?? 0, saturation: k.saturation ?? 1, brightness: k.brightness ?? 1 });
+      if (k.tint) img = sharp(await img.png().toBuffer()).tint(k.tint);
+      await img.webp({ quality: 90 }).toFile(path.join(outDir, "skins", `${id}.webp`));
     }
   }
   for (const m of root.listMaterials()) m.setMetallicFactor(0).setRoughnessFactor(0.75);

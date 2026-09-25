@@ -109,7 +109,7 @@ export class Game {
       clearColor: new Color(r, g, b),
       fov: CAMERA.fovDeg,
       nearClip: CAMERA.nearClip,
-      farClip: CAMERA.farClip,
+      farClip: biome.lighting.farClip ?? CAMERA.farClip,
       // Neutral keeps hue and saturation of the armour and yellow accents better than ACES.
       toneMapping: TONEMAP_NEUTRAL,
       gammaCorrection: GAMMA_SRGB,

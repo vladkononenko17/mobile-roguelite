@@ -30,3 +30,6 @@ assets-src/new-ars/
 assets-src/kenney/
 # Quaternius Ultimate Space Kit (CC0): raw downloads local only; built GLBs in public/models/aliens/
 assets-src/quaternius-space/
+# Quaternius Ultimate Modular Sci-Fi Pack (CC0) and HallwayPACK modules (CC0): raw files local only; used models are baked into facility-kit.glb
+assets-src/quaternius-scifi/
+assets-src/hallwaypack/

@@ -383,6 +383,18 @@ export const GROUND = {
     hangardeck: { base: "#3f4247", dark: "#35383d", light: "#4a4d53", speckDark: "#2a2c30", speckLight: "#6a6250", specks: 350, slabs: 3, seam: "#23252a" },
     /** The meteor: grey-violet rock dust, flecked with crystal glints. */
     asteroid: { base: "#4d4852", dark: "#423e47", light: "#58535e", speckDark: "#35313a", speckLight: "#9a7fd0", specks: 1000 },
+    /** ORION station: off-white deck panels (2 m) with graphite seams. */
+    stationdeck: { base: "#a9adb3", dark: "#9fa3a9", light: "#b2b6bc", speckDark: "#8a8f96", speckLight: "#bcc0c5", specks: 160, slabs: 5, seam: "#6a6f76" },
+    /** ORION docking bay: mid-grey composite deck, big panels. */
+    dockdeck: { base: "#6b7077", dark: "#62676e", light: "#747980", speckDark: "#4e5359", speckLight: "#858a90", specks: 260, slabs: 4, seam: "#474b51" },
+    /** ORION research lab: the cleanest white floor. */
+    labdeck: { base: "#bfc3c8", dark: "#b6babf", light: "#c7cbd0", speckDark: "#a2a7ad", speckLight: "#cfd3d7", specks: 90, slabs: 5, seam: "#8b9096" },
+    /** ORION quarantine: the lab floor, stained - rust, blood and goo in the seams. */
+    quarantine: { base: "#8f8e90", dark: "#848385", light: "#99989a", speckDark: "#5a3632", speckLight: "#6d7a4a", specks: 600, slabs: 5, seam: "#5c5a5d" },
+    /** ORION reactor: dark industrial grating, soot and warning-orange flecks. */
+    grate: { base: "#373b41", dark: "#2f3338", light: "#3f444a", speckDark: "#23262b", speckLight: "#8a5a2a", specks: 450, slabs: 8, seam: "#1d1f23" },
+    /** ORION Project Gate: dark violet-graphite plates, crystal glints. */
+    gatefloor: { base: "#34323f", dark: "#2c2a36", light: "#3c3a48", speckDark: "#211f2a", speckLight: "#8e6ad6", specks: 700, slabs: 6, seam: "#1c1a24" },
     /** Oil, soot and dried blood trodden into the facility floor. */
     grime: { base: "#48463f", dark: "#3d3b35", light: "#524f47", speckDark: "#2e2926", speckLight: "#5e3a33", specks: 700 },
   },
@@ -666,6 +678,8 @@ export interface LightingSpec {
   clearColor: RGB;
   fogStart: number;
   fogEnd: number;
+  /** Camera far plane (else CAMERA.farClip): space maps see their backdrop far below. */
+  farClip?: number;
 }
 
 export const LIGHTING: LightingSpec = {

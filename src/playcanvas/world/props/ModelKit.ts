@@ -71,7 +71,10 @@ export class ModelKit<Id extends string> {
     for (const render of root.findComponents("render") as RenderComponent[]) {
       for (const meshInstance of render.meshInstances) materials.add(meshInstance.material as StandardMaterial);
     }
-    for (const material of materials) this.prepareMaterial(material);
+    for (const material of materials) {
+      this.prepareMaterial(material);
+      this.materials.set(material.name, material);
+    }
 
     for (const id of Object.keys(this.defs) as Id[]) {
       const entity = root.findByName(id) as Entity | null;
@@ -92,6 +95,13 @@ export class ModelKit<Id extends string> {
       }
       this.templates.set(id, { entity, footprint: footprintOf(entity) });
     }
+  }
+
+  private readonly materials = new Map<string, StandardMaterial>();
+
+  /** A shared kit material by name ("palette", "glow", "glass", "accent"), e.g. to tint it live. */
+  material(name: string): StandardMaterial | undefined {
+    return this.materials.get(name);
   }
 
   has(id: Id): boolean {
@@ -154,11 +164,18 @@ export class ModelKit<Id extends string> {
       material.useLighting = false;
       material.useSkybox = false;
     } else {
-      if (material.name === "palette" || material.name === "glass") {
+      if (material.name === "palette" || material.name === "glass" || material.name === "accent") {
         material.diffuseVertexColor = true;
         material.diffuseVertexColorChannel = "rgb";
       }
       material.diffuse = new Color(k, k, k);
+    }
+    if (material.name === "accent") {
+      // Painted trim that also glows a little: the level tints it (ShipLevel: one colour per sector).
+      material.emissiveVertexColor = true;
+      material.emissiveVertexColorChannel = "rgb";
+      material.emissive = new Color(0.3, 0.8, 1);
+      material.diffuse = new Color(k * 0.3, k * 0.8, k);
     }
     if (material.name === "glass") {
       material.opacity = 0.32;

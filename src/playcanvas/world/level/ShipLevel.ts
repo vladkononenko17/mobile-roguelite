@@ -1,4 +1,4 @@
-import { BLEND_ADDITIVE, Color, Entity, StandardMaterial, Texture, ADDRESS_REPEAT, FILTER_LINEAR, FILTER_LINEAR_MIPMAP_LINEAR, type AppBase } from "playcanvas";
+import { BLEND_ADDITIVE, Color, Entity, Mesh, MeshInstance, StandardMaterial, TorusGeometry, Texture, ADDRESS_REPEAT, FILTER_LINEAR, FILTER_LINEAR_MIPMAP_LINEAR, type AppBase } from "playcanvas";
 import { FACILITY, FACILITY_LIGHTING } from "../../config";
 import { SPACE_DIFFICULTIES, SPACE_LEVELS, SPACE_RUN } from "../../gameplay/spaceConfig";
 import type { AmbientEmitter } from "../AmbientFx";
@@ -8,48 +8,59 @@ import type { GroundSurface } from "../../config";
 import type { ModelKit, SpawnOptions } from "../props/ModelKit";
 import { FACILITY_MODELS, type FacilityModel } from "../props/FacilityKit";
 import type { Biome, LevelBounds, WayPoint, Zone } from "./Biome";
+import { FloorPaint } from "./FloorPaint";
 
 /**
- * THE ORION - chapter 2: escape the infested ship. Six zones, crossed south to north over six
- * levels (two acts: medium / hard / boss), joined by windowed corridors sealed by energy barriers
- * until the level is won; beyond the hull, the void and a planet far below.
+ * THE ORION - chapter 2. One research station, crossed south to north (up the screen) over seven
+ * levels: six sectors inside, joined by short corridors (HallwayPACK halls bridging the void, sealed
+ * by energy barriers until the level is won), then out through the airlock onto the asteroid.
  *
- *   z   72  CARGO BAY          containers, parked cargo craft, loading lanes          (Act I)
- *   z  -22   ~~ corridor ~~
- *   z  -22  BIO-LAB            hydroponic bays, cryo tubes, specimens got loose
- *   z -126   ~~ corridor ~~
- *   z -126  REACTOR CORE       the glowing core on its hazard ring (boss 1: the Warden)
- *   z -236   ~~ corridor ~~
- *   z -236  COMMAND DECK       consoles and screens, crew bunks, a window wall      (Act II)
- *   z -338   ~~ corridor ~~
- *   z -338  HANGAR             spacecraft, rockets, turrets; the airlock north
- *   z -458   ~~ docking tube ~~
- *   z -458  THE METEOR         the rock the hive came from (boss 2: the Brood Mother)
- *   z -562
+ *   z   64  1 DOCKING BAY        the hangar the hero lands in: parked craft, cargo, pads     Act I
+ *   z  -16     ~~ corridor ~~
+ *   z  -16  2 OPERATIONS DECK    ops hall, crew quarters west, mess east, a checkpoint
+ *   z -100     ~~ corridor ~~
+ *   z -100  3 RESEARCH LAB       the cleanest white: glass labs, pods (the Warden's lockdown)
+ *   z -180     ~~ corridor ~~
+ *   z -180  4 QUARANTINE         the lab's language broken: red light, the containment cell   Act II
+ *   z -264     ~~ corridor ~~
+ *   z -264  5 REACTOR            industrial dark: the reactor on its dais, machinery bays
+ *   z -356     ~~ corridor ~~
+ *   z -356  6 PROJECT GATE       the round chamber and the portal the hive came through
+ *   z -408     ~~ airlock tube ~~
+ *   z -432  7 THE ASTEROID       outside, on the rock (the Brood Mother)                     Finale
+ *   z -536
  *
- * Camera looks towards -Z (screen up is north). Ship walls are 2.4 m (cutaway) so nothing hides the
- * hero; combat floors stay ~70% open, the detail runs along the walls and in small scenes.
+ * The station's language: white/off-white modular walls (Quaternius sci-fi), graphite, light strips,
+ * and accent paint that glows the sector's colour (cyan -> red -> orange -> purple). Walls facing the
+ * camera (south) are low cutaways; rooms are open combat floors with the detail along the walls.
  */
 
 type Rect = { x0: number; z0: number; x1: number; z1: number };
-const ROOMS: Record<string, Rect> = {
-  cargo: { x0: -38.4, z0: 0, x1: 38.4, z1: 72 },
-  biolab: { x0: -43.2, z0: -104, x1: 43.2, z1: -22 },
-  reactor: { x0: -44, z0: -214, x1: 44, z1: -126 },
-  command: { x0: -44, z0: -316, x1: 44, z1: -236 },
-  hangar: { x0: -50, z0: -428, x1: 50, z1: -338 },
-};
-/** The meteor: open rock, no walls (a rim of boulders and the void). */
-const METEOR: Rect = { x0: -52, z0: -562, x1: 52, z1: -458 };
+type SectorId = "dock" | "ops" | "lab" | "quarantine" | "reactor" | "gate" | "asteroid";
 
-/** Corridors (north-south, centred on x = 0) between the zones; the last is the glass docking tube. */
-const HALL = 3.6;
+/** Sector rooms (wall lines; multiples of the 4 m wall module). */
+const ROOMS: Record<Exclude<SectorId, "gate" | "asteroid">, Rect> = {
+  dock: { x0: -40, z0: 0, x1: 40, z1: 64 },
+  ops: { x0: -44, z0: -84, x1: 44, z1: -16 },
+  lab: { x0: -40, z0: -164, x1: 40, z1: -100 },
+  quarantine: { x0: -40, z0: -248, x1: 40, z1: -180 },
+  reactor: { x0: -48, z0: -340, x1: 48, z1: -264 },
+};
+/** The Project Gate: a round chamber. */
+const GATE = { x: 0, z: -382, radius: 26 };
+/** The asteroid: open rock, no walls (a rim of boulders and the void). */
+const ROCK: Rect = { x0: -52, z0: -536, x1: 52, z1: -432 };
+
+/** Corridors (north-south along x = 0, HallwayPACK halls: 8 m modules, ~8.3 m across). */
+const HALL = 4.15;
+const DOOR = 4;
 const CORRIDORS: { z0: number; z1: number; tube?: boolean }[] = [
-  { z0: -22, z1: 0 },
-  { z0: -126, z1: -104 },
-  { z0: -236, z1: -214 },
-  { z0: -338, z1: -316 },
-  { z0: -458, z1: -428, tube: true },
+  { z0: -16, z1: 0 },
+  { z0: -100, z1: -84 },
+  { z0: -180, z1: -164 },
+  { z0: -264, z1: -248 },
+  { z0: -356, z1: -340 },
+  { z0: -432, z1: -408, tube: true },
 ];
 
 const r = (x0: number, z0: number, x1: number, z1: number): LevelBounds => ({ minX: x0, minZ: z0, maxX: x1, maxZ: z1 });
@@ -59,32 +70,60 @@ const zone = (q: Rect, start: [number, number], exit = true): Zone => ({
   start: { x: start[0], z: start[1], yawDeg: 180 },
   ...(exit ? { exit: { axis: "z" as const, at: q.z0, dir: -1 as const } } : {}),
 });
-export const ZONES: Record<string, Zone> = {
-  cargo: zone(ROOMS.cargo, [0, 62]),
-  biolab: zone(ROOMS.biolab, [0, -34]),
-  reactor: zone(ROOMS.reactor, [0, -138]),
-  command: zone(ROOMS.command, [0, -248]),
-  hangar: zone(ROOMS.hangar, [0, -350]),
-  meteor: { region: r(METEOR.x0 + 1.5, METEOR.z0 + 1.5, METEOR.x1 - 1.5, METEOR.z1 - 0.6), start: { x: 0, z: -470, yawDeg: 180 } },
+const GATE_RECT: Rect = { x0: GATE.x - GATE.radius, z0: GATE.z - GATE.radius, x1: GATE.x + GATE.radius, z1: GATE.z + GATE.radius };
+export const ZONES: Record<SectorId, Zone> = {
+  dock: zone(ROOMS.dock, [0, 54]),
+  ops: zone(ROOMS.ops, [0, -28]),
+  lab: zone(ROOMS.lab, [0, -112]),
+  quarantine: zone(ROOMS.quarantine, [0, -192]),
+  reactor: zone(ROOMS.reactor, [0, -276]),
+  gate: zone(GATE_RECT, [0, -364]),
+  asteroid: { region: r(ROCK.x0 + 1.5, ROCK.z0 + 1.5, ROCK.x1 - 1.5, ROCK.z1 - 0.6), start: { x: 0, z: -444, yawDeg: 180 } },
 };
 
-export const BOUNDS: LevelBounds = r(-52, -562, 52, 72);
-export const SPAWN = ZONES.cargo.start;
+export const BOUNDS: LevelBounds = r(-52, -536, 52, 64);
+export const SPAWN = ZONES.dock.start;
 
 /* ------------------------------------------------------------------------------------------------
- * Light: every zone has its own colour.
+ * Colour: each sector's accent paint and light.
  * ---------------------------------------------------------------------------------------------- */
 
-const CYAN: [number, number, number] = [0.25, 0.75, 1];
-const AMBER: [number, number, number] = [1, 0.6, 0.18];
-const RED: [number, number, number] = [1, 0.12, 0.08];
-const GREEN: [number, number, number] = [0.35, 1, 0.45];
-const WHITE: [number, number, number] = [0.6, 0.72, 0.9];
-const VIOLET: [number, number, number] = [0.65, 0.35, 1];
-const STEAM: [number, number, number] = [1.05, 1.15, 1.3];
+type RGB = [number, number, number];
+const CYAN: RGB = [0.2, 0.75, 1];
+const ICE: RGB = [0.45, 0.85, 1];
+const RED: RGB = [1, 0.1, 0.06];
+const ORANGE: RGB = [1, 0.42, 0.06];
+const VIOLET: RGB = [0.6, 0.25, 1];
+const WHITE: RGB = [0.7, 0.82, 1];
+const STEAM: RGB = [1.05, 1.15, 1.3];
+const GOO: RGB = [0.35, 1, 0.3];
 
-/** The reactor core (the Warden's arena). */
-const CORE = { x: 0, z: -170, radius: 7 };
+/** Accent paint per sector (tints the kit's "accent" material as the hero moves through). */
+const ACCENT: Record<SectorId, RGB> = {
+  dock: CYAN,
+  ops: [0.25, 0.6, 1],
+  lab: ICE,
+  quarantine: RED,
+  reactor: ORANGE,
+  gate: VIOLET,
+  asteroid: VIOLET,
+};
+/** Sector spans along z (south edge first), to pick the accent colour from the hero's z. */
+const SPANS: { id: SectorId; z0: number; z1: number }[] = [
+  { id: "dock", z0: 0, z1: 64 },
+  { id: "ops", z0: -84, z1: -16 },
+  { id: "lab", z0: -164, z1: -100 },
+  { id: "quarantine", z0: -248, z1: -180 },
+  { id: "reactor", z0: -340, z1: -264 },
+  { id: "gate", z0: -408, z1: -356 },
+  { id: "asteroid", z0: -536, z1: -432 },
+];
+
+/** The reactor (dais and core) and the portal. */
+const CORE = { x: 0, z: -302, radius: 7 };
+const PORTAL = { x: GATE.x, z: GATE.z - 2, radius: 4.2 };
+/** The quarantine's containment cell (walls on its lines). */
+const CELL: Rect = { x0: -12, z0: -224, x1: 12, z1: -204 };
 
 /** Deterministic RNG so the layout is the same on every load. */
 function rng(seed: number): () => number {
@@ -92,110 +131,90 @@ function rng(seed: number): () => number {
   return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
 }
 
-/** Small scenes per zone (like Hell's), kept off the central lane, corridor mouths and starts. */
-type SceneKind = "cargo" | "crates" | "lab" | "cryo" | "power" | "console" | "crew" | "hangar" | "fuel" | "rocks" | "crystals" | "wreck";
-const ROOM_KINDS: Record<string, SceneKind[]> = {
-  cargo: ["cargo", "crates", "cargo", "power"],
-  biolab: ["lab", "cryo", "lab", "crates"],
-  reactor: ["power", "power", "crates"],
-  command: ["console", "crew", "console"],
-  hangar: ["hangar", "fuel", "crates", "hangar"],
-  meteor: ["rocks", "crystals", "rocks", "wreck", "crystals"],
-};
-const SCENES: { x: number; z: number; kind: SceneKind; seed: number }[] = (() => {
-  const random = rng(4242);
-  const out: { x: number; z: number; kind: SceneKind; seed: number }[] = [];
-  const starts = Object.values(ZONES).map((z) => z.start);
-  for (const [name, q] of [...Object.entries(ROOMS), ["meteor", METEOR] as [string, Rect]]) {
-    const kinds = ROOM_KINDS[name];
-    const wanted = Math.round(((q.x1 - q.x0) * (q.z1 - q.z0)) / 260);
-    for (let tries = 0, n = 0; n < wanted && tries < wanted * 12; tries++) {
-      const x = q.x0 + 6 + random() * (q.x1 - q.x0 - 12), z = q.z0 + 6 + random() * (q.z1 - q.z0 - 12);
-      if (Math.abs(x) < 7) continue;
-      if (name === "reactor" && Math.hypot(x - CORE.x, z - CORE.z) < CORE.radius + 12) continue;
-      if (starts.some((p) => Math.hypot(x - p.x, z - p.z) < 9)) continue;
-      if (out.some((c) => Math.hypot(c.x - x, c.z - z) < 10)) continue;
-      out.push({ x, z, kind: kinds[Math.floor(random() * kinds.length)], seed: Math.floor(random() * 1e6) });
-      n++;
-    }
-  }
-  return out;
-})();
-
-/** Props per scene kind: [model, dx, dz, scale range]. */
-type Prop = [FacilityModel, number, number, number, number];
-const SCENE_PROPS: Record<SceneKind, Prop[]> = {
-  cargo: [["kContainerTall", 0, 0, 1, 1], ["kContainerWide", 2.2, 0.4, 1, 1], ["kContainer", -2, 0.6, 1, 1], ["kContainerFlat", 0.8, 2.2, 1, 1], ["kContainerOpen", -1.4, -2, 1, 1]],
-  crates: [["kContainer", 0, 0, 1, 1.1], ["kContainer", 1.5, 0.2, 1, 1.1], ["kContainerFlat", -1.6, 1, 1, 1], ["sBarrels", 1.2, -2, 0.8, 0.9]],
-  lab: [["hydroBay", 0, 0, 1, 1], ["bioGreen", 3, 1, 1, 1], ["plant", -2.6, 1.4, 1, 1.2], ["hydroLamp", 0, 2.6, 1, 1], ["kComputer", -2.8, -1.6, 1, 1]],
-  cryo: [["cryoOn", 0, 0, 1, 1], ["cryoOff", 2.4, 0, 1, 1], ["cryoOn", -2.4, 0, 1, 1], ["bioRed", 0, 2.4, 1, 1], ["casket", 3.2, 2.6, 1, 1]],
-  power: [["generator", 0, 0, 1, 1], ["batteryBlue", 2.8, 0.6, 1, 1], ["batteryOrange", -2.8, 0.4, 1, 1], ["genPileSmall", 1.4, -2.6, 1, 1]],
-  console: [["commandConsole", 0, 0, 1, 1], ["monitorBlue", 2.8, 1.2, 1, 1], ["kComputerWide", -2.6, 0.8, 1, 1], ["chair", 0.6, 1.8, 1, 1], ["kTableDisplay", -1.2, -2.4, 1, 1]],
-  crew: [["bunk", 0, 0, 1, 1], ["bunkRed", 2.6, 0, 1, 1], ["kTable", -2.6, 1.2, 1, 1], ["kChair", -3.6, 2.8, 1, 1], ["endTable", 1.4, 2.4, 1, 1]],
-  hangar: [["sCraftSpeeder", 0, 0, 0.9, 1], ["sBarrels", 4, 2, 1, 1], ["kContainerWide", -4, 1.5, 1, 1], ["sGenerator", 3, -3, 1, 1]],
-  fuel: [["sBarrels", 0, 0, 1, 1], ["sBarrels", 2.6, 0.5, 1, 1], ["sWireless", -2.4, 0.8, 1, 1], ["kPipeRing", 0.8, 2.6, 1, 1]],
-  rocks: [["sMeteor", 0, 0, 0.8, 1.2], ["sRockLargeA", 3.4, 1.2, 0.7, 1], ["sRock", -3, 1.6, 0.8, 1.1], ["sRocksSmall", 1.4, -2.8, 0.9, 1.2], ["sCrater", -2, -3, 1, 1.3]],
-  crystals: [["sCrystalsLargeA", 0, 0, 0.9, 1.3], ["sCrystals", 2.6, 1, 0.9, 1.2], ["sCrystalsLargeB", -2.4, 1.6, 0.8, 1.1], ["sRocksSmall", 1, -2.6, 1, 1.2]],
-  wreck: [["sCraftMiner", 0, 0, 0.9, 1], ["sRocksSmall", 4, 2, 1, 1.2], ["sAstronaut", -3.4, 2.2, 1, 1], ["sBones", 2.6, -3, 1, 1]],
-};
-
-/** Light pools: machines and screens glow, the core burns, the meteor's crystals shine violet. */
+/** Light pools and ambience: sparse, at the edges, each sector in its colour. */
 export const AMBIENT: AmbientEmitter[] = [
-  // Zone washes: each zone its own colour.
-  { kind: "glow", x: 0, z: 36, size: [70, 60], color: AMBER, intensity: 0.12 },
-  { kind: "glow", x: 0, z: -63, size: [80, 72], color: GREEN, intensity: 0.14 },
-  { kind: "glow", x: 0, z: -170, size: [80, 80], color: CYAN, intensity: 0.12 },
-  { kind: "glow", x: 0, z: -276, size: [80, 70], color: WHITE, intensity: 0.12 },
-  { kind: "glow", x: 0, z: -383, size: [90, 80], color: AMBER, intensity: 0.1 },
-  { kind: "glow", x: 0, z: -510, size: [96, 96], color: VIOLET, intensity: 0.12 },
-  // The reactor core burns cyan; alarms pulse red round it.
-  { kind: "glow", x: CORE.x, z: CORE.z, size: [26, 26], color: CYAN, intensity: 0.7, pulse: 0.25 },
-  { kind: "sparks", x: CORE.x, y: 2.5, z: CORE.z, every: 2 },
-  ...[[-40, -130], [40, -130], [-40, -210], [40, -210]].map(([x, z]): AmbientEmitter => ({ kind: "glow", x, z, size: [9, 9], color: RED, intensity: 0.55, pulse: 0.8 })),
-  // Scenes carry their light.
-  ...SCENES.flatMap((s): AmbientEmitter[] => {
-    const color = s.kind === "lab" || s.kind === "cryo" ? GREEN : s.kind === "crystals" ? VIOLET : s.kind === "console" ? CYAN : s.kind === "power" || s.kind === "fuel" ? AMBER : null;
-    return color ? [{ kind: "glow", x: s.x, z: s.z, size: [9, 9], color, intensity: 0.4 }] : [];
-  }),
-  // Steam from the bio-lab vents and the hangar; dust drifting over the meteor.
-  { kind: "smoke", x: -30, y: 0.3, z: -40, size: [3, 3], intensity: 0.4, color: STEAM },
-  { kind: "smoke", x: 30, y: 0.3, z: -90, size: [3, 3], intensity: 0.4, color: STEAM },
-  { kind: "smoke", x: -40, y: 0.3, z: -360, size: [3, 3], intensity: 0.4, color: STEAM },
-  { kind: "dust", x: 0, y: 1.2, z: -510, size: [60, 60], intensity: 0.7, color: [0.75, 0.65, 0.95] },
-  // The corridors' strip lights.
-  ...CORRIDORS.map((c): AmbientEmitter => ({ kind: "glow", x: 0, z: (c.z0 + c.z1) / 2, size: [8, c.z1 - c.z0], color: c.tube ? VIOLET : CYAN, intensity: 0.3 })),
+  // Sector washes.
+  { kind: "glow", x: 0, z: 32, size: [76, 60], color: CYAN, intensity: 0.08 },
+  { kind: "glow", x: 0, z: -50, size: [84, 64], color: WHITE, intensity: 0.08 },
+  { kind: "glow", x: 0, z: -132, size: [76, 60], color: WHITE, intensity: 0.04 },
+  { kind: "glow", x: 0, z: -214, size: [76, 64], color: RED, intensity: 0.14 },
+  { kind: "glow", x: 0, z: -302, size: [92, 72], color: ORANGE, intensity: 0.08 },
+  { kind: "glow", x: GATE.x, z: GATE.z, size: [50, 50], color: VIOLET, intensity: 0.12 },
+  { kind: "glow", x: 0, z: -484, size: [96, 96], color: VIOLET, intensity: 0.1 },
+  // Dock: landing pad lights.
+  ...[[-24, 44], [24, 44], [-24, 16], [24, 16]].map(([x, z]): AmbientEmitter => ({ kind: "glow", x, z, size: [12, 12], color: CYAN, intensity: 0.22 })),
+  // Ops: the checkpoint's scanners.
+  { kind: "glow", x: -7, z: -76, size: [5, 5], color: CYAN, intensity: 0.5, pulse: 0.5 },
+  { kind: "glow", x: 7, z: -76, size: [5, 5], color: CYAN, intensity: 0.5, pulse: 0.5 },
+  // Lab: bright clean light over the pods.
+  { kind: "glow", x: -30, z: -132, size: [14, 40], color: ICE, intensity: 0.2 },
+  { kind: "glow", x: 30, z: -132, size: [14, 40], color: ICE, intensity: 0.2 },
+  // Quarantine: the cell glows sick green; alarms pulse red at the corners.
+  { kind: "glow", x: 0, z: -214, size: [22, 18], color: GOO, intensity: 0.35, pulse: 0.2 },
+  ...[[-36, -184], [36, -184], [-36, -244], [36, -244], [0, -186]].map(([x, z]): AmbientEmitter => ({ kind: "glow", x, z, size: [10, 10], color: RED, intensity: 0.6, pulse: 0.8 })),
+  { kind: "smoke", x: -26, y: 0.3, z: -236, size: [3, 3], intensity: 0.35, color: [0.7, 1, 0.7] },
+  // Reactor: the core burns cyan inside orange warning light; sparks in the machinery bays.
+  { kind: "glow", x: CORE.x, z: CORE.z, size: [24, 24], color: CYAN, intensity: 0.6, pulse: 0.25 },
+  { kind: "sparks", x: CORE.x, y: 2.5, z: CORE.z, every: 2.2 },
+  { kind: "sparks", x: -40, y: 2, z: -286, every: 3 },
+  { kind: "sparks", x: 40, y: 2, z: -322, every: 3 },
+  ...[[-44, -300], [44, -300]].map(([x, z]): AmbientEmitter => ({ kind: "glow", x, z, size: [9, 20], color: ORANGE, intensity: 0.35, pulse: 0.6 })),
+  { kind: "smoke", x: -38, y: 0.3, z: -330, size: [3, 3], intensity: 0.45, color: STEAM },
+  { kind: "smoke", x: 38, y: 0.3, z: -272, size: [3, 3], intensity: 0.45, color: STEAM },
+  // Gate: the portal's light.
+  { kind: "glow", x: PORTAL.x, z: PORTAL.z, size: [18, 14], color: VIOLET, intensity: 0.35, pulse: 0.3 },
+  { kind: "dust", x: GATE.x, y: 1.2, z: GATE.z, size: [40, 40], intensity: 0.5, color: [0.7, 0.55, 1] },
+  // Asteroid: drifting dust.
+  { kind: "dust", x: 0, y: 1.2, z: -484, size: [60, 60], intensity: 0.7, color: [0.75, 0.65, 0.95] },
+  // Corridors: strip lights (the airlock tube violet).
+  ...CORRIDORS.map((c): AmbientEmitter => ({ kind: "glow", x: 0, z: (c.z0 + c.z1) / 2, size: [7, c.z1 - c.z0], color: c.tube ? VIOLET : WHITE, intensity: 0.2 })),
 ];
 
-const ROOM_SURFACE: Record<string, GroundSurface> = { cargo: "hangardeck", biolab: "grime", reactor: "deck", command: "deck", hangar: "hangardeck" };
+const ROOM_SURFACE: Record<keyof typeof ROOMS, GroundSurface> = { dock: "dockdeck", ops: "stationdeck", lab: "labdeck", quarantine: "quarantine", reactor: "grate" };
 export const GROUND_SPEC: GroundSpec = {
-  base: "deck",
+  base: "stationdeck",
   areas: [
-    ...Object.entries(ROOMS).map(([name, q]) => ({ ...q, surface: ROOM_SURFACE[name] })),
-    ...CORRIDORS.map((c) => ({ x0: -HALL, z0: c.z0, x1: HALL, z1: c.z1, surface: "deck" as const })),
-    { ...METEOR, surface: "asteroid" as const },
+    ...Object.entries(ROOMS).map(([name, q]) => ({ ...q, surface: ROOM_SURFACE[name as keyof typeof ROOMS] })),
+    { ...GATE_RECT, surface: "gatefloor" as const },
+    { ...ROCK, surface: "asteroid" as const },
   ],
   pads: [
-    // Loading lanes and the landing pad markings.
-    { x0: -3, z0: 2, x1: 3, z1: 70, surface: "deck" },
-    { x0: -22, z0: -420, x1: 22, z1: -346, surface: "concrete" },
+    // Dock: the central landing lane; ops: the checkpoint lane; lab: the clean white centre.
+    { x0: -4, z0: 2, x1: 4, z1: 62, surface: "stationdeck" },
+    { x0: -6, z0: -84, x1: 6, z1: -60, surface: "labdeck" },
+    { x0: -14, z0: -150, x1: 14, z1: -114, surface: "stationdeck" },
+    // Reactor: the dais.
+    { x0: CORE.x - 11, z0: CORE.z - 11, x1: CORE.x + 11, z1: CORE.z + 11, surface: "deck" },
   ],
   patches: [
-    { x: -20, z: -60, w: 18, d: 14, surface: "grime", seed: 1 },
-    { x: 22, z: -80, w: 16, d: 12, surface: "ash", seed: 2 },
-    { x: CORE.x, z: CORE.z, w: 30, d: 30, surface: "cinder", seed: 3 },
-    { x: -18, z: -500, w: 26, d: 20, surface: "cinder", seed: 0 },
-    { x: 20, z: -530, w: 24, d: 20, surface: "boneash", seed: 1 },
+    // Grime spreads north: a little in ops, blood and goo in quarantine, scorch in the reactor.
+    { x: 30, z: -70, w: 10, d: 8, surface: "grime", seed: 1 },
+    { x: -26, z: -196, w: 16, d: 12, surface: "bloodrock", seed: 2 },
+    { x: 20, z: -236, w: 18, d: 12, surface: "grime", seed: 3 },
+    { x: 0, z: -214, w: 34, d: 28, surface: "grime", seed: 4 },
+    { x: 30, z: -200, w: 10, d: 8, surface: "bloodrock", seed: 5 },
+    { x: CORE.x, z: CORE.z, w: 30, d: 30, surface: "cinder", seed: 6 },
+    { x: -30, z: -318, w: 16, d: 12, surface: "ash", seed: 7 },
+    { x: GATE.x, z: GATE.z, w: 30, d: 30, surface: "bloodrock", seed: 8 },
+    { x: -18, z: -470, w: 26, d: 20, surface: "cinder", seed: 0 },
+    { x: 20, z: -500, w: 24, d: 20, surface: "boneash", seed: 1 },
   ],
 };
 
 /* ------------------------------------------------------------------------------------------------
- * Energy seals (the way on), the void.
+ * Energy seals (the way on), the void, the portal.
  * ---------------------------------------------------------------------------------------------- */
 
 interface Seal { entity: Entity; x: number; z: number; width: number; yawDeg: number; open: number }
 const SEAL_HEIGHT = 3;
 const SEAL_OPEN_SECONDS = 0.7;
-const world = { seals: [] as Seal[], exitSeals: [] as Seal[], arena: 0, shown: 0, time: 0, barrier: null as StandardMaterial | null };
+const world = {
+  seals: [] as Seal[], exitSeals: [] as Seal[], arena: 0, shown: 0, time: 0,
+  barrier: null as StandardMaterial | null,
+  accent: null as StandardMaterial | null, accentNow: [...CYAN] as RGB,
+  backdrop: null as Entity | null,
+  portal: null as { ring: Entity; disc: Entity; mat: StandardMaterial; collapse: number } | null,
+};
 
 function canvasTexture(app: AppBase, size: number, paint: (g: CanvasRenderingContext2D) => void, repeat = false): Texture {
   const canvas = document.createElement("canvas");
@@ -227,7 +246,25 @@ function barrierMaterial(app: AppBase): StandardMaterial {
   return m;
 }
 
-/** The void outside: a starfield far below, a nebula haze and a planet. */
+/** A soft round additive glow (nebulae, the portal's halo). */
+function hazeMaterial(app: AppBase, color: RGB, k: number): StandardMaterial {
+  const m = new StandardMaterial();
+  m.diffuse.set(0, 0, 0);
+  m.emissive = new Color(color[0] * k, color[1] * k, color[2] * k);
+  m.emissiveMap = canvasTexture(app, 128, (g) => {
+    const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grad.addColorStop(0, "#fff"); grad.addColorStop(0.5, "rgba(255,255,255,0.35)"); grad.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+  });
+  m.useLighting = false; m.useFog = false; m.blendType = BLEND_ADDITIVE; m.depthWrite = false;
+  m.update();
+  return m;
+}
+
+/**
+ * The void below the station: a starfield, nebula hazes and a planet. It follows the hero at 85% of
+ * his motion (parallax: far away, and always under the view - it used to lie beyond the far plane).
+ */
 function buildVoid(root: Entity, app: AppBase): void {
   const random = rng(77);
   const stars = canvasTexture(app, 512, (g) => {
@@ -242,36 +279,29 @@ function buildVoid(root: Entity, app: AppBase): void {
   starMat.diffuse.set(0, 0, 0);
   starMat.emissive = new Color(0.9, 0.95, 1.1);
   starMat.emissiveMap = stars;
-  starMat.emissiveMapTiling.set(10, 10);
+  starMat.emissiveMapTiling.set(3, 3);
   starMat.useLighting = false;
   starMat.useFog = false;
+  starMat.depthWrite = false;
   starMat.update();
+  const backdrop = new Entity("void");
+  root.addChild(backdrop);
+  world.backdrop = backdrop;
   const plane = new Entity("starfield");
   plane.addComponent("render", { type: "plane", material: starMat, castShadows: false, receiveShadows: false });
-  plane.setLocalScale(900, 1, 1100);
-  plane.setLocalPosition(0, -60, -250);
-  root.addChild(plane);
-  // Nebula haze and the planet's glow below the ship.
-  const haze = (x: number, z: number, size: number, color: [number, number, number], k: number) => {
-    const m = new StandardMaterial();
-    m.diffuse.set(0, 0, 0);
-    m.emissive = new Color(color[0] * k, color[1] * k, color[2] * k);
-    m.emissiveMap = canvasTexture(app, 128, (g) => {
-      const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-      grad.addColorStop(0, "#fff"); grad.addColorStop(0.5, "rgba(255,255,255,0.35)"); grad.addColorStop(1, "rgba(0,0,0,0)");
-      g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
-    });
-    m.useLighting = false; m.useFog = false; m.blendType = BLEND_ADDITIVE; m.depthWrite = false;
-    m.update();
+  plane.setLocalScale(300, 1, 300);
+  plane.setLocalPosition(0, -60, -40);
+  backdrop.addChild(plane);
+  const haze = (x: number, z: number, size: number, color: RGB, k: number) => {
     const e = new Entity("nebula");
-    e.addComponent("render", { type: "plane", material: m, castShadows: false, receiveShadows: false });
+    e.addComponent("render", { type: "plane", material: hazeMaterial(app, color, k), castShadows: false, receiveShadows: false });
     e.setLocalScale(size, 1, size);
     e.setLocalPosition(x, -58, z);
-    root.addChild(e);
+    backdrop.addChild(e);
   };
-  haze(-160, -40, 320, [0.25, 0.12, 0.45], 0.9);
-  haze(180, -320, 360, [0.08, 0.25, 0.45], 0.8);
-  haze(-120, -520, 300, [0.4, 0.12, 0.3], 0.8);
+  haze(-70, -30, 150, [0.25, 0.12, 0.45], 0.9);
+  haze(80, -90, 170, [0.08, 0.25, 0.45], 0.8);
+  haze(-40, -130, 120, [0.4, 0.12, 0.3], 0.7);
   const planetMat = new StandardMaterial();
   planetMat.diffuse.set(0.05, 0.08, 0.12);
   planetMat.emissive = new Color(0.12, 0.3, 0.45);
@@ -279,9 +309,59 @@ function buildVoid(root: Entity, app: AppBase): void {
   planetMat.update();
   const planet = new Entity("planet");
   planet.addComponent("render", { type: "sphere", material: planetMat, castShadows: false, receiveShadows: false });
-  planet.setLocalScale(260, 260, 260);
-  planet.setLocalPosition(230, -190, -140);
-  root.addChild(planet);
+  planet.setLocalScale(90, 90, 90);
+  planet.setLocalPosition(70, -95, -95);
+  backdrop.addChild(planet);
+}
+
+/** The Project Gate's portal: a standing ring and a swirling disc (additive), on a dais. */
+function buildPortal(root: Entity, app: AppBase): void {
+  const swirl = canvasTexture(app, 256, (g) => {
+    g.fillStyle = "#000"; g.fillRect(0, 0, 256, 256);
+    g.translate(128, 128);
+    for (let arm = 0; arm < 5; arm++) {
+      g.rotate((Math.PI * 2) / 5);
+      for (let t = 0; t < 1; t += 0.01) {
+        const a = t * Math.PI * 2.2, d = 8 + t * 116;
+        g.fillStyle = `rgba(255,255,255,${0.55 * (1 - t) + 0.08})`;
+        g.beginPath(); g.arc(Math.cos(a) * d, Math.sin(a) * d, 3 + t * 10, 0, Math.PI * 2); g.fill();
+      }
+    }
+    const core = g.createRadialGradient(0, 0, 0, 0, 0, 128);
+    core.addColorStop(0, "rgba(255,255,255,0.9)"); core.addColorStop(0.25, "rgba(255,255,255,0.2)"); core.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = core; g.fillRect(-128, -128, 256, 256);
+  });
+  const mat = new StandardMaterial();
+  mat.diffuse.set(0, 0, 0);
+  mat.emissive = new Color(VIOLET[0], VIOLET[1], VIOLET[2]);
+  mat.emissiveMap = swirl;
+  mat.useLighting = false; mat.blendType = BLEND_ADDITIVE; mat.depthWrite = false; mat.cull = 0;
+  mat.update();
+  const ringMat = new StandardMaterial();
+  ringMat.diffuse.set(0.05, 0.05, 0.07);
+  ringMat.emissive = new Color(0.5, 0.25, 1.1);
+  ringMat.update();
+  const holder = new Entity("portal");
+  holder.setLocalPosition(PORTAL.x, 0, PORTAL.z);
+  root.addChild(holder);
+  const ring = new Entity("portal-ring");
+  const torus = Mesh.fromGeometry(app.graphicsDevice, new TorusGeometry({ ringRadius: PORTAL.radius, tubeRadius: 0.38, segments: 40, sides: 10 }));
+  ring.addComponent("render", { meshInstances: [new MeshInstance(torus, ringMat)], castShadows: true, receiveShadows: false });
+  ring.setLocalPosition(0, PORTAL.radius + 0.3, 0);
+  ring.setLocalEulerAngles(90, 0, 0);
+  holder.addChild(ring);
+  const disc = new Entity("portal-disc");
+  disc.addComponent("render", { type: "plane", material: mat, castShadows: false, receiveShadows: false });
+  disc.setLocalPosition(0, PORTAL.radius + 0.3, 0);
+  disc.setLocalEulerAngles(90, 0, 0);
+  disc.setLocalScale(PORTAL.radius * 1.8, 1, PORTAL.radius * 1.8);
+  holder.addChild(disc);
+  const halo = new Entity("portal-halo");
+  halo.addComponent("render", { type: "plane", material: hazeMaterial(app, VIOLET, 0.3), castShadows: false, receiveShadows: false });
+  halo.setLocalPosition(0, 0.05, 1.5);
+  halo.setLocalScale(12, 1, 8);
+  holder.addChild(halo);
+  world.portal = { ring, disc, mat, collapse: -1 };
 }
 
 export function buildShipLevel(kit: ModelKit<FacilityModel>): Entity {
@@ -290,48 +370,81 @@ export function buildShipLevel(kit: ModelKit<FacilityModel>): Entity {
   const app = kit.app;
   world.seals = [];
   world.exitSeals = [];
+  world.accent = kit.material("accent") ?? null;
   const place = (id: FacilityModel, x: number, z: number, yaw = 0, options: SpawnOptions = {}) => kit.spawn(id, x, z, yaw, root, options);
-  const lowBox = (x: number, z: number, width: number, depth: number) => {
-    const e = new Entity("rim");
+  const block = (x: number, z: number, width: number, depth: number, low = false) => {
+    const e = new Entity("block");
     e.setLocalPosition(x, 0, z);
     root.addChild(e);
-    declareCollider(e, { kind: "box", width, depth, low: true });
+    declareCollider(e, { kind: "box", width, depth, low });
   };
   buildVoid(root, app);
 
-  // ------------------------------------------------------------------ hull walls (2.4 m, cutaway)
-  const wallLine = (ax: number, az: number, bx: number, bz: number, pattern: FacilityModel[]) => {
-    const len = Math.hypot(bx - ax, bz - az);
-    if (len < 0.5) return;
-    const n = Math.max(1, Math.round(len / 2.4)), w = len / n;
-    const dx = (bx - ax) / len, dz = (bz - az) / len, yaw = (Math.atan2(-dz, dx) * 180) / Math.PI;
-    for (let i = 0; i < n; i++) place(pattern[i % pattern.length], ax + dx * w * (i + 0.5), az + dz * w * (i + 0.5), yaw, { scale: [w / 2.4, 1, 1] });
+  // ------------------------------------------------------------------ walls
+  // Rows of 4 m modules. North walls (facing the camera) and side walls stand full height; south
+  // walls are low cutaways. `gaps` are x (or z) ranges left open (doorways). The modules are panelled
+  // on one side only: walls along x always face the camera (south, yaw 0), room side walls face in.
+  const FULL: FacilityModel[] = ["qWall1", "qWallEmpty", "qWall3", "qWallEmpty", "qWall5", "qWall4", "qWallEmpty", "qWall2"];
+  const LOW: FacilityModel[] = ["qWallLow", "qWallLow2", "qWallLow", "qWallLow4"];
+  const inGap = (v: number, gaps: [number, number][]) => gaps.some(([a, b]) => v > a && v < b);
+  const rowX = (z: number, x0: number, x1: number, pattern: FacilityModel[], yaw: number, gaps: [number, number][] = []) => {
+    for (let x = x0 + 2, i = 0; x < x1; x += 4, i++) if (!inGap(x, gaps)) place(pattern[i % pattern.length], x, z, yaw);
   };
-  const WALL: FacilityModel[] = ["kWall", "kWall", "kWallDetail", "kWall", "kWallBanner", "kWall", "kWallSwitch"];
-  const WINDOWS: FacilityModel[] = ["kWallWindow", "kWallWindow", "kWallPillar"];
-  for (const [name, q] of Object.entries(ROOMS)) {
-    // South and north walls open at the corridors (x = +-HALL); the north wall of the command deck is
-    // a window wall onto the void.
-    const southOpen = CORRIDORS.some((c) => Math.abs(c.z0 - q.z1) < 0.1) || name === "cargo";
-    const northOpen = CORRIDORS.some((c) => Math.abs(c.z1 - q.z0) < 0.1);
-    for (const [z, open, pattern] of [[q.z1, southOpen, WALL], [q.z0, northOpen, name === "command" ? WINDOWS : WALL]] as [number, boolean, FacilityModel[]][]) {
-      if (open) {
-        wallLine(q.x0, z, -HALL, z, pattern);
-        wallLine(HALL, z, q.x1, z, pattern);
-        place("kWallPillar", -HALL - 0.6, z, 0);
-        place("kWallPillar", HALL + 0.6, z, 0);
-      } else wallLine(q.x0, z, q.x1, z, pattern);
+  const rowZ = (x: number, z0: number, z1: number, pattern: FacilityModel[], yaw: number, gaps: [number, number][] = []) => {
+    for (let z = z1 - 2, i = 0; z > z0; z -= 4, i++) if (!inGap(z, gaps)) place(pattern[i % pattern.length], x, z, yaw);
+  };
+  /** A free-standing wall along z, panelled both sides (the modules are one-sided). */
+  const rowZ2 = (x: number, z0: number, z1: number, pattern: FacilityModel[]) => {
+    rowZ(x, z0, z1, pattern, 90);
+    rowZ(x, z0, z1, pattern, -90);
+  };
+  /** A room: full north and side walls, a low south wall; doorways at x = +-DOOR north and south. */
+  const room = (q: Rect, pattern: { north: FacilityModel[]; west: FacilityModel[]; east: FacilityModel[] }, southOpen = true) => {
+    const door: [number, number][] = [[-DOOR, DOOR]];
+    rowX(q.z0, q.x0, q.x1, pattern.north, 0, door);
+    rowX(q.z1, q.x0, q.x1, LOW, 0, southOpen ? door : []);
+    rowZ(q.x0, q.z0, q.z1, pattern.west, 90);
+    rowZ(q.x1, q.z0, q.z1, pattern.east, -90);
+    // Columns at the corners, the doorways and every 12 m along the walls.
+    for (const [x, z] of [[q.x0, q.z0], [q.x1, q.z0]]) place("qColumn3", x, z, 0);
+    for (const [x, z] of [[q.x0, q.z1], [q.x1, q.z1]]) place("qColumnLow", x, z, 0);
+    for (const s of [-1, 1]) {
+      place("qColumn3", s * (DOOR + 0.35), q.z0, 0);
+      if (southOpen) place("qColumnLow", s * (DOOR + 0.35), q.z1, 0);
     }
-    wallLine(q.x0, q.z1, q.x0, q.z0, name === "biolab" || name === "hangar" ? WINDOWS : WALL);
-    wallLine(q.x1, q.z1, q.x1, q.z0, name === "biolab" || name === "hangar" ? WINDOWS : WALL);
-  }
-  // The cargo bay's south wall is the ship's aft bulkhead: closed.
-  wallLine(-HALL, ROOMS.cargo.z1, HALL, ROOMS.cargo.z1, WALL);
+    for (let z = q.z1 - 12; z > q.z0 + 4; z -= 12) for (const x of [q.x0, q.x1]) place("qColumn2", x, z, 0);
+  };
+  const HULL = (windows: number): FacilityModel[] => [...FULL.slice(0, 8 - windows), ...Array<FacilityModel>(windows).fill("qWindowLong")];
 
-  // Corridors: window walls both sides; the docking tube is glass all the way.
+  room(ROOMS.dock, { north: ["qWall2", "qWallEmpty", "qDoorWall", "qWallEmpty", "qWall4"], west: HULL(3), east: HULL(3) }, false);
+  room(ROOMS.ops, { north: ["qWall1", "qWindowThree", "qWallEmpty", "qWall5"], west: ["qWall1", "qDoorWallSingle", "qWallEmpty", "qWall3", "qWindowSmall"], east: ["qWall4", "qWallEmpty", "qDoorWallSingle", "qWall5", "qWindowSmall"] });
+  room(ROOMS.lab, { north: ["qWindowLong", "qWallEmpty", "qWall5", "qWallEmpty"], west: ["qWallEmpty", "qWindow", "qWallEmpty", "qWall3"], east: ["qWallEmpty", "qWindow", "qWallEmpty", "qWall3"] });
+  room(ROOMS.quarantine, { north: ["qWall2", "qDoorWall", "qWall2", "qWallEmpty"], west: ["qWall2", "qWallEmpty", "qDoorWallSingle", "qWall4"], east: ["qWall4", "qDoorWallSingle", "qWallEmpty", "qWall2"] });
+  room(ROOMS.reactor, { north: ["qWall2", "qWall4", "qWall2", "qWall5"], west: ["qWall2", "qWall4", "qWall5"], east: ["qWall5", "qWall2", "qWall4"] });
+
+  // ------------------------------------------------------------------ the Project Gate's ring
+  {
+    const segments = Math.round((Math.PI * 2 * GATE.radius) / 4.1);
+    for (let i = 0; i < segments; i++) {
+      const a = ((i + 0.5) / segments) * Math.PI * 2;
+      const x = GATE.x + Math.sin(a) * GATE.radius, z = GATE.z + Math.cos(a) * GATE.radius;
+      // Doorways north (z < centre) and south (z > centre).
+      if (Math.abs(x - GATE.x) < DOOR + 0.5) continue;
+      const south = Math.cos(a) > 0.25;
+      const yaw = (a * 180) / Math.PI + (south ? 0 : 180);
+      const id: FacilityModel = south ? LOW[i % LOW.length] : i % 5 === 0 ? "qWall2" : i % 5 === 2 ? "qWall5" : i % 5 === 4 ? "qWindowLong" : "qWall4";
+      place(id, x, z, yaw, { scale: [1.04, 1, 1] });
+      if (i % 3 === 0) place(south ? "qColumnLow" : "qColumn3", GATE.x + Math.sin(a + Math.PI / segments) * GATE.radius, GATE.z + Math.cos(a + Math.PI / segments) * GATE.radius, yaw);
+    }
+    for (const s of [-1, 1]) for (const z of [GATE.z - GATE.radius, GATE.z + GATE.radius]) place(z < GATE.z ? "qColumn3" : "qColumnLow", s * (DOOR + 0.6), z + (z < GATE.z ? 0.4 : -0.4), 0);
+  }
+
+  // ------------------------------------------------------------------ corridors
+  // HallwayPACK halls (roofs cut), walls declared as colliders; the airlock tube has windows.
   for (const c of CORRIDORS) {
-    wallLine(-HALL, c.z1, -HALL, c.z0, c.tube ? ["kWallWindow"] : ["kWallWindow", "kWall"]);
-    wallLine(HALL, c.z1, HALL, c.z0, c.tube ? ["kWallWindow"] : ["kWallWindow", "kWall"]);
+    for (let z = c.z1 - 4, i = 0; z > c.z0; z -= 8, i++) place(c.tube || i % 2 ? "hHallWindow" : "hHall", 0, z, 0);
+    const len = c.z1 - c.z0;
+    for (const s of [-1, 1]) block(s * (HALL + 0.3), (c.z0 + c.z1) / 2, 0.8, len);
   }
 
   // ------------------------------------------------------------------ energy seals (the way on)
@@ -347,106 +460,336 @@ export function buildShipLevel(kit: ModelKit<FacilityModel>): Entity {
     world.seals.push({ entity: e, x, z, width, yawDeg: 0, open: -1 });
   };
   for (const c of CORRIDORS) {
-    addSeal(0, c.z0, HALL * 2 + 0.4);
-    addSeal(0, c.z1, HALL * 2 + 0.4);
+    addSeal(0, c.z0, DOOR * 2);
+    addSeal(0, c.z1, DOOR * 2);
   }
 
-  // ------------------------------------------------------------------ the meteor's rim
-  // Low colliders round the rock (open where the docking tube arrives), boulders and cliffs over the void.
-  const m = METEOR;
-  lowBox(m.x0 - 0.5, (m.z0 + m.z1) / 2, 1, m.z1 - m.z0);
-  lowBox(m.x1 + 0.5, (m.z0 + m.z1) / 2, 1, m.z1 - m.z0);
-  lowBox((m.x0 + m.x1) / 2, m.z0 - 0.5, m.x1 - m.x0, 1);
-  lowBox((m.x0 - HALL) / 2, m.z1 + 0.5, -HALL - m.x0, 1);
-  lowBox((m.x1 + HALL) / 2, m.z1 + 0.5, m.x1 - HALL, 1);
-  const edges: [number, number, number, number][] = [[m.x0, m.z0, m.x1, m.z0], [m.x0, m.z1, m.x1, m.z1], [m.x0, m.z0, m.x0, m.z1], [m.x1, m.z0, m.x1, m.z1]];
-  for (const [x0, z0, x1, z1] of edges) {
-    const len = Math.hypot(x1 - x0, z1 - z0);
-    for (let d = 0; d <= len; d += 3 + random() * 3) {
-      const t = d / len;
-      const x = x0 + (x1 - x0) * t + (random() - 0.5) * 2, z = z0 + (z1 - z0) * t + (random() - 0.5) * 2;
-      if (Math.abs(x) < HALL + 3 && Math.abs(z - m.z1) < 4) continue;
-      const roll = random();
-      place(roll < 0.4 ? "sMeteor" : roll < 0.7 ? "sRockLargeB" : "sMeteorHalf", x, z, random() * 360, { scale: 0.9 + random() * 1.1, y: -0.6, noCollider: true });
-      if (random() < 0.3) place("sCliff", x, z, random() * 360, { scale: [2, 2.5, 2], y: -9, noCollider: true });
+  // ================================================================== 1 DOCKING BAY
+  // Two landing pads each side with parked craft, cargo stacked along the hull, the lane up the middle.
+  {
+    const q = ROOMS.dock;
+    place("sCraftCargo", -26, 46, 20);
+    place("sCraftCargoB", 26, 44, -160);
+    place("sCraftMiner", -24, 16, -20);
+    place("sCraftSpeeder", 26, 16, 200);
+    for (const [x, z] of [[-24, 44], [24, 44], [-24, 16], [24, 16]]) {
+      for (const [dx, dz] of [[-7, -7], [7, -7], [-7, 7], [7, 7]]) place("qFloorSide", x + dx, z + dz, Math.atan2(dx, dz) * 57.3 + 45);
+    }
+    // Crate islands between the pads (cover, with room round them).
+    for (const s of [-1, 1]) {
+      place("qCrateLong", s * 12, 32, 90, { scale: 1.6 });
+      place("qCrate", s * 12.6, 28.6, 15, { scale: 1.5 });
+      place("qCrate", s * 11, 35.6, -10, { scale: 1.5 });
+    }
+    // Cargo along the side walls, in stacks with gaps.
+    for (const s of [-1, 1]) {
+      for (const z of [58, 30, 4]) {
+        place("qContainer", s * (q.x1 - 2.4), z, 90);
+        place("qCrateLong", s * (q.x1 - 2.2), z - 2.4, 90);
+        place("qCrate", s * (q.x1 - 3.8), z - 1.2, 20);
+      }
+      place("kContainerTall", s * (q.x1 - 3), 44, 90);
+      place("kContainerWide", s * (q.x1 - 3), 18, 90);
+    }
+    // Along the north wall: the dock's control booths either side of the doorway.
+    for (const s of [-1, 1]) {
+      place("qComputer", s * 8, q.z0 + 1.2, 180);
+      place("qComputerSmall", s * 10.5, q.z0 + 1, 180);
+    }
+    place("sRocket", -36, 58, 0, { scale: 0.8 });
+  }
+
+  // ================================================================== 2 OPERATIONS DECK
+  // Crew quarters west and the mess east behind partial partitions (wide gaps), the ops consoles on the
+  // north wall, a security checkpoint in front of the way on.
+  {
+    const q = ROOMS.ops;
+    // Partitions: full walls north, low towards the camera, with a 20 m opening.
+    for (const s of [-1, 1]) {
+      const x = s * 24;
+      rowZ2(x, q.z0, -60, ["qWall1", "qWindowSmall", "qWallEmpty"]);
+      rowZ2(x, -40, q.z1, ["qWallLow", "qWallLow2"]);
+      place("qColumn3", x, -60, 0);
+      place("qColumnLow", x, -40, 0);
+    }
+    // Crew quarters (west): bunks against the wall, lockers.
+    for (let z = -24; z > -80; z -= 8) {
+      place("bunk", -41, z, 90);
+      if (z % 16 === 0) place("qShelf", -33, z - 3, 90);
+    }
+    place("kTable", -33, -48, 0);
+    place("kChair", -35, -46, 40);
+    // Mess (east): tables, a food dispenser row.
+    for (const [x, z] of [[34, -26], [34, -36], [34, -70], [30, -78]]) place("cafeTable", x, z, 90);
+    place("octoTable", 36, -52, 0);
+    for (let z = -24; z > -80; z -= 10) place("qComputerSmall", 42.6, z, -90);
+    // Ops consoles on the north wall.
+    for (const x of [-20, -14, 14, 20]) place("commandConsole", x, q.z0 + 2.2, 180);
+    place("monitorBlue", -9, q.z0 + 1, 180);
+    place("monitorBlue", 9, q.z0 + 1, 180);
+    place("kTableDisplay", 0, -44, 0, { scale: 1.6 });
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      place("qComputerSmall", Math.sin(a) * 5, -44 + Math.cos(a) * 5, (a * 180) / Math.PI + 180);
+    }
+    // The checkpoint: two scanner posts either side of the lane.
+    for (const s of [-1, 1]) {
+      place("qColumnSlim", s * 6.5, -76, 0);
+      place("qComputer", s * 8.5, -74, s > 0 ? -90 : 90);
+      place("kBarrier", s * 12, -74, 0);
     }
   }
-  // Meteors drifting in the void round the rock.
-  for (let i = 0; i < 26; i++) {
-    const a = random() * Math.PI * 2, d = 62 + random() * 40;
-    place(random() < 0.5 ? "sMeteor" : "sRockLargeA", Math.sin(a) * d, -510 + Math.cos(a) * d, random() * 360, { y: -8 - random() * 20, scale: 1 + random() * 3, noCollider: true });
-  }
 
-  // ------------------------------------------------------------------ CARGO BAY
-  for (const side of [-1, 1]) {
-    // Cargo craft parked either side of the loading lane, container stacks along the walls.
-    place("sCraftCargo", side * 22, 50, side > 0 ? 180 : 0);
-    place("sCraftCargoB", side * 24, 18, side > 0 ? 180 : 0);
-    for (let z = 8; z < 68; z += 7) place(z % 14 < 7 ? "kContainerTall" : "kContainerWide", side * 35.4, z, 90);
-  }
-  for (let z = 6; z < 70; z += 8) place("hazard1", 0, z, 0);
-
-  // ------------------------------------------------------------------ BIO-LAB
-  for (const side of [-1, 1]) {
-    for (let z = -34; z > -96; z -= 10) {
-      place("hydroFull", side * 14, z, 90);
-      place("hydroLamp", side * 14, z, 90, { y: 0 });
+  // ================================================================== 3 RESEARCH LAB
+  // The cleanest white room: glass-walled labs west and east (wide openings), pods and capsules in
+  // rows, the centre open for the Warden.
+  {
+    const q = ROOMS.lab;
+    for (const s of [-1, 1]) {
+      const x = s * 22;
+      rowZ2(x, q.z0, -140, ["qWindow", "qWindowThree"]);
+      rowZ2(x, -124, q.z1, ["qWallLow"]);
+      place("qColumn3", x, -140, 0);
+      place("qColumnLow", x, -124, 0);
+      place("qColumnLow", x, q.z1, 0);
+      // Pods and capsules in the labs.
+      for (let z = -108; z > -160; z -= 8) {
+        place("qPod", s * 36.5, z, s > 0 ? -90 : 90);
+        place("qCapsule", s * 30, z - 4, 0);
+      }
+      place("qComputer", s * 27, -144, s > 0 ? -90 : 90);
+      place("qComputerSmall", s * 27, -150, s > 0 ? -90 : 90);
+      place("qShelfTall", s * 38, -162, 0);
+      place("qTeleporter", s * 30, -132, 0);
     }
-    for (let z = -30; z > -100; z -= 9) place("cryoOn", side * 40, z, side > 0 ? 270 : 90);
-  }
-  place("cryoOff", -38.5, -62, 90, { tiltZ: 40 });
-
-  // ------------------------------------------------------------------ REACTOR CORE
-  // The core: a crystal heart on a glowing ring, generators round it, hazard floor.
-  place("sCrystalsLargeA", CORE.x, CORE.z, 0, { scale: 3.2 });
-  place("sPipeRing", CORE.x, CORE.z, 0, { scale: 2.2 });
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    place(i % 2 ? "generator" : "genPile", CORE.x + Math.sin(a) * (CORE.radius + 3), CORE.z + Math.cos(a) * (CORE.radius + 3), (a * 180) / Math.PI);
-    place("hazard2", CORE.x + Math.sin(a + 0.4) * (CORE.radius + 7), CORE.z + Math.cos(a + 0.4) * (CORE.radius + 7), (a * 180) / Math.PI);
-  }
-  for (const [x, z] of [[-36, -140], [36, -140], [-36, -200], [36, -200]]) place("genPileSmall", x, z, 0);
-
-  // ------------------------------------------------------------------ COMMAND DECK
-  // The bridge: consoles facing the window wall, the captain's holo table; crew bunks east.
-  for (let x = -24; x <= 24; x += 8) place("commandConsole", x, -304, 180);
-  place("kTableDisplay", 0, -290, 0, { scale: 2 });
-  place("orrery", 0, -270, 0);
-  for (let z = -250; z > -300; z -= 8) { place("bunk", 38, z, 90); place("bunkRed", -38, z, 270); }
-
-  // ------------------------------------------------------------------ HANGAR
-  // Launch pads with spacecraft, a rocket on its stand, turrets by the airlock, the airlock gate.
-  place("sCraftMiner", -20, -370, 30);
-  place("sCraftRacer", 22, -365, -40);
-  place("sCraftSpeeder", -26, -405, 160);
-  place("sRocket", 34, -400, 0, { scale: 1.2 });
-  place("sRocket", -38, -352, 0);
-  place("sHangar", 40, -350, 270);
-  for (const side of [-1, 1]) place("sTurret", side * 10, -420, 180);
-  place("sGate", 0, -427, 0, { scale: [1.6, 1.2, 1] });
-
-  // ------------------------------------------------------------------ THE METEOR
-  // A crashed shuttle, the hive's crystal spires, a dead rover and dish from a survey team.
-  place("sCraftCargo", -30, -480, 70, { tiltZ: 18, y: -0.8 });
-  place("sDish", 34, -490, 200);
-  place("sRover", 30, -500, 120);
-  for (const [x, z, k] of [[-8, -535, 1.6], [12, -540, 1.4], [0, -548, 2]]) place("sCrystalsLargeB", x, z, random() * 360, { scale: k });
-  for (let i = 0; i < 10; i++) place(random() < 0.5 ? "sCraterLarge" : "sCrater", -40 + random() * 80, -470 - random() * 85, random() * 360, { scale: 1.5 + random() * 1.5 });
-
-  // ------------------------------------------------------------------ small scenes
-  for (const s of SCENES) {
-    const rand = rng(s.seed);
-    const turn = rand() * Math.PI * 2, cos = Math.cos(turn), sin = Math.sin(turn);
-    const yaw = (-turn * 180) / Math.PI;
-    for (const [id, dx, dz, k0, k1] of SCENE_PROPS[s.kind]) {
-      if (dx !== 0 && rand() < 0.2) continue;
-      place(id, s.x + dx * cos - dz * sin, s.z + dx * sin + dz * cos, yaw + (rand() - 0.5) * 20, { scale: k0 + rand() * (k1 - k0) });
+    // Specimen pods standing in the hall (islands of cover).
+    for (const [x, z] of [[-12, -122], [12, -122], [-12, -144], [12, -144]]) place("qPod", x, z, 0);
+    // North wall: a statue of the station's founder, the lab's instruments.
+    place("qStatue", 12, q.z0 + 2, 180);
+    place("qLaser", -12, q.z0 + 2.4, 180);
+    for (const x of [-18, 18]) place("qComputer", x, q.z0 + 1.2, 180);
+    // A few vessels, tidy.
+    for (const [x, z] of [[-16, -106], [16, -106], [-14, -158], [14, -158]]) {
+      place("qVesselTall", x, z, 0);
+      place("qVessel", x + 0.6, z + 0.4, 0);
     }
   }
+
+  // ================================================================== 4 QUARANTINE
+  // The lab's language, broken: the containment cell in the middle (glass, its door blown), combat
+  // round it; red emergency light, tipped-over pods and capsules, goo.
+  {
+    const c = CELL;
+    rowX(c.z0, c.x0, c.x1, ["qWindowThree", "qWall2"], 0);
+    rowX(c.z1, c.x0, c.x1, ["qWallLow2", "qWallLow"], 0, [[-4, 4]]);
+    rowZ2(c.x0, c.z0, c.z1, ["qWindowThree", "qWall2"]);
+    rowZ2(c.x1, c.z0, c.z1, ["qWall2", "qWindowThree"]);
+    for (const [x, z] of [[c.x0, c.z0], [c.x1, c.z0]]) place("qColumn3", x, z, 0);
+    for (const [x, z] of [[c.x0, c.z1], [c.x1, c.z1], [-4.3, c.z1], [4.3, c.z1]]) place("qColumnLow", x, z, 0);
+    // The specimen tank inside, cracked; pods broken open around it.
+    place("qPod", 0, -216, 0, { scale: 1.6 });
+    place("sCrystals", -6, -210, 30, { scale: 0.9 });
+    place("sCrystalsLargeA", 7, -218, 200, { scale: 0.8 });
+    place("qCapsule", -8, -208, 0, { tiltZ: 70, y: 0.4 });
+    // A cordon round the cell (broken through in places).
+    for (const [x, z, yaw] of [[-16, -200, 0], [16, -200, 0], [-16, -228, 0], [8, -228, 0], [-17, -214, 90], [17, -210, 90]] as [number, number, number][]) place("kBarrier", x, z, yaw);
+    // Around the walls: fallen capsules, broken screens, abandoned crates.
+    const wreck: [FacilityModel, number, number, number, SpawnOptions?][] = [
+      ["qPod", -36, -190, 90], ["qPod", -36, -200, 90, { tiltZ: 25 }], ["qCapsule", -30, -196, 0, { tiltX: 80, y: 0.4 }],
+      ["qPod", 36, -238, -90], ["qCapsule", 30, -240, 0, { tiltZ: -75, y: 0.4 }], ["qCrate", 32, -186, 30], ["qCrateLong", 35, -190, 80],
+      ["qComputer", -38, -226, 90, { tiltX: -20 }], ["displayRed", -38.6, -214, 90], ["monitorRed", 38, -214, -90],
+      ["qShelf", -34, -244, 0, { tiltZ: 30 }], ["qCrate", -30, -242, 10], ["bioRed", 36, -226, -90],
+      ["cryoOff", 34, -200, -90, { tiltZ: -35 }], ["qVessel", -24, -188, 0, { tiltX: 90, y: 0.15 }],
+    ];
+    for (const [id, x, z, yaw, o] of wreck) place(id, x, z, yaw, o ?? {});
+  }
+
+  // ================================================================== 5 REACTOR
+  // Industrial and dark: the reactor on its dais (a crystal core in a ring of generators), machinery
+  // bays along the side walls with pipes and batteries, catwalk rails.
+  {
+    const q = ROOMS.reactor;
+    place("qBase", CORE.x, CORE.z, 0, { scale: [4.2, 1, 4.2] });
+    place("sCrystalsLargeA", CORE.x, CORE.z, 0, { scale: 2.6 });
+    place("sPipeRing", CORE.x, CORE.z, 0, { scale: 1.9 });
+    block(CORE.x, CORE.z, 6, 6);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+      place(i % 2 ? "generator" : "genPile", CORE.x + Math.sin(a) * (CORE.radius + 2), CORE.z + Math.cos(a) * (CORE.radius + 2), (a * 180) / Math.PI);
+    }
+    for (const s of [-1, 1]) {
+      // Machinery bays: generators and batteries against the side walls.
+      for (let z = q.z1 - 8; z > q.z0 + 4; z -= 12) {
+        place("genPileSmall", s * (q.x1 - 3), z, 0);
+        place(z % 24 ? "batteryOrange" : "batteryGrey", s * (q.x1 - 2.2), z - 4.5, s > 0 ? -90 : 90);
+        place("wallPipe", s * (q.x1 - 0.5), z - 2, s > 0 ? -90 : 90);
+      }
+      place("sGenerator", s * 36, q.z0 + 5, 0);
+      place("railing", s * 12, q.z0 + 2.5, 0, { scale: [3, 1, 1] });
+    }
+    for (const x of [-20, 20]) place("qPipes", x, q.z0 + 0.6, 0, { y: -3.2 });
+    // Conduits across the floor from the core to the bays.
+    for (const s of [-1, 1]) for (const dz of [-8, 8]) {
+      for (let k = 0; k < 4; k++) place("qPipes", s * (14 + k * 7), CORE.z + dz, 0, { y: -3.95, scale: [2, 1, 1] });
+    }
+  }
+
+  // ================================================================== 6 PROJECT GATE
+  // The visual climax: the portal on its dais, machines and conduits round the ring, the hive's
+  // crystals creeping in from the portal.
+  {
+    buildPortal(root, app);
+    block(PORTAL.x, PORTAL.z, PORTAL.radius * 2.1, 3);
+    place("qBase", PORTAL.x, PORTAL.z, 0, { scale: [2.4, 1, 1.4] });
+    for (const s of [-1, 1]) {
+      place("qTeleporter2", PORTAL.x + s * 7, PORTAL.z + 2, 0);
+      place("qLaser", PORTAL.x + s * 9.5, PORTAL.z - 3, s * 90);
+    }
+    // Conduits from the ring walls to the dais.
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+      const d = GATE.radius - 7;
+      place("qPipes", GATE.x + Math.sin(a) * d, GATE.z + Math.cos(a) * d, (a * 180) / Math.PI + 90, { y: -3.95, scale: [2.2, 1, 1] });
+    }
+    // Machines along the ring, crystals creeping out of the portal.
+    for (const deg of [-60, -30, 30, 60, 120, 240]) {
+      const a = (deg * Math.PI) / 180;
+      const d = GATE.radius - 2.2;
+      place(deg % 60 === 0 ? "qComputer" : "generator", GATE.x + Math.sin(a + Math.PI) * d, GATE.z + Math.cos(a + Math.PI) * d, deg);
+    }
+    for (const [x, z, k] of [[-5, -392, 1.1], [6, -393, 0.9], [-12, -386, 0.7], [13, -380, 0.8], [-3, -398, 1.3]]) {
+      place(random() < 0.5 ? "sCrystalsLargeB" : "sCrystals", GATE.x + x, z, random() * 360, { scale: k });
+    }
+  }
+
+  // ================================================================== 7 THE ASTEROID
+  // Low colliders round the rock (open where the airlock tube arrives), boulders over the void.
+  {
+    const m = ROCK;
+    block(m.x0 - 0.5, (m.z0 + m.z1) / 2, 1, m.z1 - m.z0, true);
+    block(m.x1 + 0.5, (m.z0 + m.z1) / 2, 1, m.z1 - m.z0, true);
+    block((m.x0 + m.x1) / 2, m.z0 - 0.5, m.x1 - m.x0, 1, true);
+    block((m.x0 - HALL) / 2, m.z1 + 0.5, -HALL - m.x0, 1, true);
+    block((m.x1 + HALL) / 2, m.z1 + 0.5, m.x1 - HALL, 1, true);
+    const edges: [number, number, number, number][] = [[m.x0, m.z0, m.x1, m.z0], [m.x0, m.z1, m.x1, m.z1], [m.x0, m.z0, m.x0, m.z1], [m.x1, m.z0, m.x1, m.z1]];
+    for (const [x0, z0, x1, z1] of edges) {
+      const len = Math.hypot(x1 - x0, z1 - z0);
+      for (let d = 0; d <= len; d += 3 + random() * 3) {
+        const t = d / len;
+        const x = x0 + (x1 - x0) * t + (random() - 0.5) * 2, z = z0 + (z1 - z0) * t + (random() - 0.5) * 2;
+        if (Math.abs(x) < HALL + 3 && Math.abs(z - m.z1) < 4) continue;
+        const roll = random();
+        place(roll < 0.4 ? "sMeteor" : roll < 0.7 ? "sRockLargeB" : "sMeteorHalf", x, z, random() * 360, { scale: 0.9 + random() * 1.1, y: -0.6, noCollider: true });
+        if (random() < 0.3) place("sCliff", x, z, random() * 360, { scale: [2, 2.5, 2], y: -9, noCollider: true });
+      }
+    }
+    // Rocks drifting in the void round it.
+    for (let i = 0; i < 22; i++) {
+      const a = random() * Math.PI * 2, d = 62 + random() * 36;
+      place(random() < 0.5 ? "sMeteor" : "sRockLargeA", Math.sin(a) * d, -484 + Math.cos(a) * d, random() * 360, { y: -8 - random() * 20, scale: 1 + random() * 3, noCollider: true });
+    }
+    // A crashed shuttle, the hive's crystal spires, a survey team's rover and dish, craters.
+    place("sCraftCargo", -30, -456, 70, { tiltZ: 18, y: -0.8 });
+    place("sDish", 34, -466, 200);
+    place("sRover", 30, -476, 120);
+    for (const [x, z, k] of [[-8, -512, 1.6], [12, -516, 1.4], [0, -524, 2]]) place("sCrystalsLargeB", x, z, random() * 360, { scale: k });
+    for (let i = 0; i < 10; i++) place(random() < 0.5 ? "sCraterLarge" : "sCrater", -40 + random() * 80, -446 - random() * 84, random() * 360, { scale: 1.5 + random() * 1.5 });
+    const rocks: [FacilityModel, number, number][] = [["sMeteor", -36, -500], ["sRockLargeA", 38, -506], ["sRock", -20, -482], ["sCrystals", 22, -490], ["sRocksSmall", -12, -470], ["sRock", 16, -528]];
+    for (const [id, x, z] of rocks) place(id, x, z, random() * 360, { scale: 0.9 + random() * 0.4 });
+    // ORION herself, seen from the rock: the station's hull runs below the rock's west and east rims
+    // (lit windows facing the rock), docking arms hang in the void either side of the airlock tube.
+    for (const s of [-1, 1]) {
+      for (let z = m.z1 - 6, i = 0; z > m.z0 + 10; z -= 8, i++) {
+        place(i % 3 === 1 ? "qWall5" : "qWindowLong", s * (m.x1 + 9), z, s > 0 ? -90 : 90, { y: -7, scale: [2, 2, 2], noCollider: true });
+        if (i % 2 === 0) place("qColumn3", s * (m.x1 + 9), z - 4, 0, { y: -7, scale: [2, 2, 2], noCollider: true });
+      }
+    }
+    for (const s of [-1, 1]) {
+      for (let i = 0; i < 6; i++) {
+        const x = s * (HALL + 6 + i * 8), z = m.z1 + 6 + (i % 2) * 3;
+        place("qWindowLong", x, z, 180, { y: -3 - i * 1.5, scale: [2, 1.6, 2], noCollider: true });
+        if (i % 2 === 0) place("sStructure", x, z + 5, 0, { y: -8 - i, scale: 1.6, noCollider: true });
+      }
+      place("sHangar", s * 64, m.z1 + 8, s > 0 ? -90 : 90, { y: -10, scale: 1.8, noCollider: true });
+      place("sDish", s * 70, -470, s * 60, { y: -14, scale: 1.5, noCollider: true });
+      place("sSupports", s * 60, -520, 0, { y: -18, scale: 2, noCollider: true });
+    }
+  }
+
+  // ------------------------------------------------------------------ floor paint (one draw call)
+  const paint = new FloorPaint(["01  DOCKING BAY", "02  OPERATIONS", "03  RESEARCH LAB", "04  QUARANTINE", "05  REACTOR", "06  PROJECT GATE"]);
+  const PAINT: RGB = [0.9, 0.93, 0.96];
+  const YELLOW: RGB = [1, 0.72, 0.1];
+  // Every doorway: hazard stripes across the threshold, chevrons leading on.
+  for (const c of CORRIDORS) {
+    if (c.tube) continue;
+    paint.add("hazard", 0, c.z0 - 1, DOOR * 2 - 0.6, 1.2, 0, YELLOW, 0.75);
+    paint.add("hazard", 0, c.z1 + 1, DOOR * 2 - 0.6, 1.2, 0, YELLOW, 0.75);
+  }
+  // 1 DOCKING BAY: landing pads, the lane north, bay frames.
+  for (const [x, z] of [[-24, 44], [24, 44], [-24, 16], [24, 16]]) paint.add("pad", x, z, 15, 15, 0, CYAN, 0.45);
+  paint.lane(-4, 62, -4, 3, PAINT);
+  paint.lane(4, 62, 4, 3, PAINT);
+  for (let z = 58; z > 4; z -= 9) paint.add("chevron", 0, z, 4, 4, 0, YELLOW, 0.55);
+  paint.add("label0", 0, 50, 15, 3.8, 0, PAINT, 0.28);
+  for (const s of [-1, 1]) for (const z of [58, 30, 4]) paint.add("frame", s * 36, z - 1, 7, 7, 0, YELLOW, 0.35);
+  // 2 OPERATIONS: the lane door to door, a ring round the holo-table, the checkpoint.
+  paint.lane(-2.5, -18, -2.5, -82, PAINT);
+  paint.lane(2.5, -18, 2.5, -82, PAINT);
+  paint.add("ring", 0, -44, 14, 14, 0, ACCENT.ops, 0.45);
+  paint.add("hazard", 0, -76, 10, 1, 0, YELLOW, 0.7);
+  paint.add("label1", 0, -32, 15, 3.8, 0, PAINT, 0.25);
+  for (const z of [-28, -44, -60, -76]) paint.add("frame", -36, z, 8, 7, 0, PAINT, 0.25);
+  // 3 RESEARCH LAB: clean white - a ring in the centre, bay frames, little else.
+  paint.add("ring", 0, -133, 20, 20, 0, ICE, 0.35);
+  paint.add("cross", 0, -133, 3, 3, 0, ICE, 0.5);
+  paint.add("label2", 0, -116, 15, 3.8, 0, [0.5, 0.6, 0.7], 0.25);
+  for (const s of [-1, 1]) for (let z = -108; z > -160; z -= 8) paint.add("frame", s * 36.5, z, 3.4, 3.4, 0, ICE, 0.4);
+  // 4 QUARANTINE: red hazard border round the cell, warnings.
+  const RED_PAINT: RGB = [0.9, 0.12, 0.08];
+  for (let x = CELL.x0 - 3; x <= CELL.x1 + 3; x += 3) {
+    paint.add("hazard", x, CELL.z0 - 2.5, 3, 1.2, 0, RED_PAINT, 0.7);
+    if (Math.abs(x) > 4) paint.add("hazard", x, CELL.z1 + 2.5, 3, 1.2, 0, RED_PAINT, 0.7);
+  }
+  for (let z = CELL.z0 - 1; z <= CELL.z1 + 1; z += 3) for (const x of [CELL.x0 - 2.5, CELL.x1 + 2.5]) paint.add("hazard", x, z, 3, 1.2, 90, RED_PAINT, 0.7);
+  for (const [x, z] of [[-24, -196], [24, -232], [26, -194], [-26, -234]]) paint.add("warning", x, z, 4, 4, 0, RED_PAINT, 0.6);
+  paint.add("label3", 0, -193, 15, 3.8, 0, RED_PAINT, 0.28);
+  // 5 REACTOR: hazard ring round the dais, lanes to the bays.
+  for (let i = 0; i < 20; i++) {
+    const a = (i / 20) * Math.PI * 2;
+    paint.add("hazard", CORE.x + Math.sin(a) * 12, CORE.z + Math.cos(a) * 12, 3.6, 1.2, (a * 180) / Math.PI, [1, 0.5, 0.08], 0.7);
+  }
+  paint.add("label4", 0, -278, 15, 3.8, 0, [1, 0.5, 0.08], 0.28);
+  for (const s of [-1, 1]) paint.lane(s * 14, CORE.z, s * 42, CORE.z, [1, 0.5, 0.08], 0.5, 1.2, 0.8, 0.6);
+  // 6 PROJECT GATE: rings round the portal.
+  for (const [rad, a] of [[11, 0.22], [17, 0.15]]) paint.add("ring", PORTAL.x, PORTAL.z, rad * 2, rad * 2, 0, VIOLET, a);
+  paint.add("label5", 0, -362, 15, 3.8, 0, VIOLET, 0.25);
+  paint.build(app, root);
+
+  // ------------------------------------------------------------------ floor light strips
+  // Self-lit lines in the sector's colour: along the walls, and chevrons towards the way on (the
+  // brightest thing on the floor, so the eye finds the exit).
+  const lights = new FloorPaint([], true);
+  const strip = (ax: number, az: number, bx: number, bz: number, rgb: RGB, k = 0.55) => lights.lane(ax, az, bx, bz, rgb, 0.22, 3.2, 0.8, k);
+  const SECTOR_ROOMS: [keyof typeof ROOMS, RGB][] = [["dock", CYAN], ["ops", ACCENT.ops], ["lab", ICE], ["quarantine", RED], ["reactor", ORANGE]];
+  for (const [id, rgb] of SECTOR_ROOMS) {
+    const q = ROOMS[id], m = 1.6;
+    strip(q.x0 + m, q.z1 - m, q.x0 + m, q.z0 + m, rgb);
+    strip(q.x1 - m, q.z1 - m, q.x1 - m, q.z0 + m, rgb);
+    strip(q.x0 + m, q.z0 + m, -DOOR - 1, q.z0 + m, rgb);
+    strip(DOOR + 1, q.z0 + m, q.x1 - m, q.z0 + m, rgb);
+    for (let i = 0; i < 3; i++) lights.add("chevron", 0, q.z0 + 4 + i * 3, 2.6, 2.6, 0, rgb, 0.5 - i * 0.12);
+  }
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    lights.add("dash", GATE.x + Math.sin(a) * (GATE.radius - 1.8), GATE.z + Math.cos(a) * (GATE.radius - 1.8), 1.2, 4.5, (a * 180) / Math.PI + 90, VIOLET, 0.5);
+  }
+  for (let i = 0; i < 3; i++) lights.add("chevron", 0, GATE.z - GATE.radius + 4 + i * 3, 2.6, 2.6, 0, VIOLET, 0.5 - i * 0.12);
+  lights.build(app, root);
   return root;
 }
 
-/** Whether (x, z) lies on (within 1.2 m of) the edge of `region`. */
+/** Whether (x, z) lies on (within 1.4 m of) the edge of `region`. */
 function onEdge(region: LevelBounds, x: number, z: number): boolean {
   const inX = x >= region.minX - 1.4 && x <= region.maxX + 1.4, inZ = z >= region.minZ - 1.4 && z <= region.maxZ + 1.4;
   const nearZ = Math.abs(z - region.minZ) < 1.4 || Math.abs(z - region.maxZ) < 1.4;
@@ -454,12 +797,31 @@ function onEdge(region: LevelBounds, x: number, z: number): boolean {
   return (inX && nearZ) || (inZ && nearX);
 }
 
+/** The accent colour at z: the sector's, blending across the corridor between two sectors. */
+function accentAt(z: number): RGB {
+  for (let i = 0; i < SPANS.length; i++) {
+    const s = SPANS[i];
+    if (z <= s.z1 + 0.01 && z >= s.z0) return ACCENT[s.id];
+    const next = SPANS[i + 1];
+    if (next && z < s.z0 && z > next.z1) {
+      const t = (s.z0 - z) / (s.z0 - next.z1);
+      const a = ACCENT[s.id], b = ACCENT[next.id];
+      return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+    }
+  }
+  return z > 0 ? ACCENT.dock : ACCENT.asteroid;
+}
+
+/** Accent paint: lit colour and glow. */
+const ACCENT_DIFFUSE = 0.35;
+const ACCENT_GLOW = 0.5;
+
 /** Chapter 2: the ORION. */
 export const SHIP_BIOME: Biome<FacilityModel> = {
   id: "facility",
   label: "ORION",
   kit: { url: FACILITY.url, models: FACILITY_MODELS, brightness: FACILITY.brightness, glowIntensity: FACILITY.glowIntensity, batchCellMetres: FACILITY.batchCellMetres },
-  lighting: { ...FACILITY_LIGHTING, clearColor: [0.01, 0.012, 0.02], fogStart: 60, fogEnd: 140 },
+  lighting: { ...FACILITY_LIGHTING, clearColor: [0.01, 0.012, 0.02], fogStart: 60, fogEnd: 140, farClip: 160 },
   ground: GROUND_SPEC,
   bounds: BOUNDS,
   spawn: SPAWN,
@@ -474,7 +836,7 @@ export const SHIP_BIOME: Biome<FacilityModel> = {
     defaultDifficulty: "hard",
     victory: { title: "ORION IS SILENT", text: "The Brood Mother is dead and the hive with her. Somewhere a rescue beacon is still blinking." },
     onLevel(_index, zoneId) {
-      const region = ZONES[zoneId]?.region;
+      const region = ZONES[zoneId as SectorId]?.region;
       for (const s of world.seals) {
         s.open = -1;
         s.entity.setLocalScale(s.width, 1, SEAL_HEIGHT);
@@ -482,10 +844,19 @@ export const SHIP_BIOME: Biome<FacilityModel> = {
         s.entity.enabled = !!region && onEdge(region, s.x, s.z);
       }
       world.exitSeals = [];
+      // The portal burns until the gate's level is won (and stays dead after).
+      const p = world.portal;
+      if (p) {
+        const past = SPANS.findIndex((s) => s.id === zoneId) > SPANS.findIndex((s) => s.id === "gate");
+        p.collapse = past ? 2 : -1;
+        p.ring.enabled = p.disc.enabled = !past;
+      }
     },
     exits(zoneId): WayPoint[] {
-      const exit = ZONES[zoneId]?.exit;
+      const exit = ZONES[zoneId as SectorId]?.exit;
       world.exitSeals = exit ? world.seals.filter((s) => s.entity.enabled && Math.abs((exit.axis === "z" ? s.z : s.x) - exit.at) < 0.7) : [];
+      // Winning the gate's level collapses the portal.
+      if (zoneId === "gate" && world.portal && world.portal.collapse < 0) world.portal.collapse = 0;
       return world.exitSeals.map((s) => ({ x: s.x, z: s.z, width: s.width, yawDeg: s.yawDeg }));
     },
     openExit(_zoneId, index) {
@@ -495,15 +866,50 @@ export const SHIP_BIOME: Biome<FacilityModel> = {
     arena(intensity) {
       world.arena = intensity;
     },
-    update(dt) {
+    update(dt, hero) {
       world.time += dt;
       world.shown += (world.arena - world.shown) * Math.min(1, dt * 1.5);
+      // The void follows the hero (parallax).
+      world.backdrop?.setLocalPosition(hero.x * 0.85, 0, hero.z * 0.85);
+      // Accent paint takes the colour of the sector the hero is in.
+      const accent = world.accent;
+      if (accent) {
+        const want = accentAt(hero.z), now = world.accentNow;
+        const k = Math.min(1, dt * 3);
+        let moved = false;
+        for (let i = 0; i < 3; i++) {
+          const d = want[i] - now[i];
+          if (Math.abs(d) > 0.002) { now[i] += d * k; moved = true; }
+        }
+        if (moved || world.time < 0.2) {
+          accent.diffuse.set(now[0] * ACCENT_DIFFUSE, now[1] * ACCENT_DIFFUSE, now[2] * ACCENT_DIFFUSE);
+          accent.emissive.set(now[0] * ACCENT_GLOW, now[1] * ACCENT_GLOW, now[2] * ACCENT_GLOW);
+          accent.update();
+        }
+      }
       // Barriers shimmer (and flare red while a boss rages).
       const m = world.barrier;
       if (m) {
         const k = 1 + Math.sin(world.time * 6) * 0.15;
         m.emissive.set((0.25 + world.shown * 0.9) * k, 0.8 * (1 - world.shown * 0.6) * k, 1.2 * (1 - world.shown * 0.7) * k);
         m.update();
+      }
+      // The portal swirls (harder with the arena), then collapses once the gate's level is won.
+      const p = world.portal;
+      if (p && p.collapse < 2) {
+        p.disc.setLocalEulerAngles(90, 0, world.time * (40 + world.shown * 80));
+        let scale = 1 + Math.sin(world.time * 2.3) * 0.03;
+        if (p.collapse >= 0) {
+          p.collapse = Math.min(2, p.collapse + dt / 1.6);
+          // Flares, then shrinks to nothing.
+          scale = p.collapse < 0.3 ? 1 + p.collapse * 1.2 : Math.max(0, 1.36 * (1 - (p.collapse - 0.3) / 0.9));
+          if (p.collapse >= 1.2) { p.ring.enabled = p.disc.enabled = false; p.collapse = 2; }
+        }
+        const k = 0.9 + world.shown * 0.8;
+        p.mat.emissive.set(VIOLET[0] * k, VIOLET[1] * k, VIOLET[2] * k);
+        p.mat.update();
+        const d = PORTAL.radius * 1.8 * scale;
+        p.disc.setLocalScale(d, 1, d);
       }
       for (const s of world.exitSeals) {
         if (s.open < 0 || !s.entity.enabled) continue;

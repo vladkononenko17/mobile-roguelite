@@ -824,7 +824,7 @@ export class Gameplay {
     this.drones.update(dt, position, this.stats.drones, this.characterScale(), combat && this.stats.alive);
     if (combat || this.phase === "cleared") this.pickups.update(dt, position, this.characterScale(), this.phase === "cleared");
     this.effects.update(dt);
-    this.campaign?.update?.(dt);
+    this.campaign?.update?.(dt, position);
     // Level-ups wait for combat (or the wave-complete pause) and a living hero.
     if (this.pendingLevelUps > 0 && !this.choosing && (combat || this.phase === "cleared" || this.phase === "travel") && this.stats.alive) this.openLevelUp();
     this.updateHud(dt);

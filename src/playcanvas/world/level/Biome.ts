@@ -93,8 +93,8 @@ export interface Campaign {
   onLevel?(index: number, zone: string): void;
   /** Boss phase / arena intensity 0..1 (lava brightness, runes). */
   arena?(intensity: number): void;
-  /** Per frame (animated world pieces). */
-  update?(dt: number): void;
+  /** Per frame (animated world pieces), with the hero's position. */
+  update?(dt: number, hero: { x: number; z: number }): void;
   /** Hands the world's lava to the campaign (boss-phase brightness). */
   attach?(lava: Lava): void;
   /** The seals on `zone`'s way on (see Zone.exit), in a stable order. */
