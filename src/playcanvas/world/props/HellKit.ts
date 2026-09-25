@@ -90,6 +90,12 @@ export const HELL_MODELS = {
   puddleB: clutter,
   puddleC: clutter,
   rubble: clutter,
+  // Flesh growths (demon corruption)
+  fleshSpire: circle(2.4),
+  fleshBrain: box(0.8),
+  fleshClaw: circle(1.1),
+  fleshGut: box(0.75),
+  fleshStalk: circle(1.0),
 } satisfies Record<string, KitModelDef>;
 
 export type HellModel = keyof typeof HELL_MODELS;

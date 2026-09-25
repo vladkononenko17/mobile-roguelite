@@ -3,7 +3,7 @@ import type { ScreenProjector } from "../camera/ScreenProjector";
 import { COMBAT_FX, TARGETING, type WeaponStats } from "./config";
 import type { Combat } from "./Combat";
 import type { Effects } from "./Effects";
-import { isAlive, type Enemy, type EnemyManager } from "./EnemyManager";
+import { aimY, isAlive, type Enemy, type EnemyManager } from "./EnemyManager";
 import { blocked } from "./NavField";
 import type { PlayerStats } from "./PlayerStats";
 import type { PlayerController } from "../player/PlayerController";
@@ -123,6 +123,9 @@ export class PlayerGun {
    */
   private pickTarget(x: number, z: number, stats: WeaponStats, dt: number): Enemy | null {
     const current = this.target;
+    // A visible boss wins over anything not already close (adds would otherwise shield it forever).
+    const boss = this.visibleBoss(x, z, stats, current);
+    if (boss) return boss;
     if (current && this.valid(current, x, z, stats)) {
       this.hidden = this.onScreen(current, TARGETING.keepSlack) ? 0 : this.hidden + dt;
       if (this.hidden <= TARGETING.graceSeconds) return current;
@@ -140,6 +143,20 @@ export class PlayerGun {
     return best;
   }
 
+  /** The boss, if it is valid and on screen and no other enemy is within the close-threat radius. */
+  private visibleBoss(x: number, z: number, stats: WeaponStats, current: Enemy | null): Enemy | null {
+    let boss: Enemy | null = null;
+    let closest = Infinity;
+    for (const e of this.enemies.alive) {
+      if (!isAlive(e)) continue;
+      if (e.def.boss) boss = e;
+      else closest = Math.min(closest, Math.hypot(e.position.x - x, e.position.z - z));
+    }
+    if (!boss || closest < TARGETING.closeThreat) return null;
+    if (!this.valid(boss, x, z, stats) || !this.onScreen(boss, boss === current ? TARGETING.keepSlack : 0)) return null;
+    return boss;
+  }
+
   /** Alive, in weapon range and in line of sight (screen visibility is checked separately). */
   private valid(e: Enemy, x: number, z: number, stats: WeaponStats): boolean {
     if (!isAlive(e)) return false;
@@ -149,7 +166,7 @@ export class PlayerGun {
 
   /** Whether the enemy's chest point is inside the combat viewport grown by `slack` (fraction). */
   private onScreen(e: Enemy, slack: number): boolean {
-    this.aimPoint.set(e.position.x, TARGETING.aimHeight * e.scale, e.position.z);
+    this.aimPoint.set(e.position.x, aimY(e), e.position.z);
     const s = this.camera.normalized(this.aimPoint, this.screen);
     if (s.z <= 0) return false;
     return (
@@ -184,7 +201,7 @@ export class PlayerGun {
       d.target = null;
       return;
     }
-    this.aimPoint.set(t.position.x, TARGETING.aimHeight * t.scale, t.position.z);
+    this.aimPoint.set(t.position.x, aimY(t), t.position.z);
     const s = this.camera.toScreen(this.aimPoint, this.screen);
     d.target = { x: s.x, y: s.y, distance: Math.hypot(t.position.x - x, t.position.z - z), label: t.def.label };
   }

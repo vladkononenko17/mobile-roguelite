@@ -53,6 +53,8 @@ export interface SynergyReached {
 export function applyUpgrade(stats: PlayerStats, id: UpgradeId): { def: UpgradeDef; synergies: SynergyReached[] } {
   const def = upgradeDef(id);
   for (const effect of def.effects) applyEffect(stats, effect);
+  // A price in max HP never leaves HP above the new maximum.
+  stats.hp = Math.min(stats.hp, stats.maxHp);
   stats.upgrades.set(id, upgradeStacks(stats, id) + 1);
   const synergies: SynergyReached[] = [];
   const counts = tagCounts(stats);

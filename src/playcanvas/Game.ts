@@ -131,7 +131,10 @@ export class Game {
     const lavaSpec = biome.lava;
     const lavaLoaded = lavaSpec
       ? (this.lava = new Lava(app, lavaSpec)).load(`${import.meta.env.BASE_URL}${lavaSpec.url}`).then(
-          (root) => { this.collision.addStaticFrom(root); },
+          (root) => {
+            this.collision.addStaticFrom(root);
+            if (this.lava) biome.campaign?.attach?.(this.lava);
+          },
           (error: unknown) => console.error("[Lava] failed to load.", error),
         )
       : Promise.resolve();
@@ -229,7 +232,7 @@ export class Game {
 
     // The roguelite run on this arena (enemies, combat, levels). ?sandbox=1 skips it.
     if (new URLSearchParams(location.search).get("sandbox") !== "1") {
-      this.gameplay = new Gameplay(app, this.camera.entity, this.collision, biome.bounds, this.player, this.weapons, new Hud(), () => this.characterScale, biome.runStart, () => this.camera.snap());
+      this.gameplay = new Gameplay(app, this.camera.entity, this.collision, biome, this.player, this.weapons, new Hud(), () => this.characterScale, () => this.camera.snap());
       this.gameplay.init().catch((error: unknown) => console.error("[Gameplay] failed to start.", error));
     }
     app.on("update", this.update, this);

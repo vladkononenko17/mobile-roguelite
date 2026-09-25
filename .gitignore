@@ -22,3 +22,5 @@ assets-src/molten-scifi/
 # Hell map sources (`hell` release): Inferno World, SHS Dungeon Pack (no raw redistribution), lava textures
 assets-src/inferno-world/
 assets-src/shs-dungeon/
+# hell2 release packs (Bestiary, Codersan alien, Quaternius, alien buildings, cyber demons): raw files local only
+assets-src/hell2/

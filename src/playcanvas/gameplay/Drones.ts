@@ -1,8 +1,9 @@
 import { Color, Entity, StandardMaterial, Vec3, type AppBase } from "playcanvas";
-import { COMBAT_FX, TARGETING } from "./config";
+import { COMBAT_FX } from "./config";
 import type { Combat } from "./Combat";
 import type { Effects } from "./Effects";
 import type { PlayerGun } from "./PlayerGun";
+import { aimY } from "./EnemyManager";
 
 const MAX_DRONES = 5;
 const ORBIT_RADIUS = 1.05;
@@ -82,7 +83,7 @@ export class Drones {
       }
       d.cooldown = COMBAT_FX.droneInterval;
       this.muzzle.copy(p);
-      this.target.set(t.position.x, TARGETING.aimHeight * t.scale, t.position.z);
+      this.target.set(t.position.x, aimY(t), t.position.z);
       this.effects.muzzleFlash(this.muzzle, 0.12);
       this.effects.tracer(this.muzzle, this.target);
       this.combat.hit(t, COMBAT_FX.droneDamage, "drone", p.x, p.z, 0.04);

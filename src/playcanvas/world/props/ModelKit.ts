@@ -46,7 +46,7 @@ export class ModelKit<Id extends string> {
   private readonly flatGroup: number;
 
   constructor(
-    private readonly app: AppBase,
+    readonly app: AppBase,
     private readonly defs: Record<Id, KitModelDef>,
     options: { name: string; batchCellMetres: number; brightness: number; glowIntensity?: number },
   ) {

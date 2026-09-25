@@ -1,5 +1,7 @@
-import { Entity, Vec3, type AnimTrack, type Texture, type AppBase, type ContainerResource, type MeshInstance, type RenderComponent, type StandardMaterial } from "playcanvas";
-import { ENEMIES, ENEMY_LIMITS, ENEMY_VISUALS, type EnemyClips, type EnemyDef, type EnemyId, type EnemySkinId, type EnemyVisualId } from "./config";
+import { BLEND_ADDITIVE, Color, Entity, StandardMaterial, Vec3, type AnimTrack, type Texture, type AppBase, type ContainerResource, type MeshInstance, type RenderComponent } from "playcanvas";
+import { ENEMIES, ENEMY_LIMITS, ENEMY_VISUALS, TARGETING, type EnemyClips, type EnemyDef, type EnemyId, type EnemySkinId, type EnemyVisualId } from "./config";
+import { HELL_TYPE_SKINS } from "./hellConfig";
+import type { BossBrain, BossState } from "./BossBrain";
 import type { Hazards } from "./Hazards";
 import type { NavField } from "./NavField";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
@@ -16,11 +18,17 @@ export interface BodySource {
  * "dead" (corpse resting, then sinking) -> despawn (back to the pool). Only alive enemies can be
  * targeted, hit, attack, push others or count toward the cap.
  */
-type State = "move" | "attack" | "telegraph" | "charge" | "recover" | "throw" | "slam" | "dying" | "dead";
+export type EnemyState = "move" | "attack" | "telegraph" | "charge" | "recover" | "throw" | "slam" | "cast" | "dive" | "boss" | "dying" | "dead";
+type State = EnemyState;
 
 /** Alive = spawned and not dying / dead. */
 export function isAlive(e: Enemy): boolean {
   return e.active && e.state !== "dying" && e.state !== "dead";
+}
+
+/** Height of an enemy's aim point (chest; flyers include their altitude). */
+export function aimY(e: Enemy): number {
+  return e.lift + (e.def.aimHeight ?? TARGETING.aimHeight) * e.scale;
 }
 
 export interface Enemy {
@@ -69,6 +77,16 @@ export interface Enemy {
   burnTick: number;
   slowTime: number;
   slowPct: number;
+  /** Altitude of flyers (m); 0 on the ground. */
+  lift: number;
+  /** Flyers: angle around the player they circle at. */
+  orbit: number;
+  /** Enraged (berserker below half HP). */
+  enraged: boolean;
+  /** Bone attachments (enabled per type). */
+  attachments: { entity: Entity; only?: EnemyId[] }[];
+  /** Boss script state (bosses only). */
+  brain: BossState | null;
 }
 
 interface Pool {
@@ -105,6 +123,15 @@ export class EnemyManager {
   onDeath: (enemy: Enemy) => void = () => {};
   /** Called for a boss stranded somewhere unreachable (move it); regular enemies are recycled. */
   onStranded: (enemy: Enemy) => void = () => {};
+  /** Boss scripts (set by Gameplay). */
+  brain: BossBrain | null = null;
+  /** The player's ground position this frame (read by the boss scripts). */
+  readonly playerPosition = new Vec3();
+  /** Loaded attachment models by URL (set before the looks that use them are added). */
+  readonly attachmentModels = new Map<string, ContainerResource>();
+  private orbMaterial: StandardMaterial | null = null;
+  /** Nav / flyer bounds of the current level region. */
+  bounds = { minX: -1e4, maxX: 1e4, minZ: -1e4, maxZ: 1e4 };
 
   constructor(
     private readonly app: AppBase,
@@ -153,6 +180,7 @@ export class EnemyManager {
         states: [
           { name: "START" }, { name: "Move", speed: 1, loop: true }, { name: "Attack", speed: 1, loop: false }, { name: "Hit", speed: 1, loop: false },
           { name: "Death", speed: 1, loop: false }, { name: "Special", speed: 1, loop: true },
+          { name: "Roar", speed: 1, loop: false }, { name: "Cast", speed: 1, loop: false }, { name: "Slam", speed: 1, loop: false },
         ],
         transitions: [{ from: "START", to: "Move", time: 0 }],
       }],
@@ -160,6 +188,38 @@ export class EnemyManager {
     });
     root.enabled = false;
     this.root.addChild(root);
+    const attachments: Enemy["attachments"] = [];
+    for (const a of ENEMY_VISUALS[pool.visual].attachments ?? []) {
+      const bone = model.findByName(a.bone) as Entity | null;
+      if (!bone) continue;
+      let entity: Entity;
+      if (a.url) {
+        const resource = this.attachmentModels.get(a.url);
+        if (!resource) continue;
+        entity = resource.instantiateRenderEntity({ castShadows: false, receiveShadows: true });
+      } else {
+        entity = new Entity("orb");
+        if (!this.orbMaterial) {
+          const m = new StandardMaterial();
+          m.diffuse.set(0, 0, 0);
+          m.useLighting = false;
+          m.blendType = BLEND_ADDITIVE;
+          m.depthWrite = false;
+          m.emissive = new Color(1.6, 0.55, 0.12);
+          m.update();
+          this.orbMaterial = m;
+        }
+        entity.addComponent("render", { type: "sphere", material: this.orbMaterial, castShadows: false, receiveShadows: false });
+      }
+      const [px, py, pz] = a.position ?? [0, 0, 0];
+      const [rx, ry, rz] = a.rotation ?? [0, 0, 0];
+      const k = a.scale ?? 1;
+      entity.setLocalPosition(px, py, pz);
+      entity.setLocalEulerAngles(rx, ry, rz);
+      entity.setLocalScale(k, k, k);
+      bone.addChild(entity);
+      attachments.push({ entity, only: a.only });
+    }
     const first = meshes[0]?.material as StandardMaterial;
     pool.baseMaterial ??= first;
     const enemy: Enemy = {
@@ -168,6 +228,7 @@ export class EnemyManager {
       active: false, hp: 1, maxHp: 1, damageScale: 1, position: new Vec3(), push: new Vec3(),
       state: "move", stateTime: 0, cooldown: 0, specialCooldown: 0, flash: 0, yaw: 0, dirX: 0, dirZ: 1, hitDone: false, marker: null, stuck: 0,
       hitReact: 0, hitCooldown: 0, deaths: 0, burnTime: 0, burnDps: 0, burnTick: 0, slowTime: 0, slowPct: 0,
+      lift: 0, orbit: 0, enraged: false, attachments, brain: null,
     };
     pool.bodies.add(enemy);
     return enemy;
@@ -178,15 +239,18 @@ export class EnemyManager {
     const key = `${id}/${base.name}/${base.id}/${skin}`;
     let m = this.materials.get(key);
     if (!m) {
-      const tint = ENEMIES[id].tint;
+      const { tint, glow } = ENEMIES[id];
       const texture = skin ? this.skins.get(skin) : undefined;
-      const normal = tint || texture ? (base.clone() as StandardMaterial) : base;
+      const normal = tint || texture || glow ? (base.clone() as StandardMaterial) : base;
       if (tint) normal.diffuse.set(tint[0], tint[1], tint[2]);
       if (texture) normal.diffuseMap = texture;
+      // Glowing eyes / cracks: tints the look's emissive map.
+      if (glow && normal.emissiveMap) normal.emissive.set(glow[0], glow[1], glow[2]);
       if (normal !== base) normal.update();
       const flash = base.clone() as StandardMaterial;
       flash.diffuse.set(1, 1, 1);
       if (texture) flash.diffuseMap = texture;
+      flash.emissiveMap = null;
       flash.emissive.set(0.9, 0.35, 0.25);
       flash.update();
       m = { normal, flash };
@@ -238,8 +302,13 @@ export class EnemyManager {
     enemy.hitCooldown = 0;
     enemy.deaths = 0;
     enemy.burnTime = enemy.burnDps = enemy.burnTick = enemy.slowTime = enemy.slowPct = 0;
+    enemy.lift = def.fly ? def.fly.height : 0;
+    enemy.orbit = Math.random() * Math.PI * 2;
+    enemy.enraged = false;
+    enemy.brain = def.script && this.brain ? this.brain.create(enemy) : null;
+    for (const a of enemy.attachments) a.entity.enabled = !a.only || a.only.includes(id);
     // Materials (per type) and animation clips.
-    const skins = (visual.skins ?? []).filter((k) => this.skins.has(k));
+    const skins = ((HELL_TYPE_SKINS as Partial<Record<EnemyId, EnemySkinId[]>>)[id] ?? visual.skins ?? []).filter((k) => this.skins.has(k));
     enemy.skin = skins.length ? skins[Math.floor(Math.random() * skins.length)] : null;
     const mats = this.materialsFor(id, pool.baseMaterial!, enemy.skin);
     enemy.normalMaterial = mats.normal;
@@ -255,13 +324,16 @@ export class EnemyManager {
     anim.assignAnimation("Hit", track(clips.hit ?? clips.move), undefined, 1, false);
     anim.assignAnimation("Death", track(clips.death[Math.floor(Math.random() * clips.death.length)]), undefined, 1, false);
     anim.assignAnimation("Special", track(clips.special ?? clips.move), undefined, 1, true);
+    anim.assignAnimation("Roar", track(clips.roar ?? clips.special ?? clips.attack), undefined, 1, false);
+    anim.assignAnimation("Cast", track(clips.cast ?? clips.attack), undefined, 1, false);
+    anim.assignAnimation("Slam", track(clips.slam ?? clips.attack), undefined, 1, false);
     anim.speed = this.moveRate(enemy);
     anim.baseLayer!.play("Move");
     // Start each body at a different point of its walk cycle so a group does not march in step.
     anim.baseLayer!.activeStateCurrentTime = Math.random() * track(clips.move).duration;
     const bulk = visual.bulk ?? 1;
     enemy.root.setLocalScale(enemy.scale * bulk, enemy.scale, enemy.scale * bulk);
-    enemy.root.setPosition(enemy.position);
+    enemy.root.setPosition(enemy.position.x, enemy.lift, enemy.position.z);
     enemy.model.setLocalPosition(0, 0, 0);
     enemy.root.enabled = true;
     this.alive.push(enemy);
@@ -271,8 +343,12 @@ export class EnemyManager {
   /** Damage from the player. Returns true if it killed the enemy. */
   damage(enemy: Enemy, amount: number, fromX: number, fromZ: number, knockback: number): boolean {
     if (!isAlive(enemy)) return false;
-    enemy.hp -= amount;
+    // Bosses are invulnerable while they roar (a phase change).
+    if (enemy.brain && this.brain?.invulnerable(enemy)) return false;
+    enemy.hp -= amount * (1 - (enemy.def.armor ?? 0));
     enemy.flash = 0.08;
+    const enrage = enemy.def.enrage;
+    if (enrage && !enemy.enraged && enemy.hp / enemy.maxHp < enrage.below) enemy.enraged = true;
     for (const mi of enemy.meshes) mi.material = enemy.flashMaterial;
     const dx = enemy.position.x - fromX, dz = enemy.position.z - fromZ;
     const d = Math.hypot(dx, dz) || 1;
@@ -292,7 +368,15 @@ export class EnemyManager {
 
   /** Move clip playback rate that matches the feet to the ground speed. */
   private moveRate(enemy: Enemy): number {
-    return (enemy.def.speed * this.slowFactor(enemy)) / (ENEMY_VISUALS[enemy.visual].moveSpeed * enemy.scale);
+    return (this.speedOf(enemy) * this.slowFactor(enemy)) / (ENEMY_VISUALS[enemy.visual].moveSpeed * enemy.scale);
+  }
+
+  /** Ground speed with enrage / boss phase multipliers. */
+  private speedOf(enemy: Enemy): number {
+    let v = enemy.def.speed;
+    if (enemy.enraged && enemy.def.enrage) v *= enemy.def.enrage.speed;
+    if (enemy.brain && this.brain) v *= this.brain.speedFactor(enemy);
+    return v;
   }
 
   /** 1, or less while slowed (bosses resist half of it). */
@@ -313,10 +397,12 @@ export class EnemyManager {
     enemy.hitReact = 0;
     enemy.push.set(0, 0, 0);
     this.setState(enemy, "dying");
+    this.brain?.release(enemy);
     this.hazards.clear(enemy.marker);
     enemy.marker = null;
     enemy.model.anim!.speed = 1;
     enemy.model.anim!.baseLayer!.transition("Death", 0.1);
+    // Flyers fall to the ground as they die.
     if (reward) this.onDeath(enemy);
     return true;
   }
@@ -360,6 +446,7 @@ export class EnemyManager {
   }
 
   update(dt: number, player: Vec3, playerAlive: boolean): void {
+    this.playerPosition.copy(player);
     const alive = this.alive;
     // Separation (O(n^2) over at most ~30 bodies).
     for (let i = 0; i < alive.length; i++) {
@@ -392,7 +479,11 @@ export class EnemyManager {
       if (enemy.flash <= 0) for (const mi of enemy.meshes) mi.material = enemy.normalMaterial;
     }
     if (enemy.state === "dying") {
-      // The death clip plays out (it ends lying down), then the body is a corpse.
+      // The death clip plays out (it ends lying down), then the body is a corpse. Flyers drop.
+      if (enemy.lift > 0) {
+        enemy.lift = Math.max(0, enemy.lift - dt * 6);
+        enemy.root.setPosition(enemy.position.x, enemy.lift, enemy.position.z);
+      }
       if (enemy.stateTime >= ENEMY_LIMITS.dyingSeconds) this.setState(enemy, "dead");
       return;
     }
@@ -411,15 +502,18 @@ export class EnemyManager {
       enemy.hitReact -= dt;
       if (enemy.hitReact <= 0 && enemy.state === "move") enemy.model.anim!.baseLayer!.transition("Move", 0.15);
     }
-    // Safety net: never leave an enemy stranded where it cannot reach the player.
-    enemy.stuck = this.nav.isReachable(enemy.position.x, enemy.position.z) ? 0 : enemy.stuck + dt;
-    if (enemy.stuck > 3) {
-      enemy.stuck = 0;
-      if (enemy.def.boss) this.onStranded(enemy);
-      else {
-        this.hazards.clear(enemy.marker);
-        this.release(enemy);
-        return;
+    const flyer = !!def.fly;
+    // Safety net: never leave a walker stranded where it cannot reach the player (flyers go anywhere).
+    if (!flyer) {
+      enemy.stuck = this.nav.isReachable(enemy.position.x, enemy.position.z) ? 0 : enemy.stuck + dt;
+      if (enemy.stuck > 3) {
+        enemy.stuck = 0;
+        if (enemy.def.boss) this.onStranded(enemy);
+        else {
+          this.hazards.clear(enemy.marker);
+          this.release(enemy);
+          return;
+        }
       }
     }
     const dx = player.x - enemy.position.x, dz = player.z - enemy.position.z;
@@ -427,8 +521,19 @@ export class EnemyManager {
     const toX = dx / (distance || 1), toZ = dz / (distance || 1);
     let moveX = 0, moveZ = 0, speed = 0;
     const anim = enemy.model.anim!;
+    const rage = enemy.enraged && def.enrage ? def.enrage.cooldown : 1;
 
-    switch (enemy.state) {
+    if (enemy.brain && this.brain) {
+      // Bosses: the script decides (movement comes back through `steer`).
+      const out = this.brain.update(enemy, dt, player, playerAlive);
+      moveX = out.x;
+      moveZ = out.z;
+      speed = out.speed;
+      if (out.useNav && distance > 2.5 && !flyer && this.nav.direction(enemy.position.x, enemy.position.z, this.steer)) {
+        moveX = this.steer.x;
+        moveZ = this.steer.z;
+      }
+    } else switch (enemy.state) {
       case "move": {
         if (!playerAlive) break;
         // Specials first.
@@ -437,6 +542,15 @@ export class EnemyManager {
           enemy.dirX = toX;
           enemy.dirZ = toZ;
           enemy.marker = this.hazards.lane(enemy.position.x, enemy.position.z, toX, toZ, def.charge.distance, def.radius * 2.2, def.charge.telegraph);
+          anim.baseLayer!.transition("Special", 0.15);
+          break;
+        }
+        if (def.fly?.dive && enemy.specialCooldown <= 0 && distance < def.fly.dive.distance * 0.8 && distance > 3) {
+          // Dive: the lane shows while it hovers, then it swoops low through it.
+          this.setState(enemy, "telegraph");
+          enemy.dirX = toX;
+          enemy.dirZ = toZ;
+          enemy.marker = this.hazards.lane(enemy.position.x, enemy.position.z, toX, toZ, def.fly.dive.distance, def.radius * 2.4, def.fly.dive.telegraph);
           anim.baseLayer!.transition("Special", 0.15);
           break;
         }
@@ -453,16 +567,38 @@ export class EnemyManager {
           anim.baseLayer!.transition(def.behavior === "thrower" ? "Special" : "Attack", 0.1);
           break;
         }
+        if (def.bolt && enemy.specialCooldown <= 0 && distance >= def.bolt.minRange && distance <= def.bolt.maxRange) {
+          this.setState(enemy, "cast");
+          anim.speed = 1;
+          anim.baseLayer!.transition(enemy.clips.special ? "Special" : "Attack", 0.1);
+          break;
+        }
         if (distance <= def.attackRange * 0.92 && enemy.cooldown <= 0) {
           this.setState(enemy, "attack");
           anim.speed = 1;
           anim.baseLayer!.transition("Attack", 0.1);
           break;
         }
-        // Throwers keep their distance.
-        if (def.behavior === "thrower" && def.projectile && distance < def.projectile.minRange * 0.9) {
+        if (flyer) {
+          // Circle the player at the orbit distance (orbit 0: close in to bite).
+          const orbit = def.fly!.orbit;
+          enemy.orbit += dt * (0.35 + (enemy.maxHp % 7) * 0.02);
+          const tx = orbit > 0 ? player.x - Math.sin(enemy.orbit) * orbit : player.x;
+          const tz = orbit > 0 ? player.z - Math.cos(enemy.orbit) * orbit : player.z;
+          const ox = tx - enemy.position.x, oz = tz - enemy.position.z;
+          const od = Math.hypot(ox, oz);
+          if (od > 0.4 && (orbit > 0 || distance > def.attackRange * 0.8)) {
+            moveX = ox / od;
+            moveZ = oz / od;
+          }
+        } else if ((def.behavior === "thrower" && def.projectile && distance < def.projectile.minRange * 0.9) || (def.behavior === "caster" && def.bolt && distance < def.bolt.minRange * 0.85)) {
+          // Ranged enemies keep their distance.
           moveX = -toX;
           moveZ = -toZ;
+        } else if (def.behavior === "caster" && def.bolt && distance < def.bolt.maxRange * 0.8) {
+          // In range: sidestep around the player while the bolt recharges.
+          moveX = -toZ * (enemy.maxHp % 2 ? 1 : -1);
+          moveZ = toX * (enemy.maxHp % 2 ? 1 : -1);
         } else if (distance > def.attackRange * 0.8) {
           if (distance > 2.5 && this.nav.direction(enemy.position.x, enemy.position.z, this.steer)) {
             moveX = this.steer.x;
@@ -473,7 +609,8 @@ export class EnemyManager {
           }
         }
         // Staggered while flinching; slowed by cryo hits.
-        speed = (enemy.hitReact > 0 ? def.speed * 0.3 : def.speed) * this.slowFactor(enemy);
+        speed = (enemy.hitReact > 0 ? this.speedOf(enemy) * 0.3 : this.speedOf(enemy)) * this.slowFactor(enemy);
+        if (def.behavior === "caster" && distance < def.bolt!.maxRange * 0.8 && distance >= def.bolt!.minRange * 0.85) speed *= 0.5;
         break;
       }
       case "attack": {
@@ -482,35 +619,42 @@ export class EnemyManager {
           enemy.hitDone = true;
           if (playerAlive && distance <= def.attackRange * 1.15) this.onPlayerHit(def.damage * enemy.damageScale, enemy);
         }
-        if (enemy.stateTime >= def.attackWindup + 0.45) this.backToMove(enemy, def.attackCooldown);
+        if (enemy.stateTime >= def.attackWindup + 0.45 * rage) this.backToMove(enemy, def.attackCooldown * rage);
         break;
       }
       case "telegraph": {
-        // Charger: aim, flash the lane, then go.
-        if (enemy.stateTime >= (def.charge?.telegraph ?? 1)) {
-          this.setState(enemy, "charge");
+        // Charger / diving flyer: aim, flash the lane, then go.
+        const wait = def.charge?.telegraph ?? def.fly?.dive?.telegraph ?? 1;
+        if (enemy.stateTime >= wait) {
+          this.setState(enemy, def.charge ? "charge" : "dive");
           this.hazards.clear(enemy.marker);
           enemy.marker = null;
         }
         this.face(enemy, enemy.dirX, enemy.dirZ, dt, 12);
         break;
       }
-      case "charge": {
-        const c = def.charge!;
+      case "charge":
+      case "dive": {
+        const c = enemy.state === "charge" ? def.charge! : def.fly!.dive!;
         moveX = enemy.dirX;
         moveZ = enemy.dirZ;
         speed = c.speed;
         anim.speed = 1.6;
-        if (!enemy.hitDone && distance < def.radius + 0.6) {
+        if (enemy.state === "dive") enemy.lift = Math.max(0.7, enemy.lift - dt * 8);
+        if (!enemy.hitDone && distance < def.radius + 0.7) {
           enemy.hitDone = true;
           if (playerAlive) this.onPlayerHit(c.damage * enemy.damageScale, enemy);
         }
         const travelled = enemy.stateTime * c.speed;
         if (travelled >= c.distance) {
-          // Overshot: winded and vulnerable for a moment.
-          this.setState(enemy, "recover");
-          anim.speed = 0.4;
-          anim.baseLayer!.transition("Move", 0.2);
+          if (enemy.state === "dive") {
+            this.backToMove(enemy, 0.8, def.fly!.dive!.cooldown);
+          } else {
+            // Overshot: winded and vulnerable for a moment.
+            this.setState(enemy, "recover");
+            anim.speed = 0.4;
+            anim.baseLayer!.transition("Move", 0.2);
+          }
         }
         break;
       }
@@ -529,29 +673,63 @@ export class EnemyManager {
         if (enemy.stateTime >= 1.1) this.backToMove(enemy, 0.3, def.projectile?.cooldown);
         break;
       }
+      case "cast": {
+        // The hand glows through the wind-up (the clip), then the bolt(s) fly: dodge sideways.
+        const b = def.bolt!;
+        this.face(enemy, toX, toZ, dt, 12);
+        if (!enemy.hitDone && enemy.stateTime >= b.windup) {
+          enemy.hitDone = true;
+          this.tmp.set(enemy.position.x + toX * 0.5, enemy.lift + 1.2, enemy.position.z + toZ * 0.5);
+          this.fan(this.tmp, toX, toZ, b.count, b.spreadDeg, b.speed, b.radius, b.damage * enemy.damageScale, b.maxRange * 1.6);
+        }
+        if (enemy.stateTime >= b.windup + 0.45) this.backToMove(enemy, 0.4, b.cooldown * (0.85 + Math.random() * 0.3));
+        break;
+      }
       case "slam": {
-        const s = def.slam!;
-        if (!enemy.hitDone && enemy.stateTime >= s.telegraph) {
+        const sl = def.slam!;
+        if (!enemy.hitDone && enemy.stateTime >= sl.telegraph) {
           enemy.hitDone = true;
           this.hazards.clear(enemy.marker);
           enemy.marker = null;
-          if (playerAlive && distance <= s.radius) this.onPlayerHit(s.damage * enemy.damageScale, enemy);
+          if (playerAlive && distance <= sl.radius) this.onPlayerHit(sl.damage * enemy.damageScale, enemy);
+          this.onSlam(enemy.position, sl.radius);
         }
-        if (enemy.stateTime >= s.telegraph + 0.5) this.backToMove(enemy, 0.6, s.cooldown);
+        if (enemy.stateTime >= sl.telegraph + 0.5) this.backToMove(enemy, 0.6, sl.cooldown);
         break;
       }
     }
 
-    // Move with knockback, slide along walls.
+    // Move: walkers slide along walls with knockback; flyers go straight over everything.
     const px = enemy.push.x * dt, pz = enemy.push.z * dt;
     enemy.push.mulScalar(Math.exp(-10 * dt));
     const stepX = moveX * speed * dt + px, stepZ = moveZ * speed * dt + pz;
-    if (stepX !== 0 || stepZ !== 0) this.collision.moveCircle(enemy.position, def.radius, stepX, stepZ);
-    if (speed > 0 && (moveX !== 0 || moveZ !== 0)) this.face(enemy, moveX, moveZ, dt, enemy.state === "charge" ? 20 : 8);
-    if (enemy.state === "move" && enemy.hitReact <= 0) anim.speed = speed > 0 ? this.moveRate(enemy) : 0.3;
-    enemy.root.setPosition(enemy.position);
+    if (flyer) {
+      const b = this.bounds;
+      enemy.position.x = Math.min(b.maxX + 2, Math.max(b.minX - 2, enemy.position.x + stepX));
+      enemy.position.z = Math.min(b.maxZ + 2, Math.max(b.minZ - 2, enemy.position.z + stepZ));
+      if (enemy.state !== "dive") enemy.lift += ((def.fly!.height) - enemy.lift) * Math.min(1, dt * 3);
+      if (speed === 0) this.face(enemy, toX, toZ, dt, 6);
+    } else if (stepX !== 0 || stepZ !== 0) {
+      this.collision.moveCircle(enemy.position, def.radius, stepX, stepZ);
+    }
+    if (speed > 0 && (moveX !== 0 || moveZ !== 0)) this.face(enemy, moveX, moveZ, dt, enemy.state === "charge" || enemy.state === "dive" ? 20 : 8);
+    if (enemy.state === "move" && enemy.hitReact <= 0) anim.speed = speed > 0 ? this.moveRate(enemy) : flyer ? 1 : 0.3;
+    const bob = flyer ? Math.sin(enemy.stateTime * 3 + enemy.orbit) * 0.12 : 0;
+    enemy.root.setPosition(enemy.position.x, enemy.lift + bob, enemy.position.z);
     enemy.root.setEulerAngles(0, enemy.yaw, 0);
   }
+
+  /** Fires `count` bolts fanned over `spreadDeg` around the direction (dx, dz). */
+  fan(from: Vec3, dx: number, dz: number, count: number, spreadDeg: number, speed: number, radius: number, damage: number, range: number): void {
+    const base = Math.atan2(dx, dz);
+    for (let i = 0; i < count; i++) {
+      const a = base + (count > 1 ? ((i / (count - 1)) - 0.5) * ((spreadDeg * Math.PI) / 180) : 0);
+      this.hazards.bolt(from, Math.sin(a), Math.cos(a), speed, radius, damage, range);
+    }
+  }
+
+  /** Visual hook for slams (dust / shock ring). */
+  onSlam: (position: Vec3, radius: number) => void = () => {};
 
   private backToMove(enemy: Enemy, cooldown: number, specialCooldown?: number): void {
     this.setState(enemy, "move");
@@ -571,7 +749,7 @@ export class EnemyManager {
 
   /** True while the charger is recovering (takes extra damage). */
   vulnerable(enemy: Enemy): boolean {
-    return enemy.state === "recover";
+    return enemy.state === "recover" || (!!enemy.brain && !!this.brain?.vulnerable(enemy));
   }
 
   /** Nearest living enemy whose body a ray from (ox, oz) along (dx, dz) hits within `range`. */

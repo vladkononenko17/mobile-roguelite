@@ -32,6 +32,16 @@ export interface LavaPool {
   y?: number;
 }
 
+/** A lava fall: a vertical sheet pouring down (x, z = the top edge's centre; yaw faces the camera side). */
+export interface LavaFall {
+  x: number;
+  z: number;
+  y: number;
+  width: number;
+  height: number;
+  yawDeg: number;
+}
+
 export interface LavaSpec {
   /** Texture (self-lit crust with glowing cracks); UVs in world metres. */
   url: string;
@@ -41,6 +51,7 @@ export interface LavaSpec {
   flow: [number, number];
   intensity: number;
   pools: LavaPool[];
+  falls?: LavaFall[];
 }
 
 /**
@@ -52,7 +63,12 @@ export class Lava {
   private readonly root = new Entity("Lava");
   private readonly materials: StandardMaterial[] = [];
   private readonly offset = new Vec2();
+  private readonly fallOffset = new Vec2();
+  private fallMaterial: StandardMaterial | null = null;
   private time = 0;
+  /** Extra brightness (boss phases): 0..1, eased. */
+  boost = 0;
+  private shown = 0;
 
   constructor(private readonly app: AppBase, private readonly spec: LavaSpec) {
     app.root.addChild(this.root);
@@ -108,6 +124,22 @@ export class Lava {
       }
     });
     for (const m of this.materials) this.tile(m);
+    // Falls: the same texture on vertical quads, flowing downwards fast.
+    if (this.spec.falls?.length) {
+      const m = make(false);
+      m.cull = 0;
+      this.fallMaterial = m;
+      for (const f of this.spec.falls) {
+        const e = new Entity("lava-fall");
+        e.addComponent("render", { type: "plane", material: m, castShadows: false, receiveShadows: false });
+        e.setLocalScale(f.width, 1, f.height);
+        e.setLocalPosition(f.x, f.y - f.height / 2, f.z);
+        e.setLocalEulerAngles(90, f.yawDeg, 0);
+        this.root.addChild(e);
+      }
+      m.emissiveMapTiling = new Vec2(0.25, 0.12);
+      m.update();
+    }
     return this.root;
   }
 
@@ -120,8 +152,18 @@ export class Lava {
     this.time += dt;
     const [fx, fz] = this.spec.flow;
     this.offset.set((this.time * fx) % 1, (this.time * fz) % 1);
-    const pulse = this.spec.intensity * (0.9 + 0.1 * Math.sin(this.time * 1.3) + 0.05 * Math.sin(this.time * 3.7));
+    this.shown += (this.boost - this.shown) * Math.min(1, dt * 1.5);
+    const pulse = this.spec.intensity * (1 + this.shown * (0.7 + 0.3 * Math.sin(this.time * 4))) * (0.9 + 0.1 * Math.sin(this.time * 1.3) + 0.05 * Math.sin(this.time * 3.7));
+    if (this.fallMaterial) {
+      this.fallOffset.set(0, (this.time * 0.35) % 1);
+      this.fallMaterial.emissiveMapOffset = this.fallOffset;
+    }
     for (const m of this.materials) {
+      if (m === this.fallMaterial) {
+        m.emissiveIntensity = pulse * 1.1;
+        m.update();
+        continue;
+      }
       m.emissiveMapOffset = this.offset;
       m.emissiveIntensity = pulse;
       m.update();

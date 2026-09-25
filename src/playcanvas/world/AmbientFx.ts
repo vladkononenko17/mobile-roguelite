@@ -238,7 +238,7 @@ function softDot(app: AppBase): Texture {
 }
 
 /** Opaque white-to-black radial falloff for additive light pools (emissive map). */
-function softGlow(app: AppBase): Texture {
+export function softGlow(app: AppBase): Texture {
   const size = 64;
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
@@ -258,7 +258,7 @@ function softGlow(app: AppBase): Texture {
 }
 
 /** A pentagram inside a double ring, glowing lines on black (emissive map for additive sigils). */
-function pentagram(app: AppBase): Texture {
+export function pentagram(app: AppBase): Texture {
   const size = 512;
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;

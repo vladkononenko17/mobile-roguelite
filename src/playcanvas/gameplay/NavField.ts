@@ -20,31 +20,40 @@ const NEIGHBOURS: [number, number, number][] = [
  * distance, so crowds route around walls and buildings instead of grinding into them.
  */
 export class NavField {
-  readonly cols: number;
-  readonly rows: number;
-  private readonly walkable: Uint8Array;
-  private readonly distance: Float32Array;
-  private readonly heap: Int32Array;
+  cols = 0;
+  rows = 0;
+  private walkable = new Uint8Array(0);
+  private distance = new Float32Array(0);
+  private heap = new Int32Array(0);
   private heapSize = 0;
   private sourceIndex = -1;
+  private bounds: Bounds;
 
   constructor(
-    collision: CollisionWorld,
-    private readonly bounds: Bounds,
+    private readonly collision: CollisionWorld,
+    bounds: Bounds,
     private readonly cell = 1,
-    clearance = 0.45,
+    private readonly clearance = 0.45,
   ) {
-    this.cols = Math.ceil((bounds.maxX - bounds.minX) / cell);
-    this.rows = Math.ceil((bounds.maxZ - bounds.minZ) / cell);
+    this.bounds = bounds;
+    this.setBounds(bounds);
+  }
+
+  /** Re-grids over `bounds` (a level's region of a large map); keeps the cost per rebuild small. */
+  setBounds(bounds: Bounds): void {
+    this.bounds = bounds;
+    this.cols = Math.ceil((bounds.maxX - bounds.minX) / this.cell);
+    this.rows = Math.ceil((bounds.maxZ - bounds.minZ) / this.cell);
     const count = this.cols * this.rows;
     this.walkable = new Uint8Array(count);
     this.distance = new Float32Array(count).fill(Infinity);
     this.heap = new Int32Array(count * 8);
+    this.sourceIndex = -1;
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
-        const x = bounds.minX + (c + 0.5) * cell;
-        const z = bounds.minZ + (r + 0.5) * cell;
-        this.walkable[r * this.cols + c] = blocked(collision, x, z, clearance) ? 0 : 1;
+        const x = bounds.minX + (c + 0.5) * this.cell;
+        const z = bounds.minZ + (r + 0.5) * this.cell;
+        this.walkable[r * this.cols + c] = blocked(this.collision, x, z, this.clearance) ? 0 : 1;
       }
     }
   }

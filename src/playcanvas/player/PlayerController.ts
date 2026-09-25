@@ -26,6 +26,8 @@ export class PlayerController {
   aimTurnSharpness = 18;
   /** Movement speed multiplier (upgrades). */
   speedMultiplier = 1;
+  /** Knockback (m/s) from heavy hits; decays quickly. */
+  readonly push = new Vec3();
   /** When false, input is ignored (menus, death). */
   controlsEnabled = true;
   /** Unit ground direction the player is steering toward (zero when not steering). */
@@ -93,8 +95,9 @@ export class PlayerController {
     }
 
     this.position.copy(this.entity.getPosition());
-    const dx = this.velocity.x * dt;
-    const dz = this.velocity.z * dt;
+    const dx = (this.velocity.x + this.push.x) * dt;
+    const dz = (this.velocity.z + this.push.z) * dt;
+    this.push.mulScalar(Math.exp(-7 * dt));
     if (this.collision) {
       // Move-and-slide: blocked components are removed from both the step and the velocity, so
       // running diagonally into a wall keeps the along-wall part of the motion (and the animation

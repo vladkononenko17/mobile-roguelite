@@ -1,7 +1,7 @@
 import { Vec3 } from "playcanvas";
-import { COMBAT_FX, TARGETING } from "./config";
+import { COMBAT_FX } from "./config";
 import type { Effects } from "./Effects";
-import { isAlive, type Enemy, type EnemyManager } from "./EnemyManager";
+import { aimY, isAlive, type Enemy, type EnemyManager } from "./EnemyManager";
 import type { PlayerStats } from "./PlayerStats";
 
 /** What dealt a hit (decides which upgrades apply and how the number is shown). */
@@ -45,7 +45,7 @@ export class Combat {
 
   /** Chest-height point of an enemy (numbers, arcs, bounces). */
   private chest(e: Enemy, out: Vec3): Vec3 {
-    return out.set(e.position.x, TARGETING.aimHeight * e.scale, e.position.z);
+    return out.set(e.position.x, aimY(e), e.position.z);
   }
 
   /**

@@ -1,9 +1,11 @@
 import type { Entity } from "playcanvas";
-import type { LightingSpec } from "../../config";
+import type { LightingSpec, WeaponId } from "../../config";
+import type { WaveDef } from "../../gameplay/config";
 import type { AmbientEmitter } from "../AmbientFx";
 import type { GroundSpec } from "../Ground";
 import type { LavaSpec } from "../Lava";
 import type { KitModelDef, ModelKit } from "../props/ModelKit";
+import type { Lava } from "../Lava";
 
 export interface LevelBounds {
   minX: number;
@@ -47,4 +49,29 @@ export interface Biome<Id extends string = string> {
   lava?: LavaSpec;
   /** Places every model; each declares its collider, so the returned root feeds CollisionWorld. */
   build(kit: ModelKit<Id>): Entity;
+  /** A campaign of its own (else the shared WAVES): levels fought in named zones of the map. */
+  campaign?: Campaign;
+}
+
+/** A zone of a large map: where a level is fought (the player, nav and spawns stay inside). */
+export interface Zone {
+  region: LevelBounds;
+  start: Placement2D;
+}
+
+export interface Campaign {
+  levels: WaveDef[];
+  zones: Record<string, Zone>;
+  /** How a run starts (a veteran's weapon, cash, upgrade picks) and its special beats. */
+  run?: { startWeapon: WeaponId; startCash: number; startPicks: number; pactAfter: number; finalLevel: number };
+  /** Title and line shown when the whole campaign is won. */
+  victory: { title: string; text: string };
+  /** A level starts in `zone` (seal the way on, light the arena...). */
+  onLevel?(index: number, zone: string): void;
+  /** Boss phase / arena intensity 0..1 (lava brightness, runes). */
+  arena?(intensity: number): void;
+  /** Per frame (animated world pieces). */
+  update?(dt: number): void;
+  /** Hands the world's lava to the campaign (boss-phase brightness). */
+  attach?(lava: Lava): void;
 }

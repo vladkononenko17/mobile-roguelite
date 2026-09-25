@@ -3,6 +3,7 @@
 
 import type { WeaponId } from "../config";
 import type { UpgradeCategory, UpgradeIcon, UpgradeRarity } from "../ui/UpgradeIcons";
+import { HELL_ENEMIES, HELL_SKINS, HELL_VISUALS, type HellEnemyId, type HellSkinId, type HellVisualId } from "./hellConfig";
 
 /* ------------------------------------------------------------------------------------------------
  * Player combat
@@ -35,6 +36,8 @@ export const TARGETING = {
   graceSeconds: 0.15,
   /** Height of the enemy's aim point (chest) above its feet, per unit of enemy scale (m). */
   aimHeight: 1.0,
+  /** A visible boss is the target unless a regular enemy is within this distance (m). */
+  closeThreat: 3.5,
 };
 
 /* ------------------------------------------------------------------------------------------------
@@ -71,8 +74,10 @@ export const WEAPON_STATS: Partial<Record<WeaponId, WeaponStats>> = {
  * Enemies
  * ---------------------------------------------------------------------------------------------- */
 
-export type EnemyId = "walker" | "runner" | "thrower" | "brute" | "charger" | "tank";
-export type EnemyBehavior = "chaser" | "charger" | "thrower" | "tank";
+export type EnemyId = "walker" | "runner" | "thrower" | "brute" | "charger" | "tank" | HellEnemyId;
+/** chaser / charger / thrower / tank: melee walkers with specials; caster: keeps its distance and
+ * fires bolts; flyer: flies over everything (orbits, bolts, dives); boss: driven by a BossScript. */
+export type EnemyBehavior = "chaser" | "charger" | "thrower" | "tank" | "caster" | "flyer" | "boss";
 
 /* Enemy look and behaviour are separate: an EnemyDef (AI, stats) lists the EnemyVisuals (model +
  * animation set) its bodies are drawn with, so one behaviour can wear several variant models
@@ -81,13 +86,14 @@ export type EnemyBehavior = "chaser" | "charger" | "thrower" | "tank";
 export type EnemyVisualId =
   | "zombieMaleCasual" | "zombieMaleFarmer" | "zombieFemaleCasual" | "zombieFemaleOffice"
   | "zombieRunnerMale" | "zombieRunnerFemale" | "zombieThrower" | "zombieBrute"
-  | "vanguard";
+  | "vanguard" | HellVisualId;
 
 /** Zombie colour skins: recoloured copies of the zombie pack's swatch palette (one small texture
  * each, shared by every zombie model), built by scripts/build-zombies.mjs. */
-export type EnemySkinId = "green" | "darkgreen" | "purple" | "brown" | "toxic" | "brute";
+export type EnemySkinId = "green" | "darkgreen" | "purple" | "brown" | "toxic" | "brute" | HellSkinId;
 
 export const ENEMY_SKINS: Record<EnemySkinId, string> = {
+  ...HELL_SKINS,
   green: "models/zombies/skins/green.webp",
   darkgreen: "models/zombies/skins/darkgreen.webp",
   purple: "models/zombies/skins/purple.webp",
@@ -106,6 +112,10 @@ export interface EnemyClips {
   death: string[];
   /** Charge / throw / slam wind-up (bosses, thrower). */
   special?: string;
+  /** Boss clips: phase-change roar, spell cast, ground slam (fall back to attack / special). */
+  roar?: string;
+  cast?: string;
+  slam?: string;
 }
 
 export interface EnemyVisual {
@@ -120,6 +130,20 @@ export interface EnemyVisual {
   skins?: EnemySkinId[];
   /** Width / depth factor on top of the scale: < 1 lean (runner), > 1 bulky (brute). */
   bulk?: number;
+  /** Extra meshes on bones (a caster's fire orb, the archfiend's horns); `url` = a GLB (else a glowing orb). */
+  attachments?: EnemyAttachment[];
+}
+
+export interface EnemyAttachment {
+  bone: string;
+  url?: string;
+  /** Orb colour (emissive, additive) when no `url`. */
+  color?: [number, number, number];
+  position?: [number, number, number];
+  rotation?: [number, number, number];
+  scale?: number;
+  /** Only on these enemy types (default: every type wearing the visual). */
+  only?: EnemyId[];
 }
 
 const ZOMBIE_CLIPS: EnemyClips = {
@@ -137,6 +161,7 @@ const zombie = (file: string, scale: number, extra: Partial<EnemyVisual> = {}): 
 const RUNNER: Partial<EnemyVisual> = { clips: { ...ZOMBIE_CLIPS, move: "Zombie_Run" }, moveSpeed: 4.3, bulk: 0.88 };
 
 export const ENEMY_VISUALS: Record<EnemyVisualId, EnemyVisual> = {
+  ...HELL_VISUALS,
   zombieMaleCasual: zombie("zombie_male_casual", 0.98),
   zombieMaleFarmer: zombie("zombie_male_farmer", 1.04),
   zombieFemaleCasual: zombie("zombie_female_casual", 1.05),
@@ -190,11 +215,30 @@ export interface EnemyDef {
   charge?: { cooldown: number; telegraph: number; speed: number; distance: number; recover: number; damage: number };
   /** Tank ground slam. */
   slam?: { cooldown: number; telegraph: number; radius: number; damage: number; triggerRange: number };
+  /** Fraction of incoming damage ignored (elites). */
+  armor?: number;
+  /** Player knockback (m/s) when its melee lands. */
+  knockback?: number;
+  /** Below this HP fraction it enrages: faster, shorter cooldowns, glowing. */
+  enrage?: { below: number; speed: number; cooldown: number };
+  /** Straight bolts (casters, flyers): aimed at the player, `count` fanned by `spreadDeg`. */
+  bolt?: { damage: number; speed: number; radius: number; cooldown: number; minRange: number; maxRange: number; count: number; spreadDeg: number; windup: number };
+  /** Flyers: hover height, preferred distance from the player, optional dive (a lane telegraph). */
+  fly?: { height: number; orbit: number; dive?: { cooldown: number; telegraph: number; speed: number; distance: number; damage: number } };
+  /** Bosses driven by a script (gameplay/BossBrain.ts, data in HELL_BOSSES). */
+  script?: string;
+  /** Aim point height per unit of scale (default TARGETING.aimHeight). */
+  aimHeight?: number;
+  /** Death effect: embers and ash instead of blood (demons). */
+  deathFx?: "ember";
+  /** Emissive tint for the body's emissive map (glowing eyes / cracks); default white. */
+  glow?: [number, number, number];
 }
 
 const WALKER_LOOKS: EnemyVisualId[] = ["zombieMaleCasual", "zombieMaleFarmer", "zombieFemaleCasual", "zombieFemaleOffice"];
 
 export const ENEMIES: Record<EnemyId, EnemyDef> = {
+  ...HELL_ENEMIES,
   // Hero is ~1.95 m (1.70 m model x 1.15); walkers are 0.9 - 1.0x of that, hunched.
   walker: {
     label: "Walker", visuals: WALKER_LOOKS, scale: 1.1, scaleJitter: 0.05, behavior: "chaser",
@@ -260,9 +304,9 @@ export const ENEMY_LIMITS = {
  * without touching the systems. Character level / XP is a separate system (XP below).
  * ---------------------------------------------------------------------------------------------- */
 
-/** Regular (non-boss) enemy types a wave can spawn. */
-export type WaveEnemyId = Exclude<EnemyId, "brute" | "charger" | "tank">;
-export type BossId = Extract<EnemyId, "brute" | "charger" | "tank">;
+/** Boss enemy types (a wave's `boss`); every other type can be in a wave's weights. */
+export type BossId = Extract<EnemyId, "brute" | "charger" | "tank" | "glutton" | "wyrm" | "archfiend">;
+export type WaveEnemyId = Exclude<EnemyId, BossId>;
 
 /** One pacing step of a wave, in effect from `at` seconds until the next step. */
 export interface WavePhase {
@@ -289,6 +333,13 @@ export interface WaveDef {
   damageScale: number;
   /** Optional boss: arrives when the time runs out; regular spawning continues at `spawnFactor` of the last step's rate. */
   boss?: { type: BossId; spawnFactor: number };
+  /** Campaign levels (Hell): the map zone this level is fought in (the biome resolves it to a
+   * playable region and a start point), the act it belongs to and a line for the banner. */
+  zone?: string;
+  act?: string;
+  subtitle?: string;
+  /** Environmental meteors around the player (every `every` s, randomised). */
+  meteors?: { every: number; damage: number; radius: number; count: number };
 }
 
 export const WAVES: WaveDef[] = [
@@ -387,7 +438,8 @@ export type UpgradeId =
   | "rapidFire" | "heavyRounds" | "extendedMag" | "vitality" | "quickHands" | "piercing" | "adrenaline"
   | "incendiary" | "volatile" | "ricochet" | "splitShot" | "headhunter" | "chainLightning" | "drone" | "cryo" | "shockReload" | "bloodthirst"
   | "dragonsBreath"
-  | "armor" | "crit" | "medkit" | "fifthShot" | "vampire";
+  | "armor" | "crit" | "medkit" | "fifthShot" | "vampire"
+  | "pactFury" | "pactIron" | "pactSwift" | "pactRuin" | "pactEye" | "pactStorm";
 
 /** PlayerStats numbers an upgrade (or a synergy tier) may change. */
 export type UpgradeStat =
@@ -407,7 +459,8 @@ export type UpgradeEffect =
   | { healFraction: number };
 
 /** Where an upgrade can be offered: level-up cards and/or rare world pickups. */
-export type UpgradePool = "levelUp" | "drop";
+/** levelUp: level-up cards; drop: world badges; pact: the Infernal Pact before Hell's last act. */
+export type UpgradePool = "levelUp" | "drop" | "pact";
 
 /** Build families: owning several upgrades of one tag unlocks its synergy tiers (SYNERGIES). */
 export type UpgradeTag = "fire" | "precision" | "tech";
@@ -490,6 +543,19 @@ export const UPGRADES: UpgradeDef[] = [
     effects: [{ stat: "fifthShot", op: "add", value: 1, max: 1 }] },
   { id: "vampire", name: "Scavenger", stat: "Heal 5 HP on Kill", value: "6% chance", icon: "drop", category: "special", rarity: "rare", maxStacks: 3, pools: ["drop"],
     effects: [{ stat: "vampireChance", op: "add", value: 0.06, max: 0.2 }] },
+  // ---- The Infernal Pact (Hell, before Act III): one build-defining choice, each with a price.
+  { id: "pactFury", name: "Pact of Fury", stat: "Damage +40% · Fire Rate +15% ·", value: "Max HP -25", icon: "bullet", category: "weapon", rarity: "epic", maxStacks: 1, pools: ["pact"],
+    effects: [{ stat: "damageMult", op: "mul", value: 1.4 }, { stat: "fireRateMult", op: "mul", value: 1.15 }, { stat: "maxHp", op: "add", value: -25 }] },
+  { id: "pactIron", name: "Pact of Iron", stat: "Max HP +60 · Armor +12% ·", value: "Heal 1 per kill", icon: "shield", category: "player", rarity: "epic", maxStacks: 1, pools: ["pact"],
+    effects: [{ stat: "maxHp", op: "add", value: 60 }, { heal: 60 }, { stat: "armor", op: "add", value: 0.12, max: 0.6 }, { stat: "healOnKill", op: "add", value: 1 }] },
+  { id: "pactSwift", name: "Pact of the Swift", stat: "Move Speed +20% · Reload -35% ·", value: "+4 rounds", icon: "boot", category: "player", rarity: "epic", maxStacks: 1, pools: ["pact"],
+    effects: [{ stat: "moveSpeedMult", op: "mul", value: 1.2 }, { stat: "reloadTimeMult", op: "mul", value: 0.65 }, { stat: "magazineBonus", op: "add", value: 4 }] },
+  { id: "pactRuin", name: "Pact of Ruin", stat: "Kills Explode 20% · Burn +6/s ·", value: "Blast +20", icon: "flame", category: "special", rarity: "epic", maxStacks: 1, pools: ["pact"], tags: ["fire"],
+    effects: [{ stat: "explodeChance", op: "add", value: 0.2, max: 0.9 }, { stat: "burnDps", op: "add", value: 6 }, { stat: "explodeDamage", op: "add", value: 20 }] },
+  { id: "pactEye", name: "Pact of the Eye", stat: "Crit +15% · Crit Damage +100% ·", value: "Pierce +1", icon: "target", category: "weapon", rarity: "epic", maxStacks: 1, pools: ["pact"], tags: ["precision"],
+    effects: [{ stat: "critChance", op: "add", value: 0.15, max: 0.9 }, { stat: "critMult", op: "add", value: 1 }, { stat: "penetration", op: "add", value: 1 }] },
+  { id: "pactStorm", name: "Pact of the Storm", stat: "Chain +25% · +1 Drone ·", value: "Tech +30%", icon: "drone", category: "special", rarity: "epic", maxStacks: 1, pools: ["pact"], tags: ["tech"],
+    effects: [{ stat: "chainChance", op: "add", value: 0.25, max: 0.9 }, { stat: "drones", op: "add", value: 1 }, { stat: "techDamageMult", op: "mul", value: 1.3 }] },
 ];
 
 /**

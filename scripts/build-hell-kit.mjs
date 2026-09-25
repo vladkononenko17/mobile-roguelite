@@ -30,6 +30,16 @@ const SHS = "assets-src/shs-dungeon/glb";
 /** The SHS FBX files reference their palette by an absolute path on the author's disk, so the
  * converted GLBs carry a 1x1 placeholder; the pack's palette is sampled instead (FBX V is up). */
 const SHS_PALETTE = "assets-src/shs-dungeon/palette.png";
+/** "Lowpoly alien buildings" (hell2 release): skinned, animated organic growths; baked static. Their
+ * FBX files do not embed textures, so each material's base colour is given here. */
+const FLESH = "assets-src/hell2/buildings";
+const FLESH_TEX = {
+  "Material.001": "birther/shroom_low_v2_DefaultMaterial_BaseColor.png",
+  BrainBody: "brain/brain_BrainBody_BaseColor.png", "Brain Detail": "brain/brain_Brain Detail_BaseColor.png",
+  "Claw Body": "claw/claw_Claw Body_BaseColor.png", "Claw Detail": "claw/claw_Claw Detail_BaseColor.png",
+  StomachBody: "stomach/stomach_StomachBody_BaseColor.png", "Stomach Detail": "stomach/stomach_Stomach Detail_BaseColor.png",
+  Terraformer: "terraformer/terraformer_Terraformer_AlbedoTransparency.png", terraformer_detail: "terraformer/terraformer_terraformer_detail_AlbedoTransparency.png",
+};
 const outFile = path.join(ROOT, "public/models/hell/hell-kit.glb");
 
 /** Inferno World is modelled ~2x real size (its brazier is 2.9 units tall). */
@@ -117,6 +127,12 @@ const MANIFEST = {
   puddleB: [`${SHS}/Puddle_B`, "blood"],
   puddleC: [`${SHS}/Puddle_C`, "blood"],
   rubble: [`${SHS}/Rubble_A`, "stone"],
+  // Flesh growths: demon corruption spreading over the rock (scaled up to 5-9 m).
+  fleshSpire: [`${FLESH}/bld_birther`, "flesh", 5],
+  fleshBrain: [`${FLESH}/bld_brain`, "flesh", 6],
+  fleshClaw: [`${FLESH}/bld_claw`, "flesh", 5],
+  fleshGut: [`${FLESH}/bld_stomach`, "flesh", 6],
+  fleshStalk: [`${FLESH}/bld_terraformer`, "flesh", 6],
 };
 
 /** Grade per group: [saturation kept, brightness, tint]. Grey-violet stone (as in the Inferno World
@@ -129,6 +145,7 @@ const GRADE = {
   prop: [0.85, 0.62, WARM],
   bone: [0.5, 0.36, [1.05, 0.95, 0.85]],
   blood: [1, 0.3, [1.2, 0.5, 0.45]],
+  flesh: [0.9, 0.55, [1.1, 0.8, 0.8]],
 };
 /** Heavy meshes (many small parts) reduced with the sloppy simplifier: id -> kept ratio. */
 const SLOPPY = { statue: 0.25, tower: 0.2, goldBig: 0.2, chest: 0.4, cragBig: 0.5, crag: 0.6, gear: 0.6, brazier: 0.6 };
@@ -141,7 +158,10 @@ const textureCache = new Map();
 for (const [id, [file, group, extraScale = 1, keepHeight = false]] of Object.entries(MANIFEST)) {
   const doc = await io.read(path.join(ROOT, `${file}.glb`));
   for (const animation of doc.getRoot().listAnimations()) animation.dispose();
-  await bakeVertexColours(doc, group, file.startsWith(SHS));
+  // Skinned sources become static meshes in their bind pose.
+  for (const node of doc.getRoot().listNodes()) node.setSkin(null);
+  for (const skin of doc.getRoot().listSkins()) skin.dispose();
+  await bakeVertexColours(doc, group, file.startsWith(SHS), file.startsWith(FLESH));
   const source = doc.getRoot().listScenes()[0];
   const scale = (file.startsWith(INF) ? SCALE_INFERNO : 1) * extraScale;
   // Re-centre on the footprint, base on the ground (unless keepHeight), then scale.
@@ -205,7 +225,7 @@ for (const node of scene.listChildren()) {
 console.log(`wrote ${outFile} (${(fs.statSync(outFile).size / 1024).toFixed(0)} KB)`);
 
 /** Bakes every primitive to vertex colours; the kind (palette / glow) goes in a marker material. */
-async function bakeVertexColours(doc, group, shs) {
+async function bakeVertexColours(doc, group, shs, flesh) {
   const buffer = doc.getRoot().listBuffers()[0] ?? doc.createBuffer();
   await doc.transform(dequantize());
   const markers = {};
@@ -219,6 +239,7 @@ async function bakeVertexColours(doc, group, shs) {
       const texture = glow ? (material?.getEmissiveTexture() ?? material?.getBaseColorTexture()) : material?.getBaseColorTexture();
       let image = texture ? await decode(texture) : null;
       if (shs) image = await decodeFile(path.join(ROOT, SHS_PALETTE));
+      if (flesh && FLESH_TEX[material?.getName()]) image = await decodeFile(path.join(ROOT, FLESH, "textures", FLESH_TEX[material.getName()]));
       const uvs = prim.getAttribute("TEXCOORD_0");
       const count = prim.getAttribute("POSITION").getCount();
       const colours = new Uint8Array(count * 4);
@@ -227,7 +248,7 @@ async function bakeVertexColours(doc, group, shs) {
         let rgb = [1, 1, 1];
         if (image && uvs) {
           uvs.getElement(i, uv);
-          rgb = sample(image, uv[0], shs ? 1 - uv[1] : uv[1]);
+          rgb = sample(image, uv[0], shs || flesh ? 1 - uv[1] : uv[1]);
         }
         const out = glow ? lavaGlow(rgb) : grade(rgb.map((c, k) => c * factor[k]), group);
         colours.set([...out.map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255)), 255], i * 4);
@@ -236,6 +257,7 @@ async function bakeVertexColours(doc, group, shs) {
       for (const semantic of prim.listSemantics()) {
         if (!["POSITION", "NORMAL", "COLOR_0"].includes(semantic)) prim.setAttribute(semantic, null);
       }
+      for (const target of prim.listTargets()) prim.removeTarget(target);
       prim.setMaterial(marker(glow ? "glow" : "palette"));
     }
   }

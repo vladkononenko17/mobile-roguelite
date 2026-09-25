@@ -1,6 +1,6 @@
 import { Vec3 } from "playcanvas";
 import type { ScreenProjector } from "../camera/ScreenProjector";
-import { SPAWNING, WAVES, type EnemyId, type WaveDef, type WaveEnemyId, type WavePhase } from "./config";
+import { SPAWNING, type EnemyId, type WaveDef, type WaveEnemyId, type WavePhase } from "./config";
 import { isAlive, type Enemy, type EnemyManager } from "./EnemyManager";
 import type { NavField } from "./NavField";
 
@@ -26,7 +26,7 @@ export type DirectorPhase = "waves" | "boss" | "complete";
  * camera shows. Nothing here depends on the map beyond the NavField and the arena bounds.
  */
 export class SpawnDirector {
-  wave: WaveDef = WAVES[0];
+  wave: WaveDef;
   waveIndex = 0;
   time = 0;
   phase: DirectorPhase = "waves";
@@ -41,12 +41,17 @@ export class SpawnDirector {
   constructor(
     private readonly enemies: EnemyManager,
     private readonly nav: NavField,
-    private readonly bounds: Bounds,
-  ) {}
+    /** The current level's region (spawns stay inside). */
+    public bounds: Bounds,
+    /** The run's levels. */
+    private readonly levels: WaveDef[],
+  ) {
+    this.wave = levels[0];
+  }
 
   start(waveIndex: number): void {
     this.waveIndex = waveIndex;
-    this.wave = WAVES[waveIndex];
+    this.wave = this.levels[waveIndex];
     this.time = 0;
     this.phase = "waves";
     this.boss = null;
