@@ -348,6 +348,12 @@ export const GROUND = {
     ash: { base: "#5e5450", dark: "#4f4643", light: "#6c605a", speckDark: "#3c3432", speckLight: "#6f7650", specks: 800 },
     /** Facility deck plates (2 m panels with seams): the ORION station floor between the rooms. */
     deck: { base: "#454c55", dark: "#3a4049", light: "#4f5761", speckDark: "#2d3239", speckLight: "#5d6570", specks: 260, slabs: 5, seam: "#262a30" },
+    /** Hell: cooled basalt, near-black with a red cast; the island's bare ground. */
+    basalt: { base: "#4a484d", dark: "#403e44", light: "#545258", speckDark: "#353338", speckLight: "#615f65", specks: 700 },
+    /** Hell: worn flagstones of the keep (1.25 m slabs with dark joints). */
+    flagstone: { base: "#5c5b61", dark: "#525157", light: "#66656b", speckDark: "#47464c", speckLight: "#716f75", specks: 400, slabs: 8, seam: "#2e2d32" },
+    /** Hell: scorched cinders round the lava, flecked with embers. */
+    cinder: { base: "#3a3538", dark: "#302c2f", light: "#443e41", speckDark: "#242124", speckLight: "#d0602a", specks: 1000 },
     /** Oil, soot and dried blood trodden into the facility floor. */
     grime: { base: "#48463f", dark: "#3d3b35", light: "#524f47", speckDark: "#2e2926", speckLight: "#5e3a33", specks: 700 },
   },
@@ -442,6 +448,20 @@ export const FACILITY = {
   /** Screens and light strips (the "glow" material). */
   glowIntensity: 1.2,
   batchCellMetres: 12,
+};
+
+/**
+ * Chapter 3 environment kit: Inferno World and the SHS Dungeon Pack, merged into one GLB by
+ * scripts/build-hell-kit.mjs (graded dark and warm). Lava surfaces are separate (world/Lava.ts).
+ */
+export const HELL = {
+  url: "models/hell/hell-kit.glb",
+  brightness: 1,
+  /** Lava windows of the tower, the lava well. */
+  glowIntensity: 1.1,
+  batchCellMetres: 12,
+  /** Bright molten sea (Inferno World's lava texture). */
+  lavaUrl: "textures/lava/lava-sea.webp",
 };
 
 export const CAMERA = {
@@ -694,6 +714,49 @@ export const FACILITY_LIGHTING: LightingSpec = {
   clearColor: [0.045, 0.06, 0.08],
   fogStart: 31,
   fogEnd: 78,
+};
+
+/**
+ * The pit (Chapter 3), after the Inferno World renders: grey-violet stone under a dusky lavender
+ * key light, everything hot coming from below - the lava sea, braziers, the sigil. Hero fill and
+ * rim are fire-coloured so he reads against the stone. Lava and fire are self-lit; orange light
+ * pools and embers come from AmbientFx.
+ */
+export const HELL_LIGHTING: LightingSpec = {
+  sun: {
+    color: [0.88, 0.82, 0.94],
+    intensity: 1.45,
+    elevationDeg: 55,
+    azimuthDeg: 320,
+    shadowResolution: 1024,
+    shadowDistance: 30,
+    shadowBias: 0.2,
+    normalOffsetBias: 0.04,
+    shadowIntensity: 0.7,
+  },
+  fill: {
+    color: [1.0, 0.45, 0.18],
+    intensity: 0.6,
+    elevationDeg: 10,
+    azimuthDeg: 140,
+  },
+  rim: {
+    color: [1.0, 0.55, 0.25],
+    intensity: 1.8,
+    elevationDeg: 20,
+    azimuthDeg: 190,
+  },
+  environment: {
+    zenith: [0.32, 0.28, 0.36],
+    horizon: [0.85, 0.42, 0.22],
+    ground: [0.9, 0.35, 0.1],
+    intensity: 0.55,
+  },
+  exposure: 1.0,
+  groundAmbient: [0.64, 0.56, 0.58],
+  clearColor: [0.2, 0.08, 0.06],
+  fogStart: 28,
+  fogEnd: 75,
 };
 
 export const DEBUG = {

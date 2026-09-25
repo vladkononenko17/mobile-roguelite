@@ -6,10 +6,13 @@ import type { Entity, Vec3 } from "playcanvas";
  * hundred colliders costs microseconds per frame, with no allocations in the update loop.
  */
 
-/** Collider declaration, in the local space of the entity that carries it. */
+/**
+ * Collider declaration, in the local space of the entity that carries it. `low`: blocks walking
+ * but not shots or sight (lava, pits).
+ */
 export type ColliderShape =
-  | { kind: "box"; width: number; depth: number }
-  | { kind: "circle"; radius: number };
+  | { kind: "box"; width: number; depth: number; low?: boolean }
+  | { kind: "circle"; radius: number; low?: boolean };
 
 /** Tag carried by every entity that declares a collider (see `declareCollider`). */
 export const SOLID_TAG = "solid";
@@ -39,6 +42,8 @@ export interface Collider {
   radius: number;
   /** World-space bounding radius, for the broadphase. */
   bound: number;
+  /** Blocks movement only; bullets and line of sight pass over it. */
+  low: boolean;
   /** Source entity (for debugging / future removal). */
   entity: Entity | null;
   stamp: number;
@@ -87,11 +92,11 @@ export class CollisionWorld {
       shape.kind === "box"
         ? {
             kind: "box", x: p.x, z: p.z, halfW: shape.width / 2, halfD: shape.depth / 2, axisX, axisZ, radius: 0,
-            bound: Math.hypot(shape.width, shape.depth) / 2, entity, stamp: 0,
+            bound: Math.hypot(shape.width, shape.depth) / 2, low: shape.low ?? false, entity, stamp: 0,
           }
         : {
             kind: "circle", x: p.x, z: p.z, halfW: shape.radius, halfD: shape.radius, axisX: 1, axisZ: 0,
-            radius: shape.radius, bound: shape.radius, entity, stamp: 0,
+            radius: shape.radius, bound: shape.radius, low: shape.low ?? false, entity, stamp: 0,
           };
     this.colliders.push(collider);
     this.forCells(collider.x, collider.z, collider.bound, (key) => {

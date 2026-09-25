@@ -194,7 +194,7 @@ export class PlayerGun {
     const steps = Math.floor(d / WALL_STEP);
     for (let i = 1; i < steps; i++) {
       const t = i / steps;
-      if (blocked(this.collision, x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, 0.05)) return false;
+      if (blocked(this.collision, x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, 0.05, true)) return false;
     }
     return true;
   }
@@ -202,7 +202,7 @@ export class PlayerGun {
   /** Distance a bullet from the origin along (dx, dz) travels before a wall (up to `range`). */
   private wallDistance(dx: number, dz: number, range: number): number {
     for (let d = WALL_STEP; d < range; d += WALL_STEP) {
-      if (blocked(this.collision, this.origin.x + dx * d, this.origin.z + dz * d, 0.05)) return d;
+      if (blocked(this.collision, this.origin.x + dx * d, this.origin.z + dz * d, 0.05, true)) return d;
     }
     return range;
   }

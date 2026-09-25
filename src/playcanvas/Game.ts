@@ -33,6 +33,7 @@ import { CollisionWorld } from "./world/collision/CollisionWorld";
 import type { Biome } from "./world/level/Biome";
 import { BIOMES, isBiomeId, switchBiome, type BiomeId } from "./world/level/Biomes";
 import { AmbientFx } from "./world/AmbientFx";
+import { Lava } from "./world/Lava";
 import { ModelKit } from "./world/props/ModelKit";
 import { ResolutionGovernor } from "./perf/ResolutionGovernor";
 
@@ -63,6 +64,7 @@ export class Game {
   /** The roguelite run (null in the ?sandbox=1 movement sandbox). */
   gameplay: Gameplay | null = null;
   private ambient: AmbientFx | null = null;
+  private lava: Lava | null = null;
   weapons!: WeaponHolder;
   private contactShadow!: Entity;
   private characterScale: number = CHARACTER.scale;
@@ -125,6 +127,15 @@ export class Game {
       (error: unknown) => console.error("[Level] environment kit failed to load.", error),
     );
 
+    // Lava (hell): its pools join the collision world before the run builds its nav field.
+    const lavaSpec = biome.lava;
+    const lavaLoaded = lavaSpec
+      ? (this.lava = new Lava(app, lavaSpec)).load(`${import.meta.env.BASE_URL}${lavaSpec.url}`).then(
+          (root) => { this.collision.addStaticFrom(root); },
+          (error: unknown) => console.error("[Lava] failed to load.", error),
+        )
+      : Promise.resolve();
+
     // Weapons (~1.5 MB) download alongside the character; a failure only leaves the hands empty.
     this.weapons = new WeaponHolder(app);
     const weaponsLoaded = this.weapons.load(`${import.meta.env.BASE_URL}${WEAPONS.url}`).catch((error: unknown) =>
@@ -163,7 +174,7 @@ export class Game {
     console.info(`[PlayerAnimation] Idle=${this.animation.clipNames.Idle}, Walk=${this.animation.clipNames.Walk}, Run=${this.animation.clipNames.Run}`);
 
     this.setCharacterScale(this.characterScale);
-    await Promise.all([groundLoaded, levelLoaded, weaponsLoaded]);
+    await Promise.all([groundLoaded, levelLoaded, weaponsLoaded, lavaLoaded]);
     this.weapons.onPoseChange = (clip) => this.animation.setUpperBodyPose(clip);
     // Attack: Space, or the on-screen button (shown only when the weapon has an attack clip).
     const attackButton = document.querySelector<HTMLElement>("[data-attack]");
@@ -240,6 +251,7 @@ export class Game {
     // Combat after the hands are posed (tracers start at the posed muzzle).
     this.gameplay?.update(dt);
     this.ambient?.update(dt, this.player.entity.getPosition());
+    this.lava?.update(dt);
     const device = this.app.graphicsDevice;
     this.camera.update(dt, device.width / Math.max(1, device.height));
 

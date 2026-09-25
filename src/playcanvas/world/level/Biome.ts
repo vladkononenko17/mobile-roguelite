@@ -2,6 +2,7 @@ import type { Entity } from "playcanvas";
 import type { LightingSpec } from "../../config";
 import type { AmbientEmitter } from "../AmbientFx";
 import type { GroundSpec } from "../Ground";
+import type { LavaSpec } from "../Lava";
 import type { KitModelDef, ModelKit } from "../props/ModelKit";
 
 export interface LevelBounds {
@@ -42,6 +43,8 @@ export interface Biome<Id extends string = string> {
   /** Where every wave starts: an open area with room to move in every direction. */
   runStart: Placement2D;
   ambient: AmbientEmitter[];
+  /** Lava surfaces (hell): self-lit, flowing; pools may block walking. */
+  lava?: LavaSpec;
   /** Places every model; each declares its collider, so the returned root feeds CollisionWorld. */
   build(kit: ModelKit<Id>): Entity;
 }

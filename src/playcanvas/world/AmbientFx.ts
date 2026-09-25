@@ -11,7 +11,7 @@ import {
  * spread (smoke / sparks).
  */
 export interface AmbientEmitter {
-  kind: "dust" | "smoke" | "sparks" | "glow";
+  kind: "dust" | "smoke" | "sparks" | "glow" | "embers" | "sigil";
   /** Tint (linear 0..1): dust and smoke colour, glow light colour. */
   color?: [number, number, number];
   /** Glow: pulses per second (0 = steady). */
@@ -60,6 +60,7 @@ export class AmbientFx {
   private readonly pulses: { material: StandardMaterial; rate: number; base: number; phase: number }[] = [];
   private readonly glowMaterials = new Map<string, StandardMaterial>();
   private glowTexture: Texture | null = null;
+  private sigilTexture: Texture | null = null;
   private time = 0;
   private readonly tmp = new Vec3();
 
@@ -90,7 +91,7 @@ export class AmbientFx {
     this.emitters.push({ entity, reach: Math.max(...(e.size ?? [1, 1])) / 2 });
     const k = e.intensity ?? 1;
     const [sx, sz] = e.size ?? [1, 1];
-    if (e.kind === "glow") {
+    if (e.kind === "glow" || e.kind === "sigil") {
       this.addGlow(entity, e);
       return;
     }
@@ -105,6 +106,17 @@ export class AmbientFx {
         scaleGraph: new Curve([0, 0.07, 1, 0.1]), scaleGraph2: new Curve([0, 0.1, 1, 0.14]),
         alphaGraph: new Curve([0, 0, 0.3, 0.55, 0.7, 0.55, 1, 0]),
         colorGraph: new CurveSet([[0, 0.55 * cr], [0, 0.48 * cg], [0, 0.36 * cb]]),
+      });
+    } else if (e.kind === "embers") {
+      // Glowing flecks rising off lava and braziers, wandering as they climb and burning out.
+      entity.addComponent("particlesystem", {
+        ...common, numParticles: Math.round(24 * k), lifetime: 3.2, rate: 0.12 / k, rate2: 0.25 / k, preWarm: true, loop: true,
+        emitterExtents: new Vec3(sx, 0.2, sz), blendType: BLEND_ADDITIVE,
+        velocityGraph: new CurveSet([[0, -0.25, 0.5, 0.2, 1, -0.2], [0, 0.7, 1, 1.1], [0, -0.2, 0.5, 0.25, 1, -0.1]]),
+        velocityGraph2: new CurveSet([[0, 0.25, 0.5, -0.2, 1, 0.25], [0, 1.1, 1, 1.6], [0, 0.2, 0.5, -0.25, 1, 0.15]]),
+        scaleGraph: new Curve([0, 0.05, 1, 0.02]), scaleGraph2: new Curve([0, 0.08, 1, 0.03]),
+        alphaGraph: new Curve([0, 0, 0.1, 1, 0.7, 0.8, 1, 0]),
+        colorGraph: new CurveSet([[0, 1.0 * cr, 1, 0.9 * cr], [0, 0.55 * cg, 1, 0.25 * cg], [0, 0.18 * cb, 1, 0.05 * cb]]),
       });
     } else if (e.kind === "smoke") {
       // Soft grey puffs rising and widening, drifting with a light wind.
@@ -132,14 +144,15 @@ export class AmbientFx {
   private addGlow(entity: Entity, e: AmbientEmitter): void {
     const [r, g, b] = e.color ?? [0.4, 0.7, 1];
     const k = e.intensity ?? 1;
-    const key = `${r},${g},${b},${k}`;
+    const key = `${e.kind},${r},${g},${b},${k}`;
     let material = e.pulse ? undefined : this.glowMaterials.get(key);
     if (!material) {
       this.glowTexture ??= softGlow(this.app);
       material = new StandardMaterial();
       material.diffuse.set(0, 0, 0);
       material.emissive = new Color(r * k, g * k, b * k);
-      material.emissiveMap = this.glowTexture;
+      // A sigil is a glowing pentagram in a double ring (a summoning circle); glows are soft pools.
+      material.emissiveMap = e.kind === "sigil" ? (this.sigilTexture ??= pentagram(this.app)) : this.glowTexture;
       material.useLighting = false;
       material.useSkybox = false;
       material.useFog = true;
@@ -239,6 +252,43 @@ function softGlow(app: AppBase): Texture {
   g.addColorStop(1, "rgb(0,0,0)");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, size, size);
+  const texture = new Texture(app.graphicsDevice, { format: PIXELFORMAT_SRGBA8, mipmaps: true });
+  texture.setSource(canvas);
+  return texture;
+}
+
+/** A pentagram inside a double ring, glowing lines on black (emissive map for additive sigils). */
+function pentagram(app: AppBase): Texture {
+  const size = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, size, size);
+  const c = size / 2;
+  const glowLine = (width: number, draw: () => void) => {
+    // A soft halo under a hot core, so the lines read as molten channels.
+    for (const [w, colour] of [[width * 3.2, "rgba(255,120,30,0.28)"], [width * 1.8, "rgba(255,150,50,0.6)"], [width, "rgb(255,220,150)"]] as const) {
+      ctx.lineWidth = w;
+      ctx.strokeStyle = colour;
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      draw();
+      ctx.stroke();
+    }
+  };
+  const outer = size * 0.46, inner = size * 0.41;
+  glowLine(9, () => ctx.arc(c, c, outer, 0, Math.PI * 2));
+  glowLine(5, () => ctx.arc(c, c, inner, 0, Math.PI * 2));
+  glowLine(7, () => {
+    for (let i = 0; i <= 5; i++) {
+      // Star points every 144 degrees, one pointing up the screen (north).
+      const a = -Math.PI / 2 + i * ((Math.PI * 4) / 5);
+      const x = c + Math.cos(a) * inner, y = c + Math.sin(a) * inner;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+  });
   const texture = new Texture(app.graphicsDevice, { format: PIXELFORMAT_SRGBA8, mipmaps: true });
   texture.setSource(canvas);
   return texture;

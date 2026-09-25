@@ -27,6 +27,9 @@ const HALF = GROUND_SIZE / 2;
 export interface GroundSpec {
   /** Surface under everything. */
   base: GroundSurface;
+  /** Where the base surface exists (islands); default: everywhere. Outside, whatever lies below
+   * (hell's lava sea) shows. */
+  areas?: { x0: number; z0: number; x1: number; z1: number }[];
   /** Opaque rectangles (e.g. poured concrete floors), axis-aligned, metres. */
   pads: { x0: number; z0: number; x1: number; z1: number; surface: GroundSurface }[];
   /** Soft irregular patches (transparent blob masks) blended over the base: tracks, scorched
@@ -118,7 +121,7 @@ function canvasTexture(app: AppBase, name: string, canvas: HTMLCanvasElement, re
 }
 
 /** Irregular soft blob (UV1 0..1 over a patch quad); each seed gives a different outline. */
-function createPatchMask(app: AppBase, seed: number): Texture {
+export function createPatchMask(app: AppBase, seed: number): Texture {
   const size = 128;
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
@@ -159,7 +162,10 @@ export class Ground {
   private readonly patchMaterials: StandardMaterial[] = [];
 
   constructor(private readonly app: AppBase, private readonly spec: GroundSpec) {
-    this.addMesh("Ground", this.opaqueMaterial(spec.base), groundQuadMesh(app.graphicsDevice, -HALF, -HALF, HALF, HALF), 0);
+    const base = this.opaqueMaterial(spec.base);
+    for (const a of spec.areas ?? [{ x0: -HALF, z0: -HALF, x1: HALF, z1: HALF }]) {
+      this.addMesh("Ground", base, groundQuadMesh(app.graphicsDevice, a.x0, a.z0, a.x1, a.z1), 0);
+    }
   }
 
   get tileSize(): number { return this.baseTile; }

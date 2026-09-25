@@ -191,8 +191,10 @@ export class NavField {
 }
 
 /** True if a circle at (x, z) overlaps any static collider. */
-export function blocked(collision: CollisionWorld, x: number, z: number, radius: number): boolean {
+export function blocked(collision: CollisionWorld, x: number, z: number, radius: number, shots = false): boolean {
   for (const c of collision.query(x, z, radius)) {
+    // Shots and sight pass over low obstacles (lava).
+    if (shots && c.low) continue;
     if (c.kind === "circle") {
       if (Math.hypot(x - c.x, z - c.z) < radius + c.radius) return true;
     } else {

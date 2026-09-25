@@ -19,3 +19,6 @@ assets-src/survivor-v3/
 assets-src/zombies-lowpoly/
 # Molten Maps SciFi pack (CC0, `space` release): raw GLBs stay local; the built kit is public/models/facility/
 assets-src/molten-scifi/
+# Hell map sources (`hell` release): Inferno World, SHS Dungeon Pack (no raw redistribution), lava textures
+assets-src/inferno-world/
+assets-src/shs-dungeon/
