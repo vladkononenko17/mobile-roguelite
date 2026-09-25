@@ -24,3 +24,7 @@ Planned use: weapon attachments, minigun and monsters as later unlocks / modific
 ## Hell rifles (AR_2, AR_3)
 
 Two flat-colour assault rifles supplied in chat (`.gltf` + `.fbx`); raw files kept local in `assets-src/new-ars/` (git-ignored; licence not stated). `scripts/add-weapons.mjs` re-orients them (muzzle -Z, origin at the pistol grip), scales them (0.52 / 0.47), recolours the neutral parts (gunmetal / crimson iron) and puts the orange accent on an emissive material (cyan for the Plasma rifle), then appends them to `public/models/weapons/weapons.glb` as `Plasma_Rifle` and `Hellfire_Rifle` (~3.5k and ~3.2k triangles, 2 draw calls each).
+
+## Kenney Graveyard Kit 5.0 and Nature Kit (CC0)
+
+By Kenney (www.kenney.nl), Creative Commons Zero. Downloaded from https://kenney.nl/assets/graveyard-kit and https://kenney.nl/assets/nature-kit into `assets-src/kenney/` (git-ignored; re-download to rebuild). `scripts/build-hell-kit.mjs` bakes the used models into `public/models/hell/hell-kit.glb` with their own grades: crypts (with their roofs), gravestones, iron fences, obelisks, coffins, urns, candles, a stone altar and fire baskets (the abyss graveyard, the gate avenue, the ritual stones), charred dead pines, trunks, stumps and logs, and four tall rock spires (the wastes' badlands). The Inferno World gems (already in the `hell` release) are baked self-lit as lava crystals.

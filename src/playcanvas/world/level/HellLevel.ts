@@ -1,9 +1,10 @@
-import { BLEND_ADDITIVE, Color, Entity, StandardMaterial, type AppBase } from "playcanvas";
+import { BLEND_ADDITIVE, Color, Entity, StandardMaterial, math, type AppBase } from "playcanvas";
 import { HELL, HELL_LIGHTING } from "../../config";
 import { HELL_LEVELS, HELL_RUN } from "../../gameplay/hellConfig";
 import { pentagram, type AmbientEmitter } from "../AmbientFx";
 import { declareCollider } from "../collision/CollisionWorld";
 import type { GroundSpec } from "../Ground";
+import type { GroundSurface } from "../../config";
 import type { Lava, LavaFall, LavaPool } from "../Lava";
 import type { ModelKit, SpawnOptions } from "../props/ModelKit";
 import { HELL_MODELS, type HellModel } from "../props/HellKit";
@@ -119,6 +120,8 @@ const FIRE: [number, number, number] = [1, 0.45, 0.12];
 const HOT: [number, number, number] = [1, 0.32, 0.08];
 const BLOOD: [number, number, number] = [1, 0.12, 0.04];
 const SOOT: [number, number, number] = [0.45, 0.38, 0.36];
+/** Ghost-green soul light (the abyss graveyard). */
+const SOUL: [number, number, number] = [0.3, 0.95, 0.5];
 
 /** Deterministic RNG so the layout is the same on every load. */
 function rng(seed: number): () => number {
@@ -127,17 +130,47 @@ function rng(seed: number): () => number {
 }
 
 /**
- * Small scenes spread over every island (the doubled layout would otherwise leave long bare
- * stretches): rock outcrops, bone piles, flesh growths, ruins, torture racks. Some carry a brazier.
- * Kept off the central road, the pentagrams, bridge mouths and the level starts, and apart.
+ * Every island has its own look, so crossing a bridge is arriving somewhere new: its ground and the
+ * kinds of small scenes spread over it.
  */
-type ClusterKind = "rocks" | "bones" | "flesh" | "ruin" | "torture";
+type ClusterKind = "rocks" | "bones" | "flesh" | "ruin" | "torture" | "spires" | "deadwood" | "ritual" | "crystals" | "barracks" | "graves" | "crypt";
+const ISLAND_LOOK: Record<string, { surface: GroundSurface; kinds: ClusterKind[] }> = {
+  // Gates of Hell: basalt, ruins and the damned on display.
+  gates: { surface: "basalt", kinds: ["ruin", "torture", "rocks", "ruin"] },
+  // Infernal Wastes: ash badlands - rock spires, charred dead trees, bones, flesh.
+  wastes: { surface: "ash", kinds: ["spires", "deadwood", "spires", "bones", "flesh", "deadwood"] },
+  // Sacrificial Pentagram: blood-soaked rock, obelisks and candles, altars.
+  pentagram: { surface: "bloodrock", kinds: ["ritual", "bones", "torture", "ritual"] },
+  // Lava Crossing: obsidian veined with fire, lava crystals.
+  d1: { surface: "obsidian", kinds: ["crystals", "rocks", "crystals"] },
+  d2: { surface: "obsidian", kinds: ["crystals", "rocks", "crystals"] },
+  d3: { surface: "obsidian", kinds: ["crystals", "rocks", "crystals"] },
+  // Demon Citadel: paved throughout, barracks and torture.
+  citadel: { surface: "flagstone", kinds: ["barracks", "torture", "ruin", "barracks"] },
+  // The Abyss: a graveyard of the damned on pale bone-ash.
+  abyss: { surface: "boneash", kinds: ["graves", "crypt", "deadwood", "graves", "bones"] },
+  // Throne of the Archfiend: charred ground, ritual stones.
+  throne: { surface: "cinder", kinds: ["ritual", "rocks", "bones"] },
+};
+
+/** Fire baskets lining the gates' avenue (either side of the road, every 11 m). */
+const GATE_BASKETS: XZ[] = [];
+for (let z = 118 * S + 10; z < 154 * S - 6; z += 11) GATE_BASKETS.push([-4.6, z], [4.6, z]);
+
+/** The abyss's walled grave plots (layout space: centre, size), clear of the ribcage avenue. */
+const GRAVE_PLOTS = ([[-17, -131], [17, -131], [-17, -150], [17, -148], [-18, -163]] as XZ[]).map(([x, z]) => ({ x: x * S, z: z * S, w: 13, d: 9 }));
+
+/**
+ * Small scenes spread over every island (the doubled layout would otherwise leave long bare
+ * stretches), of the island's kinds (ISLAND_LOOK). Some carry a brazier.
+ * Kept off the central road, the pentagrams, bridge mouths, grave plots and the level starts, and apart.
+ */
 const CLUSTERS: { x: number; z: number; kind: ClusterKind; fire: boolean; seed: number }[] = (() => {
   const random = rng(1313);
-  const kinds: ClusterKind[] = ["rocks", "bones", "flesh", "ruin", "torture", "rocks", "bones"];
   const starts = Object.values(ZONES).map((zone) => zone.start);
   const out: { x: number; z: number; kind: ClusterKind; fire: boolean; seed: number }[] = [];
-  for (const isl of Object.values(ISLANDS)) {
+  for (const [name, isl] of Object.entries(ISLANDS)) {
+    const kinds = ISLAND_LOOK[name]?.kinds ?? ["rocks", "bones"];
     const area = (isl.x1 - isl.x0) * (isl.z1 - isl.z0);
     const wanted = Math.round(area / 220);
     for (let tries = 0, n = 0; n < wanted && tries < wanted * 12; tries++) {
@@ -148,6 +181,7 @@ const CLUSTERS: { x: number; z: number; kind: ClusterKind; fire: boolean; seed: 
       if (starts.some((p) => Math.hypot(x - p.x, z - p.z) < 9)) continue;
       if (Math.abs(z + 86 * S) < 6 || Math.abs(z + 196 * S) < 6 || Math.abs(z + 114 * S) < 5) continue;
       if (out.some((c) => Math.hypot(c.x - x, c.z - z) < 9)) continue;
+      if (GRAVE_PLOTS.some((g) => Math.abs(x - g.x) < g.w / 2 + 5 && Math.abs(z - g.z) < g.d / 2 + 5)) continue;
       out.push({ x, z, kind: kinds[Math.floor(random() * kinds.length)], fire: random() < 0.22, seed: Math.floor(random() * 1e6) });
       n++;
     }
@@ -211,6 +245,21 @@ export const AMBIENT: AmbientEmitter[] = [
     { kind: "embers", x: p.x, y: 0.2, z: p.z, size: [p.w * 0.5, p.d * 0.5], intensity: 0.8 },
     { kind: "smoke", x: p.x, y: 0.2, z: p.z, size: [2, 2], intensity: 0.35, color: SOOT },
   ]),
+  // Zone light: lava crystals burn, the abyss's graves glow ghost-green, candles round the ritual stones.
+  ...CLUSTERS.filter((c) => c.kind === "crystals").map((c): AmbientEmitter => ({ kind: "glow", x: c.x, z: c.z, size: [7, 7], color: HOT, intensity: 0.45 })),
+  ...CLUSTERS.filter((c) => c.kind === "ritual").map((c): AmbientEmitter => ({ kind: "glow", x: c.x, z: c.z, size: [5, 5], color: FIRE, intensity: 0.3 })),
+  ...CLUSTERS.filter((c) => c.kind === "graves" || c.kind === "crypt").map((c): AmbientEmitter => ({ kind: "glow", x: c.x, z: c.z, size: [8, 8], color: SOUL, intensity: 0.28, pulse: 0.2 })),
+  ...GRAVE_PLOTS.flatMap((g): AmbientEmitter[] => [
+    { kind: "glow", x: g.x, z: g.z, size: [g.w + 6, g.d + 6], color: SOUL, intensity: 0.3, pulse: 0.25 },
+    { kind: "dust", x: g.x, y: 0.6, z: g.z, size: [g.w, g.d], intensity: 0.5, color: [0.55, 0.9, 0.65] },
+  ]),
+  ...GATE_BASKETS.flatMap(([x, z], i): AmbientEmitter[] => [
+    { kind: "glow", x, z, size: [4.5, 4.5], color: FIRE, intensity: 0.45 },
+    ...(i % 4 === 0 ? [{ kind: "sparks" as const, x, y: 0.5, z, every: 3 + (i % 3) }] : []),
+  ]),
+  // Ash storms over the wastes.
+  { kind: "dust", x: -30 * S / 2, y: 1.4, z: 96 * S, size: [30, 24], intensity: 0.8, color: [0.75, 0.68, 0.62] },
+  { kind: "dust", x: 30 * S / 2, y: 1.4, z: 72 * S, size: [30, 24], intensity: 0.8, color: [0.75, 0.68, 0.62] },
   // The two great pentagrams glow blood red.
   { kind: "glow", x: SIGIL_C.x, z: SIGIL_C.z, size: [26 * S, 26 * S], color: BLOOD, intensity: 0.35, pulse: 0.3 },
   { kind: "glow", x: SIGIL_F.x, z: SIGIL_F.z, size: [30 * S, 30 * S], color: BLOOD, intensity: 0.4, pulse: 0.25 },
@@ -222,7 +271,7 @@ export const AMBIENT: AmbientEmitter[] = [
 
 export const GROUND_SPEC: GroundSpec = {
   base: "basalt",
-  areas: Object.values(ISLANDS),
+  areas: Object.entries(ISLANDS).map(([name, isl]) => ({ ...isl, surface: ISLAND_LOOK[name]?.surface })),
   pads: [
     ...BRIDGES.map((b) => ({ ...rect(deckRect(b)), surface: "flagstone" as const })),
     // Roads of flagstone through the keep areas (the road keeps its width).
@@ -265,7 +314,16 @@ const CLUSTER_PROPS: Record<ClusterKind, [HellModel, number, number, number, num
   flesh: [["fleshStalk", 0, 0, 0.7, 1], ["fleshClaw", 2.4, -1, 0.5, 0.8], ["puddleC", -1.4, 1.2, 1, 1.5], ["bones2", 1.6, 2, 0.8, 1.2]],
   ruin: [["columnBroken", 0, 0, 0.8, 1], ["columnStump", 2.4, 1.5, 0.9, 1.1], ["rubble", -2, -1, 0.8, 1.3], ["stoneSmall1", 1, -2.2, 0.8, 1.2]],
   torture: [["cage", 0, 0, 0.9, 1.1], ["cross", 2.6, 0.8, 0.8, 1], ["skeleton", -1.8, 1.8, 1, 1], ["bones1", 1.2, -2, 0.9, 1.2]],
+  spires: [["spireA", 0, 0, 0.8, 1.15], ["spireF", 4.2, 2, 0.7, 1], ["spireC", -3.6, 2.6, 0.8, 1.15], ["rockSmall2", 2, -3.4, 0.8, 1.2], ["spireH", -2.5, -3.5, 0.6, 0.9]],
+  deadwood: [["treeDead", 0, 0, 0.8, 1.15], ["stump", 2.6, 1.6, 0.9, 1.2], ["log", -2.6, -1.2, 0.8, 1], ["treeDead2", -3.4, 2.8, 0.7, 0.95], ["skull", 1.4, -2, 1, 1.3]],
+  ritual: [["obelisk", 0, 0, 0.9, 1.15], ["candlesMany", 1.5, 0.8, 1, 1.3], ["altarStone", -2.4, 0.4, 0.9, 1], ["urn", 1.2, -1.6, 1, 1.3], ["candlesMany", -1.7, -1.9, 1, 1.3], ["obelisk", 3.2, -2.4, 0.7, 0.9]],
+  crystals: [["crystal1", 0, 0, 0.8, 1.3], ["crystal2", 1.7, 1, 0.8, 1.25], ["crystal3", -1.5, 1.3, 0.8, 1.2], ["crystal2", -0.8, -1.6, 0.6, 0.9], ["rockSmall2", 2, -1.8, 0.7, 1]],
+  barracks: [["barrel", 0, 0, 1, 1.1], ["barrel", 0.95, 0.6, 1, 1.1], ["crate", -1.9, 0.4, 1, 1.2], ["table", 2.4, -1.4, 1, 1], ["jailBench", -1.3, -2.1, 1, 1], ["rack", 3.4, 1.8, 0.9, 1]],
+  graves: [["graveCross", 0, 0, 0.9, 1.1], ["graveRound", 1.7, 0, 0.9, 1.1], ["graveBroken", 3.4, 0.2, 0.9, 1.1], ["graveDeco", 0, 2, 0.9, 1.1], ["graveCross", 1.7, 2, 0.9, 1.1], ["graveRound", 3.4, 2, 0.9, 1.1], ["coffin", -2, 1, 1, 1]],
+  crypt: [["cryptSmall", 0, 0, 1, 1], ["cryptSmallRoof", 0, 0, 1, 1], ["urn", 3, 2.8, 1, 1.2], ["candlesMany", -2.9, 2.6, 1, 1.2], ["graveCross", 3, -2.4, 0.9, 1.1], ["treeDead", -4, -3, 0.7, 0.9]],
 };
+/** Kinds laid out in rows facing one way (graves, crypts), not scattered at random angles. */
+const ALIGNED: ReadonlySet<ClusterKind> = new Set(["graves", "crypt"]);
 
 /* ------------------------------------------------------------------------------------------------
  * World state driven by the campaign: the rune seals on the way on, the arena's glow.
@@ -601,11 +659,11 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
     place("boneRib2", 11, z - 2, -90, { tiltZ: 18, scale: 1.3 });
   }
   placeAll([
-    ["gear", -20, -130, 30, { tiltX: 72, y: 0.6, scale: 1.2 }], ["gearSmall", 20, -156, -20, { tiltX: 80, y: 0.2 }],
-    ["axe", 22, -128, 20, { tiltZ: 12, y: -2.2 }], ["fleshSpire", -22, -164, 0], ["fleshGut", 22, -166, 60], ["fleshBrain", -24, -138, 30],
+    ["gearSmall", 20, -156, -20, { tiltX: 80, y: 0.2 }],
+    ["axe", 22, -128, 20, { tiltZ: 12, y: -2.2 }], ["fleshGut", 22, -166, 60], ["fleshBrain", -24, -138, 30],
     ["cage", -12, -126, 15], ["cage", 12, -126, -15], ["cross", 0, -166, 0], ["crag", 25, -145, 60, { scale: 0.8 }], ["crag", -25, -154, 150, { scale: 0.75 }],
     ["skeleton", -4, -140, 40], ["skeleton", 5, -152, -20], ["bones3", 0, -134, 0],
-    ["boneHorn", -22, -126, -40, { tiltZ: 12 }], ["boneHorn", 22, -168, 150, { tiltZ: 12 }], ["fleshClaw", 24, -150, 20], ["fleshStalk", -20, -150, 70],
+    ["boneHorn", -22, -126, -40, { tiltZ: 12 }], ["boneHorn", 22, -168, 150, { tiltZ: 12 }], ["fleshClaw", 24, -150, 20],
     ["gear", 18, -164, 70, { tiltX: 72, y: 0.6 }], ["cage", -24, -168, 30], ["cross", 24, -132, 0], ["rockMid4", -8, -164, 40],
   ]);
 
@@ -640,11 +698,57 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
   for (const c of CLUSTERS) {
     const rand = rng(c.seed);
     const turn = rand() * Math.PI * 2, cos = Math.cos(turn), sin = Math.sin(turn);
+    const aligned = ALIGNED.has(c.kind);
     for (const [id, dx, dz, k0, k1] of CLUSTER_PROPS[c.kind]) {
       if (dx !== 0 && rand() < 0.25) continue;
-      const tilt = id === "boneRib" ? { tiltZ: (rand() - 0.5) * 30 } : {};
-      place(id, c.x + dx * cos - dz * sin, c.z + dx * sin + dz * cos, rand() * 360, { scale: k0 + rand() * (k1 - k0), ...tilt, ...(id === "crag" ? { y: -0.5 } : {}) });
+      const tilt = id === "boneRib" ? { tiltZ: (rand() - 0.5) * 30 } : id === "graveCross" || id === "graveRound" ? { tiltZ: (rand() - 0.5) * 14 } : {};
+      const yaw = aligned ? -turn * math.RAD_TO_DEG + (rand() - 0.5) * 10 : rand() * 360;
+      place(id, c.x + dx * cos - dz * sin, c.z + dx * sin + dz * cos, yaw, { scale: k0 + rand() * (k1 - k0), ...tilt, ...(id === "crag" ? { y: -0.5 } : {}) });
     }
+  }
+
+  // ------------------------------------------------------------------ zone signatures
+  // Gates: an avenue of fire baskets and iron fences up to the gate.
+  for (const [x, z] of GATE_BASKETS) {
+    place("fireBasket", x, z, 0);
+    if (Math.round(z) % 3 !== 0) for (let k = 0; k < 3; k++) place("ironFence", Math.sign(x) * 7.5, z + 1.6 + k * 1.6, 90);
+  }
+  // Pentagram: a ring of obelisks and candles just outside the circle.
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    const r = SIGIL_C.radius + 3.2;
+    place("obelisk", SIGIL_C.x + Math.sin(a) * r, SIGIL_C.z + Math.cos(a) * r, (a * 180) / Math.PI);
+    place("candlesMany", SIGIL_C.x + Math.sin(a + 0.31) * (r - 0.6), SIGIL_C.z + Math.cos(a + 0.31) * (r - 0.6), 0);
+  }
+  // The abyss: walled grave plots (rows of graves inside a broken iron fence, a crypt at one end).
+  for (const [n, g] of GRAVE_PLOTS.entries()) {
+    const rand = rng(900 + n);
+    const graves: HellModel[] = ["graveCross", "graveRound", "graveDeco", "graveBroken", "graveCross"];
+    for (let row = 0; row < 3; row++) {
+      for (let col = 0; col < 5; col++) {
+        if (rand() < 0.15) continue;
+        const x = g.x - g.w / 2 + 2.2 + col * 2.2, z = g.z - g.d / 2 + 1.8 + row * 2.6;
+        place(graves[Math.floor(rand() * graves.length)], x, z, 180 + (rand() - 0.5) * 12, { scale: 0.9 + rand() * 0.3, tiltZ: (rand() - 0.5) * 12 });
+      }
+    }
+    const fence = (x0: number, z0: number, x1: number, z1: number) => {
+      const len = Math.hypot(x1 - x0, z1 - z0), count = Math.floor(len / 1.6);
+      const yaw = (Math.atan2(x1 - x0, z1 - z0) * 180) / Math.PI + 90;
+      for (let k = 0; k < count; k++) {
+        const r = rand();
+        if (r < 0.28) continue;
+        const t = (k + 0.5) / count;
+        place(r < 0.45 ? "ironFenceBroken" : "ironFence", x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, yaw);
+      }
+    };
+    const x0 = g.x - g.w / 2, x1 = g.x + g.w / 2, z0 = g.z - g.d / 2, z1 = g.z + g.d / 2;
+    fence(x0, z0, x1, z0);
+    fence(x0, z1, x0 + g.w * 0.35, z1);
+    fence(x1 - g.w * 0.35, z1, x1, z1);
+    fence(x0, z0, x0, z1);
+    fence(x1, z0, x1, z1);
+    place("crypt", g.x, z0 - 4.5, 180);
+    place("cryptRoof", g.x, z0 - 4.5, 180);
   }
 
   return root;

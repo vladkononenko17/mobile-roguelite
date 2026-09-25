@@ -373,6 +373,12 @@ export const GROUND = {
     flagstone: { base: "#5c5b61", dark: "#525157", light: "#66656b", speckDark: "#47464c", speckLight: "#716f75", specks: 400, slabs: 8, seam: "#2e2d32" },
     /** Hell: scorched cinders round the lava, flecked with embers. */
     cinder: { base: "#3a3538", dark: "#302c2f", light: "#443e41", speckDark: "#242124", speckLight: "#d0602a", specks: 1000 },
+    /** Hell, lava crossing: black obsidian veined with glowing red. */
+    obsidian: { base: "#27232b", dark: "#1e1b22", light: "#312c35", speckDark: "#151317", speckLight: "#c8421d", specks: 1100 },
+    /** Hell, the sacrificial pentagram: rock soaked dark red. */
+    bloodrock: { base: "#4d2a2d", dark: "#412326", light: "#583236", speckDark: "#2d1719", speckLight: "#7d3b31", specks: 850 },
+    /** Hell, the abyss: pale bone-ash of the graveyard of the damned. */
+    boneash: { base: "#6b695f", dark: "#5e5c53", light: "#77756a", speckDark: "#4a4840", speckLight: "#8c8a7c", specks: 900 },
     /** Oil, soot and dried blood trodden into the facility floor. */
     grime: { base: "#48463f", dark: "#3d3b35", light: "#524f47", speckDark: "#2e2926", speckLight: "#5e3a33", specks: 700 },
   },
@@ -535,6 +541,22 @@ export const PLAYER = {
   /** Radius of the player's collision circle at character scale 1: the body / feet footprint, not
    * the swinging arms. Scaled with the character. */
   colliderRadius: 0.34,
+};
+
+/**
+ * Twin-stick legs (player/LegTurn.ts): moving at an angle to the facing turns the hips toward the
+ * movement (the spine turns back, the chest keeps aiming); moving away from the facing backpedals
+ * (the walk / run cycle reversed). Angles in degrees; hysteresis between the two thresholds.
+ */
+export const LEG_TURN = {
+  hips: "mixamorig:Hips",
+  spine: "mixamorig:Spine",
+  maxDeg: 70,
+  backAboveDeg: 112,
+  forwardBelowDeg: 98,
+  minSpeed: 0.3,
+  /** How fast the hips follow (1/s). */
+  sharpness: 10,
 };
 
 export const ANIMATION = {

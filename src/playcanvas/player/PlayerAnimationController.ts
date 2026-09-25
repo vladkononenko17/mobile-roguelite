@@ -1,6 +1,8 @@
 import {
+  ANIM_EQUAL_TO,
   ANIM_GREATER_THAN,
   ANIM_LESS_THAN,
+  ANIM_PARAMETER_BOOLEAN,
   ANIM_PARAMETER_FLOAT,
   math,
   type AnimTrack,
@@ -19,6 +21,8 @@ function findTrack(tracks: AnimTrack[], name: string): AnimTrack | undefined {
 
 /**
  * Drives an anim-component state graph (Idle / Walk / Run) from the character's ground speed.
+ * Moving backwards (away from the facing, e.g. kiting while the gun aims behind) plays the walk / run
+ * cycle in reverse (WalkBack / RunBack), a backpedal instead of legs striding forward.
  * Transitions are cross-faded by PlayCanvas; playback rate is scaled to the ground speed to
  * keep foot sliding down.
  */
@@ -54,6 +58,8 @@ export class PlayerAnimationController {
     const t = ANIMATION.blendTime;
     const faster = (value: number) => [{ parameterName: "speed", predicate: ANIM_GREATER_THAN, value }];
     const slower = (value: number) => [{ parameterName: "speed", predicate: ANIM_LESS_THAN, value }];
+    const back = (value: boolean) => ({ parameterName: "back", predicate: ANIM_EQUAL_TO, value });
+    const walkSpeed = ANIMATION.idleToWalkSpeed, runSpeed = ANIMATION.walkToRunSpeed;
 
     model.addComponent("anim", { activate: true });
     const anim = model.anim!;
@@ -66,15 +72,27 @@ export class PlayerAnimationController {
             { name: "Idle", speed: 1, loop: true },
             { name: "Walk", speed: 1, loop: true },
             { name: "Run", speed: 1, loop: true },
+            { name: "WalkBack", speed: -1, loop: true },
+            { name: "RunBack", speed: -1, loop: true },
           ],
           transitions: [
             { from: "START", to: "Idle", time: 0 },
-            { from: "Idle", to: "Walk", time: t, conditions: faster(ANIMATION.idleToWalkSpeed) },
-            { from: "Idle", to: "Run", time: t, conditions: faster(ANIMATION.walkToRunSpeed) },
-            { from: "Walk", to: "Run", time: t, conditions: faster(ANIMATION.walkToRunSpeed) },
-            { from: "Walk", to: "Idle", time: t, conditions: slower(ANIMATION.idleToWalkSpeed) },
-            { from: "Run", to: "Walk", time: t, conditions: slower(ANIMATION.walkToRunSpeed) },
-            { from: "Run", to: "Idle", time: t, conditions: slower(ANIMATION.idleToWalkSpeed) },
+            { from: "Idle", to: "Run", time: t, conditions: [...faster(runSpeed), back(false)] },
+            { from: "Idle", to: "RunBack", time: t, conditions: [...faster(runSpeed), back(true)] },
+            { from: "Idle", to: "Walk", time: t, conditions: [...faster(walkSpeed), back(false)] },
+            { from: "Idle", to: "WalkBack", time: t, conditions: [...faster(walkSpeed), back(true)] },
+            { from: "Walk", to: "Idle", time: t, conditions: slower(walkSpeed) },
+            { from: "Walk", to: "Run", time: t, conditions: faster(runSpeed) },
+            { from: "Walk", to: "WalkBack", time: t, conditions: [back(true)] },
+            { from: "Run", to: "Idle", time: t, conditions: slower(walkSpeed) },
+            { from: "Run", to: "Walk", time: t, conditions: slower(runSpeed) },
+            { from: "Run", to: "RunBack", time: t, conditions: [back(true)] },
+            { from: "WalkBack", to: "Idle", time: t, conditions: slower(walkSpeed) },
+            { from: "WalkBack", to: "RunBack", time: t, conditions: faster(runSpeed) },
+            { from: "WalkBack", to: "Walk", time: t, conditions: [back(false)] },
+            { from: "RunBack", to: "Idle", time: t, conditions: slower(walkSpeed) },
+            { from: "RunBack", to: "WalkBack", time: t, conditions: slower(runSpeed) },
+            { from: "RunBack", to: "Run", time: t, conditions: [back(false)] },
           ],
         },
         {
@@ -91,11 +109,16 @@ export class PlayerAnimationController {
           transitions: [{ from: "START", to: "Action", time: 0 }],
         },
       ],
-      parameters: { speed: { name: "speed", type: ANIM_PARAMETER_FLOAT, value: 0 } },
+      parameters: {
+        speed: { name: "speed", type: ANIM_PARAMETER_FLOAT, value: 0 },
+        back: { name: "back", type: ANIM_PARAMETER_BOOLEAN, value: false },
+      },
     });
     anim.assignAnimation("Idle", resolved.Idle);
     anim.assignAnimation("Walk", resolved.Walk);
     anim.assignAnimation("Run", resolved.Run);
+    anim.assignAnimation("WalkBack", resolved.Walk);
+    anim.assignAnimation("RunBack", resolved.Run);
 
     const upper = anim.findAnimationLayer("UpperBody")!;
     anim.assignAnimation("Pose", resolved.Idle, "UpperBody");
@@ -159,11 +182,13 @@ export class PlayerAnimationController {
     return this.actionTime < this.actionDuration;
   }
 
+  /** Idle / Walk / Run (the reversed WalkBack / RunBack count as Walk / Run). */
   get state(): LocomotionState {
-    return (this.model.anim?.baseLayer?.activeState ?? "Idle") as LocomotionState;
+    return (this.model.anim?.baseLayer?.activeState ?? "Idle").replace("Back", "") as LocomotionState;
   }
 
-  update(groundSpeed: number, dt = 0): void {
+  /** `backward`: the hero moves away from where he faces (reverse the walk / run cycle). */
+  update(groundSpeed: number, dt = 0, backward = false): void {
     const anim = this.model.anim;
     if (!anim) return;
     // Fade the action layer in over the first moments of the clip and out over its last ones.
@@ -175,6 +200,7 @@ export class PlayerAnimationController {
       action.weight = t >= d ? 0 : math.clamp(Math.min(t / fade, (d - t) / fade), 0, 1);
     }
     anim.setFloat("speed", groundSpeed);
+    anim.setBoolean("back", backward);
     // Match cadence to ground speed so feet stay planted when walking/running at other speeds.
     let rate = 1;
     const state = this.state;

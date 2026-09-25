@@ -26,3 +26,5 @@ assets-src/shs-dungeon/
 assets-src/hell2/
 # Plasma / Hellfire rifle sources (AR_2, AR_3, supplied in chat; licence unknown): raw files local only
 assets-src/new-ars/
+# Kenney Graveyard / Nature kits (CC0, kenney.nl): raw downloads local only; used models are baked into hell-kit.glb
+assets-src/kenney/

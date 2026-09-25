@@ -5,7 +5,7 @@ import type { WeaponHolder } from "../player/WeaponHolder";
 import type { Hud } from "../ui/Hud";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
 import type { Biome, Campaign, LevelBounds, WayPoint, Zone } from "../world/level/Biome";
-import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, WEAPON_CARDS, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
+import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, shopPrice, WEAPON_CARDS, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
 import { BossBrain } from "./BossBrain";
 import { HELL_BOSSES, HELL_TYPE_SKINS } from "./hellConfig";
 import { Effects } from "./Effects";
@@ -459,27 +459,37 @@ export class Gameplay {
     this.phase = "shop";
     const s = this.stats;
     const items = SHOP.filter((item) => (!item.weapon || WEAPON_STATS[item.weapon]) && (!item.campaign || this.armorySeen));
-    const soldOut = (item: ShopItem) => (item.weapon ? s.owned.has(item.weapon) : false) || (item.id === "heal" && s.hp >= s.maxHp);
+    const count = (item: ShopItem) => s.bought.get(item.id) ?? 0;
+    const maxed = (item: ShopItem) => item.max !== undefined && count(item) >= item.max;
+    const soldOut = (item: ShopItem) => (item.weapon ? s.owned.has(item.weapon) : false) || (item.id === "heal" && s.hp >= s.maxHp) || maxed(item);
+    const note = (item: ShopItem) => item.weapon ? "Owned" : maxed(item) ? `Maxed ${count(item)}/${item.max}` : "HP full";
     this.hud.openModal({
       title: "SHOP",
       compact: true,
       text: `Cash: ${s.cash}$ · HP ${Math.ceil(s.hp)}/${s.maxHp} · ${WEAPONS.list[s.weapon]?.label ?? s.weapon}`,
       cards: items.map((item) => ({
-        title: `${item.title} — ${item.cost}$`,
-        text: soldOut(item) ? (item.weapon ? "Owned" : "HP full") : item.text,
+        title: maxed(item) ? item.title : `${item.title} — ${this.shopPrice(item)}$`,
+        text: soldOut(item) ? note(item) : item.max !== undefined ? `${item.text} · ${count(item)}/${item.max}` : item.text,
         tag: item.weapon ? "weapon" : "",
         kind: item.weapon ? "weapon" : "player",
-        disabled: soldOut(item) || s.cash < item.cost,
+        disabled: soldOut(item) || s.cash < this.shopPrice(item),
       })),
       onCard: (i) => {
         const item = items[i];
-        if (s.cash < item.cost || soldOut(item)) return;
-        s.cash -= item.cost;
+        const price = this.shopPrice(item);
+        if (s.cash < price || soldOut(item)) return;
+        s.cash -= price;
+        s.bought.set(item.id, count(item) + 1);
         this.buy(item);
         this.openShop(next);
       },
       actions: [{ label: `${this.wayOn(next) ? "On to" : "Start"} ${this.levels[next].label}`, onClick: () => this.beforeLevel(next) }],
     });
+  }
+
+  /** What `item` costs now (its price grows with each purchase this run). */
+  shopPrice(item: ShopItem): number {
+    return shopPrice(item, this.stats.bought.get(item.id) ?? 0);
   }
 
   /** The last level gets a warning first: this is the final encounter. */
@@ -714,12 +724,23 @@ export class Gameplay {
     const hero = this.player.entity.getPosition();
     const combatBoss = boss && this.phase === "combat" ? boss : null;
     if (this.travel) {
+      const t = this.travel;
       let best = Infinity;
-      for (const w of this.travel.exits) {
-        const dist = wayDistance(w, hero, this.tmp);
-        if (dist < best) {
-          best = dist;
-          this.wayPoint.copy(this.tmp);
+      const past = ((t.exit.axis === "z" ? hero.z : hero.x) - t.exit.at) * t.exit.dir > 0;
+      if (past) {
+        // Through the seal: lead on into the next zone (its near edge, straight ahead), not back.
+        const r = t.region;
+        const edge = t.exit.dir < 0 ? (t.exit.axis === "z" ? r.maxZ : r.maxX) - 2 : (t.exit.axis === "z" ? r.minZ : r.minX) + 2;
+        if (t.exit.axis === "z") this.wayPoint.set(Math.min(r.maxX - 2, Math.max(r.minX + 2, hero.x)), 0, edge);
+        else this.wayPoint.set(edge, 0, Math.min(r.maxZ - 2, Math.max(r.minZ + 2, hero.z)));
+        best = Math.hypot(this.wayPoint.x - hero.x, this.wayPoint.z - hero.z);
+      } else {
+        for (const w of t.exits) {
+          const dist = wayDistance(w, hero, this.tmp);
+          if (dist < best) {
+            best = dist;
+            this.wayPoint.copy(this.tmp);
+          }
         }
       }
       this.hud.setPointer(Number.isFinite(best) ? this.wayPoint : null, best, "way");

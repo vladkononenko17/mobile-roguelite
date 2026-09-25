@@ -17,6 +17,7 @@ import { KeyboardMoveInput } from "./input/KeyboardMoveInput";
 import { TouchJoystickInput } from "./input/TouchJoystickInput";
 import { CombinedMoveInput, type MoveInputSource } from "./input/MoveInput";
 import { AimTwist } from "./player/AimTwist";
+import { LegTurn } from "./player/LegTurn";
 import { loadCharacter } from "./player/CharacterLoader";
 import { PlayerAnimationController } from "./player/PlayerAnimationController";
 import { PlayerController } from "./player/PlayerController";
@@ -59,6 +60,7 @@ export class Game {
   private input!: MoveInputSource;
   private model!: Entity;
   private aimTwist: AimTwist | null = null;
+  private legTurn: LegTurn | null = null;
   private weaponHands: WeaponHands | null = null;
   private weaponTuner: WeaponTuner | null = null;
   /** The roguelite run (null in the ?sandbox=1 movement sandbox). */
@@ -198,6 +200,7 @@ export class Game {
     const rig: CharacterModel = characterModel;
     this.weapons.attachTo(character.model, rig);
     this.aimTwist = new AimTwist(character.model);
+    this.legTurn = new LegTurn(character.model);
     this.weaponHands = new WeaponHands(app, character.model, rig);
     this.weaponHands.debug = DEBUG.DEBUG_GRIPS || new URLSearchParams(location.search).get("grips") === "1";
     this.options.debugRoot.querySelector("[data-grips]")?.addEventListener("click", () => {
@@ -242,7 +245,10 @@ export class Game {
     const dt = Math.min(rawDt, MAX_DT);
     this.resolution.update(rawDt);
     this.player.update(dt);
-    this.animation.update(this.player.speed, dt);
+    // Legs first (the skeleton is posed): turn the hips toward the movement, backpedal when moving
+    // away from the facing; the animation reverses the cycle from the next frame.
+    const backward = this.legTurn?.update(this.player.velocity, this.player.yawDeg, dt) ?? false;
+    this.animation.update(this.player.speed, dt, backward);
     // After the anim system has posed the skeleton this frame: turn the chest so the gun points
     // where the hero faces (the weapon follows the right hand's WeaponSocket), then left-arm IK onto
     // the weapon's LeftHandGrip and the finger grip on both hands.

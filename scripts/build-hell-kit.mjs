@@ -40,14 +40,19 @@ const FLESH_TEX = {
   StomachBody: "stomach/stomach_StomachBody_BaseColor.png", "Stomach Detail": "stomach/stomach_Stomach Detail_BaseColor.png",
   Terraformer: "terraformer/terraformer_Terraformer_AlbedoTransparency.png", terraformer_detail: "terraformer/terraformer_terraformer_detail_AlbedoTransparency.png",
 };
+/** Kenney (CC0): "Graveyard Kit" and "Nature Kit" - crypts, graves, iron fences, obelisks, dead
+ * trees, tall rock spires; give the zones their own silhouettes (abyss graveyard, wastes spires). */
+const KG = "assets-src/kenney/graveyard/Models/GLB format";
+const KN = "assets-src/kenney/nature/Models/GLTF format";
 const outFile = path.join(ROOT, "public/models/hell/hell-kit.glb");
 
 /** Inferno World is modelled ~2x real size (its brazier is 2.9 units tall). */
 const SCALE_INFERNO = 0.5;
 
 /**
- * Kit id -> [source, grade group, extra scale, keepHeight]. keepHeight: keep the model's own
- * vertical origin (wall-mounted and hanging pieces, rocks sunk into the ground).
+ * Kit id -> [source, grade group, extra scale, keepHeight, glow]. keepHeight: keep the model's own
+ * vertical origin (wall-mounted and hanging pieces, rocks sunk into the ground). glow: the whole
+ * model is self-lit on the lava ramp (crystals).
  */
 const MANIFEST = {
   // Inferno World: rock and basalt
@@ -133,6 +138,39 @@ const MANIFEST = {
   fleshClaw: [`${FLESH}/bld_claw`, "flesh", 5],
   fleshGut: [`${FLESH}/bld_stomach`, "flesh", 6],
   fleshStalk: [`${FLESH}/bld_terraformer`, "flesh", 6],
+  // Inferno World gems as lava crystals (self-lit) for the crossing's obsidian fields.
+  crystal1: [`${INF}/Gem_001`, "rock", 14, false, true],
+  crystal2: [`${INF}/Gem_003`, "rock", 10, false, true],
+  crystal3: [`${INF}/Gem_005`, "rock", 10, false, true],
+  // Kenney Graveyard: the abyss is a graveyard of the damned.
+  // Crypts come with their roofs as separate pieces: keep both heights so the roof sits on top.
+  crypt: [`${KG}/crypt-large`, "grave", 3, true],
+  cryptRoof: [`${KG}/crypt-large-roof`, "kstone", 3, true],
+  cryptSmall: [`${KG}/crypt-small`, "grave", 3, true],
+  cryptSmallRoof: [`${KG}/crypt-small-roof`, "kstone", 3, true],
+  graveCross: [`${KG}/gravestone-cross`, "grave", 1.5],
+  graveRound: [`${KG}/gravestone-round`, "grave", 1.5],
+  graveBroken: [`${KG}/gravestone-broken`, "grave", 1.5],
+  graveDeco: [`${KG}/gravestone-decorative`, "grave", 1.5],
+  ironFence: [`${KG}/iron-fence`, "iron", 1.6],
+  ironFenceBroken: [`${KG}/iron-fence-damaged`, "iron", 1.6],
+  obelisk: [`${KG}/pillar-obelisk`, "kstone", 3.2],
+  coffin: [`${KG}/coffin-old`, "prop", 1.8],
+  fireBasket: [`${KG}/fire-basket`, "iron", 2.2],
+  urn: [`${KG}/urn-round`, "kstone", 2],
+  candlesMany: [`${KG}/candle-multiple`, "prop", 2.2],
+  altarStone: [`${KG}/altar-stone`, "kstone", 2],
+  // Charred dead trees (Kenney pines and trunks burnt black).
+  treeDead: [`${KG}/pine-crooked`, "char", 2.8],
+  treeDead2: [`${KG}/pine-fall-crooked`, "char", 2.8],
+  trunk: [`${KG}/trunk-long`, "char", 2.2],
+  // Kenney Nature: tall rock spires (the wastes' badlands), stumps and logs.
+  spireA: [`${KN}/rock_tallA`, "spire", 7],
+  spireC: [`${KN}/rock_tallC`, "spire", 9],
+  spireF: [`${KN}/rock_tallF`, "spire", 10],
+  spireH: [`${KN}/rock_tallH`, "spire", 9],
+  stump: [`${KN}/stump_old`, "char", 3],
+  log: [`${KN}/log_large`, "char", 3],
 };
 
 /** Grade per group: [saturation kept, brightness, tint]. Grey-violet stone (as in the Inferno World
@@ -146,6 +184,17 @@ const GRADE = {
   bone: [0.5, 0.36, [1.05, 0.95, 0.85]],
   blood: [1, 0.3, [1.2, 0.5, 0.45]],
   flesh: [0.9, 0.55, [1.1, 0.8, 0.8]],
+  /** Kenney graves and crypts: pale, cold, desaturated stone. */
+  grave: [0.3, 0.4, [0.95, 1.0, 0.98]],
+  /** Wrought iron. */
+  iron: [0.3, 0.3, [1, 0.95, 0.95]],
+  /** Burnt wood and trees: near black, a trace of warmth. */
+  char: [0.25, 0.22, [1.2, 0.95, 0.85]],
+  /** Kenney rock spires (grass tops included) as dark weathered basalt. Kenney's untextured
+ * materials are pure colours near 1, so these grades are far lower than the textured packs'. */
+  spire: [0.12, 0.045, [1.08, 0.96, 0.98]],
+  /** Kenney stone (obelisks, altars, urns, crypt roofs): dark weathered stone. */
+  kstone: [0.3, 0.1, WARM],
 };
 /** Heavy meshes (many small parts) reduced with the sloppy simplifier: id -> kept ratio. */
 const SLOPPY = { statue: 0.25, tower: 0.2, goldBig: 0.2, chest: 0.4, cragBig: 0.5, crag: 0.6, gear: 0.6, brazier: 0.6 };
@@ -155,13 +204,13 @@ const target = new Document();
 const scene = target.createScene("hell-kit");
 const textureCache = new Map();
 
-for (const [id, [file, group, extraScale = 1, keepHeight = false]] of Object.entries(MANIFEST)) {
+for (const [id, [file, group, extraScale = 1, keepHeight = false, glowAll = false]] of Object.entries(MANIFEST)) {
   const doc = await io.read(path.join(ROOT, `${file}.glb`));
   for (const animation of doc.getRoot().listAnimations()) animation.dispose();
   // Skinned sources become static meshes in their bind pose.
   for (const node of doc.getRoot().listNodes()) node.setSkin(null);
   for (const skin of doc.getRoot().listSkins()) skin.dispose();
-  await bakeVertexColours(doc, group, file.startsWith(SHS), file.startsWith(FLESH));
+  await bakeVertexColours(doc, group, file.startsWith(SHS), file.startsWith(FLESH), glowAll);
   const source = doc.getRoot().listScenes()[0];
   const scale = (file.startsWith(INF) ? SCALE_INFERNO : 1) * extraScale;
   // Re-centre on the footprint, base on the ground (unless keepHeight), then scale.
@@ -225,7 +274,7 @@ for (const node of scene.listChildren()) {
 console.log(`wrote ${outFile} (${(fs.statSync(outFile).size / 1024).toFixed(0)} KB)`);
 
 /** Bakes every primitive to vertex colours; the kind (palette / glow) goes in a marker material. */
-async function bakeVertexColours(doc, group, shs, flesh) {
+async function bakeVertexColours(doc, group, shs, flesh, glowAll = false) {
   const buffer = doc.getRoot().listBuffers()[0] ?? doc.createBuffer();
   await doc.transform(dequantize());
   const markers = {};
@@ -233,7 +282,7 @@ async function bakeVertexColours(doc, group, shs, flesh) {
   for (const mesh of doc.getRoot().listMeshes()) {
     for (const prim of mesh.listPrimitives()) {
       const material = prim.getMaterial();
-      const glow = (material?.getName() ?? "").startsWith("Emission");
+      const glow = glowAll || (material?.getName() ?? "").startsWith("Emission");
       const factor = material?.getBaseColorFactor() ?? [1, 1, 1, 1];
       const emissive = material?.getEmissiveFactor() ?? [0, 0, 0];
       const texture = glow ? (material?.getEmissiveTexture() ?? material?.getBaseColorTexture()) : material?.getBaseColorTexture();

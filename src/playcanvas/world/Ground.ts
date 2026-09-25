@@ -27,9 +27,9 @@ const HALF = GROUND_SIZE / 2;
 export interface GroundSpec {
   /** Surface under everything. */
   base: GroundSurface;
-  /** Where the base surface exists (islands); default: everywhere. Outside, whatever lies below
-   * (hell's lava sea) shows. */
-  areas?: { x0: number; z0: number; x1: number; z1: number }[];
+  /** Where the base surface exists (islands; each may have its own `surface`); default: everywhere.
+   * Outside, whatever lies below (hell's lava sea) shows. */
+  areas?: { x0: number; z0: number; x1: number; z1: number; surface?: GroundSurface }[];
   /** Opaque rectangles (e.g. poured concrete floors), axis-aligned, metres. */
   pads: { x0: number; z0: number; x1: number; z1: number; surface: GroundSurface }[];
   /** Soft irregular patches (transparent blob masks) blended over the base: tracks, scorched
@@ -162,9 +162,9 @@ export class Ground {
   private readonly patchMaterials: StandardMaterial[] = [];
 
   constructor(private readonly app: AppBase, private readonly spec: GroundSpec) {
-    const base = this.opaqueMaterial(spec.base);
-    for (const a of spec.areas ?? [{ x0: -HALF, z0: -HALF, x1: HALF, z1: HALF }]) {
-      this.addMesh("Ground", base, groundQuadMesh(app.graphicsDevice, a.x0, a.z0, a.x1, a.z1), 0);
+    const areas: NonNullable<GroundSpec["areas"]> = spec.areas ?? [{ x0: -HALF, z0: -HALF, x1: HALF, z1: HALF }];
+    for (const a of areas) {
+      this.addMesh("Ground", this.opaqueMaterial(a.surface ?? spec.base), groundQuadMesh(app.graphicsDevice, a.x0, a.z0, a.x1, a.z1), 0);
     }
   }
 

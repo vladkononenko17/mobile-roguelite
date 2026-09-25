@@ -667,14 +667,24 @@ export interface ShopItem {
   weapon?: WeaponId;
   /** Only sold in campaigns (Hell) once the run has seen its armory. */
   campaign?: boolean;
+  /** Each purchase multiplies the next one's price by this (stat items get dearer). */
+  growth?: number;
+  /** Purchases allowed per run (stat items; the shop can't carry a build on its own). */
+  max?: number;
 }
 
+/** Price of `item` after `bought` purchases this run. */
+export const shopPrice = (item: ShopItem, bought: number): number => Math.round(item.cost * (item.growth ?? 1) ** bought);
+
 export const SHOP: ShopItem[] = [
-  { id: "heal", title: "Medkit", text: "Heal to full", cost: 12 },
-  { id: "maxHp", title: "Vest", text: "+25 max HP", cost: 18 },
-  { id: "armor", title: "Plating", text: "+10% damage resistance", cost: 20 },
-  { id: "damage", title: "Gun Oil", text: "+10% weapon damage", cost: 16 },
-  { id: "fireRate", title: "Spring Kit", text: "+10% fire rate", cost: 16 },
+  // Stat items get dearer with every purchase and are capped per run: cash tops a build up, the
+  // level-up upgrades make it.
+  // Maxing everything (~980$) takes most of a whole campaign's cash: choose what to invest in.
+  { id: "heal", title: "Medkit", text: "Heal to full", cost: 20, growth: 1.3 },
+  { id: "maxHp", title: "Vest", text: "+25 max HP", cost: 30, growth: 1.6, max: 4 },
+  { id: "armor", title: "Plating", text: "+10% damage resistance", cost: 35, growth: 1.6, max: 3 },
+  { id: "damage", title: "Gun Oil", text: "+10% weapon damage", cost: 28, growth: 1.6, max: 4 },
+  { id: "fireRate", title: "Spring Kit", text: "+10% fire rate", cost: 28, growth: 1.6, max: 4 },
   { id: "shotgun", title: "Shotgun", text: "7 pellets, brutal up close", cost: 30, weapon: "shotgun" },
   { id: "rifle", title: "Assault Rifle", text: "Fast, long range, pierces", cost: 45, weapon: "rifle" },
   { id: "plasma", title: "Plasma Rifle", text: "12 bolts a second, pierces", cost: 110, weapon: "plasma", campaign: true },

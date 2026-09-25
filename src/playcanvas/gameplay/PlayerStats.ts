@@ -55,6 +55,8 @@ export class PlayerStats {
   vampireHeal = 5;
   weapon: WeaponId = "pistol";
   readonly owned = new Set<WeaponId>(["pistol"]);
+  /** Shop purchases this run, per item (prices grow, stat items are capped). */
+  readonly bought = new Map<string, number>();
   readonly upgrades = new Map<UpgradeId, number>();
   /** Upgrades removed from the level-up offers for this run. */
   readonly banished = new Set<UpgradeId>();

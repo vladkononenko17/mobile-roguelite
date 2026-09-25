@@ -7,7 +7,8 @@ const clutter: KitModelDef = { collider: { kind: "none" }, shadows: false };
 
 /**
  * Chapter 3 environment kit: the pit (public/models/hell/hell-kit.glb, built by
- * scripts/build-hell-kit.mjs from Inferno World and the SHS Dungeon Pack). Every model is centred
+ * scripts/build-hell-kit.mjs from Inferno World, the SHS Dungeon Pack, the hell2 flesh growths and
+ * Kenney's Graveyard / Nature kits). Every model is centred
  * on its footprint with its base on the ground, in metres. Rocks are round blockers; walls,
  * machines and relics block by footprint; bones, puddles and small clutter are walk-over.
  */
@@ -96,6 +97,38 @@ export const HELL_MODELS = {
   fleshClaw: circle(1.1),
   fleshGut: box(0.75),
   fleshStalk: circle(1.0),
+  // Lava crystals (self-lit), for the crossing
+  crystal1: circle(0.9),
+  crystal2: circle(0.6),
+  crystal3: circle(0.7),
+  // Kenney Graveyard (CC0): the abyss graveyard
+  crypt: box(0.95),
+  cryptRoof: decor,
+  cryptSmall: box(0.95),
+  cryptSmallRoof: decor,
+  graveCross: clutter,
+  graveRound: clutter,
+  graveBroken: clutter,
+  graveDeco: clutter,
+  ironFence: box(0.9),
+  ironFenceBroken: box(0.9),
+  obelisk: circle(0.55),
+  coffin: clutter,
+  fireBasket: clutter,
+  urn: clutter,
+  candlesMany: clutter,
+  altarStone: box(0.9),
+  // Charred dead trees and wood (trunks block, the crowns overhang)
+  treeDead: circle(0.45),
+  treeDead2: circle(0.45),
+  trunk: circle(0.5),
+  stump: clutter,
+  log: box(0.85),
+  // Kenney Nature (CC0): tall rock spires of the wastes' badlands
+  spireA: circle(2.8),
+  spireC: circle(1.8),
+  spireF: circle(2.0),
+  spireH: circle(2.3),
 } satisfies Record<string, KitModelDef>;
 
 export type HellModel = keyof typeof HELL_MODELS;
