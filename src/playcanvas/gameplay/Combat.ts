@@ -111,7 +111,7 @@ export class Combat {
       if (!next) break;
       damage *= COMBAT_FX.ricochetDamage;
       this.effects.tracer(this.chest(from, this.from), this.chest(next, this.point));
-      this.effects.bloodHit(this.point, next.position.x - from.position.x, next.position.z - from.position.z);
+      this.effects.bloodHit(this.point, next.position.x - from.position.x, next.position.z - from.position.z, next.def.gore);
       this.hit(next, damage, "ricochet", from.position.x, from.position.z, 0.05);
       this.visited.push(next);
       from = next;

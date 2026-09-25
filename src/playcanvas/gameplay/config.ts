@@ -270,6 +270,8 @@ export interface EnemyDef {
   aimHeight?: number;
   /** Death effect: embers and ash instead of blood (demons). */
   deathFx?: "ember";
+  /** What hits spill (default red blood): glowing alien "goo", or a machine's "oil" and sparks. */
+  gore?: "goo" | "oil";
   /** Emissive tint for the body's emissive map (glowing eyes / cracks); default white. */
   glow?: [number, number, number];
 }

@@ -251,7 +251,7 @@ export class PlayerGun {
         const crit = Math.random() < this.stats.critChance;
         const amount = stats.damage * bonus * (crit ? this.stats.critMult : 1);
         const point = this.end.set(this.origin.x + dx * hit.t, muzzle.y, this.origin.z + dz * hit.t);
-        this.effects.bloodHit(point, dx, dz);
+        this.effects.bloodHit(point, dx, dz, hit.enemy.def.gore);
         this.combat.bulletHit(hit.enemy, amount, crit || bonus > 1, this.origin.x, this.origin.z, stats.knockback);
         if (fx?.burn) this.combat.burnFrom(hit.enemy, fx.burn);
         if (fx?.splash) this.combat.splash(hit.enemy, fx.splash.radius, amount * fx.splash.fraction);

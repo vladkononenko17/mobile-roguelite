@@ -19,6 +19,9 @@ interface Decal {
   life: number;
 }
 
+/** What a body spills when hit: red blood, glowing alien goo, or a machine's oil and sparks. */
+export type Gore = "blood" | "goo" | "oil";
+
 const DECAL_LIFE = 9;
 
 /** An expanding flat ring on the ground (explosions, shock pulses), fading out. */
@@ -82,6 +85,9 @@ export class Effects {
   private readonly tracers: Pooled[] = [];
   private readonly sparks: Pooled[] = [];
   private readonly blood: Bit[] = [];
+  private readonly goo: Bit[] = [];
+  private readonly oil: Bit[] = [];
+  private readonly decalMats = {} as Record<Gore, StandardMaterial>;
   private readonly dust: Bit[] = [];
   private readonly casings: Bit[] = [];
   private readonly decals: Decal[] = [];
@@ -101,6 +107,11 @@ export class Effects {
     const dustMat = flat(new Color(0.62, 0.55, 0.44), 0.5);
     const brass = flat(new Color(0.85, 0.62, 0.25));
     for (let i = 0; i < 28; i++) this.blood.push(this.bit("blood", "box", bloodMat));
+    // Alien goo glows a sickly green (additive droplets read as luminous ichor).
+    const gooMat = glow(new Color(0.3, 0.95, 0.22));
+    for (let i = 0; i < 28; i++) this.goo.push(this.bit("goo", "sphere", gooMat));
+    const oilMat = flat(new Color(0.04, 0.04, 0.05));
+    for (let i = 0; i < 12; i++) this.oil.push(this.bit("oil", "box", oilMat));
     for (let i = 0; i < 12; i++) this.dust.push(this.bit("dust", "sphere", dustMat));
     for (let i = 0; i < 10; i++) this.casings.push(this.bit("casing", "cylinder", brass));
     const flame = glow(new Color(1, 0.48, 0.12));
@@ -136,15 +147,24 @@ export class Effects {
         this.rings.push({ entity, mesh: entity.render!.meshInstances[0], life: 0, total: 1, radius: 1 });
       }
     }
-    const decalMat = new StandardMaterial();
-    decalMat.diffuse.set(0, 0, 0);
-    decalMat.emissive.set(0.28, 0.03, 0.02);
-    decalMat.useLighting = false;
-    decalMat.opacityMap = splatTexture(app);
-    decalMat.opacityMapChannel = "a";
-    decalMat.blendType = BLEND_NORMAL;
-    decalMat.depthWrite = false;
-    decalMat.update();
+    const splat = splatTexture(app);
+    const decal = (r: number, g: number, b: number) => {
+      const m = new StandardMaterial();
+      m.diffuse.set(0, 0, 0);
+      m.emissive.set(r, g, b);
+      m.useLighting = false;
+      m.opacityMap = splat;
+      m.opacityMapChannel = "a";
+      m.blendType = BLEND_NORMAL;
+      m.depthWrite = false;
+      m.update();
+      return m;
+    };
+    const decalMat = decal(0.28, 0.03, 0.02);
+    this.decalMats.blood = decalMat;
+    // Goo pools stay faintly luminous; oil is near black.
+    this.decalMats.goo = decal(0.16, 0.55, 0.1);
+    this.decalMats.oil = decal(0.035, 0.035, 0.04);
     for (let i = 0; i < 18; i++) {
       const entity = new Entity("blood-decal");
       entity.addComponent("render", { type: "plane", material: decalMat, castShadows: false, receiveShadows: false });
@@ -239,11 +259,16 @@ export class Effects {
     b.entity.setLocalScale(size, size, size);
   }
 
-  /** A short spray of dark droplets from a bullet hit, away from the shooter (dirX, dirZ). */
-  bloodHit(position: Vec3, dirX: number, dirZ: number): void {
-    for (let i = 0; i < 4; i++) {
+  /**
+   * A short spray from a bullet hit, away from the shooter (dirX, dirZ): dark blood, glowing alien
+   * goo, or (machines) sparks and a few drops of oil.
+   */
+  bloodHit(position: Vec3, dirX: number, dirZ: number, gore: Gore = "blood"): void {
+    if (gore === "oil") this.spark(position, 0.14);
+    const pool = gore === "goo" ? this.goo : gore === "oil" ? this.oil : this.blood;
+    for (let i = 0; i < (gore === "oil" ? 2 : 4); i++) {
       const spread = 1.2 + Math.random() * 1.6;
-      this.launch(this.blood, position,
+      this.launch(pool, position,
         dirX * spread + (Math.random() - 0.5) * 1.4, 0.6 + Math.random() * 1.4, dirZ * spread + (Math.random() - 0.5) * 1.4,
         0.32 + Math.random() * 0.12, 0.035 + Math.random() * 0.03, 9);
     }
@@ -320,9 +345,24 @@ export class Effects {
     r.radius = radius;
   }
 
-  /** A blood pool left where a zombie died (fades out after a few seconds). */
-  bloodDecal(x: number, z: number, scale = 1): void {
+  /** A burst when a body dies: goo splashes up and out; a machine blows apart in sparks. */
+  goreBurst(position: Vec3, size: number, gore: Gore): void {
+    if (gore === "oil") {
+      this.explosion(position, 0.6 * size);
+      for (let i = 0; i < 3; i++) this.spark(position, 0.2 * size);
+    }
+    if (gore === "blood") return;
+    const pool = gore === "goo" ? this.goo : this.oil;
+    for (let i = 0; i < 10; i++) {
+      const a = Math.random() * Math.PI * 2, v = (1.5 + Math.random() * 2.5) * Math.min(2, size);
+      this.launch(pool, position, Math.sin(a) * v, 1.5 + Math.random() * 2.5, Math.cos(a) * v, 0.45 + Math.random() * 0.2, (0.05 + Math.random() * 0.05) * Math.min(2, size), 9);
+    }
+  }
+
+  /** A pool left where a body died (fades out after a few seconds): blood, goo or oil. */
+  bloodDecal(x: number, z: number, scale = 1, gore: Gore = "blood"): void {
     const d = this.decals[this.nextDecal];
+    d.mesh.material = this.decalMats[gore];
     this.nextDecal = (this.nextDecal + 1) % this.decals.length;
     d.entity.enabled = true;
     d.entity.setPosition(x + (Math.random() - 0.5) * 0.4, 0.045 + this.nextDecal * 0.0005, z + (Math.random() - 0.5) * 0.4);
@@ -411,7 +451,7 @@ export class Effects {
       r.entity.setLocalScale(s, 1, s);
       r.mesh.setParameter("material_opacity", 1 - t);
     }
-    for (const pool of [this.blood, this.dust, this.casings, this.fire, this.frost]) {
+    for (const pool of [this.blood, this.goo, this.oil, this.dust, this.casings, this.fire, this.frost]) {
       for (const b of pool) {
         if (!b.entity.enabled) continue;
         b.life -= dt;

@@ -686,6 +686,11 @@ export class Gameplay {
       this.effects.explosion(this.tmp, (enemy.def.boss ? 2.4 : 0.55) * Math.min(2, enemy.scale));
       this.effects.flame(this.tmp);
       this.effects.bloodDecal(x, z, enemy.scale * (enemy.def.boss ? 1.6 : 0.8));
+    } else if (enemy.def.gore) {
+      // Aliens burst in glowing goo, machines blow apart in sparks and leave an oil stain.
+      this.tmp.set(x, 0.6 * enemy.scale + enemy.lift, z);
+      this.effects.goreBurst(this.tmp, enemy.scale * (enemy.def.boss ? 2.5 : 1), enemy.def.gore);
+      this.effects.bloodDecal(x, z, enemy.scale * (enemy.def.boss ? 1.8 : 1.1), enemy.def.gore);
     } else this.effects.bloodDecal(x, z, enemy.scale * (enemy.def.boss ? 1.6 : 1));
     const drops = enemy.def.drops;
     if (enemy.def.boss) {

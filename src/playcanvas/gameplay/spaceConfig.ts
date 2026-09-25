@@ -74,21 +74,21 @@ export const SPACE_ENEMIES: Record<SpaceEnemyId, EnemyDef> = {
   },
   // SWARM: tiny floating aliens, fast and weak, in packs.
   skitter: {
-    label: "Skitter", visuals: ["skitter"], scale: 1.0, scaleJitter: 0.1, behavior: "flyer", aimHeight: 0.35,
+    label: "Skitter", gore: "goo", visuals: ["skitter"], scale: 1.0, scaleJitter: 0.1, behavior: "flyer", aimHeight: 0.35,
     maxHp: 18, speed: 4.8, radius: 0.3, damage: 6, attackRange: 0.95, attackWindup: 0.2, attackCooldown: 0.8,
     cash: 0, xp: 5, drops: { cash: 0.12, health: 0.01, upgrade: 0.002 },
     fly: { height: 0.6, orbit: 0 },
   },
   // CASTER: keeps its distance and spits slow acid orbs - dodge sideways.
   spitter: {
-    label: "Spitter", visuals: ["spitter"], scale: 1.0, behavior: "caster", aimHeight: 0.7,
+    label: "Spitter", gore: "goo", visuals: ["spitter"], scale: 1.0, behavior: "caster", aimHeight: 0.7,
     maxHp: 60, speed: 1.9, radius: 0.4, damage: 8, attackRange: 1.1, attackWindup: 0.4, attackCooldown: 1.3,
     cash: 2, xp: 22, drops: { cash: 0.55, health: 0.04, upgrade: 0.01 },
     bolt: { damage: 12, speed: 6.2, radius: 0.32, cooldown: 2.9, minRange: 5.5, maxRange: 11, count: 1, spreadDeg: 0, windup: 0.5 },
   },
   // FLYER: drifts over walls and machines, spits, dives through.
   glub: {
-    label: "Glub", visuals: ["glub"], scale: 1.0, behavior: "flyer", aimHeight: 0.5,
+    label: "Glub", gore: "goo", visuals: ["glub"], scale: 1.0, behavior: "flyer", aimHeight: 0.5,
     maxHp: 80, speed: 3.1, radius: 0.5, damage: 12, attackRange: 1.3, attackWindup: 0.35, attackCooldown: 1.2,
     cash: 3, xp: 30, drops: { cash: 0.6, health: 0.04, upgrade: 0.012 },
     bolt: { damage: 13, speed: 7, radius: 0.34, cooldown: 3.2, minRange: 3, maxRange: 11, count: 1, spreadDeg: 0, windup: 0.45 },
@@ -96,7 +96,7 @@ export const SPACE_ENEMIES: Record<SpaceEnemyId, EnemyDef> = {
   },
   // TANK: the alien hulk - slow, huge, a knockback smash and a ground slam.
   hulk: {
-    label: "Alien Hulk", visuals: ["alienBrute"], scale: 1.0, behavior: "chaser", armor: 0.15,
+    label: "Alien Hulk", gore: "goo", visuals: ["alienBrute"], scale: 1.0, behavior: "chaser", armor: 0.15,
     maxHp: 420, speed: 1.4, radius: 0.85, damage: 22, attackRange: 2.0, attackWindup: 0.7, attackCooldown: 1.6, knockback: 7,
     cash: 12, xp: 60, drops: { cash: 1, health: 0.3, upgrade: 0.05 },
     clips: { special: "Jump_Land" },
@@ -104,20 +104,20 @@ export const SPACE_ENEMIES: Record<SpaceEnemyId, EnemyDef> = {
   },
   // ELITE: a hijacked security mech - armoured, charges.
   secmech: {
-    label: "Security Mech", visuals: ["mech"], scale: 1.0, behavior: "charger", armor: 0.4, glow: [1.4, 0.3, 0.2],
+    label: "Security Mech", gore: "oil", visuals: ["mech"], scale: 1.0, behavior: "charger", armor: 0.4, glow: [1.4, 0.3, 0.2],
     maxHp: 320, speed: 1.9, radius: 0.7, damage: 18, attackRange: 1.7, attackWindup: 0.55, attackCooldown: 1.3,
     cash: 15, xp: 70, drops: { cash: 1, health: 0.3, upgrade: 0.06 },
     charge: { cooldown: 6, telegraph: 0.9, speed: 11, distance: 10, recover: 1.0, damage: 22 },
   },
   // BOSS 1: THE WARDEN - the ship's security mech, turned. Guns, a charge, a stomp.
   warden: {
-    label: "The Warden", visuals: ["mech"], scale: 2.3, behavior: "boss", script: "warden", boss: true, glow: [2, 0.4, 0.2],
+    label: "The Warden", gore: "oil", visuals: ["mech"], scale: 2.3, behavior: "boss", script: "warden", boss: true, glow: [2, 0.4, 0.2],
     maxHp: 2600, speed: 1.8, radius: 1.4, damage: 28, attackRange: 3.0, attackWindup: 0.6, attackCooldown: 1.5, knockback: 7,
     cash: 60, xp: 200, drops: { cash: 1, health: 1, upgrade: 0 },
   },
   // BOSS 2: THE BROOD MOTHER - the hive's queen, on the meteor it came from.
   broodmother: {
-    label: "The Brood Mother", visuals: ["alienBrute"], scale: 2.5, behavior: "boss", script: "broodmother", boss: true, glow: [0.6, 1.6, 0.9],
+    label: "The Brood Mother", gore: "goo", visuals: ["alienBrute"], scale: 2.5, behavior: "boss", script: "broodmother", boss: true, glow: [0.6, 1.6, 0.9],
     maxHp: 10000, speed: 2.0, radius: 1.5, damage: 32, attackRange: 3.3, attackWindup: 0.55, attackCooldown: 1.2, knockback: 8,
     cash: 150, xp: 500, drops: { cash: 1, health: 1, upgrade: 0 },
   },
