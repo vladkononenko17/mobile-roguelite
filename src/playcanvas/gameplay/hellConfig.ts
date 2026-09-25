@@ -389,15 +389,15 @@ export const HELL_LEVELS: WaveDef[] = [
 ];
 
 /**
- * Hell starts a run as a veteran who came through Earth and ORION: a rifle, some cash and a few
- * upgrades chosen right away (the build starts on the first screen), plus the Infernal Pact before
- * Act III and a final warning before the last level.
+ * Hell starts a run with a rifle and some cash (the hero came through Earth and ORION), at level 1:
+ * the build grows from the demons killed. The Infernal Armory after the first boss, the Infernal
+ * Pact before Act III and a final warning before the last level.
  */
 export const HELL_RUN = {
   startWeapon: "rifle" as const,
   startCash: 120,
-  /** Level-up choices offered at the start (before the first demon arrives). */
-  startPicks: 4,
+  /** Level-up choices offered at the start (0: none; the run starts at level 1). */
+  startPicks: 0,
   /** After this level (index) the Infernal Pact is offered (one build-defining upgrade). */
   pactAfter: 5,
   /** Before this level (index) the final warning is shown. */

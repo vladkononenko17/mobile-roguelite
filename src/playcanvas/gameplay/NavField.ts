@@ -8,6 +8,9 @@ interface Bounds {
 }
 
 const DIAGONAL = Math.SQRT2;
+/** Regions up to this many cells get the whole-region field; larger ones are cut at NAV_RANGE (m). */
+const NAV_FULL_CELLS = 6000;
+const NAV_RANGE = 42;
 const NEIGHBOURS: [number, number, number][] = [
   [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1],
   [1, 1, DIAGONAL], [1, -1, DIAGONAL], [-1, 1, DIAGONAL], [-1, -1, DIAGONAL],
@@ -28,6 +31,12 @@ export class NavField {
   private heapSize = 0;
   private sourceIndex = -1;
   private bounds: Bounds;
+  /**
+   * Path distance (m) the field is built out to. Large regions (Hell's zones) stop the search this far
+   * from the player so a rebuild costs about the same as on a small map; beyond it enemies steer
+   * straight at the player until they are in range. Spawns (within SPAWNING.maxDistance) stay inside.
+   */
+  private range = Infinity;
 
   constructor(
     private readonly collision: CollisionWorld,
@@ -45,6 +54,7 @@ export class NavField {
     this.cols = Math.ceil((bounds.maxX - bounds.minX) / this.cell);
     this.rows = Math.ceil((bounds.maxZ - bounds.minZ) / this.cell);
     const count = this.cols * this.rows;
+    this.range = count > NAV_FULL_CELLS ? NAV_RANGE : Infinity;
     this.walkable = new Uint8Array(count);
     this.distance = new Float32Array(count).fill(Infinity);
     this.heap = new Int32Array(count * 8);
@@ -108,7 +118,7 @@ export class NavField {
         // No corner cutting past blocked cells.
         if (dc !== 0 && dr !== 0 && (!walkable[r * cols + nc] || !walkable[nr * cols + c])) continue;
         const nd = d + cost * this.cell;
-        if (nd < distance[n]) {
+        if (nd < distance[n] && nd <= this.range) {
           distance[n] = nd;
           this.push(n);
         }

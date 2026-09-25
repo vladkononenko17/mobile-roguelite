@@ -10,7 +10,7 @@ import { HELL_MODELS, type HellModel } from "../props/HellKit";
 import type { Biome, LevelBounds, Zone } from "./Biome";
 
 /**
- * HELL - one connected infernal world, ~60 x 380 m, crossed south to north over nine levels. Seven
+ * HELL - one connected infernal world, ~120 x 760 m, crossed south to north over nine levels. Seven
  * basalt islands stand out of a lava sea (LAVA_Y below the ground), joined by walled bridges; each
  * level is fought inside one zone (its region bounds the hero, the nav grid and the spawns) and the
  * way on is sealed by a burning rune until the level is won.
@@ -31,13 +31,23 @@ import type { Biome, LevelBounds, Zone } from "./Biome";
  *
  * The camera looks towards -Z: screen up is north. Combat surfaces stay ~70% open; the heavy detail
  * sits on the island rims, between zones and out in the lava.
+ *
+ * The layout is drawn in the coordinates above and built S times larger (islands, bridge lengths,
+ * zones, set-piece positions); props, bridge widths, the central road and gate gaps keep their size.
+ * Each level's zone is then ~2x the outpost / ORION maps.
  */
+
+/** Layout scale (see above). */
+const S = 2;
+type XZ = [number, number];
+const at = ([x, z]: XZ): XZ => [x * S, z * S];
 
 /** Height of the lava sea below the islands (the plateau cliffs are this tall). */
 const LAVA_Y = -2.3;
 
 type Rect = { x0: number; z0: number; x1: number; z1: number };
-const ISLANDS: Record<string, Rect> = {
+const scaleRect = (q: Rect): Rect => ({ x0: q.x0 * S, z0: q.z0 * S, x1: q.x1 * S, z1: q.z1 * S });
+const ISLANDS: Record<string, Rect> = Object.fromEntries(Object.entries({
   gates: { x0: -22, z0: 118, x1: 22, z1: 154 },
   wastes: { x0: -30, z0: 62, x1: 30, z1: 110 },
   pentagram: { x0: -24, z0: 6, x1: 24, z1: 54 },
@@ -47,7 +57,7 @@ const ISLANDS: Record<string, Rect> = {
   citadel: { x0: -30, z0: -114, x1: 30, z1: -64 },
   abyss: { x0: -28, z0: -170, x1: 28, z1: -122 },
   throne: { x0: -25, z0: -228, x1: 25, z1: -178 },
-};
+}).map(([k, q]) => [k, scaleRect(q)]));
 
 /** A walled bridge deck: `axis` z runs north-south (x centre, z0..z1), x runs east-west. */
 interface Bridge { axis: "z" | "x"; c: number; width: number; a0: number; a1: number }
@@ -63,37 +73,43 @@ const BRIDGES: Bridge[] = [
   { axis: "z", c: 0, width: 5, a0: -64, a1: -56 },
   { axis: "z", c: 0, width: 6, a0: -122, a1: -114 },
   { axis: "z", c: 0, width: 6, a0: -178, a1: -170 },
-];
+].map((b): Bridge => ({ ...b, axis: b.axis as Bridge["axis"], c: b.c * S, a0: b.a0 * S, a1: b.a1 * S }));
 const deckRect = (b: Bridge): Rect => b.axis === "z"
   ? { x0: b.c - b.width / 2, z0: b.a0, x1: b.c + b.width / 2, z1: b.a1 }
   : { x0: b.a0, z0: b.c - b.width / 2, x1: b.a1, z1: b.c + b.width / 2 };
 
 /** Passages through walls inside an island (the citadel's inner gate): sealed like bridges. */
 const GATES: { x: number; z: number; width: number }[] = [
-  { x: 0, z: -86, width: 6 },
+  { x: 0, z: -86 * S, width: 6 },
   // A wall of runes across the throne island: the final approach stops short of the arena.
-  { x: 0, z: -196, width: 50 },
+  { x: 0, z: -196 * S, width: 50 * S },
 ];
 
-const SIGIL_C = { x: 0, z: 28, radius: 9.5 };
-const SIGIL_F = { x: 0, z: -205, radius: 11 };
+const SIGIL_C = { x: 0, z: 28 * S, radius: 9.5 * S };
+const SIGIL_F = { x: 0, z: -205 * S, radius: 11 * S };
 
 const r = (x0: number, z0: number, x1: number, z1: number): LevelBounds => ({ minX: x0, minZ: z0, maxX: x1, maxZ: z1 });
+/** A zone region from layout-space edges: scaled, 0.6 m inside (null = that edge exactly, scaled). */
+const zr = (x0: number, z0: number, x1: number, z1: number, exact: { z0?: number; z1?: number } = {}): LevelBounds =>
+  r(x0 * S + 0.6, exact.z0 !== undefined ? exact.z0 * S : z0 * S + 0.6, x1 * S - 0.6, exact.z1 !== undefined ? exact.z1 * S : z1 * S - 0.6);
+const start = (x: number, z: number) => ({ x: x * S, z: z * S, yawDeg: 180 });
 /** Each level's zone: its playable region (a little inside the islands) and where it starts. */
 export const ZONES: Record<string, Zone> = {
-  gates: { region: r(-21.4, 118.6, 21.4, 153.4), start: { x: 0, z: 147, yawDeg: 180 } },
-  wastes: { region: r(-29.4, 62.6, 29.4, 109.4), start: { x: 0, z: 104, yawDeg: 180 } },
-  pentagram: { region: r(-23.4, 6.6, 23.4, 53.4), start: { x: 0, z: 46, yawDeg: 180 } },
-  crossing: { region: r(-25.4, -55.4, 25.4, -4.6), start: { x: -15, z: -9, yawDeg: 180 } },
-  approach: { region: r(-29.4, -86.4, 29.4, -34.6), start: { x: 0, z: -40, yawDeg: 180 } },
-  citadel: { region: r(-29.4, -113.4, 29.4, -86.6), start: { x: 0, z: -91, yawDeg: 180 } },
-  abyss: { region: r(-27.4, -169.4, 27.4, -122.6), start: { x: 0, z: -128, yawDeg: 180 } },
-  brink: { region: r(-27.4, -196, 27.4, -122.6), start: { x: 0, z: -160, yawDeg: 180 } },
-  throne: { region: r(-24.4, -227.4, 24.4, -178.6), start: { x: 0, z: -185, yawDeg: 180 } },
+  gates: { region: zr(-22, 118, 22, 154), start: start(0, 147) },
+  wastes: { region: zr(-30, 62, 30, 110), start: start(0, 104) },
+  pentagram: { region: zr(-24, 6, 24, 54), start: start(0, 46) },
+  crossing: { region: zr(-26, -56, 26, -4), start: start(-15, -9) },
+  // The outer yard ends at the inner wall (its gate is sealed).
+  approach: { region: zr(-30, 0, 30, -34, { z0: -86.2 }), start: start(0, -40) },
+  citadel: { region: zr(-30, -114, 30, 0, { z1: -86.3 }), start: start(0, -91) },
+  abyss: { region: zr(-28, -170, 28, -122), start: start(0, -128) },
+  // The abyss and the throne island up to the wall of runes.
+  brink: { region: zr(-28, 0, 28, -122, { z0: -196 }), start: start(0, -160) },
+  throne: { region: zr(-25, -228, 25, -178), start: start(0, -185) },
 };
 
-export const BOUNDS: LevelBounds = r(-30, -228, 30, 154);
-export const SPAWN = { x: 0, z: 147, yawDeg: 180 };
+export const BOUNDS: LevelBounds = r(-30 * S, -228 * S, 30 * S, 154 * S);
+export const SPAWN = start(0, 147);
 export const RUN_START = ZONES.gates.start;
 
 const FIRE: [number, number, number] = [1, 0.45, 0.12];
@@ -101,32 +117,69 @@ const HOT: [number, number, number] = [1, 0.32, 0.08];
 const BLOOD: [number, number, number] = [1, 0.12, 0.04];
 const SOOT: [number, number, number] = [0.45, 0.38, 0.36];
 
+/** Deterministic RNG so the layout is the same on every load. */
+function rng(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+}
+
+/**
+ * Small scenes spread over every island (the doubled layout would otherwise leave long bare
+ * stretches): rock outcrops, bone piles, flesh growths, ruins, torture racks. Some carry a brazier.
+ * Kept off the central road, the pentagrams, bridge mouths and the level starts, and apart.
+ */
+type ClusterKind = "rocks" | "bones" | "flesh" | "ruin" | "torture";
+const CLUSTERS: { x: number; z: number; kind: ClusterKind; fire: boolean; seed: number }[] = (() => {
+  const random = rng(1313);
+  const kinds: ClusterKind[] = ["rocks", "bones", "flesh", "ruin", "torture", "rocks", "bones"];
+  const starts = Object.values(ZONES).map((zone) => zone.start);
+  const out: { x: number; z: number; kind: ClusterKind; fire: boolean; seed: number }[] = [];
+  for (const isl of Object.values(ISLANDS)) {
+    const area = (isl.x1 - isl.x0) * (isl.z1 - isl.z0);
+    const wanted = Math.round(area / 220);
+    for (let tries = 0, n = 0; n < wanted && tries < wanted * 12; tries++) {
+      const x = isl.x0 + 5 + random() * (isl.x1 - isl.x0 - 10), z = isl.z0 + 5 + random() * (isl.z1 - isl.z0 - 10);
+      if (Math.abs(x) < 6) continue;
+      if (Math.hypot(x - SIGIL_C.x, z - SIGIL_C.z) < SIGIL_C.radius + 9 || Math.hypot(x - SIGIL_F.x, z - SIGIL_F.z) < SIGIL_F.radius + 11) continue;
+      if (BRIDGES.some((b) => b.axis === "z" ? Math.abs(x - b.c) < b.width / 2 + 6 && z > b.a0 - 8 && z < b.a1 + 8 : Math.abs(z - b.c) < b.width / 2 + 6 && x > b.a0 - 8 && x < b.a1 + 8)) continue;
+      if (starts.some((p) => Math.hypot(x - p.x, z - p.z) < 9)) continue;
+      if (Math.abs(z + 86 * S) < 6 || Math.abs(z + 196 * S) < 6 || Math.abs(z + 114 * S) < 5) continue;
+      if (out.some((c) => Math.hypot(c.x - x, c.z - z) < 9)) continue;
+      out.push({ x, z, kind: kinds[Math.floor(random() * kinds.length)], fire: random() < 0.22, seed: Math.floor(random() * 1e6) });
+      n++;
+    }
+  }
+  return out;
+})();
+
 /** Braziers (x, z) across the world; each gets a fire-light pool. */
 const BRAZIERS: [number, number][] = [
-  [-4, 142], [4, 142], [-4, 132], [4, 132], [-7, 121], [7, 121],
-  [-18, 100], [18, 100], [-10, 72], [10, 72],
+  ...([
+    [-4, 142], [4, 142], [-4, 132], [4, 132], [-7, 124], [7, 124],
+    [-18, 100], [18, 100], [-10, 72], [10, 72], [-22, 86], [22, 86],
+    [-18, -10], [18, -14], [-6, -44], [6, -44],
+    [-10, -70], [10, -70], [-20, -108], [20, -108], [-24, -96], [24, -96],
+    [-12, -132], [12, -132], [-20, -160], [20, -160], [-22, -146], [22, -146],
+    [-14, 144], [14, 144], [-16, 20], [16, 38],
+  ] as XZ[]).map(at),
+  // Either side of the citadel's inner gate (the gap keeps its size).
+  [-5, -86 * S + 2], [5, -86 * S + 2],
+  ...CLUSTERS.filter((c) => c.fire).map((c): [number, number] => [c.x + 1.8, c.z - 1.2]),
   ...[0, 1, 2, 3, 4].map((i): [number, number] => [SIGIL_C.x + Math.sin((i * 72 * Math.PI) / 180) * (SIGIL_C.radius + 1.3), SIGIL_C.z - Math.cos((i * 72 * Math.PI) / 180) * (SIGIL_C.radius + 1.3)]),
-  [-18, -10], [18, -14], [-6, -44], [6, -44],
-  [-10, -70], [10, -70], [-5, -88], [5, -88], [-20, -108], [20, -108],
-  [-12, -132], [12, -132], [-20, -160], [20, -160],
   ...[0, 1, 2, 3, 4].map((i): [number, number] => [SIGIL_F.x + Math.sin((i * 72 * Math.PI) / 180) * (SIGIL_F.radius + 1.3), SIGIL_F.z - Math.cos((i * 72 * Math.PI) / 180) * (SIGIL_F.radius + 1.3)]),
 ];
 
 /** Lava cracks inside the islands (soft pools; they block walking, not bullets). */
 const POOLS: LavaPool[] = [
   // The sea below everything.
-  { x: 0, z: -37, w: 220, d: 460, y: LAVA_Y },
-  // Wastes: cracks.
-  { x: -18, z: 90, w: 9, d: 6, soft: true, solid: true },
-  { x: 17, z: 80, w: 8, d: 9, soft: true, solid: true },
-  { x: -4, z: 70, w: 7, d: 5, soft: true, solid: true },
-  // Citadel outer yard moat pieces.
-  { x: -20, z: -76, w: 8, d: 6, soft: true, solid: true },
-  { x: 20, z: -76, w: 8, d: 6, soft: true, solid: true },
-  // Abyss: pools among the bones.
-  { x: -14, z: -146, w: 9, d: 7, soft: true, solid: true },
-  { x: 15, z: -140, w: 7, d: 8, soft: true, solid: true },
-  { x: 2, z: -160, w: 8, d: 5, soft: true, solid: true },
+  { x: 0, z: -37 * S, w: 220 * S, d: 460 * S, y: LAVA_Y },
+  // Lava cracks (layout space; scaled below): wastes, crossing, citadel outer yard moat, abyss.
+  ...[
+    { x: -18, z: 90, w: 9, d: 6 }, { x: 17, z: 80, w: 8, d: 9 }, { x: -4, z: 70, w: 7, d: 5 }, { x: 22, z: 104, w: 5, d: 4 },
+    { x: -16, z: -48, w: 5, d: 4 }, { x: 18, z: -20, w: 4, d: 5 },
+    { x: -20, z: -76, w: 8, d: 6 }, { x: 20, z: -76, w: 8, d: 6 },
+    { x: -14, z: -146, w: 9, d: 7 }, { x: 15, z: -140, w: 7, d: 8 }, { x: 2, z: -160, w: 8, d: 5 },
+  ].map((p): LavaPool => ({ x: p.x * S, z: p.z * S, w: p.w * 1.6, d: p.d * 1.6, soft: true, solid: true })),
 ];
 
 /** Lava falls pouring off distant cliffs (scenery). */
@@ -136,7 +189,9 @@ const FALLS: LavaFall[] = [
   { x: -46, z: -100, y: 15, width: 7, height: 19, yawDeg: 90 },
   { x: 0, z: -262, y: 22, width: 16, height: 26, yawDeg: 0 },
   { x: 44, z: -190, y: 14, width: 6, height: 17, yawDeg: -90 },
-];
+  { x: 46, z: 120, y: 14, width: 7, height: 18, yawDeg: -90 },
+  { x: -44, z: -160, y: 15, width: 7, height: 19, yawDeg: 90 },
+].map((f) => ({ ...f, x: f.x * S, z: f.z * S, y: f.y * 1.3, width: f.width * 1.4, height: f.height * 1.3 }));
 
 export const AMBIENT: AmbientEmitter[] = [
   ...BRAZIERS.map(([x, z]): AmbientEmitter => ({ kind: "glow", x, z, size: [5.5, 5.5], color: FIRE, intensity: 0.4 })),
@@ -154,12 +209,12 @@ export const AMBIENT: AmbientEmitter[] = [
     { kind: "smoke", x: p.x, y: 0.2, z: p.z, size: [2, 2], intensity: 0.35, color: SOOT },
   ]),
   // The two great pentagrams glow blood red.
-  { kind: "glow", x: SIGIL_C.x, z: SIGIL_C.z, size: [26, 26], color: BLOOD, intensity: 0.35, pulse: 0.3 },
-  { kind: "glow", x: SIGIL_F.x, z: SIGIL_F.z, size: [30, 30], color: BLOOD, intensity: 0.4, pulse: 0.25 },
-  { kind: "embers", x: SIGIL_F.x, y: 0.3, z: SIGIL_F.z, size: [10, 10], intensity: 1 },
+  { kind: "glow", x: SIGIL_C.x, z: SIGIL_C.z, size: [26 * S, 26 * S], color: BLOOD, intensity: 0.35, pulse: 0.3 },
+  { kind: "glow", x: SIGIL_F.x, z: SIGIL_F.z, size: [30 * S, 30 * S], color: BLOOD, intensity: 0.4, pulse: 0.25 },
+  { kind: "embers", x: SIGIL_F.x, y: 0.3, z: SIGIL_F.z, size: [10 * S, 10 * S], intensity: 1 },
   // Ash drifting over the wastes and the abyss.
-  { kind: "dust", x: 0, y: 1.2, z: 86, size: [24, 20], intensity: 0.7, color: [0.8, 0.6, 0.55] },
-  { kind: "dust", x: 0, y: 1.2, z: -146, size: [24, 20], intensity: 0.7, color: [0.8, 0.6, 0.55] },
+  { kind: "dust", x: 0, y: 1.2, z: 86 * S, size: [24 * S, 20 * S], intensity: 0.7, color: [0.8, 0.6, 0.55] },
+  { kind: "dust", x: 0, y: 1.2, z: -146 * S, size: [24 * S, 20 * S], intensity: 0.7, color: [0.8, 0.6, 0.55] },
 ];
 
 export const GROUND_SPEC: GroundSpec = {
@@ -167,14 +222,14 @@ export const GROUND_SPEC: GroundSpec = {
   areas: Object.values(ISLANDS),
   pads: [
     ...BRIDGES.map((b) => ({ ...rect(deckRect(b)), surface: "flagstone" as const })),
-    // Roads of flagstone through the keep areas.
-    { x0: -2.8, z0: 118, x1: 2.8, z1: 152, surface: "flagstone" },
-    { x0: -26, z0: -86, x1: 26, z1: -82, surface: "flagstone" },
-    { x0: -2.8, z0: -114, x1: 2.8, z1: -64, surface: "flagstone" },
-    { x0: -16, z0: -112, x1: 16, z1: -92, surface: "flagstone" },
-    { x0: -2.8, z0: -195, x1: 2.8, z1: -178, surface: "flagstone" },
+    // Roads of flagstone through the keep areas (the road keeps its width).
+    { x0: -2.8, z0: 118 * S, x1: 2.8, z1: 152 * S, surface: "flagstone" },
+    { x0: -26 * S, z0: -86 * S, x1: 26 * S, z1: -86 * S + 5, surface: "flagstone" },
+    { x0: -2.8, z0: -114 * S, x1: 2.8, z1: -64 * S, surface: "flagstone" },
+    { x0: -16 * S, z0: -112 * S, x1: 16 * S, z1: -92 * S, surface: "flagstone" },
+    { x0: -2.8, z0: -195 * S, x1: 2.8, z1: -178 * S, surface: "flagstone" },
   ],
-  patches: [
+  patches: ([
     { x: -14, z: 136, w: 12, d: 10, surface: "cinder", seed: 0 },
     { x: 15, z: 128, w: 10, d: 12, surface: "cinder", seed: 1 },
     { x: -18, z: 90, w: 14, d: 11, surface: "cinder", seed: 2 },
@@ -186,7 +241,12 @@ export const GROUND_SPEC: GroundSpec = {
     { x: -14, z: -146, w: 14, d: 11, surface: "cinder", seed: 1 },
     { x: 15, z: -140, w: 11, d: 12, surface: "cinder", seed: 2 },
     { x: 0, z: -205, w: 30, d: 30, surface: "cinder", seed: 3 },
-  ],
+    { x: -18, z: 150, w: 10, d: 6, surface: "ash", seed: 0 },
+    { x: 0, z: 100, w: 16, d: 8, surface: "ash", seed: 1 },
+    { x: 16, z: 48, w: 12, d: 8, surface: "ash", seed: 2 },
+    { x: -18, z: -104, w: 12, d: 10, surface: "ash", seed: 3 },
+    { x: 18, z: -166, w: 12, d: 8, surface: "ash", seed: 0 },
+  ] as GroundSpec["patches"]).map((p) => ({ ...p, x: p.x * S, z: p.z * S, w: p.w * S, d: p.d * S })),
 };
 
 function rect(r: Rect) {
@@ -195,11 +255,14 @@ function rect(r: Rect) {
 
 type Placement = [HellModel, number, number, number?, SpawnOptions?];
 
-/** Deterministic RNG so the scatter is the same on every load. */
-function rng(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
-}
+/** Props of a small scene (offsets from its centre, metres): [model, dx, dz, scale range]. */
+const CLUSTER_PROPS: Record<ClusterKind, [HellModel, number, number, number, number][]> = {
+  rocks: [["crag", 0, 0, 0.45, 0.7], ["rockMid4", 2.6, 1.4, 0.7, 1.1], ["rockSmall2", -2.2, 1.8, 0.7, 1.2], ["rockSmall1", 1.2, -2.4, 0.6, 1]],
+  bones: [["boneRib", 0, 0, 0.9, 1.2], ["skeleton", 2.4, 1.2, 1, 1], ["bones2", -1.8, -1.6, 0.9, 1.3], ["skull", 1.4, -1.8, 1, 1.4]],
+  flesh: [["fleshStalk", 0, 0, 0.7, 1], ["fleshClaw", 2.4, -1, 0.5, 0.8], ["puddleC", -1.4, 1.2, 1, 1.5], ["bones2", 1.6, 2, 0.8, 1.2]],
+  ruin: [["columnBroken", 0, 0, 0.8, 1], ["columnStump", 2.4, 1.5, 0.9, 1.1], ["rubble", -2, -1, 0.8, 1.3], ["stoneSmall1", 1, -2.2, 0.8, 1.2]],
+  torture: [["cage", 0, 0, 0.9, 1.1], ["cross", 2.6, 0.8, 0.8, 1], ["skeleton", -1.8, 1.8, 1, 1], ["bones1", 1.2, -2, 0.9, 1.2]],
+};
 
 /* ------------------------------------------------------------------------------------------------
  * World state driven by the campaign: the rune seals on the way on, the arena's glow.
@@ -236,7 +299,9 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
   world.sigils = [];
 
   const place = (id: HellModel, x: number, z: number, yaw = 0, options: SpawnOptions = {}) => kit.spawn(id, x, z, yaw, root, options);
-  const placeAll = (list: Placement[]) => { for (const [id, x, z, yaw, options] of list) place(id, x, z, yaw ?? 0, options); };
+  const placeRaw = (list: Placement[]) => { for (const [id, x, z, yaw, options] of list) place(id, x, z, yaw ?? 0, options); };
+  /** Hand-placed set pieces, in layout space (positions scaled by S). */
+  const placeAll = (list: Placement[]) => { for (const [id, x, z, yaw, options] of list) place(id, x * S, z * S, yaw ?? 0, options); };
   const lowBox = (x: number, z: number, width: number, depth: number) => {
     const e = new Entity("rim");
     e.setLocalPosition(x, 0, z);
@@ -330,7 +395,8 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
     }
   }
   // Broken bridges: stubs reaching into the lava and ending in rubble (scenery).
-  const broken: [number, number, number, number][] = [[26, -16, 38, -16], [-28, -150, -40, -150], [30, 86, 40, 86], [-14, -56, -14, -64]];
+  const broken = ([[26, -16, 38, -16], [-28, -150, -40, -150], [30, 86, 40, 86], [-14, -56, -14, -64], [-30, 96, -40, 96], [28, -196, 38, -196]] as [number, number, number, number][])
+    .map((b) => b.map((v) => v * S));
   for (const [x0, z0, x1, z1] of broken) {
     const len = Math.hypot(x1 - x0, z1 - z0), dx = (x1 - x0) / len, dz = (z1 - z0) / len;
     const yaw = (Math.atan2(-dz, dx) * 180) / Math.PI;
@@ -368,15 +434,15 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
   // ------------------------------------------------------------------ lava sea: spikes, statues, towers, chains
   const lavaRock = (x: number, z: number, big: boolean) =>
     place(big ? "cragBig" : random() < 0.5 ? "crag" : "rockMid2", x, z, random() * 360, { y: LAVA_Y - (big ? 1.5 : 0.6), scale: (big ? 0.7 : 0.8) + random() * 0.6, noCollider: true });
-  for (let i = 0; i < 110; i++) {
-    const z = 170 - random() * 420;
+  for (let i = 0; i < 190; i++) {
+    const z = (170 - random() * 420) * S;
     const side = random() < 0.5 ? -1 : 1;
-    const x = side * (34 + random() * 22);
+    const x = side * (32 * S + 4 + random() * 34);
     lavaRock(x, z, random() < 0.35);
   }
   // Rocks in the chasms between islands.
   for (const [x, z] of [[-20, 114], [16, 115], [-24, 58], [0, 58], [24, 59], [0, 0], [-24, 0], [24, -1], [0, -29], [-22, -30], [22, -31], [-18, -60], [16, -61], [-16, -118], [18, -117], [-18, -174], [18, -175]]) {
-    place(random() < 0.5 ? "rockSmall1" : "rockMid3", x, z, random() * 360, { y: LAVA_Y - 0.4, scale: 0.6 + random() * 0.4, noCollider: true });
+    place(random() < 0.5 ? "rockSmall1" : "rockMid3", x * S, z * S, random() * 360, { y: LAVA_Y - 0.4, scale: 0.6 + random() * 0.4, noCollider: true });
   }
   // Landmarks.
   placeAll([
@@ -384,7 +450,7 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
     ["statue", -18, 113, 20, { y: LAVA_Y, scale: 1.1, noCollider: true }],
     ["statue", 18, 113, -20, { y: LAVA_Y, scale: 1.1, noCollider: true }],
     // Towers of the citadel beyond its walls.
-    ["tower", -38, -95, 30, { y: LAVA_Y, noCollider: true }],
+    ["tower", -37, -95, 30, { y: LAVA_Y, noCollider: true }],
     ["tower", 38, -92, -30, { y: LAVA_Y, scale: 0.9, noCollider: true }],
     ["tower", -30, -122, 0, { y: LAVA_Y, scale: 0.75, noCollider: true }],
     // The demon lord's colossus behind the throne, and two more towers.
@@ -400,25 +466,32 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
   ]);
   // Giant chains rising out of the lava, and hung between towers.
   for (const [x, z, h] of [[-36, 20, 9], [38, -40, 11], [-40, -130, 10], [36, -170, 12], [-28, 96, 8]] as const) {
-    place("chain", x, z, random() * 90, { y: LAVA_Y, scale: [5, h, 5], noCollider: true });
+    place("chain", x * S, z * S, random() * 90, { y: LAVA_Y, scale: [5, h, 5], noCollider: true });
   }
   placeAll([
-    ["chainHang", 0, -232, 0, { y: 9, scale: [22, 6, 6], noCollider: true }],
-    ["chainHang", -30, -95, 90, { y: 7, scale: [10, 5, 5], noCollider: true }],
+    ["chainHang", 0, -234, 0, { y: 11, scale: [44, 7, 7], noCollider: true }],
+    ["chainHang", -33.5, -95, 90, { y: 7, scale: [10, 5, 5], noCollider: true }],
   ]);
 
   // ------------------------------------------------------------------ A: GATES OF HELL (z 118..154)
+  // The gate: two great pillars at the bridge mouth with fire on top and chains between them.
+  const gateZ = 118 * S + 1.5;
+  placeRaw([
+    ["pillar", -5.2, gateZ, 0, { scale: [1.6, 2.2, 1.6] }], ["pillar", 5.2, gateZ, 0, { scale: [1.6, 2.2, 1.6] }],
+    ["brazier", -5.2, gateZ, 0, { y: 8.2, scale: 1.3, noCollider: true }], ["brazier", 5.2, gateZ, 0, { y: 8.2, scale: 1.3, noCollider: true }],
+    ["chainHang", 0, gateZ + 0.1, 0, { y: 6.5, scale: [7.5, 2.6, 2.6], noCollider: true }],
+    ["boneHorn", -9.5, gateZ + 1.5, -30, { tiltZ: 12 }], ["boneHorn", 9.5, gateZ + 1.5, 210, { tiltZ: 12 }],
+  ]);
   placeAll([
-    // The gate: two great pillars with fire on top and chains between them.
-    ["pillar", -5.2, 119.5, 0, { scale: [1.6, 2.2, 1.6] }], ["pillar", 5.2, 119.5, 0, { scale: [1.6, 2.2, 1.6] }],
-    ["brazier", -5.2, 119.5, 0, { y: 8.2, scale: 1.3, noCollider: true }], ["brazier", 5.2, 119.5, 0, { y: 8.2, scale: 1.3, noCollider: true }],
-    ["chainHang", 0, 119.6, 0, { y: 6.5, scale: [7.5, 2.6, 2.6], noCollider: true }],
-    ["boneHorn", -9.5, 121, -30, { tiltZ: 12 }], ["boneHorn", 9.5, 121, 210, { tiltZ: 12 }],
     // Arrival: bones and spikes.
     ["boneRib", -7, 147, 20, { tiltZ: -14 }], ["boneRib2", 7.5, 143, -30, { tiltZ: 10 }],
     ["crag", -16, 146, 30, { scale: 0.8 }], ["crag", 17, 138, 200, { scale: 0.75 }], ["cragBig", -19, 127, 70, { scale: 0.42, y: -1 }],
     ["rockMid3", 14, 150, 20, { scale: 0.7 }], ["rockSmall1", -12, 130, 0], ["rockSmall2", 11, 124, 60],
     ["cage", -14, 124, 15], ["cage", 15, 132, -20], ["skeleton", 2.2, 136, 40], ["bones1", -2, 150, 0], ["skull", -4.5, 128, 20],
+    // The approach to the gate: an avenue of broken columns and impaled dead.
+    ["columnBroken", -8, 144, 30], ["column", 8, 146, 0, { scale: [0.8, 0.9, 0.8] }], ["columnStump", -9, 134, 0], ["columnBroken", 9, 128, 200],
+    ["cross", -18, 140, 20], ["cross", 19, 146, -30], ["fleshStalk", -19, 121, 40], ["gear", 12, 139, 0, { tiltX: 72, y: 0.3 }],
+    ["crag", 0, 125, 40, { scale: 0.5 }], ["rockMid4", -6, 139, 10], ["stockade", 18, 124, 0],
   ]);
 
   // ------------------------------------------------------------------ B: INFERNAL WASTES (z 62..110)
@@ -432,20 +505,25 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
     ["crag", 26, 106, 60, { scale: 0.8 }], ["crag", -27, 64, 150, { scale: 0.75 }], ["cragBig", 27, 76, 20, { scale: 0.4, y: -1 }],
     ["cage", 6, 106, 20], ["cage", -14, 66, -15], ["skeleton", 12, 94, 70], ["stockade", -26, 94, 90],
     ["columnBroken", 15, 104, 80], ["columnStump", -18, 78, 0],
+    // More of the wastes: a second ribcage, burnt cages, flesh taking the rock.
+    ["boneRib", 16, 70, 160, { tiltZ: 14 }], ["boneRib2", 19, 68, 190, { tiltZ: -10 }], ["fleshGut", -12, 76, 80], ["fleshSpire", 8, 78, 0, { scale: 0.8 }],
+    ["cage", 24, 92, 40], ["skeleton", -20, 108, 10], ["gearSmall", -26, 104, 30, { tiltX: 80, y: 0.2 }], ["crag", -4, 104, 90, { scale: 0.55 }],
+    ["rack", -2, 64, 0], ["cross", 26, 64, 20], ["rockMid4", 4, 94, 60],
   ]);
 
   // ------------------------------------------------------------------ C: SACRIFICIAL PENTAGRAM (z 6..54)
-  place("circlePlatform", SIGIL_C.x, SIGIL_C.z, 0, { y: -1.92, scale: [2.05, 1, 2.05], noCollider: true });
+  place("circlePlatform", SIGIL_C.x, SIGIL_C.z, 0, { y: -1.92, scale: [2.05 * S, 1, 2.05 * S], noCollider: true });
   world.sigils.push(sigil(root, app, SIGIL_C.x, SIGIL_C.z, SIGIL_C.radius, 1.2));
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
-    const x = SIGIL_C.x + Math.sin(a) * 16.5, z = SIGIL_C.z + Math.cos(a) * 16.5;
+    const x = SIGIL_C.x + Math.sin(a) * (SIGIL_C.radius + 7), z = SIGIL_C.z + Math.cos(a) * (SIGIL_C.radius + 7);
     place(i % 3 === 2 ? "columnBroken" : "column", x, z, (a * 180) / Math.PI, { scale: [0.8, 0.9, 0.8] });
   }
   placeAll([
     ["altar", -4, 43, 0], ["altar", 4, 43, 0], ["cross", 0, 48.5, 0],
     ["crag", -21, 50, 60, { scale: 0.75 }], ["crag", 21.5, 9, 150, { scale: 0.8 }], ["cragBig", -22, 10, 20, { scale: 0.45, y: -1 }],
     ["cage", 20, 48, 20], ["cage", -20, 30, -20], ["skeleton", 17, 30, 60], ["boneRib", 20, 18, 30, { tiltZ: 12 }],
+    ["fleshClaw", -20, 14, 60], ["fleshStalk", 21, 36, 0], ["cross", -21, 42, 10], ["columnStump", 14, 51, 0], ["crag", 22, 26, 40, { scale: 0.55 }],
   ]);
   // Statues of the lords watching the circle from the lava.
   placeAll([["statue", -40, 28, 90, { y: LAVA_Y, scale: 0.9, noCollider: true }], ["statue", 40, 28, -90, { y: LAVA_Y, scale: 0.9, noCollider: true }]]);
@@ -456,6 +534,8 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
     ["crag", 23, -22, 60, { scale: 0.75 }], ["fleshStalk", 22, -9, 10], ["columnBroken", 8, -22, 30], ["skeleton", 14, -20, 40],
     ["boneRib", -10, -52, 20, { tiltZ: -12 }], ["boneRib2", 10, -52, -30, { tiltZ: 10 }], ["cragBig", 12, -36, 40, { scale: 0.4, y: -1 }],
     ["altar", -3, -45, 0], ["altar", 3, -45, 0],
+    ["fleshBrain", -16, -12, 40, { scale: 0.8 }], ["cage", 20, -12, 0], ["gearSmall", -12, -8, 20, { tiltX: 80, y: 0.2 }], ["rockMid4", 12, -10, 80],
+    ["cage", -10, -40, 20], ["crag", -11, -54, 60, { scale: 0.5 }], ["skeleton", 8, -48, 30],
   ]);
 
   // ------------------------------------------------------------------ E: DEMON CITADEL (z -64..-114)
@@ -468,13 +548,18 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
       if (id) place(id, ax + dx * w * (i + 0.5), az + dz * w * (i + 0.5), yaw, { scale: [w / 2, height, 1] });
     }
   };
-  wallLine(-30, -86, -3, -86, ["wall", "wallBump", "wall", "wallWindow"]);
-  wallLine(3, -86, 30, -86, ["wall", "wallWindow", "wall", "wallBump"]);
+  // The inner gate keeps its real width (6 m).
+  wallLine(-30 * S, -86 * S, -3, -86 * S, ["wall", "wallBump", "wall", "wallWindow"]);
+  wallLine(3, -86 * S, 30 * S, -86 * S, ["wall", "wallWindow", "wall", "wallBump"]);
   // North wall of the citadel (the keep's face), taller.
-  wallLine(-30, -114, 30, -114, ["wall", "wallWindow", "wallBump", "wall", "wallWindow", "wall"], 1.4);
+  wallLine(-30 * S, -114 * S, 30 * S, -114 * S, ["wall", "wallWindow", "wallBump", "wall", "wallWindow", "wall"], 1.4);
+  placeRaw([
+    ["column", -3.8, -86 * S, 0, { scale: [0.85, 1.1, 0.85] }], ["column", 3.8, -86 * S, 0, { scale: [0.85, 1.1, 0.85] }],
+    ["brazier", -3.8, -86 * S, 0, { y: 4.4, noCollider: true }], ["brazier", 3.8, -86 * S, 0, { y: 4.4, noCollider: true }],
+  ]);
+  // Towers along the inner wall.
+  for (const x of [-44, -24, 24, 44]) placeRaw([["column", x, -86 * S, 0, { scale: [1, 1.3, 1] }], ["brazier", x, -86 * S, 0, { y: 5.2, noCollider: true }]]);
   placeAll([
-    ["column", -3.8, -86, 0, { scale: [0.85, 1.1, 0.85] }], ["column", 3.8, -86, 0, { scale: [0.85, 1.1, 0.85] }],
-    ["brazier", -3.8, -86, 0, { y: 4.4, noCollider: true }], ["brazier", 3.8, -86, 0, { y: 4.4, noCollider: true }],
     ["column", -29, -86, 0, { scale: [1, 1.3, 1] }], ["column", 29, -86, 0, { scale: [1, 1.3, 1] }],
     ["column", -29, -113, 0, { scale: [1, 1.8, 1] }], ["column", 29, -113, 0, { scale: [1, 1.8, 1] }],
     // Outer yard: cages, racks, a spike wheel - the citadel's killing ground.
@@ -483,32 +568,39 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
     // Courtyard: the ring of pillars where the wyrm lands; a throne for its master, empty.
     ["pedestal", 0, -110, 0, { scale: [2.2, 1, 1.5] }], ["throne", 0, -110.4, 0, { y: 0.54, noCollider: true }],
     ["cage", -24, -110, 20], ["cage", 24, -110, -20], ["skeleton", -20, -96, 30], ["bones1", 18, -98, 0],
+    // Outer yard: more of the killing ground.
+    ["rack", 12, -66, -20], ["spikeWheel", -22, -80, 20], ["cage", 0, -74, 0], ["cross", -26, -74, 10], ["cross", 26, -70, -10],
+    ["stockade", 8, -78, 90], ["stockade", 10, -78, 90], ["skeleton", -2, -68, 60],
+    // Courtyard corners.
+    ["spikeWheel", -24, -92, 40], ["rack", 24, -94, -30], ["crag", -26, -104, 30, { scale: 0.6 }], ["crag", 26, -106, 200, { scale: 0.6 }],
   ]);
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    place("pillar", Math.sin(a) * 15, -100 + Math.cos(a) * 9, 0, { scale: [0.9, 1, 0.9] });
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    place("pillar", Math.sin(a) * 15 * S, (-100 + Math.cos(a) * 9) * S, 0, { scale: [0.9, 1, 0.9] });
   }
 
   // ------------------------------------------------------------------ G: THE ABYSS (z -122..-170)
   // An ossuary of giants: ribcages rising from the rock, gears, flesh, chains.
-  for (let i = 0; i < 5; i++) {
-    const z = -130 - i * 7;
-    place("boneRib", -8, z, 90, { tiltZ: -18, scale: 1.3 });
-    place("boneRib2", 8, z - 2, -90, { tiltZ: 18, scale: 1.3 });
+  for (let i = 0; i < 9; i++) {
+    const z = -130 * S - i * 7.5;
+    place("boneRib", -11, z, 90, { tiltZ: -18, scale: 1.3 });
+    place("boneRib2", 11, z - 2, -90, { tiltZ: 18, scale: 1.3 });
   }
   placeAll([
     ["gear", -20, -130, 30, { tiltX: 72, y: 0.6, scale: 1.2 }], ["gearSmall", 20, -156, -20, { tiltX: 80, y: 0.2 }],
     ["axe", 22, -128, 20, { tiltZ: 12, y: -2.2 }], ["fleshSpire", -22, -164, 0], ["fleshGut", 22, -166, 60], ["fleshBrain", -24, -138, 30],
     ["cage", -12, -126, 15], ["cage", 12, -126, -15], ["cross", 0, -166, 0], ["crag", 25, -145, 60, { scale: 0.8 }], ["crag", -25, -154, 150, { scale: 0.75 }],
     ["skeleton", -4, -140, 40], ["skeleton", 5, -152, -20], ["bones3", 0, -134, 0],
+    ["boneHorn", -22, -126, -40, { tiltZ: 12 }], ["boneHorn", 22, -168, 150, { tiltZ: 12 }], ["fleshClaw", 24, -150, 20], ["fleshStalk", -20, -150, 70],
+    ["gear", 18, -164, 70, { tiltX: 72, y: 0.6 }], ["cage", -24, -168, 30], ["cross", 24, -132, 0], ["rockMid4", -8, -164, 40],
   ]);
 
   // ------------------------------------------------------------------ F: THRONE OF THE ARCHFIEND (z -178..-228)
-  place("circlePlatform", SIGIL_F.x, SIGIL_F.z, 0, { y: -1.92, scale: [2.4, 1, 2.4], noCollider: true });
+  place("circlePlatform", SIGIL_F.x, SIGIL_F.z, 0, { y: -1.92, scale: [2.4 * S, 1, 2.4 * S], noCollider: true });
   world.sigils.push(sigil(root, app, SIGIL_F.x, SIGIL_F.z, SIGIL_F.radius, 1.4));
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
-    const x = SIGIL_F.x + Math.sin(a) * 19, z = SIGIL_F.z + Math.cos(a) * 19;
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+    const x = SIGIL_F.x + Math.sin(a) * (SIGIL_F.radius + 8), z = SIGIL_F.z + Math.cos(a) * (SIGIL_F.radius + 8);
     place("pillar", x, z, 0, { scale: [1.1, 1.4, 1.1] });
     place("brazier", x, z, 0, { y: 5.2, noCollider: true });
   }
@@ -522,7 +614,7 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
   const pathsClear = (x: number, z: number) => Math.abs(x) < 3.2 || Math.hypot(x - SIGIL_C.x, z - SIGIL_C.z) < SIGIL_C.radius + 2 || Math.hypot(x - SIGIL_F.x, z - SIGIL_F.z) < SIGIL_F.radius + 2;
   for (const isl of Object.values(ISLANDS)) {
     const area = (isl.x1 - isl.x0) * (isl.z1 - isl.z0);
-    const n = Math.round(area / 45);
+    const n = Math.round(area / 50);
     for (let k = 0; k < n; k++) {
       const x = isl.x0 + 1.5 + random() * (isl.x1 - isl.x0 - 3), z = isl.z0 + 1.5 + random() * (isl.z1 - isl.z0 - 3);
       if (pathsClear(x, z)) continue;
@@ -531,6 +623,15 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
     }
   }
   for (const [x, z] of BRAZIERS) place("brazier", x, z);
+  for (const c of CLUSTERS) {
+    const rand = rng(c.seed);
+    const turn = rand() * Math.PI * 2, cos = Math.cos(turn), sin = Math.sin(turn);
+    for (const [id, dx, dz, k0, k1] of CLUSTER_PROPS[c.kind]) {
+      if (dx !== 0 && rand() < 0.25) continue;
+      const tilt = id === "boneRib" ? { tiltZ: (rand() - 0.5) * 30 } : {};
+      place(id, c.x + dx * cos - dz * sin, c.z + dx * sin + dz * cos, rand() * 360, { scale: k0 + rand() * (k1 - k0), ...tilt, ...(id === "crag" ? { y: -0.5 } : {}) });
+    }
+  }
 
   return root;
 }
