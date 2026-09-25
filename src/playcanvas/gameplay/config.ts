@@ -334,11 +334,12 @@ export const WAVES: WaveDef[] = [
 /**
  * Character XP and levels (independent of waves): kills give XP (EnemyDef.xp); each level-up offers a
  * choice of 3 upgrades. `toNext[i]` = XP from level i + 1 to i + 2; past the table each level needs
- * `growth` more than the one before.
+ * `growth` more than the one before. Paced (measured in a kiting simulation) so the first level-up
+ * comes ~25-30 s into wave 1, two in wave 1 and two to three in wave 2: upgrades stay an event.
  */
 export const XP = {
-  toNext: [50, 90, 140, 200, 270],
-  growth: 80,
+  toNext: [150, 230, 320, 420, 540],
+  growth: 120,
   /** Upgrade cards offered per level-up. */
   choices: 3,
 };
