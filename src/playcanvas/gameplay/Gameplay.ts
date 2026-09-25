@@ -5,7 +5,7 @@ import type { WeaponHolder } from "../player/WeaponHolder";
 import type { Hud } from "../ui/Hud";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
 import type { Biome, Campaign, LevelBounds, WayPoint, Zone } from "../world/level/Biome";
-import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, shopPrice, WEAPON_CARDS, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
+import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, shopPrice, TRAPS, ENEMY_PACE, WEAPON_CARDS, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
 import { BossBrain } from "./BossBrain";
 import { HELL_BOSSES, HELL_TYPE_SKINS } from "./hellConfig";
 import { Effects } from "./Effects";
@@ -83,6 +83,12 @@ export class Gameplay {
   private region: LevelBounds;
   /** Burn damage waiting to be applied (fire zones tick in small amounts). */
   private burn = 0;
+  /** Seconds to the next trap (WaveDef.traps). */
+  private trapTimer = 0;
+  /** Hellhound bite: remaining seconds and the speed multiplier. */
+  private cripple = { time: 0, slow: 1 };
+  /** On-kill healing still available (campaign run.killHealPerSecond; refills per second). */
+  private killHealBudget = 0;
   /** A weapon picked up between levels: its NEW WEAPON card shows when the next level starts. */
   private unlocked: WeaponId | null = null;
   /** The armory has been visited this run (campaign-only weapons appear in the shop). */
@@ -123,6 +129,8 @@ export class Gameplay {
     this.gun = new PlayerGun(this.enemies, this.effects, collision, this.stats, this.projector, this.combat);
     this.drones = new Drones(app, this.effects, this.combat, this.gun);
     this.enemies.onPlayerHit = (damage, from) => {
+      const c = from.def.cripple;
+      if (c) this.cripple = { time: Math.max(this.cripple.time, c.seconds), slow: Math.min(this.cripple.time > 0 ? this.cripple.slow : 1, c.slow) };
       const push = from.def.knockback ?? 0;
       if (push > 0 && this.hurtPlayer(damage)) {
         const p = this.player.entity.getPosition();
@@ -275,6 +283,8 @@ export class Gameplay {
     this.campaign?.arena?.(0);
     this.burn = 0;
     this.meteorTimer = this.levels[index].meteors?.every ?? 0;
+    this.trapTimer = (this.levels[index].traps?.every ?? 0) * 0.6;
+    this.cripple.time = 0;
     // Every wave starts in the zone's (or map's) open area.
     const start = zone?.start ?? this.biome.runStart;
     if (!arrived) {
@@ -609,9 +619,9 @@ export class Gameplay {
   /** Called exactly once per enemy death (EnemyManager.die): XP, heal-on-kill, drops. */
   private onEnemyDeath(enemy: Enemy): void {
     this.stats.kills++;
-    if (this.stats.healOnKill > 0) this.stats.heal(this.stats.healOnKill);
+    if (this.stats.healOnKill > 0) this.killHeal(this.stats.healOnKill);
     this.pendingLevelUps += this.stats.gainXp(enemy.def.xp);
-    if (this.stats.vampireChance > 0 && Math.random() < this.stats.vampireChance) this.stats.heal(this.stats.vampireHeal);
+    if (this.stats.vampireChance > 0 && Math.random() < this.stats.vampireChance) this.killHeal(this.stats.vampireHeal);
     // Drops: most zombies leave nothing, so the ground stays readable.
     const { x, z } = enemy.position;
     if (enemy.def.deathFx === "ember") {
@@ -639,7 +649,7 @@ export class Gameplay {
     if (kind === "cash") s.cash += value;
     else if (kind === "health") {
       const before = s.hp;
-      s.heal(s.maxHp * DROPS.healthFraction);
+      s.heal(Math.min(s.maxHp * DROPS.healthFraction, this.campaign?.run?.pickupHealMax ?? Infinity));
       const p = this.player.entity.getPosition();
       this.tmp.set(p.x, 2.1 * this.characterScale(), p.z);
       this.hud.damageNumber(this.tmp, `+${Math.round(s.hp - before)} HP`, "heal");
@@ -652,6 +662,7 @@ export class Gameplay {
 
   /** Level hazards: environmental meteor showers around the hero (Hell's last act). */
   private environment(dt: number, position: Vec3): void {
+    this.springTraps(dt, position);
     const m = this.director.wave.meteors;
     if (!m) return;
     this.meteorTimer -= dt;
@@ -662,6 +673,55 @@ export class Gameplay {
       const r = i === 0 ? 0.5 : 2 + Math.random() * 4, a = Math.random() * Math.PI * 2;
       this.hazards.strike(position.x + Math.sin(a) * r, position.z + Math.cos(a) * r, m.radius, 1.3 + i * 0.25, m.damage * w.damageScale, "meteor", 3, 8);
     }
+  }
+
+  /** WaveDef.traps: every few seconds a cage, a sweep or tar pools around the hero. */
+  private springTraps(dt: number, position: Vec3): void {
+    const t = this.director.wave.traps;
+    if (!t) return;
+    this.trapTimer -= dt;
+    if (this.trapTimer > 0) return;
+    this.trapTimer = t.every * (0.75 + Math.random() * 0.5);
+    const damage = t.damage * this.director.wave.damageScale;
+    const kind = t.kinds[Math.floor(Math.random() * t.kinds.length)];
+    const h = this.hazards;
+    if (kind === "cage") {
+      // A ring of eruptions with one gap closes round the hero; the ground under him erupts too.
+      const c = TRAPS.cage, gap = Math.random() * Math.PI * 2, half = (c.gapDeg * Math.PI) / 360;
+      for (let i = 0; i < c.strikes; i++) {
+        const a = gap + half + ((Math.PI * 2 - half * 2) * (i + 0.5)) / c.strikes;
+        h.strike(position.x + Math.sin(a) * c.radius, position.z + Math.cos(a) * c.radius, c.strikeRadius, c.delay, damage, "eruption", 2.5, 8);
+      }
+      h.strike(position.x, position.z, c.centreRadius, c.delay + 0.35, damage, "eruption");
+    } else if (kind === "sweep") {
+      // A line of eruptions across the hero, rippling from one end.
+      const c = TRAPS.sweep, a = Math.random() * Math.PI, dx = Math.sin(a), dz = Math.cos(a);
+      for (let i = 0; i < c.strikes; i++) {
+        const o = (i - (c.strikes - 1) / 2) * c.spacing;
+        h.strike(position.x + dx * o, position.z + dz * o, c.strikeRadius, c.delay + i * c.ripple, damage, "eruption", c.fire, 8);
+      }
+    } else {
+      // Brimstone tar: pools near the hero, one of them where he is heading.
+      const c = TRAPS.tar, v = this.player.velocity;
+      for (let i = 0; i < c.pools; i++) {
+        const lead = i === 0 && v.lengthSq() > 1;
+        const a = lead ? Math.atan2(v.x, v.z) : Math.random() * Math.PI * 2;
+        const r = c.near[0] + Math.random() * (c.near[1] - c.near[0]);
+        h.tar(position.x + Math.sin(a) * r, position.z + Math.cos(a) * r, c.radius[0] + Math.random() * (c.radius[1] - c.radius[0]), c.seconds);
+      }
+    }
+  }
+
+  /** Heals on a kill, within the campaign's per-second budget (so a fast-killing build can't out-heal Hell). */
+  private killHeal(amount: number): void {
+    const rate = this.campaign?.run?.killHealPerSecond;
+    if (rate === undefined) {
+      this.stats.heal(amount);
+      return;
+    }
+    const given = Math.min(amount, this.killHealBudget);
+    this.killHealBudget -= given;
+    if (given > 0) this.stats.heal(given);
   }
 
   update(dt: number): void {
@@ -680,7 +740,12 @@ export class Gameplay {
         this.navTimer = 0.3;
       }
       this.stats.invulnerable = Math.max(0, this.stats.invulnerable - dt);
-      this.player.speedMultiplier = this.stats.moveSpeedMult;
+      // Tar and hellhound bites slow the hero; demons keep pace with his speed upgrades.
+      this.cripple.time = Math.max(0, this.cripple.time - dt);
+      this.player.speedMultiplier = this.stats.moveSpeedMult * (this.hazards.playerInTar ? TRAPS.tarSlow : 1) * (this.cripple.time > 0 ? this.cripple.slow : 1);
+      this.enemies.pace = (this.director.wave.speedScale ?? 1) * (1 + ENEMY_PACE.followHero * (this.stats.moveSpeedMult - 1));
+      const rate = this.campaign?.run?.killHealPerSecond;
+      if (rate !== undefined) this.killHealBudget = Math.min(rate * 2, this.killHealBudget + rate * dt);
       this.director.update(dt, position, this.projector);
       this.enemies.update(dt, position, this.stats.alive);
       this.combat.update(dt);

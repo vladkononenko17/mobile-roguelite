@@ -371,9 +371,12 @@ export class EnemyManager {
     return (this.speedOf(enemy) * this.slowFactor(enemy)) / (ENEMY_VISUALS[enemy.visual].moveSpeed * enemy.scale);
   }
 
-  /** Ground speed with enrage / boss phase multipliers. */
+  /** Speed multiplier for every enemy (the level's pace and the hero's speed upgrades; set per frame). */
+  pace = 1;
+
+  /** Ground speed with enrage / boss phase multipliers and the pace. */
   private speedOf(enemy: Enemy): number {
-    let v = enemy.def.speed;
+    let v = enemy.def.speed * this.pace;
     if (enemy.enraged && enemy.def.enrage) v *= enemy.def.enrage.speed;
     if (enemy.brain && this.brain) v *= this.brain.speedFactor(enemy);
     return v;

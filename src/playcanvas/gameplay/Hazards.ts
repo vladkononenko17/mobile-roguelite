@@ -82,10 +82,11 @@ interface Portal {
   onDone: (() => void) | null;
 }
 
-const RINGS = 24;
+const RINGS = 48;
 const BOLTS = 48;
-const STRIKES = 16;
-const ZONES = 14;
+const STRIKES = 40;
+const ZONES = 20;
+const TARS = 10;
 const PORTALS = 8;
 
 /**
@@ -97,6 +98,7 @@ const PORTALS = 8;
  * - bolts: slow glowing orbs flying straight, with a shadow on the ground - dodge sideways;
  * - strikes: meteors / eruptions - a filling ring, then the impact, optionally leaving fire;
  * - fire zones: burning ground, damage per second while standing in it;
+ * - tar: brimstone pools that slow the hero while he stands in them (playerInTar);
  * - portals: a summoning circle that opens before a demon steps out.
  * Pooled; flat unlit meshes, one draw each.
  */
@@ -109,6 +111,9 @@ export class Hazards {
   private readonly strikes: Strike[] = [];
   private readonly zones: Zone[] = [];
   private readonly portals: Portal[] = [];
+  private readonly tars: { entity: Entity; x: number; z: number; radius: number; life: number; total: number }[] = [];
+  /** Whether the player stood in tar at the last update. */
+  playerInTar = false;
   private readonly tmp = new Vec3();
   private time = 0;
   /** Called when a projectile lands / a strike hits: damages the player if inside `radius`. */
@@ -172,6 +177,15 @@ export class Hazards {
       entity.enabled = false;
       this.root.addChild(entity);
       this.zones.push({ entity, x: 0, z: 0, radius: 1, dps: 0, life: 0, total: 1 });
+    }
+    // Tar: opaque dark ooze with a sickly violet sheen (not additive: it reads as a floor you sink in).
+    const tar = flat(new Color(0.16, 0.05, 0.2), 0.85);
+    for (let i = 0; i < TARS; i++) {
+      const entity = new Entity("tar");
+      entity.addComponent("render", { type: "cylinder", castShadows: false, receiveShadows: false, material: tar });
+      entity.enabled = false;
+      this.root.addChild(entity);
+      this.tars.push({ entity, x: 0, z: 0, radius: 1, life: 0, total: 1 });
     }
     for (let i = 0; i < PORTALS; i++) {
       const entity = new Entity("portal");
@@ -285,6 +299,15 @@ export class Hazards {
     f.entity.setLocalScale(radius * 2, 0.01, radius * 2);
   }
 
+  /** A brimstone tar pool at (x, z) for `seconds`: the hero is slowed inside it. */
+  tar(x: number, z: number, radius: number, seconds: number): void {
+    const t = this.free(this.tars);
+    if (!t) return;
+    Object.assign(t, { x, z, radius, life: seconds, total: seconds });
+    t.entity.enabled = true;
+    t.entity.setPosition(x, 0.03, z);
+  }
+
   /** A summoning portal that opens over `seconds`, then calls `onDone`. */
   portal(x: number, z: number, radius: number, seconds: number, onDone: () => void): void {
     const p = this.free(this.portals);
@@ -373,6 +396,19 @@ export class Hazards {
       f.entity.setLocalScale(f.radius * 2 * (0.94 + 0.06 * k), 0.01, f.radius * 2 * (0.94 + 0.06 * k));
       if (player && Math.hypot(player.x - f.x, player.z - f.z) < f.radius) this.onBurn(f.dps * dt);
     }
+    this.playerInTar = false;
+    for (const t of this.tars) {
+      if (!t.entity.enabled) continue;
+      t.life -= dt;
+      if (t.life <= 0) {
+        t.entity.enabled = false;
+        continue;
+      }
+      // Spreads out over the first half second, shrinks away over the last one.
+      const k = Math.min(1, (t.total - t.life) * 2, t.life);
+      t.entity.setLocalScale(t.radius * 2 * k, 0.01, t.radius * 2 * k);
+      if (player && Math.hypot(player.x - t.x, player.z - t.z) < t.radius * k) this.playerInTar = true;
+    }
     for (const p of this.portals) {
       if (!p.entity.enabled) continue;
       p.life -= dt;
@@ -394,6 +430,8 @@ export class Hazards {
     for (const m of [...this.rings, ...this.lanes]) m.entity.enabled = false;
     for (const p of this.projectiles) p.entity.enabled = false;
     for (const b of this.bolts) b.entity.enabled = b.shadow.enabled = false;
+    for (const t of this.tars) t.entity.enabled = false;
+    this.playerInTar = false;
     for (const s of this.strikes) {
       if (s.orb) s.orb.enabled = false;
       s.marker = null;

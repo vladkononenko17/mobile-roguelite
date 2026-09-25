@@ -88,6 +88,8 @@ export const HELL_ENEMIES: Record<HellEnemyId, EnemyDef> = {
   hound: {
     label: "Hellhound", visuals: ["puglin"], scale: 1.1, scaleJitter: 0.06, behavior: "chaser", deathFx: EMBER,
     maxHp: 36, speed: 5.0, radius: 0.34, damage: 9, attackRange: 1.05, attackWindup: 0.22, attackCooldown: 0.8,
+    // Its bite cripples: running away from a pack gets harder.
+    cripple: { slow: 0.65, seconds: 1.1 },
     cash: 1, xp: 14, drops: { cash: 0.35, health: 0.02, upgrade: 0.006 },
   },
   // SPITTER / CASTER: keeps 6-11 m away and throws slow fire bolts - dodge sideways.
@@ -148,14 +150,14 @@ export const HELL_ENEMIES: Record<HellEnemyId, EnemyDef> = {
   // BOSS 2 - The Infernal Wyrm: a giant drake. Fireball volleys, meteor rain, dives; phase 2 at 50%.
   wyrm: {
     label: "The Infernal Wyrm", visuals: ["drake"], scale: 2.7, behavior: "boss", script: "wyrm", boss: true, deathFx: EMBER, aimHeight: 0.4,
-    maxHp: 4400, speed: 3.4, radius: 1.3, damage: 24, attackRange: 3.2, attackWindup: 0.5, attackCooldown: 1.4,
+    maxHp: 6000, speed: 3.4, radius: 1.3, damage: 24, attackRange: 3.2, attackWindup: 0.5, attackCooldown: 1.4,
     cash: 90, xp: 320, drops: { cash: 1, health: 1, upgrade: 0 },
     fly: { height: 2.2, orbit: 6.5 },
   },
   // FINAL BOSS - The Archfiend: a horned giant fiend. Three phases (65% / 30%).
   archfiend: {
     label: "The Archfiend", visuals: ["fiend"], scale: 3.3, behavior: "boss", script: "archfiend", boss: true, deathFx: EMBER, glow: [2.2, 0.8, 0.25],
-    maxHp: 17500, speed: 2.0, radius: 1.35, damage: 34, attackRange: 3.3, attackWindup: 0.55, attackCooldown: 1.2, knockback: 8,
+    maxHp: 24000, speed: 2.0, radius: 1.35, damage: 34, attackRange: 3.3, attackWindup: 0.55, attackCooldown: 1.2, knockback: 8,
     cash: 150, xp: 500, drops: { cash: 1, health: 1, upgrade: 0 },
     clips: { hit: undefined, special: "D_Charge" },
   },
@@ -315,7 +317,7 @@ export const HELL_LEVELS: WaveDef[] = [
   },
   {
     label: "Hell II", act: "Act I · The Descent", subtitle: "The Infernal Wastes", zone: "wastes",
-    duration: 85, prespawn: 8, hpScale: 1.1, damageScale: 1.05,
+    duration: 85, prespawn: 8, hpScale: 1.15, damageScale: 1.1,
     phases: [
       { at: 0, spawnInterval: 2.6, group: [3, 4], maxAlive: 14, weights: { imp: 1, hound: 0.5 } },
       { at: 20, spawnInterval: 2.5, group: [3, 5], maxAlive: 16, weights: { imp: 1, hound: 0.6, husk: 0.25 } },
@@ -324,7 +326,7 @@ export const HELL_LEVELS: WaveDef[] = [
   },
   {
     label: "Hell III", act: "Act I · The Descent", subtitle: "The Sacrificial Pentagram", zone: "pentagram",
-    duration: 40, prespawn: 6, hpScale: 1.15, damageScale: 1.1,
+    duration: 40, prespawn: 6, hpScale: 1.25, damageScale: 1.15, speedScale: 1.04, bossDamageScale: 1.15,
     phases: [
       { at: 0, spawnInterval: 2.6, group: [3, 4], maxAlive: 14, weights: { imp: 1, hound: 0.5, husk: 0.3 } },
     ],
@@ -333,7 +335,8 @@ export const HELL_LEVELS: WaveDef[] = [
   // ACT II - THE BURNING CITADEL
   {
     label: "Hell IV", act: "Act II · The Burning Citadel", subtitle: "The Lava Crossing", zone: "crossing",
-    duration: 90, prespawn: 8, hpScale: 1.3, damageScale: 1.1,
+    duration: 90, prespawn: 8, hpScale: 1.6, damageScale: 1.3, speedScale: 1.08,
+    traps: { every: 14, kinds: ["tar", "sweep"], damage: 16 },
     phases: [
       { at: 0, spawnInterval: 2.5, group: [3, 5], maxAlive: 16, weights: { imp: 1, hound: 0.5, husk: 0.4, drake: 0.15 } },
       { at: 30, spawnInterval: 2.2, group: [3, 5], maxAlive: 19, weights: { imp: 1, hound: 0.6, husk: 0.5, drake: 0.3 } },
@@ -342,7 +345,8 @@ export const HELL_LEVELS: WaveDef[] = [
   },
   {
     label: "Hell V", act: "Act II · The Burning Citadel", subtitle: "The Citadel Approach", zone: "approach",
-    duration: 100, prespawn: 10, hpScale: 1.5, damageScale: 1.25,
+    duration: 100, prespawn: 10, hpScale: 2.0, damageScale: 1.5, speedScale: 1.1,
+    traps: { every: 12, kinds: ["tar", "sweep", "cage"], damage: 18 },
     phases: [
       { at: 0, spawnInterval: 2.3, group: [3, 5], maxAlive: 18, weights: { imp: 1, husk: 0.6, drake: 0.3, berserker: 0.3 } },
       { at: 30, spawnInterval: 2.1, group: [4, 6], maxAlive: 21, weights: { imp: 1, hound: 0.5, husk: 0.6, drake: 0.35, berserker: 0.35, hellbrute: 0.08 } },
@@ -351,7 +355,8 @@ export const HELL_LEVELS: WaveDef[] = [
   },
   {
     label: "Hell VI", act: "Act II · The Burning Citadel", subtitle: "The Citadel", zone: "citadel",
-    duration: 45, prespawn: 8, hpScale: 1.6, damageScale: 1.3,
+    duration: 45, prespawn: 8, hpScale: 2.3, damageScale: 1.6, speedScale: 1.12, bossDamageScale: 1.4,
+    traps: { every: 13, kinds: ["tar", "cage"], damage: 18 },
     phases: [
       { at: 0, spawnInterval: 2.3, group: [3, 5], maxAlive: 16, weights: { imp: 1, husk: 0.6, berserker: 0.35, hellbat: 0.8 } },
     ],
@@ -360,27 +365,30 @@ export const HELL_LEVELS: WaveDef[] = [
   // ACT III - THE ABYSS
   {
     label: "Hell VII", act: "Act III · The Abyss", subtitle: "Deep Hell", zone: "abyss",
-    duration: 110, prespawn: 10, hpScale: 1.9, damageScale: 1.4,
+    duration: 110, prespawn: 10, hpScale: 3.0, damageScale: 2.0, speedScale: 1.18,
+    traps: { every: 9, kinds: ["tar", "sweep", "cage", "cage"], damage: 20 },
     phases: [
       { at: 0, spawnInterval: 2.2, group: [4, 6], maxAlive: 20, weights: { imp: 1, husk: 0.7, drake: 0.4, berserker: 0.5, hellbat: 0.7, hellbrute: 0.1 } },
       { at: 35, spawnInterval: 2.0, group: [4, 6], maxAlive: 23, weights: { imp: 1, hound: 0.6, husk: 0.8, drake: 0.45, berserker: 0.55, hellbrute: 0.14, hellknight: 0.1 } },
       { at: 80, spawnInterval: 1.7, group: [5, 7], maxAlive: 26, weights: { imp: 0.8, hound: 0.7, husk: 0.9, drake: 0.5, berserker: 0.6, hellbat: 0.8, hellbrute: 0.16, hellknight: 0.14 } },
     ],
-    meteors: { every: 11, damage: 22, radius: 2.2, count: 2 },
+    meteors: { every: 9, damage: 22, radius: 2.2, count: 3 },
   },
   {
     label: "Hell VIII", act: "Act III · The Abyss", subtitle: "The Final Approach", zone: "brink",
-    duration: 120, prespawn: 12, hpScale: 2.2, damageScale: 1.55,
+    duration: 120, prespawn: 12, hpScale: 3.6, damageScale: 2.3, speedScale: 1.22,
+    traps: { every: 8, kinds: ["tar", "sweep", "cage", "sweep"], damage: 22 },
     phases: [
       { at: 0, spawnInterval: 2.0, group: [4, 6], maxAlive: 23, weights: { imp: 0.8, hound: 0.7, husk: 0.9, drake: 0.5, berserker: 0.6, hellbrute: 0.15, hellknight: 0.12 } },
       { at: 40, spawnInterval: 1.8, group: [5, 7], maxAlive: 26, weights: { imp: 0.7, hound: 0.8, husk: 1, drake: 0.6, berserker: 0.7, hellbat: 0.9, hellbrute: 0.2, hellknight: 0.18 } },
       { at: 90, spawnInterval: 1.55, group: [5, 8], maxAlive: 28, weights: { imp: 0.6, hound: 0.9, husk: 1, drake: 0.7, berserker: 0.8, hellbat: 1, hellbrute: 0.24, hellknight: 0.22 } },
     ],
-    meteors: { every: 8, damage: 26, radius: 2.3, count: 3 },
+    meteors: { every: 7, damage: 26, radius: 2.3, count: 4 },
   },
   {
     label: "Hell IX", act: "Act III · The Abyss", subtitle: "The Throne of the Archfiend", zone: "throne",
-    duration: 30, prespawn: 8, hpScale: 2.3, damageScale: 1.6,
+    duration: 30, prespawn: 8, hpScale: 4.0, damageScale: 2.5, speedScale: 1.25, bossDamageScale: 1.8,
+    traps: { every: 10, kinds: ["tar", "sweep", "cage"], damage: 24 },
     phases: [
       { at: 0, spawnInterval: 2.2, group: [3, 5], maxAlive: 16, weights: { imp: 1, husk: 0.8, berserker: 0.5, hellbat: 0.6 } },
     ],
@@ -402,6 +410,10 @@ export const HELL_RUN = {
   pactAfter: 5,
   /** Before this level (index) the final warning is shown. */
   finalLevel: 8,
+  /** Hell can't be out-healed: on-kill healing tops out at this many HP per second... */
+  killHealPerSecond: 2.5,
+  /** ...and a health pickup heals at most this much. */
+  pickupHealMax: 30,
   /** After this level (index; the Glutton) the Infernal Armory offers one of these free. */
   armory: { after: 2, weapons: ["plasma", "hellfire"] as const },
 };

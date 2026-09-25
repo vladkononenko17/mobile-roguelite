@@ -93,15 +93,15 @@ export const WEAPON_STATS: Partial<Record<WeaponId, WeaponStats>> = {
   },
   // Hellfire: slow, heavy soul rounds that pierce, burst and burn (damage and fire builds).
   hellfire: {
-    damage: 30, fireRate: 2.6, range: 15, spreadDeg: 1.2, pellets: 1, penetration: 2, magazine: 12, reloadSeconds: 2.1, knockback: 0.3,
-    fx: { tracer: [1, 0.45, 0.1], tracerWidth: 0.12, tracerLife: 0.12, muzzle: [1, 0.5, 0.12], muzzleSize: 0.34, shot: { speed: 34, size: 0.2, color: [1, 0.5, 0.1] }, splash: { radius: 1.6, fraction: 0.4 }, burn: 7 },
+    damage: 36, fireRate: 2.6, range: 15, spreadDeg: 1.2, pellets: 1, penetration: 2, magazine: 12, reloadSeconds: 2.1, knockback: 0.3,
+    fx: { tracer: [1, 0.45, 0.1], tracerWidth: 0.12, tracerLife: 0.12, muzzle: [1, 0.5, 0.12], muzzleSize: 0.34, shot: { speed: 34, size: 0.2, color: [1, 0.5, 0.1] }, splash: { radius: 1.8, fraction: 0.5 }, burn: 7 },
   },
 };
 
 /** The NEW WEAPON card per weapon (Hud.showWeapon): one line of identity, stat chips, accent colour. */
 export const WEAPON_CARDS: Partial<Record<WeaponId, { text: string; stats: string[]; color: string }>> = {
   plasma: { text: "A hose of plasma bolts. Loves fire rate and crits.", stats: ["12 SHOTS/S", "44 MAG", "PIERCE"], color: "#4fd8ff" },
-  hellfire: { text: "Heavy soul rounds that pierce, burst and burn.", stats: ["30 DMG", "PIERCE 2", "SPLASH", "BURN"], color: "#ff7a2e" },
+  hellfire: { text: "Heavy soul rounds that pierce, burst and burn.", stats: ["36 DMG", "PIERCE 2", "SPLASH", "BURN"], color: "#ff7a2e" },
 };
 
 /* ------------------------------------------------------------------------------------------------
@@ -216,6 +216,8 @@ export const ENEMY_VISUALS: Record<EnemyVisualId, EnemyVisual> = {
 };
 
 export interface EnemyDef {
+  /** A hit slows the hero: speed multiplier for `seconds` (hellhound bites). */
+  cripple?: { slow: number; seconds: number };
   label: string;
   /** Variant looks; each spawn picks one at random (from those loaded). */
   visuals: EnemyVisualId[];
@@ -374,7 +376,34 @@ export interface WaveDef {
   subtitle?: string;
   /** Environmental meteors around the player (every `every` s, randomised). */
   meteors?: { every: number; damage: number; radius: number; count: number };
+  /** Enemy ground speed multiplier for this level (on top of following the hero's speed upgrades). */
+  speedScale?: number;
+  /** The boss's attack damage multiplier (default 1: bosses are authored at full strength). */
+  bossDamageScale?: number;
+  /**
+   * Traps sprung around the hero every `every` s (randomised): "cage" - a ring of eruptions with one
+   * gap closes round him while the ground under him erupts; "sweep" - a line of eruptions cuts
+   * across his position; "tar" - brimstone pools that slow him. `damage` per hit (times damageScale).
+   */
+  traps?: { every: number; kinds: TrapKind[]; damage: number };
 }
+
+export type TrapKind = "cage" | "sweep" | "tar";
+
+/** Trap shapes (see WaveDef.traps). */
+export const TRAPS = {
+  cage: { radius: 6.5, strikes: 10, gapDeg: 80, strikeRadius: 1.8, centreRadius: 3.4, delay: 1.7 },
+  sweep: { strikes: 9, spacing: 2.3, strikeRadius: 1.5, delay: 1.25, ripple: 0.06, fire: 2.5 },
+  tar: { pools: 3, radius: [2.2, 3.2] as [number, number], seconds: 9, near: [2.5, 8] as [number, number] },
+  /** Speed multiplier while in tar. */
+  tarSlow: 0.5,
+};
+
+/**
+ * Enemies keep pace: their speed follows the hero's speed upgrades by this share (a hero 30% faster
+ * meets demons 21% faster), on top of the level's speedScale.
+ */
+export const ENEMY_PACE = { followHero: 0.7 };
 
 export const WAVES: WaveDef[] = [
   {
