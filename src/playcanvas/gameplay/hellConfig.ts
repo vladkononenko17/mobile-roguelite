@@ -326,7 +326,7 @@ export const HELL_LEVELS: WaveDef[] = [
   },
   {
     label: "Hell III", act: "Act I · The Descent", subtitle: "The Sacrificial Pentagram", zone: "pentagram",
-    duration: 40, prespawn: 6, hpScale: 1.25, damageScale: 1.15, speedScale: 1.04, bossDamageScale: 1.15,
+    duration: 40, prespawn: 6, hpScale: 1.25, damageScale: 1.15,
     phases: [
       { at: 0, spawnInterval: 2.6, group: [3, 4], maxAlive: 14, weights: { imp: 1, hound: 0.5, husk: 0.3 } },
     ],
