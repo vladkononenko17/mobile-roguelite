@@ -145,6 +145,20 @@ export class Combat {
     }
   }
 
+  /** Weapon splash: `damage` to every other enemy within `radius` of `origin`, with a small blast. */
+  splash(origin: Enemy, radius: number, damage: number): void {
+    this.effects.explosion(this.point.set(origin.position.x, 0.3, origin.position.z), radius * 0.8);
+    for (const e of this.nearest(origin.position.x, origin.position.z, radius, 8, [origin])) this.hit(e, damage, "explosion", origin.position.x, origin.position.z, 0.05);
+  }
+
+  /** Weapon burn: sets `e` burning at least `dps`. */
+  burnFrom(e: Enemy, dps: number): void {
+    if (!isAlive(e)) return;
+    e.burnTime = COMBAT_FX.burnSeconds;
+    e.burnDps = Math.max(e.burnDps, dps);
+    if (e.burnTick <= 0) e.burnTick = COMBAT_FX.burnTick;
+  }
+
   /** Reload shock pulse around the hero (Shock Reload). */
   shockwave(x: number, z: number): void {
     const damage = this.stats.shockDamage;

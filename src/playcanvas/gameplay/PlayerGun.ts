@@ -229,7 +229,8 @@ export class PlayerGun {
     this.ammo--;
     this.shotCount++;
     const muzzle = weapon.muzzle(this.muzzle) ?? this.muzzle.copy(this.origin);
-    this.effects.muzzleFlash(muzzle, stats.pellets > 1 ? 0.32 : 0.22);
+    const fx = stats.fx;
+    this.effects.muzzleFlash(muzzle, fx?.muzzleSize ?? (stats.pellets > 1 ? 0.32 : 0.22), fx?.muzzle);
     const baseAngle = Math.atan2(tx, tz);
     // A casing flies out to the right (the hero faces the target when firing).
     this.effects.casing(muzzle, -Math.cos(baseAngle), Math.sin(baseAngle));
@@ -252,12 +253,15 @@ export class PlayerGun {
         const point = this.end.set(this.origin.x + dx * hit.t, muzzle.y, this.origin.z + dz * hit.t);
         this.effects.bloodHit(point, dx, dz);
         this.combat.bulletHit(hit.enemy, amount, crit || bonus > 1, this.origin.x, this.origin.z, stats.knockback);
+        if (fx?.burn) this.combat.burnFrom(hit.enemy, fx.burn);
+        if (fx?.splash) this.combat.splash(hit.enemy, fx.splash.radius, amount * fx.splash.fraction);
         travel = hit.t;
         if (crit) pierce += Math.round(this.stats.critPierce);
         if (pierce-- <= 0) break;
       }
       this.end.set(this.origin.x + dx * travel, muzzle.y, this.origin.z + dz * travel);
-      this.effects.tracer(muzzle, this.end);
+      this.effects.tracer(muzzle, this.end, fx && { color: fx.tracer, width: fx.tracerWidth, life: fx.tracerLife });
+      if (fx?.shot) this.effects.energyShot(muzzle, this.end, fx.shot.speed, fx.shot.color, fx.shot.size);
       // Stopped by a wall (not an enemy, not the end of the range): dust and a spark there.
       if (travel === range && range < stats.range) this.effects.impact(this.end);
     }

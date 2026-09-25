@@ -61,6 +61,24 @@ export interface WeaponStats {
   reloadSeconds: number;
   /** Knockback per hit (m). */
   knockback: number;
+  /** Look and extra effects (energy / infernal guns); plain bullets without it. */
+  fx?: WeaponFx;
+}
+
+export interface WeaponFx {
+  /** Tracer colour (additive), width and lifetime. */
+  tracer?: [number, number, number];
+  tracerWidth?: number;
+  tracerLife?: number;
+  /** Muzzle flash colour and size. */
+  muzzle?: [number, number, number];
+  muzzleSize?: number;
+  /** A visible shot flying to the hit (the damage is instant). */
+  shot?: { speed: number; size: number; color: [number, number, number] };
+  /** Splash at every hit: `fraction` of the shot's damage to others within `radius`. */
+  splash?: { radius: number; fraction: number };
+  /** Sets hit enemies burning (damage per second). */
+  burn?: number;
 }
 
 /** Combat stats per weapon (weapons missing here cannot be fired). */

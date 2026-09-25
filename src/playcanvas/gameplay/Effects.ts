@@ -154,10 +154,51 @@ export class Effects {
     }
     const flash = glow(new Color(1, 0.8, 0.35));
     const tracer = glow(new Color(1, 0.85, 0.5));
+    this.flashMat = flash;
+    this.tracerMat = tracer;
+    this.glowOf = (c) => glow(new Color(c[0], c[1], c[2]));
     const spark = glow(new Color(1, 0.45, 0.25));
     for (let i = 0; i < 6; i++) this.flashes.push(this.make("flash", "sphere", flash));
     for (let i = 0; i < 24; i++) this.tracers.push(this.make("tracer", "box", tracer));
     for (let i = 0; i < 16; i++) this.sparks.push(this.make("spark", "sphere", spark));
+    for (let i = 0; i < 20; i++) this.shots.push(Object.assign(this.make("energy", "sphere", tracer), { from: new Vec3(), to: new Vec3() }));
+  }
+
+  private flashMat!: StandardMaterial;
+  private tracerMat!: StandardMaterial;
+  private glowOf!: (c: readonly [number, number, number]) => StandardMaterial;
+  private readonly tints = new Map<string, StandardMaterial>();
+  /** Visible energy shots flying muzzle -> hit (the damage itself is instant). */
+  private readonly shots: (Pooled & { from: Vec3; to: Vec3 })[] = [];
+
+  /** A shared additive material of colour `c` (weapon effects). */
+  private tint(c: readonly [number, number, number] | undefined, fallback: StandardMaterial): StandardMaterial {
+    if (!c) return fallback;
+    const key = c.join(",");
+    let m = this.tints.get(key);
+    if (!m) this.tints.set(key, (m = this.glowOf(c)));
+    return m;
+  }
+
+  /**
+   * A glowing shot travelling from `from` to `to` at `speed` m/s (energy weapons), leaving a short
+   * streak behind it.
+   */
+  energyShot(from: Vec3, to: Vec3, speed: number, color: readonly [number, number, number], size: number): void {
+    let p = this.shots.find((s) => !s.entity.enabled);
+    if (!p) {
+      if (this.shots.length >= 40) p = this.shots[0];
+      else this.shots.push((p = Object.assign(this.make("energy", "sphere", this.tracerMat), { from: new Vec3(), to: new Vec3() })));
+    }
+    p.from.copy(from);
+    p.to.copy(to);
+    p.entity.render!.meshInstances[0].material = this.tint(color, this.tracerMat);
+    p.entity.enabled = true;
+    p.total = Math.max(0.04, from.distance(to) / speed);
+    p.life = p.total;
+    p.width = size;
+    p.entity.setPosition(from);
+    p.entity.setLocalScale(size, size, size);
   }
 
   private make(name: string, type: string, material: StandardMaterial): Pooled {
@@ -301,8 +342,9 @@ export class Effects {
     return oldest;
   }
 
-  muzzleFlash(position: Vec3, size = 0.22): void {
+  muzzleFlash(position: Vec3, size = 0.22, color?: readonly [number, number, number]): void {
     const p = this.take(this.flashes);
+    p.entity.render!.meshInstances[0].material = this.tint(color, this.flashMat);
     p.entity.enabled = true;
     p.entity.setPosition(position);
     p.life = p.total = 0.06;
@@ -310,18 +352,19 @@ export class Effects {
     p.entity.setLocalScale(size, size, size);
   }
 
-  /** A streak from `from` to `to`. */
-  tracer(from: Vec3, to: Vec3): void {
+  /** A streak from `from` to `to` (weapons may colour, widen and lengthen it). */
+  tracer(from: Vec3, to: Vec3, style?: { color?: readonly [number, number, number]; width?: number; life?: number }): void {
     const p = this.take(this.tracers);
     const length = from.distance(to);
     if (length < 0.05) return;
+    p.entity.render!.meshInstances[0].material = this.tint(style?.color, this.tracerMat);
     p.entity.enabled = true;
     this.tmp.lerp(from, to, 0.5);
     p.entity.setPosition(this.tmp);
     p.entity.lookAt(to);
-    p.life = p.total = 0.07;
+    p.life = p.total = style?.life ?? 0.07;
     p.length = length;
-    p.width = 0.035;
+    p.width = style?.width ?? 0.035;
     p.entity.setLocalScale(p.width, p.width, length);
   }
 
@@ -335,6 +378,16 @@ export class Effects {
   }
 
   update(dt: number): void {
+    for (const s of this.shots) {
+      if (!s.entity.enabled) continue;
+      s.life -= dt;
+      if (s.life <= 0) {
+        s.entity.enabled = false;
+        continue;
+      }
+      this.tmp.lerp(s.to, s.from, s.life / s.total);
+      s.entity.setPosition(this.tmp);
+    }
     for (const b of this.blasts) {
       if (!b.entity.enabled) continue;
       b.life -= dt;

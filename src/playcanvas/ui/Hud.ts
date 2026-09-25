@@ -83,6 +83,13 @@ const CSS = `
 #hud .dmg.heal { color: #9fcf78; font-size: 17px; }
 #hud .dmg.burn { color: #f08a3c; font-size: 13px; }
 #hud .dmg.tech { color: #8fd0ff; font-size: 14px; }
+#hud .weapon-new { --c: #ff7a2e; position: absolute; left: 50%; bottom: calc(16% + env(safe-area-inset-bottom)); transform: translate(-50%, 12px); width: min(78vw, 330px); box-sizing: border-box; padding: 10px 14px 11px; border-radius: 6px; background: rgba(16, 12, 10, 0.86); border: 1px solid var(--c); box-shadow: 0 0 18px -4px var(--c); opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; text-align: center; }
+#hud .weapon-new.show { opacity: 1; transform: translate(-50%, 0); }
+#hud .weapon-new i { display: block; font: 700 11px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.22em; color: var(--c); }
+#hud .weapon-new b { display: block; margin-top: 4px; font: 800 24px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.06em; color: #f3e7d3; text-transform: uppercase; }
+#hud .weapon-new small { display: block; margin-top: 5px; font: 500 13px/1.25 system-ui, sans-serif; color: #d9ccb8; }
+#hud .weapon-new ul { display: flex; justify-content: center; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; flex-wrap: wrap; }
+#hud .weapon-new li { font: 700 11px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.08em; padding: 4px 6px; border-radius: 3px; color: #f3e7d3; background: color-mix(in srgb, var(--c) 28%, transparent); }
 #hud .upgrade { --c: #ffb13b; position: absolute; left: 50%; top: 19%; transform: translateX(-50%); max-width: min(52vw, 280px); display: flex; flex-direction: column; align-items: center; gap: 7px; opacity: 0; }
 #hud .upgrade.show { animation: up-life 1.6s ease-out forwards; }
 #hud .upgrade .disc { position: relative; width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center; border: 2px solid rgba(255, 250, 235, 0.9);
@@ -251,6 +258,8 @@ export class Hud {
   private readonly screen = new Vec3();
   private bannerTimer = 0;
   private readonly upgrade: HTMLElement;
+  private readonly weaponCard: HTMLElement;
+  private weaponTimer = 0;
   private readonly pulse: HTMLElement;
   private readonly upgradeQueue: UpgradeNotice[] = [];
   private upgradeShowing = false;
@@ -309,6 +318,10 @@ export class Hud {
     this.banner = q(".banner");
     this.hurt = q(".hurt");
     this.upgrade = q(".upgrade");
+    this.weaponCard = document.createElement("div");
+    this.weaponCard.className = "weapon-new";
+    this.weaponCard.innerHTML = "<i>NEW WEAPON</i><b></b><small></small><ul></ul>";
+    this.upgrade.parentElement!.append(this.weaponCard);
     this.pulse = q(".pulse");
     this.upgrade.addEventListener("animationend", (e) => {
       if (e.target !== this.upgrade) return;
@@ -444,6 +457,21 @@ export class Hud {
     el.classList.add("show");
   }
 
+  /**
+   * A new weapon: a compact card (name, one line of identity, stat chips) for a few seconds; play
+   * does not stop.
+   */
+  showWeapon(name: string, text: string, stats: string[], color = "#ff7a2e", seconds = 3.2): void {
+    const el = this.weaponCard;
+    el.style.setProperty("--c", color);
+    el.querySelector("b")!.textContent = name;
+    el.querySelector("small")!.textContent = text;
+    const ul = el.querySelector("ul")!;
+    ul.replaceChildren(...stats.map((t) => Object.assign(document.createElement("li"), { textContent: t })));
+    el.classList.add("show");
+    this.weaponTimer = seconds;
+  }
+
   flashHurt(): void {
     this.hurt.style.transition = "none";
     this.hurt.style.opacity = "1";
@@ -464,6 +492,10 @@ export class Hud {
   }
 
   update(dt: number, camera: ScreenProjector): void {
+    if (this.weaponTimer > 0) {
+      this.weaponTimer -= dt;
+      if (this.weaponTimer <= 0) this.weaponCard.classList.remove("show");
+    }
     if (this.bannerTimer > 0) {
       this.bannerTimer -= dt;
       if (this.bannerTimer <= 0) this.banner.style.opacity = "0";
