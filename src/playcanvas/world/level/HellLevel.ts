@@ -559,8 +559,13 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
   // The inner gate keeps its real width (6 m).
   wallLine(-30 * S, -86 * S, -3, -86 * S, ["wall", "wallBump", "wall", "wallWindow"]);
   wallLine(3, -86 * S, 30 * S, -86 * S, ["wall", "wallWindow", "wall", "wallBump"]);
-  // North wall of the citadel (the keep's face), taller.
-  wallLine(-30 * S, -114 * S, 30 * S, -114 * S, ["wall", "wallWindow", "wallBump", "wall", "wallWindow", "wall"], 1.4);
+  // North wall of the citadel (the keep's face), taller, with the keep gate over the abyss bridge.
+  wallLine(-30 * S, -114 * S, -4, -114 * S, ["wall", "wallWindow", "wallBump", "wall", "wallWindow", "wall"], 1.4);
+  wallLine(4, -114 * S, 30 * S, -114 * S, ["wall", "wallWindow", "wallBump", "wall", "wallWindow", "wall"], 1.4);
+  placeRaw([
+    ["column", -4.8, -114 * S + 0.6, 0, { scale: [0.9, 1.5, 0.9] }], ["column", 4.8, -114 * S + 0.6, 0, { scale: [0.9, 1.5, 0.9] }],
+    ["brazier", -4.8, -114 * S + 0.6, 0, { y: 6, noCollider: true }], ["brazier", 4.8, -114 * S + 0.6, 0, { y: 6, noCollider: true }],
+  ]);
   placeRaw([
     ["column", -3.8, -86 * S, 0, { scale: [0.85, 1.1, 0.85] }], ["column", 3.8, -86 * S, 0, { scale: [0.85, 1.1, 0.85] }],
     ["brazier", -3.8, -86 * S, 0, { y: 4.4, noCollider: true }], ["brazier", 3.8, -86 * S, 0, { y: 4.4, noCollider: true }],
@@ -574,7 +579,7 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
     ["rack", -14, -70, 25], ["spikeWheel", 14, -72, 70], ["cage", -26, -68, 15], ["cage", 25, -80, -20],
     ["stockade", -8, -80, 90], ["stockade", -6, -80, 90], ["crag", 26, -67, 30, { scale: 0.7 }],
     // Courtyard: the ring of pillars where the wyrm lands; a throne for its master, empty.
-    ["pedestal", 0, -110, 0, { scale: [2.2, 1, 1.5] }], ["throne", 0, -110.4, 0, { y: 0.54, noCollider: true }],
+    ["pedestal", -9, -110, 0, { scale: [2.2, 1, 1.5] }], ["throne", -9, -110.4, 0, { y: 0.54, noCollider: true }],
     ["cage", -24, -110, 20], ["cage", 24, -110, -20], ["skeleton", -20, -96, 30], ["bones1", 18, -98, 0],
     // Outer yard: more of the killing ground.
     ["rack", 12, -66, -20], ["spikeWheel", -22, -80, 20], ["cage", 8, -74, 0], ["cross", -26, -74, 10], ["cross", 26, -70, -10],
