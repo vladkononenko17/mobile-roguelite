@@ -708,11 +708,9 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
   }
 
   // ------------------------------------------------------------------ zone signatures
-  // Gates: an avenue of fire baskets and iron fences up to the gate.
-  for (const [x, z] of GATE_BASKETS) {
-    place("fireBasket", x, z, 0);
-    if (Math.round(z) % 3 !== 0) for (let k = 0; k < 3; k++) place("ironFence", Math.sign(x) * 7.5, z + 1.6 + k * 1.6, 90);
-  }
+  // Gates: an avenue of fire baskets up to the gate.
+  // (No fences: the first fight starts here and needs room to kite.)
+  for (const [x, z] of GATE_BASKETS) place("fireBasket", x, z, 0);
   // Pentagram: a ring of obelisks and candles just outside the circle.
   for (let i = 0; i < 10; i++) {
     const a = (i / 10) * Math.PI * 2;
