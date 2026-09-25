@@ -4,7 +4,7 @@
 // retargeted onto the Bestiary / Codersan rigs) and scripts/build-hell-creatures.mjs (drake, bat,
 // husk: Quaternius clips); see assets-src/SOURCES.md.
 
-import type { EnemyClips, EnemyDef, EnemyVisual, WaveDef } from "./config";
+import type { DifficultyDef, EnemyClips, EnemyDef, EnemyVisual, WaveDef } from "./config";
 
 /* ------------------------------------------------------------------------------------------------
  * Looks
@@ -410,10 +410,64 @@ export const HELL_RUN = {
   pactAfter: 5,
   /** Before this level (index) the final warning is shown. */
   finalLevel: 8,
-  /** Hell can't be out-healed: on-kill healing tops out at this many HP per second... */
-  killHealPerSecond: 2.5,
-  /** ...and a health pickup heals at most this much. */
-  pickupHealMax: 30,
   /** After this level (index; the Glutton) the Infernal Armory offers one of these free. */
   armory: { after: 2, weapons: ["plasma", "hellfire"] as const },
+};
+
+/**
+ * Hell's difficulties. HELL_LEVELS are Hard. Easy is Hell as first balanced (gentler scaling, no
+ * traps, bosses at their old strength, healing unbound). Nightmare is built to be all but
+ * impossible: the final level falls to maybe one run in a hundred, with the right build played
+ * nearly perfectly.
+ */
+export const HELL_DIFFICULTIES: Record<"easy" | "hard" | "nightmare", DifficultyDef> = {
+  easy: {
+    label: "Easy",
+    text: "Hell as it was first forged: gentler demons, no traps, healing unbound.",
+    levels: [
+      { hpScale: 1, damageScale: 1 },
+      { hpScale: 1.1, damageScale: 1.05 },
+      { hpScale: 1.15, damageScale: 1.1, speedScale: 1, bossDamageScale: 1 },
+      { hpScale: 1.3, damageScale: 1.1, speedScale: 1, traps: undefined },
+      { hpScale: 1.5, damageScale: 1.25, speedScale: 1, traps: undefined },
+      { hpScale: 1.6, damageScale: 1.3, speedScale: 1, traps: undefined, bossDamageScale: 1, bossHpScale: 4400 / 6000 },
+      { hpScale: 1.9, damageScale: 1.4, speedScale: 1, traps: undefined, meteors: { every: 11, damage: 22, radius: 2.2, count: 2 } },
+      { hpScale: 2.2, damageScale: 1.55, speedScale: 1, traps: undefined, meteors: { every: 8, damage: 26, radius: 2.3, count: 3 } },
+      { hpScale: 2.3, damageScale: 1.6, speedScale: 1, traps: undefined, bossDamageScale: 1, bossHpScale: 17500 / 24000 },
+    ],
+    cripple: false,
+    followHero: 0,
+  },
+  hard: {
+    label: "Hard",
+    text: "Act III is a nightmare: traps, relentless demons, healing capped. The right build and good feet win.",
+    killHealPerSecond: 2.5,
+    pickupHealMax: 30,
+    cripple: true,
+    followHero: 0.7,
+  },
+  nightmare: {
+    label: "Nightmare",
+    text: "Built to kill you. Maybe one run in a hundred sees the Archfiend fall.",
+    // Traps from the first act on.
+    levels: [
+      undefined,
+      { traps: { every: 16, kinds: ["tar", "sweep"], damage: 12 } },
+      { traps: { every: 15, kinds: ["tar", "sweep"], damage: 14 } },
+    ],
+    scale: {
+      hp: [1.15, 1.2, 1.2, 1.25, 1.25, 1.3, 1.3, 1.3, 1.4],
+      damage: [1.1, 1.1, 1.15, 1.15, 1.2, 1.2, 1.2, 1.2, 1.3],
+      speed: [1.03, 1.03, 1.03, 1.05, 1.05, 1.05, 1.07, 1.07, 1.07],
+      bossHp: 1.3,
+      bossDamage: 1.2,
+      trapsEvery: 0.75,
+      trapsDamage: 1.25,
+      maxAlive: 1.1,
+    },
+    killHealPerSecond: 1.5,
+    pickupHealMax: 15,
+    cripple: true,
+    followHero: 0.9,
+  },
 };

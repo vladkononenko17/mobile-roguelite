@@ -157,7 +157,7 @@ export class SpawnDirector {
   private spawnBoss(type: EnemyId, player: Vec3, camera: ScreenProjector): boolean {
     const spot = this.findSpot(player, camera, [2, 4]);
     if (!spot) return false;
-    this.boss = this.enemies.spawn(type, spot.x, spot.z, 1, this.wave.bossDamageScale ?? 1);
+    this.boss = this.enemies.spawn(type, spot.x, spot.z, this.wave.bossHpScale ?? 1, this.wave.bossDamageScale ?? 1);
     return this.boss !== null;
   }
 

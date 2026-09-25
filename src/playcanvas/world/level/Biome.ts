@@ -1,5 +1,6 @@
 import type { Entity } from "playcanvas";
 import type { LightingSpec, WeaponId } from "../../config";
+import type { DifficultyDef } from "../../gameplay/config";
 import type { WaveDef } from "../../gameplay/config";
 import type { AmbientEmitter } from "../AmbientFx";
 import type { GroundSpec } from "../Ground";
@@ -80,11 +81,10 @@ export interface Campaign {
   run?: {
     startWeapon: WeaponId; startCash: number; startPicks: number; pactAfter: number; finalLevel: number;
     armory?: { after: number; weapons: readonly WeaponId[] };
-    /** On-kill healing (heal on kill, scavenger) is limited to this many HP per second. */
-    killHealPerSecond?: number;
-    /** A health pickup heals at most this much. */
-    pickupHealMax?: number;
   };
+  /** Difficulties the run can be played at (`levels` are the baseline, `defaultDifficulty`). */
+  difficulties?: Record<string, DifficultyDef>;
+  defaultDifficulty?: string;
   /** Title and line shown when the whole campaign is won. */
   victory: { title: string; text: string };
   /** A level starts in `zone` (seal the way on, light the arena...). */

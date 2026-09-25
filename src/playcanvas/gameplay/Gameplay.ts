@@ -5,7 +5,7 @@ import type { WeaponHolder } from "../player/WeaponHolder";
 import type { Hud } from "../ui/Hud";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
 import type { Biome, Campaign, LevelBounds, WayPoint, Zone } from "../world/level/Biome";
-import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, shopPrice, TRAPS, ENEMY_PACE, WEAPON_CARDS, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
+import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, shopPrice, TRAPS, ENEMY_PACE, WEAPON_CARDS, levelsAt, type DifficultyDef, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
 import { BossBrain } from "./BossBrain";
 import { HELL_BOSSES, HELL_TYPE_SKINS } from "./hellConfig";
 import { Effects } from "./Effects";
@@ -89,6 +89,9 @@ export class Gameplay {
   private cripple = { time: 0, slow: 1 };
   /** On-kill healing still available (campaign run.killHealPerSecond; refills per second). */
   private killHealBudget = 0;
+  /** The campaign difficulty of this run (null: no difficulties, or not chosen yet). */
+  private difficultyId: string | null = null;
+  private difficulty: DifficultyDef | null = null;
   /** A weapon picked up between levels: its NEW WEAPON card shows when the next level starts. */
   private unlocked: WeaponId | null = null;
   /** The armory has been visited this run (campaign-only weapons appear in the shop). */
@@ -108,7 +111,8 @@ export class Gameplay {
   ) {
     const bounds = biome.bounds;
     this.campaign = biome.campaign ?? null;
-    this.levels = this.campaign?.levels ?? WAVES;
+    // A copy for campaigns: the chosen difficulty rewrites it in place (the director shares it).
+    this.levels = this.campaign ? [...this.campaign.levels] : WAVES;
     this.region = bounds;
     this.effects = new Effects(app);
     this.hazards = new Hazards(app);
@@ -129,7 +133,7 @@ export class Gameplay {
     this.gun = new PlayerGun(this.enemies, this.effects, collision, this.stats, this.projector, this.combat);
     this.drones = new Drones(app, this.effects, this.combat, this.gun);
     this.enemies.onPlayerHit = (damage, from) => {
-      const c = from.def.cripple;
+      const c = this.rules?.cripple === false ? undefined : from.def.cripple;
       if (c) this.cripple = { time: Math.max(this.cripple.time, c.seconds), slow: Math.min(this.cripple.time > 0 ? this.cripple.slow : 1, c.slow) };
       const push = from.def.knockback ?? 0;
       if (push > 0 && this.hurtPlayer(damage)) {
@@ -231,7 +235,56 @@ export class Gameplay {
     this.startRun();
   }
 
+  /** "Hard · " for the end screens (empty without difficulties). */
+  private get difficultyTag(): string {
+    return this.difficultyId && this.difficulty ? `${this.difficulty.label} · ` : "";
+  }
+
+  /** The difficulty rules in force (campaigns with difficulties; else none). */
+  private get rules(): DifficultyDef | null {
+    return this.difficulty;
+  }
+
+  /**
+   * Campaigns with difficulties: pick one (?difficulty=id, else a choice screen; remembered), then
+   * rewrite the levels for it and start the run.
+   */
+  private chooseDifficulty(then: () => void): void {
+    const all = this.campaign?.difficulties;
+    if (!all) {
+      then();
+      return;
+    }
+    const apply = (id: string) => {
+      this.difficultyId = id;
+      this.difficulty = all[id];
+      try { localStorage.setItem(`${this.biome.id}.difficulty`, id); } catch { /* private mode */ }
+      this.levels.splice(0, this.levels.length, ...levelsAt(this.campaign!.levels, all[id]));
+      then();
+    };
+    const requested = this.params.get("difficulty");
+    if (requested && all[requested]) {
+      apply(requested);
+      return;
+    }
+    let last: string | null = null;
+    try { last = localStorage.getItem(`${this.biome.id}.difficulty`); } catch { /* private mode */ }
+    const ids = Object.keys(all);
+    this.phase = "shop";
+    this.player.controlsEnabled = false;
+    this.hud.openModal({
+      title: "CHOOSE YOUR DOOM",
+      text: last && all[last] ? `Last time: ${all[last].label}` : "How deep into Hell do you dare?",
+      cards: ids.map((id) => ({ title: all[id].label, text: all[id].text, tag: id === this.campaign?.defaultDifficulty ? "intended" : "", kind: id === "nightmare" ? "special" : "player" })),
+      onCard: (i) => apply(ids[i]),
+    });
+  }
+
   startRun(): void {
+    if (this.campaign?.difficulties && !this.difficulty) {
+      this.chooseDifficulty(() => this.startRun());
+      return;
+    }
     const s = this.stats;
     Object.assign(s, new PlayerStats());
     s.owned.clear();
@@ -337,8 +390,11 @@ export class Gameplay {
     this.player.aimYawDeg = null;
     this.hud.openModal({
       title: "YOU DIED",
-      text: `${this.director.wave.label} · Level ${this.stats.level} · ${this.stats.kills} kills · ${this.stats.cash}$`,
-      actions: [{ label: "Restart run", onClick: () => this.startRun() }],
+      text: `${this.difficultyTag}${this.director.wave.label} · Level ${this.stats.level} · ${this.stats.kills} kills · ${this.stats.cash}$`,
+      actions: [
+        { label: "Restart run", onClick: () => this.startRun() },
+        ...(this.difficulty ? [{ label: "Change difficulty", onClick: () => { this.difficulty = null; this.params.delete("difficulty"); this.startRun(); } }] : []),
+      ],
     });
   }
 
@@ -368,7 +424,7 @@ export class Gameplay {
     const victory = this.campaign?.victory ?? { title: "RUN COMPLETE", text: "The outpost is quiet." };
     this.hud.openModal({
       title: victory.title,
-      text: `${victory.text} Level ${this.stats.level} · ${this.stats.kills} kills · ${this.stats.cash}$ left.`,
+      text: `${victory.text} ${this.difficultyTag}Level ${this.stats.level} · ${this.stats.kills} kills · ${this.stats.cash}$ left.`,
       actions: [{ label: "New run", onClick: () => this.startRun() }],
     });
   }
@@ -649,7 +705,7 @@ export class Gameplay {
     if (kind === "cash") s.cash += value;
     else if (kind === "health") {
       const before = s.hp;
-      s.heal(Math.min(s.maxHp * DROPS.healthFraction, this.campaign?.run?.pickupHealMax ?? Infinity));
+      s.heal(Math.min(s.maxHp * DROPS.healthFraction, this.rules?.pickupHealMax ?? Infinity));
       const p = this.player.entity.getPosition();
       this.tmp.set(p.x, 2.1 * this.characterScale(), p.z);
       this.hud.damageNumber(this.tmp, `+${Math.round(s.hp - before)} HP`, "heal");
@@ -714,7 +770,7 @@ export class Gameplay {
 
   /** Heals on a kill, within the campaign's per-second budget (so a fast-killing build can't out-heal Hell). */
   private killHeal(amount: number): void {
-    const rate = this.campaign?.run?.killHealPerSecond;
+    const rate = this.rules?.killHealPerSecond;
     if (rate === undefined) {
       this.stats.heal(amount);
       return;
@@ -743,8 +799,8 @@ export class Gameplay {
       // Tar and hellhound bites slow the hero; demons keep pace with his speed upgrades.
       this.cripple.time = Math.max(0, this.cripple.time - dt);
       this.player.speedMultiplier = this.stats.moveSpeedMult * (this.hazards.playerInTar ? TRAPS.tarSlow : 1) * (this.cripple.time > 0 ? this.cripple.slow : 1);
-      this.enemies.pace = (this.director.wave.speedScale ?? 1) * (1 + ENEMY_PACE.followHero * (this.stats.moveSpeedMult - 1));
-      const rate = this.campaign?.run?.killHealPerSecond;
+      this.enemies.pace = (this.director.wave.speedScale ?? 1) * (1 + (this.rules?.followHero ?? ENEMY_PACE.followHero) * (this.stats.moveSpeedMult - 1));
+      const rate = this.rules?.killHealPerSecond;
       if (rate !== undefined) this.killHealBudget = Math.min(rate * 2, this.killHealBudget + rate * dt);
       this.director.update(dt, position, this.projector);
       this.enemies.update(dt, position, this.stats.alive);

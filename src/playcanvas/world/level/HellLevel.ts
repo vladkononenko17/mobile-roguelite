@@ -1,6 +1,6 @@
 import { BLEND_ADDITIVE, Color, Entity, StandardMaterial, math, type AppBase } from "playcanvas";
 import { HELL, HELL_LIGHTING } from "../../config";
-import { HELL_LEVELS, HELL_RUN } from "../../gameplay/hellConfig";
+import { HELL_DIFFICULTIES, HELL_LEVELS, HELL_RUN } from "../../gameplay/hellConfig";
 import { pentagram, type AmbientEmitter } from "../AmbientFx";
 import { declareCollider } from "../collision/CollisionWorld";
 import type { GroundSpec } from "../Ground";
@@ -791,6 +791,8 @@ export const HELL_BIOME: Biome<HellModel> = {
     levels: HELL_LEVELS,
     zones: ZONES,
     run: HELL_RUN,
+    difficulties: HELL_DIFFICULTIES,
+    defaultDifficulty: "hard",
     victory: { title: "HELL IS SILENT", text: "The Archfiend is dead. You were not supposed to survive this." },
     onLevel(_index, zone) {
       // Seal every way out of this level's region (bridge ends and gates on its edge).

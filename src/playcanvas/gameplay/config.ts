@@ -380,6 +380,8 @@ export interface WaveDef {
   speedScale?: number;
   /** The boss's attack damage multiplier (default 1: bosses are authored at full strength). */
   bossDamageScale?: number;
+  /** The boss's HP multiplier (default 1). */
+  bossHpScale?: number;
   /**
    * Traps sprung around the hero every `every` s (randomised): "cage" - a ring of eruptions with one
    * gap closes round him while the ground under him erupts; "sweep" - a line of eruptions cuts
@@ -389,6 +391,58 @@ export interface WaveDef {
 }
 
 export type TrapKind = "cage" | "sweep" | "tar";
+
+/**
+ * A campaign difficulty: changes to the campaign's baseline levels (its "hard" setting) and the
+ * rules that keep a run honest. `levels` replaces fields per level (index); `scale` then multiplies.
+ */
+export interface DifficultyDef {
+  label: string;
+  /** One line on the difficulty card. */
+  text: string;
+  levels?: (Partial<WaveDef> | undefined)[];
+  scale?: {
+    /** Per level (index; the last value repeats). */
+    hp?: number[];
+    damage?: number[];
+    speed?: number[];
+    bossHp?: number;
+    bossDamage?: number;
+    /** Traps come this much more often (their interval is multiplied by it) and hit this much harder. */
+    trapsEvery?: number;
+    trapsDamage?: number;
+    /** More enemies alive at once. */
+    maxAlive?: number;
+  };
+  /** On-kill healing (heal on kill, scavenger) limited to this many HP per second (none: unlimited). */
+  killHealPerSecond?: number;
+  /** A health pickup heals at most this much (none: its full share). */
+  pickupHealMax?: number;
+  /** Hellhound bites cripple the hero. */
+  cripple: boolean;
+  /** Share of the hero's speed upgrades the enemies follow (ENEMY_PACE). */
+  followHero: number;
+}
+
+/** The levels of a campaign at a difficulty. */
+export function levelsAt(base: readonly WaveDef[], d: DifficultyDef): WaveDef[] {
+  const pick = (list: number[] | undefined, i: number) => (list?.length ? list[Math.min(i, list.length - 1)] : 1);
+  return base.map((level, i) => {
+    const l: WaveDef = { ...level, ...(d.levels?.[i] ?? {}) };
+    const s = d.scale;
+    if (!s) return l;
+    l.hpScale *= pick(s.hp, i);
+    l.damageScale *= pick(s.damage, i);
+    l.speedScale = (l.speedScale ?? 1) * pick(s.speed, i);
+    if (l.boss) {
+      l.bossHpScale = (l.bossHpScale ?? 1) * (s.bossHp ?? 1);
+      l.bossDamageScale = (l.bossDamageScale ?? 1) * (s.bossDamage ?? 1);
+    }
+    if (l.traps) l.traps = { ...l.traps, every: l.traps.every * (s.trapsEvery ?? 1), damage: l.traps.damage * (s.trapsDamage ?? 1) };
+    if (s.maxAlive) l.phases = l.phases.map((p) => ({ ...p, maxAlive: Math.round(p.maxAlive * s.maxAlive!) }));
+    return l;
+  });
+}
 
 /** Trap shapes (see WaveDef.traps). */
 export const TRAPS = {
