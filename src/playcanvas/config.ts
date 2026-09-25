@@ -514,8 +514,8 @@ export const CAMERA = {
    * Arena shooter framing (measured on a 402x646 portrait phone): ~2.2x the ground area of the
    * old 50 deg / 9.5 m view (about 12 x 18 m), the hero about 13% of the screen height, so hordes,
    * boss attacks and projectiles are visible coming from every side. BASELINE: keep this distance
-   * unless a gameplay reason calls for a change. */
-  distance: 15.2,
+   * unless a gameplay reason calls for a change. Raised 25% (15.2 -> 19 m) for a wider field of play. */
+  distance: 19,
   /** Vertical field of view, used in both portrait and landscape. */
   fovDeg: 42,
   /** How far below the screen centre the character sits, as a fraction of screen height.
@@ -694,7 +694,7 @@ export const LIGHTING: LightingSpec = {
     azimuthDeg: 318,
     // PCF3 (4 hardware-filtered taps) at 1024 over the view's range from the farther arena camera.
     shadowResolution: 1024,
-    shadowDistance: 30,
+    shadowDistance: 38,
     shadowBias: 0.2,
     normalOffsetBias: 0.04,
     shadowIntensity: 0.78,
@@ -745,7 +745,7 @@ export const FACILITY_LIGHTING: LightingSpec = {
     elevationDeg: 62,
     azimuthDeg: 330,
     shadowResolution: 1024,
-    shadowDistance: 30,
+    shadowDistance: 38,
     shadowBias: 0.2,
     normalOffsetBias: 0.04,
     shadowIntensity: 0.72,
@@ -788,7 +788,7 @@ export const HELL_LIGHTING: LightingSpec = {
     elevationDeg: 55,
     azimuthDeg: 320,
     shadowResolution: 1024,
-    shadowDistance: 30,
+    shadowDistance: 38,
     shadowBias: 0.2,
     normalOffsetBias: 0.04,
     shadowIntensity: 0.7,
