@@ -577,13 +577,14 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
     ["pedestal", 0, -110, 0, { scale: [2.2, 1, 1.5] }], ["throne", 0, -110.4, 0, { y: 0.54, noCollider: true }],
     ["cage", -24, -110, 20], ["cage", 24, -110, -20], ["skeleton", -20, -96, 30], ["bones1", 18, -98, 0],
     // Outer yard: more of the killing ground.
-    ["rack", 12, -66, -20], ["spikeWheel", -22, -80, 20], ["cage", 0, -74, 0], ["cross", -26, -74, 10], ["cross", 26, -70, -10],
+    ["rack", 12, -66, -20], ["spikeWheel", -22, -80, 20], ["cage", 8, -74, 0], ["cross", -26, -74, 10], ["cross", 26, -70, -10],
     ["stockade", 8, -78, 90], ["stockade", 10, -78, 90], ["skeleton", -2, -68, 60],
     // Courtyard corners.
     ["spikeWheel", -24, -92, 40], ["rack", 24, -94, -30], ["crag", -26, -104, 30, { scale: 0.6 }], ["crag", 26, -106, 200, { scale: 0.6 }],
   ]);
+  // Rotated half a step so no pillar stands on the central road (or the level's start).
   for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
+    const a = ((i + 0.5) / 8) * Math.PI * 2;
     place("pillar", Math.sin(a) * 15 * S, (-100 + Math.cos(a) * 9) * S, 0, { scale: [0.9, 1, 0.9] });
   }
 
