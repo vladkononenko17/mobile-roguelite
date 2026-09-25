@@ -118,7 +118,7 @@ export const SPACE_ENEMIES: Record<SpaceEnemyId, EnemyDef> = {
   // BOSS 2: THE BROOD MOTHER - the hive's queen, on the meteor it came from.
   broodmother: {
     label: "The Brood Mother", visuals: ["alienBrute"], scale: 2.5, behavior: "boss", script: "broodmother", boss: true, glow: [0.6, 1.6, 0.9],
-    maxHp: 11000, speed: 2.0, radius: 1.5, damage: 32, attackRange: 3.3, attackWindup: 0.55, attackCooldown: 1.2, knockback: 8,
+    maxHp: 10000, speed: 2.0, radius: 1.5, damage: 32, attackRange: 3.3, attackWindup: 0.55, attackCooldown: 1.2, knockback: 8,
     cash: 150, xp: 500, drops: { cash: 1, health: 1, upgrade: 0 },
   },
 };
@@ -253,12 +253,12 @@ export const SPACE_LEVELS: WaveDef[] = [
   },
   {
     label: "ORION VI", act: "Act II · Abandon Ship", subtitle: "The Meteor", zone: "meteor",
-    duration: 30, prespawn: 8, hpScale: 2.3, damageScale: 1.8, speedScale: 1.2, bossDamageScale: 1.35,
+    duration: 30, prespawn: 5, hpScale: 2.3, damageScale: 1.8, speedScale: 1.2, bossDamageScale: 1.35,
     traps: { every: 13, kinds: ["tar", "sweep", "cage"], damage: 22 },
     // The sky over the meteor never stops falling.
-    meteors: { every: 10, damage: 24, radius: 2.3, count: 3 },
+    meteors: { every: 10, damage: 20, radius: 2.3, count: 3 },
     phases: [
-      { at: 0, spawnInterval: 2.2, group: [3, 5], maxAlive: 16, weights: { skitter: 1, spitter: 0.6, glub: 0.4, infected: 0.5 } },
+      { at: 0, spawnInterval: 2.4, group: [3, 4], maxAlive: 13, weights: { skitter: 1, spitter: 0.6, glub: 0.4, infected: 0.5 } },
     ],
     boss: { type: "broodmother", spawnFactor: 0.25 },
   },
