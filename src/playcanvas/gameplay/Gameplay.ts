@@ -5,7 +5,7 @@ import type { WeaponHolder } from "../player/WeaponHolder";
 import type { Hud } from "../ui/Hud";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
 import type { Biome, Campaign, LevelBounds } from "../world/level/Biome";
-import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
+import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, WEAPON_CARDS, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
 import { BossBrain } from "./BossBrain";
 import { HELL_BOSSES, HELL_TYPE_SKINS } from "./hellConfig";
 import { Effects } from "./Effects";
@@ -79,6 +79,10 @@ export class Gameplay {
   private region: LevelBounds;
   /** Burn damage waiting to be applied (fire zones tick in small amounts). */
   private burn = 0;
+  /** A weapon picked up between levels: its NEW WEAPON card shows when the next level starts. */
+  private unlocked: WeaponId | null = null;
+  /** The armory has been visited this run (campaign-only weapons appear in the shop). */
+  private armorySeen = false;
   private meteorTimer = 0;
 
   constructor(
@@ -221,6 +225,8 @@ export class Gameplay {
     s.owned.clear();
     s.owned.add("pistol");
     s.upgrades.clear();
+    this.unlocked = null;
+    this.armorySeen = false;
     const kit = this.campaign?.run;
     const requested = this.params.get("weapon");
     this.equip(requested && requested in WEAPON_STATS ? (requested as WeaponId) : kit?.startWeapon ?? "pistol");
@@ -280,9 +286,13 @@ export class Gameplay {
     this.hud.closeModal();
     const level = this.levels[index];
     this.hud.showBanner(level.subtitle ? `${level.label} · ${level.subtitle}` : level.label, 2.6);
+    const card = this.unlocked && WEAPON_CARDS[this.unlocked];
+    if (card) this.hud.showWeapon(WEAPONS.list[this.unlocked!].label, card.text, card.stats, card.color);
+    this.unlocked = null;
   }
 
   equip(weapon: WeaponId): void {
+    if (this.phase !== "loading" && !this.stats.owned.has(weapon) && WEAPON_CARDS[weapon]) this.unlocked = weapon;
     this.stats.weapon = weapon;
     this.stats.owned.add(weapon);
     this.weapons.equip(weapon);
@@ -327,7 +337,9 @@ export class Gameplay {
   private afterWave(): void {
     const next = this.director.waveIndex + 1;
     if (next < this.levels.length) {
-      if (this.campaign?.run && this.director.waveIndex === this.campaign.run.pactAfter) this.openPact(next);
+      const run = this.campaign?.run;
+      if (run && this.director.waveIndex === run.pactAfter) this.openPact(next);
+      else if (run?.armory && this.director.waveIndex === run.armory.after) this.openArmory(next, run.armory.weapons);
       else this.openShop(next);
       return;
     }
@@ -437,7 +449,7 @@ export class Gameplay {
   private openShop(next: number): void {
     this.phase = "shop";
     const s = this.stats;
-    const items = SHOP.filter((item) => !item.weapon || WEAPON_STATS[item.weapon]);
+    const items = SHOP.filter((item) => (!item.weapon || WEAPON_STATS[item.weapon]) && (!item.campaign || this.armorySeen));
     const soldOut = (item: ShopItem) => (item.weapon ? s.owned.has(item.weapon) : false) || (item.id === "heal" && s.hp >= s.maxHp);
     this.hud.openModal({
       title: "SHOP",
@@ -491,6 +503,29 @@ export class Gameplay {
       cards: offers.map((u) => ({ title: u.name, text: upgradeText(u), tag: "pact", kind: "special" })),
       onCard: (i) => {
         this.announce(applyUpgrade(this.stats, offers[i].id));
+        this.openShop(next);
+      },
+    });
+  }
+
+  /**
+   * The Infernal Armory (after the first Hell boss): one new rifle, free. Each suits a different
+   * build; the other one is sold in the shop from now on. Then the shop.
+   */
+  private openArmory(next: number, weapons: readonly WeaponId[]): void {
+    this.phase = "shop";
+    this.armorySeen = true;
+    const offers = weapons.filter((id) => WEAPON_STATS[id] && !this.stats.owned.has(id));
+    if (!offers.length) {
+      this.openShop(next);
+      return;
+    }
+    this.hud.openModal({
+      title: "THE INFERNAL ARMORY",
+      text: "The Glutton guarded a cache of hellforged rifles. Take one - the other waits in the shop.",
+      cards: offers.map((id) => ({ title: WEAPONS.list[id].label, text: WEAPON_CARDS[id]?.text ?? "", tag: "weapon", kind: "weapon" })),
+      onCard: (i) => {
+        this.equip(offers[i]);
         this.openShop(next);
       },
     });

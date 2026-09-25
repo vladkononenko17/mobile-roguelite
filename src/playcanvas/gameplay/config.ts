@@ -86,6 +86,22 @@ export const WEAPON_STATS: Partial<Record<WeaponId, WeaponStats>> = {
   pistol: { damage: 14, fireRate: 3.2, range: 11, spreadDeg: 1.5, pellets: 1, penetration: 0, magazine: 12, reloadSeconds: 1.1, knockback: 0.12 },
   shotgun: { damage: 9, fireRate: 1.25, range: 7, spreadDeg: 11, pellets: 7, penetration: 0, magazine: 6, reloadSeconds: 1.6, knockback: 0.35 },
   rifle: { damage: 10, fireRate: 7.5, range: 14, spreadDeg: 3, pellets: 1, penetration: 1, magazine: 30, reloadSeconds: 1.8, knockback: 0.08 },
+  // Hell rifles. Plasma: a hose of small energy bolts (fire rate and crit builds).
+  plasma: {
+    damage: 7, fireRate: 12, range: 14, spreadDeg: 2.2, pellets: 1, penetration: 1, magazine: 44, reloadSeconds: 1.6, knockback: 0.04,
+    fx: { tracer: [0.35, 0.85, 1], tracerWidth: 0.05, tracerLife: 0.06, muzzle: [0.4, 0.85, 1], muzzleSize: 0.18, shot: { speed: 60, size: 0.1, color: [0.45, 0.9, 1] } },
+  },
+  // Hellfire: slow, heavy soul rounds that pierce, burst and burn (damage and fire builds).
+  hellfire: {
+    damage: 30, fireRate: 2.6, range: 15, spreadDeg: 1.2, pellets: 1, penetration: 2, magazine: 12, reloadSeconds: 2.1, knockback: 0.3,
+    fx: { tracer: [1, 0.45, 0.1], tracerWidth: 0.12, tracerLife: 0.12, muzzle: [1, 0.5, 0.12], muzzleSize: 0.34, shot: { speed: 34, size: 0.2, color: [1, 0.5, 0.1] }, splash: { radius: 1.6, fraction: 0.4 }, burn: 7 },
+  },
+};
+
+/** The NEW WEAPON card per weapon (Hud.showWeapon): one line of identity, stat chips, accent colour. */
+export const WEAPON_CARDS: Partial<Record<WeaponId, { text: string; stats: string[]; color: string }>> = {
+  plasma: { text: "A hose of plasma bolts. Loves fire rate and crits.", stats: ["12 SHOTS/S", "44 MAG", "PIERCE"], color: "#4fd8ff" },
+  hellfire: { text: "Heavy soul rounds that pierce, burst and burn.", stats: ["30 DMG", "PIERCE 2", "SPLASH", "BURN"], color: "#ff7a2e" },
 };
 
 /* ------------------------------------------------------------------------------------------------
@@ -640,7 +656,7 @@ export const COMBAT_FX = {
 /** "Damage Resistance +10%" */
 export const upgradeText = (u: UpgradeDef): string => `${u.stat} ${u.value}`;
 
-export type ShopItemId = "heal" | "maxHp" | "armor" | "damage" | "fireRate" | "shotgun" | "rifle";
+export type ShopItemId = "heal" | "maxHp" | "armor" | "damage" | "fireRate" | "shotgun" | "rifle" | "plasma" | "hellfire";
 
 export interface ShopItem {
   id: ShopItemId;
@@ -649,6 +665,8 @@ export interface ShopItem {
   cost: number;
   /** Weapon purchases equip that weapon (and can be bought once). */
   weapon?: WeaponId;
+  /** Only sold in campaigns (Hell) once the run has seen its armory. */
+  campaign?: boolean;
 }
 
 export const SHOP: ShopItem[] = [
@@ -659,4 +677,6 @@ export const SHOP: ShopItem[] = [
   { id: "fireRate", title: "Spring Kit", text: "+10% fire rate", cost: 16 },
   { id: "shotgun", title: "Shotgun", text: "7 pellets, brutal up close", cost: 30, weapon: "shotgun" },
   { id: "rifle", title: "Assault Rifle", text: "Fast, long range, pierces", cost: 45, weapon: "rifle" },
+  { id: "plasma", title: "Plasma Rifle", text: "12 bolts a second, pierces", cost: 110, weapon: "plasma", campaign: true },
+  { id: "hellfire", title: "Hellfire Rifle", text: "Heavy rounds: pierce, splash, burn", cost: 110, weapon: "hellfire", campaign: true },
 ];

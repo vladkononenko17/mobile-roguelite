@@ -63,7 +63,7 @@ export interface Campaign {
   levels: WaveDef[];
   zones: Record<string, Zone>;
   /** How a run starts (a veteran's weapon, cash, upgrade picks) and its special beats. */
-  run?: { startWeapon: WeaponId; startCash: number; startPicks: number; pactAfter: number; finalLevel: number };
+  run?: { startWeapon: WeaponId; startCash: number; startPicks: number; pactAfter: number; finalLevel: number; armory?: { after: number; weapons: readonly WeaponId[] } };
   /** Title and line shown when the whole campaign is won. */
   victory: { title: string; text: string };
   /** A level starts in `zone` (seal the way on, light the arena...). */

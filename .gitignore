@@ -24,3 +24,5 @@ assets-src/inferno-world/
 assets-src/shs-dungeon/
 # hell2 release packs (Bestiary, Codersan alien, Quaternius, alien buildings, cyber demons): raw files local only
 assets-src/hell2/
+# Plasma / Hellfire rifle sources (AR_2, AR_3, supplied in chat; licence unknown): raw files local only
+assets-src/new-ars/

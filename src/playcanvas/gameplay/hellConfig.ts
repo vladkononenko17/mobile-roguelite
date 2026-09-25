@@ -402,4 +402,6 @@ export const HELL_RUN = {
   pactAfter: 5,
   /** Before this level (index) the final warning is shown. */
   finalLevel: 8,
+  /** After this level (index; the Glutton) the Infernal Armory offers one of these free. */
+  armory: { after: 2, weapons: ["plasma", "hellfire"] as const },
 };

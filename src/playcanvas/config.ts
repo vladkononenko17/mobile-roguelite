@@ -230,6 +230,25 @@ export const WEAPONS = {
     // with the legacy placement: that carry keeps the head away from the body in idle and run, while a
     // grip-fitted hold swung the head up by the character's head. Locomotion and attack clips move it.
     axe: { label: "Axe", class: "axe", node: "low_poly_axe", position: [0, 0.08, 0.62], rotation: [90, 0, 0], rollDeg: 0, attack: "Axe_Spin_Attack" },
+    // Hell-chapter rifles (AR_2 / AR_3, added by scripts/add-weapons.mjs): origin at the pistol grip
+    // centre, accents on their own emissive material.
+    // Plasma: 78 cm bullpup; the support hand takes the fore-grip under the thumb hole (z -0.21).
+    plasma: {
+      label: "Plasma rifle", class: "rifle", node: "Plasma_Rifle", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, 0, 0], axis: [0, 0.94, -0.34], palm: [0.85, 0.18, 0.49], radius: 0.02 },
+        left: { position: [0, 0.004, -0.214], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.022, rollRangeDeg: 35 },
+      },
+    },
+    // Hellfire: 72 cm, slanted pistol grip; box magazine ahead of it; the support hand under the
+    // front of the receiver (z -0.27).
+    hellfire: {
+      label: "Hellfire rifle", class: "rifle", node: "Hellfire_Rifle", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, 0, 0], axis: [0, 0.905, -0.425], palm: [0.85, 0.22, 0.47], radius: 0.02 },
+        left: { position: [0, 0.056, -0.273], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.02, rollRangeDeg: 35 },
+      },
+    },
   },
 } satisfies {
   url: string;
