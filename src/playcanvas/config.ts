@@ -234,9 +234,11 @@ export const WEAPONS = {
     // centre, accents on their own emissive material.
     // Plasma: 78 cm bullpup; the support hand takes the fore-grip under the thumb hole (z -0.21).
     plasma: {
-      label: "Plasma rifle", class: "rifle", node: "Plasma_Rifle", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      // Bullpup: the hand goes through the thumb-hole round the strut behind it, so the model is scaled
+      // up (the hole must fit the fingers) and the grip sits mid-strut, not at its foot.
+      label: "Plasma rifle", class: "rifle", node: "Plasma_Rifle", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null, scale: 1.3,
       grips: {
-        right: { position: [0, 0, 0], axis: [0, 0.94, -0.34], palm: [0.85, 0.18, 0.49], radius: 0.02 },
+        right: { position: [0, 0.022, 0.006], axis: [0, 0.94, -0.34], palm: [0.85, 0.18, 0.49], radius: 0.02 },
         left: { position: [0, 0.004, -0.214], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.022, rollRangeDeg: 35 },
       },
     },
