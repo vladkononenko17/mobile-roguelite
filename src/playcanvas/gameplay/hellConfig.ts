@@ -4,7 +4,7 @@
 // retargeted onto the Bestiary / Codersan rigs) and scripts/build-hell-creatures.mjs (drake, bat,
 // husk: Quaternius clips); see assets-src/SOURCES.md.
 
-import type { DifficultyDef, EnemyClips, EnemyDef, EnemyVisual, WaveDef } from "./config";
+import type { DifficultyDef, EnemyClips, EnemyDef, EnemyId, EnemyVisual, WaveDef } from "./config";
 
 /* ------------------------------------------------------------------------------------------------
  * Looks
@@ -197,7 +197,7 @@ export type BossAttack =
   /** Lava eruption: a line of strikes from the boss towards the player. */
   | { kind: "eruption"; count: number; radius: number; delay: number; damage: number; spacing: number; fire: number }
   /** Summon: portals open around the boss, demons step out. */
-  | { kind: "summon"; enemies: { type: HellEnemyId; count: number }[]; radius: number; portal: number }
+  | { kind: "summon"; enemies: { type: EnemyId; count: number }[]; radius: number; portal: number }
   /** Flying dive at the player (the wyrm). */
   | { kind: "dive"; telegraph: number; speed: number; distance: number; damage: number };
 
@@ -412,6 +412,11 @@ export const HELL_RUN = {
   finalLevel: 8,
   /** After this level (index; the Glutton) the Infernal Armory offers one of these free. */
   armory: { after: 2, weapons: ["plasma", "hellfire"] as const },
+  text: {
+    armory: ["THE INFERNAL ARMORY", "The Glutton guarded a cache of hellforged rifles. Take one - the other waits in the shop."] as [string, string],
+    pact: ["THE INFERNAL PACT", "Deeper Hell will test your build. Choose one pact - its power has a price."] as [string, string],
+    finalWarning: ["THE FINAL ENCOUNTER", "The Archfiend waits on its throne. There is no way back and no second chance: read its attacks, move, and trust your build."] as [string, string],
+  },
 };
 
 /**

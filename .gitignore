@@ -28,3 +28,5 @@ assets-src/hell2/
 assets-src/new-ars/
 # Kenney Graveyard / Nature kits (CC0, kenney.nl): raw downloads local only; used models are baked into hell-kit.glb
 assets-src/kenney/
+# Quaternius Ultimate Space Kit (CC0): raw downloads local only; built GLBs in public/models/aliens/
+assets-src/quaternius-space/

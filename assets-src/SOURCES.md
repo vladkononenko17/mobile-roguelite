@@ -28,3 +28,9 @@ Two flat-colour assault rifles supplied in chat (`.gltf` + `.fbx`); raw files ke
 ## Kenney Graveyard Kit 5.0 and Nature Kit (CC0)
 
 By Kenney (www.kenney.nl), Creative Commons Zero. Downloaded from https://kenney.nl/assets/graveyard-kit and https://kenney.nl/assets/nature-kit into `assets-src/kenney/` (git-ignored; re-download to rebuild). `scripts/build-hell-kit.mjs` bakes the used models into `public/models/hell/hell-kit.glb` with their own grades: crypts (with their roofs), gravestones, iron fences, obelisks, coffins, urns, candles, a stone altar and fire baskets (the abyss graveyard, the gate avenue, the ritual stones), charred dead pines, trunks, stumps and logs, and four tall rock spires (the wastes' badlands). The Inferno World gems (already in the `hell` release) are baked self-lit as lava crystals.
+
+## Kenney Space Station Kit, Space Kit (CC0) and Quaternius Ultimate Space Kit (CC0)
+
+Kenney "Space Station Kit" and "Space Kit" (www.kenney.nl, CC0) from https://kenney.nl/assets/space-station-kit and https://kenney.nl/assets/space-kit into `assets-src/kenney/` (git-ignored): walls, consoles, beds, containers, pipes (x2.4) and spacecraft, rockets, turrets, hangars, meteors, craters, crystals, rover, dishes (x4), baked into `public/models/facility/facility-kit.glb` by `scripts/build-facility-kit.mjs`. ("Modular Space Kit" was downloaded too but not used: its rooms are too heavy for mobile.)
+
+Quaternius "Ultimate Space Kit" (quaternius.com, CC0; its public Google Drive folder), glTF characters Enemy_ExtraSmall, Enemy_Small, Enemy_Flying, Enemy_Large and Mech_FinnTheFrog in `assets-src/quaternius-space/characters/` (git-ignored), built by `scripts/build-space-creatures.mjs` into `public/models/aliens/` (skitter, spitter, glub, alienBrute, mech) with hue-shifted skins in `public/models/aliens/skins/`.

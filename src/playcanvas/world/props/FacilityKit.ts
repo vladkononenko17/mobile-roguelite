@@ -8,7 +8,8 @@ const clutter: KitModelDef = { collider: { kind: "none" }, shadows: false };
 
 /**
  * Chapter 2 environment kit: the ORION research facility (public/models/facility/facility-kit.glb,
- * built by scripts/build-facility-kit.mjs from the Molten Maps SciFi pack). Ids match the node names
+ * built by scripts/build-facility-kit.mjs from the Molten Maps SciFi pack and Kenney's Space Station /
+ * Space kits). Ids match the node names
  * in the GLB. Walls and machines block; floor tiles and wall-mounted details do not.
  */
 export const FACILITY_MODELS = {
@@ -97,6 +98,69 @@ export const FACILITY_MODELS = {
   // Structure
   catwalk: box(0.95),
   railing: box(1),
+  // Kenney Space Station Kit (x2.4): 2.4 m walls and interior props
+  kWall: box(),
+  kWallWindow: box(),
+  kWallDetail: box(),
+  kWallBanner: box(),
+  kWallPillar: box(),
+  kWallSwitch: box(),
+  kStructure: box(0.95),
+  kBarrier: box(0.9),
+  kBarrierHigh: box(0.9),
+  kComputer: box(0.85),
+  kComputerWide: box(0.85),
+  kComputerSystem: box(0.85),
+  kDisplayWall: box(0.85),
+  kContainer: box(0.9),
+  kContainerTall: box(0.9),
+  kContainerWide: box(0.9),
+  kContainerFlat: box(0.9),
+  kContainerOpen: box(0.9),
+  kBed: box(0.9),
+  kBedSingle: box(0.9),
+  kChair: clutter,
+  kTable: box(0.85),
+  kTableDisplay: circle(0.5),
+  kPipe: decor,
+  kPipeRing: decor,
+  kSkipRocks: box(0.9),
+  kRail: decor,
+  // Kenney Space Kit (x4): hangar, launch bay and the meteor
+  sCraftCargo: box(0.8),
+  sCraftCargoB: box(0.8),
+  sCraftMiner: box(0.8),
+  sCraftSpeeder: box(0.75),
+  sCraftRacer: box(0.75),
+  sRocket: circle(2.6),
+  sHangar: box(0.95),
+  sHangarRound: box(0.9),
+  sTurret: circle(1.4),
+  sTurretSingle: circle(1.2),
+  sDish: circle(1.2),
+  sRover: box(0.85),
+  sGenerator: box(0.85),
+  sBarrels: box(0.85),
+  sWireless: circle(0.8),
+  sGate: decor,
+  sPlatform: floor,
+  sSupports: decor,
+  sStructure: box(0.9),
+  sPipeRing: decor,
+  sMeteor: circle(1.5),
+  sMeteorHalf: circle(1.4),
+  sRock: circle(1.2),
+  sRockLargeA: circle(1.6),
+  sRockLargeB: circle(1.6),
+  sRocksSmall: clutter,
+  sCrystals: circle(1.2),
+  sCrystalsLargeA: circle(1.4),
+  sCrystalsLargeB: circle(1.4),
+  sCrater: floor,
+  sCraterLarge: floor,
+  sCliff: clutter,
+  sBones: clutter,
+  sAstronaut: clutter,
 } satisfies Record<string, KitModelDef>;
 
 export type FacilityModel = keyof typeof FACILITY_MODELS;

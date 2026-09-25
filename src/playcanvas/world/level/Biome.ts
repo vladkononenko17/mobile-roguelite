@@ -81,6 +81,8 @@ export interface Campaign {
   run?: {
     startWeapon: WeaponId; startCash: number; startPicks: number; pactAfter: number; finalLevel: number;
     armory?: { after: number; weapons: readonly WeaponId[] };
+    /** Screen text: the armory, the pact (build-defining upgrades before the last act) and the final warning. */
+    text?: { armory?: [string, string]; pact?: [string, string]; finalWarning?: [string, string] };
   };
   /** Difficulties the run can be played at (`levels` are the baseline, `defaultDifficulty`). */
   difficulties?: Record<string, DifficultyDef>;

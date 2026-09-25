@@ -1,7 +1,9 @@
 import { Vec3 } from "playcanvas";
 import type { Enemy, EnemyManager } from "./EnemyManager";
 import type { Hazards } from "./Hazards";
-import { HELL_BOSSES, type BossAttack, type BossPhase, type HellEnemyId } from "./hellConfig";
+import type { EnemyId } from "./config";
+import { BOSS_SCRIPTS } from "./campaigns";
+import type { BossAttack, BossPhase } from "./hellConfig";
 
 type Step = "idle" | "approach" | "windup" | "active" | "recover" | "roar";
 
@@ -36,7 +38,7 @@ export interface BossSteer {
 }
 
 /**
- * Boss scripts (data: HELL_BOSSES). Each boss cycles through its current phase's attacks with a
+ * Boss scripts (data: BOSS_SCRIPTS - HELL_BOSSES, SPACE_BOSSES). Each boss cycles through its current phase's attacks with a
  * pause (`cadence`) between them; below each phase threshold it roars (invulnerable, the arena
  * reacts) and switches to the next, faster phase. Every damaging attack is telegraphed:
  * - melee: the swing's wind-up animation, and only within reach;
@@ -51,14 +53,14 @@ export class BossBrain {
   onWindup: (enemy: Enemy, seconds: number) => void = () => {};
   onPhase: (enemy: Enemy, phase: BossPhase, index: number) => void = () => {};
   onBlast: (position: Vec3, radius: number) => void = () => {};
-  onSummon: (type: HellEnemyId, x: number, z: number) => void = () => {};
+  onSummon: (type: EnemyId, x: number, z: number) => void = () => {};
   private readonly out: BossSteer = { x: 0, z: 0, speed: 0, useNav: false };
   private readonly tmp = new Vec3();
 
   constructor(private readonly enemies: EnemyManager, private readonly hazards: Hazards) {}
 
   create(enemy: Enemy): BossState {
-    const phases = HELL_BOSSES[enemy.def.script!];
+    const phases = BOSS_SCRIPTS[enemy.def.script!];
     return {
       phases, phase: 0, next: 0, attack: null, step: "idle", t: 0, wait: 2, count: 0,
       dirX: 0, dirZ: 1, travelled: 0, marker: null, hitDone: false,

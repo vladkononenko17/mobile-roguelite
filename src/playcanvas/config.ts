@@ -379,6 +379,10 @@ export const GROUND = {
     bloodrock: { base: "#4d2a2d", dark: "#412326", light: "#583236", speckDark: "#2d1719", speckLight: "#7d3b31", specks: 850 },
     /** Hell, the abyss: pale bone-ash of the graveyard of the damned. */
     boneash: { base: "#6b695f", dark: "#5e5c53", light: "#77756a", speckDark: "#4a4840", speckLight: "#8c8a7c", specks: 900 },
+    /** ORION hangar: dark concrete-composite launch deck, big slabs with painted seams. */
+    hangardeck: { base: "#3f4247", dark: "#35383d", light: "#4a4d53", speckDark: "#2a2c30", speckLight: "#6a6250", specks: 350, slabs: 3, seam: "#23252a" },
+    /** The meteor: grey-violet rock dust, flecked with crystal glints. */
+    asteroid: { base: "#4d4852", dark: "#423e47", light: "#58535e", speckDark: "#35313a", speckLight: "#9a7fd0", specks: 1000 },
     /** Oil, soot and dried blood trodden into the facility floor. */
     grime: { base: "#48463f", dark: "#3d3b35", light: "#524f47", speckDark: "#2e2926", speckLight: "#5e3a33", specks: 700 },
   },

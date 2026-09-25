@@ -7,7 +7,7 @@ import type { CollisionWorld } from "../world/collision/CollisionWorld";
 import type { Biome, Campaign, LevelBounds, WayPoint, Zone } from "../world/level/Biome";
 import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, shopPrice, TRAPS, ENEMY_PACE, WEAPON_CARDS, levelsAt, type DifficultyDef, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
 import { BossBrain } from "./BossBrain";
-import { HELL_BOSSES, HELL_TYPE_SKINS } from "./hellConfig";
+import { BOSS_SCRIPTS, TYPE_SKINS } from "./campaigns";
 import { Effects } from "./Effects";
 import { EnemyManager, isAlive, type BodySource, type Enemy } from "./EnemyManager";
 import { Hazards } from "./Hazards";
@@ -214,13 +214,13 @@ export class Gameplay {
       if (level.boss) {
         types.add(level.boss.type);
         const script = ENEMIES[level.boss.type].script;
-        for (const phase of script ? HELL_BOSSES[script] : []) for (const a of phase.attacks) if (a.kind === "summon") a.enemies.forEach((e) => types.add(e.type));
+        for (const phase of script ? BOSS_SCRIPTS[script] : []) for (const a of phase.attacks) if (a.kind === "summon") a.enemies.forEach((e) => types.add(e.type));
       }
     }
     const openers = Object.keys(this.levels[0].phases[0].weights) as EnemyId[];
     const first = new Set(openers.flatMap((id) => ENEMIES[id].visuals));
     const neededSkins = new Set<EnemySkinId>([...types].flatMap((id) => [
-      ...((HELL_TYPE_SKINS as Partial<Record<EnemyId, EnemySkinId[]>>)[id] ?? []),
+      ...(TYPE_SKINS[id] ?? []),
       ...ENEMIES[id].visuals.flatMap((v) => ENEMY_VISUALS[v].skins ?? []),
     ]));
     const skins = (Object.keys(ENEMY_SKINS) as EnemySkinId[]).filter((skin) => neededSkins.has(skin)).map((skin) =>
@@ -562,8 +562,8 @@ export class Gameplay {
   private beforeLevel(next: number): void {
     if (this.campaign?.run && next === this.campaign.run.finalLevel) {
       this.hud.openModal({
-        title: "THE FINAL ENCOUNTER",
-        text: "The Archfiend waits on its throne. There is no way back and no second chance: read its attacks, move, and trust your build.",
+        title: this.campaign.run.text?.finalWarning?.[0] ?? "THE FINAL ENCOUNTER",
+        text: this.campaign.run.text?.finalWarning?.[1] ?? "There is no way back and no second chance: read its attacks, move, and trust your build.",
         actions: [{ label: `Enter ${this.levels[next].label}`, onClick: () => this.proceed(next) }],
       });
       return;
@@ -627,8 +627,8 @@ export class Gameplay {
       return;
     }
     this.hud.openModal({
-      title: "THE INFERNAL PACT",
-      text: "Deeper Hell will test your build. Choose one pact - its power has a price.",
+      title: this.campaign?.run?.text?.pact?.[0] ?? "THE PACT",
+      text: this.campaign?.run?.text?.pact?.[1] ?? "What lies ahead will test your build. Choose one - its power has a price.",
       cards: offers.map((u) => ({ title: u.name, text: upgradeText(u), tag: "pact", kind: "special" })),
       onCard: (i) => {
         this.announce(applyUpgrade(this.stats, offers[i].id));
@@ -650,8 +650,8 @@ export class Gameplay {
       return;
     }
     this.hud.openModal({
-      title: "THE INFERNAL ARMORY",
-      text: "The Glutton guarded a cache of hellforged rifles. Take one - the other waits in the shop.",
+      title: this.campaign?.run?.text?.armory?.[0] ?? "THE ARMORY",
+      text: this.campaign?.run?.text?.armory?.[1] ?? "Take one new weapon - the other waits in the shop.",
       cards: offers.map((id) => ({ title: WEAPONS.list[id].label, text: WEAPON_CARDS[id]?.text ?? "", tag: "weapon", kind: "weapon" })),
       onCard: (i) => {
         this.equip(offers[i]);

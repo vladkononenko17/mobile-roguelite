@@ -1,12 +1,12 @@
 import type { Biome } from "./Biome";
-import { FACILITY_BIOME } from "./FacilityLevel";
+import { SHIP_BIOME } from "./ShipLevel";
 import { HELL_BIOME } from "./HellLevel";
 import { OUTPOST_BIOME } from "./OutpostLevel";
 
 /** Every playable map, in chapter order. */
 export const BIOMES = {
   outpost: OUTPOST_BIOME as Biome,
-  facility: FACILITY_BIOME as Biome,
+  facility: SHIP_BIOME as Biome,
   hell: HELL_BIOME as Biome,
 };
 
@@ -19,7 +19,7 @@ const ALIASES: Record<string, BiomeId> = { space: "facility", orion: "facility",
 
 /**
  * The map comes from the URL only, so each map has its own link and the plain link is always
- * chapter 1: ?level=space (or ?biome=facility) opens the ORION facility, ?level=hell the pit;
+ * chapter 1: ?level=space (or ?biome=facility) opens the ORION ship, ?level=hell the pit;
  * space.html and hell.html redirect there.
  */
 export function pickBiome(): BiomeId {

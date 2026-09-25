@@ -1,6 +1,6 @@
 import { BLEND_ADDITIVE, Color, Entity, StandardMaterial, Vec3, type AnimTrack, type Texture, type AppBase, type ContainerResource, type MeshInstance, type RenderComponent } from "playcanvas";
 import { ENEMIES, ENEMY_LIMITS, ENEMY_VISUALS, TARGETING, type EnemyClips, type EnemyDef, type EnemyId, type EnemySkinId, type EnemyVisualId } from "./config";
-import { HELL_TYPE_SKINS } from "./hellConfig";
+import { TYPE_SKINS } from "./campaigns";
 import type { BossBrain, BossState } from "./BossBrain";
 import type { Hazards } from "./Hazards";
 import type { NavField } from "./NavField";
@@ -308,7 +308,7 @@ export class EnemyManager {
     enemy.brain = def.script && this.brain ? this.brain.create(enemy) : null;
     for (const a of enemy.attachments) a.entity.enabled = !a.only || a.only.includes(id);
     // Materials (per type) and animation clips.
-    const skins = ((HELL_TYPE_SKINS as Partial<Record<EnemyId, EnemySkinId[]>>)[id] ?? visual.skins ?? []).filter((k) => this.skins.has(k));
+    const skins = (TYPE_SKINS[id] ?? visual.skins ?? []).filter((k) => this.skins.has(k));
     enemy.skin = skins.length ? skins[Math.floor(Math.random() * skins.length)] : null;
     const mats = this.materialsFor(id, pool.baseMaterial!, enemy.skin);
     enemy.normalMaterial = mats.normal;
