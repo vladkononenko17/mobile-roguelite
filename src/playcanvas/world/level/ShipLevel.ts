@@ -213,6 +213,8 @@ const world = {
   barrier: null as StandardMaterial | null,
   accent: null as StandardMaterial | null, accentNow: [...CYAN] as RGB,
   backdrop: null as Entity | null,
+  voidMaterial: null as StandardMaterial | null,
+  camera: null as Entity | null,
   portal: null as { ring: Entity; disc: Entity; mat: StandardMaterial; collapse: number } | null,
 };
 
@@ -261,57 +263,78 @@ function hazeMaterial(app: AppBase, color: RGB, k: number): StandardMaterial {
   return m;
 }
 
+/** Metres of backdrop per repeat of the space texture, and how fast it drifts with the camera. */
+const VOID_TILE = 240;
+const VOID_PARALLAX = 0.22;
+/** The backdrop's distance in front of the camera (inside the space map's far plane). */
+const VOID_DISTANCE = 150;
+
 /**
- * The void below the station: a starfield, nebula hazes and a planet. It follows the hero at 85% of
- * his motion (parallax: far away, and always under the view - it used to lie beyond the far plane).
+ * The void round the station: one camera-facing quad just inside the far plane, painted with stars,
+ * nebulae and a planet (a seamless 1024 canvas), drifting slowly as the camera moves (parallax).
+ * Everything in the level is nearer, so the level hides it wherever there is floor. (It used to be
+ * big planes far below the station: on phone GPUs they sampled into blocky smears.)
  */
 function buildVoid(root: Entity, app: AppBase): void {
   const random = rng(77);
-  const stars = canvasTexture(app, 512, (g) => {
-    g.fillStyle = "#000"; g.fillRect(0, 0, 512, 512);
-    for (let i = 0; i < 520; i++) {
-      const b = random(), s = b > 0.97 ? 2.2 : b > 0.85 ? 1.4 : 0.8;
-      g.fillStyle = `rgba(${200 + random() * 55},${210 + random() * 45},255,${0.35 + b * 0.65})`;
-      g.beginPath(); g.arc(random() * 512, random() * 512, s, 0, Math.PI * 2); g.fill();
+  const size = 1024;
+  const texture = canvasTexture(app, size, (g) => {
+    g.fillStyle = "#020308";
+    g.fillRect(0, 0, size, size);
+    // Draws with wrap-around so the tile repeats seamlessly.
+    const wrapped = (x: number, y: number, r: number, draw: (x: number, y: number) => void) => {
+      for (const ox of [-size, 0, size]) for (const oy of [-size, 0, size]) {
+        if (x + ox + r > 0 && x + ox - r < size && y + oy + r > 0 && y + oy - r < size) draw(x + ox, y + oy);
+      }
+    };
+    g.globalCompositeOperation = "lighter";
+    const nebulae: [number, number, number, string][] = [
+      [230, 260, 330, "rgba(70,30,120,0.55)"], [720, 380, 380, "rgba(20,60,120,0.5)"], [520, 820, 300, "rgba(110,30,80,0.4)"], [900, 900, 220, "rgba(40,20,90,0.45)"],
+    ];
+    for (const [x, y, r, c] of nebulae) {
+      wrapped(x, y, r, (px, py) => {
+        const grad = g.createRadialGradient(px, py, 0, px, py, r);
+        grad.addColorStop(0, c); grad.addColorStop(1, "rgba(0,0,0,0)");
+        g.fillStyle = grad; g.fillRect(px - r, py - r, r * 2, r * 2);
+      });
     }
+    for (let i = 0; i < 900; i++) {
+      const b = random(), r = b > 0.985 ? 2.4 : b > 0.9 ? 1.6 : 1;
+      const x = random() * size, y = random() * size;
+      const colour = `rgba(${200 + random() * 55},${210 + random() * 45},255,${0.3 + b * 0.7})`;
+      wrapped(x, y, r, (px, py) => { g.fillStyle = colour; g.beginPath(); g.arc(px, py, r, 0, Math.PI * 2); g.fill(); });
+    }
+    // The planet: a shaded disc with a thin lit rim.
+    g.globalCompositeOperation = "source-over";
+    const [px, py, pr] = [650, 640, 120];
+    const body = g.createRadialGradient(px - pr * 0.4, py - pr * 0.4, pr * 0.1, px, py, pr);
+    body.addColorStop(0, "#3d7fa8"); body.addColorStop(0.6, "#1c3f5c"); body.addColorStop(1, "#08131f");
+    g.fillStyle = body; g.beginPath(); g.arc(px, py, pr, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = "rgba(120,200,255,0.45)"; g.lineWidth = 4; g.beginPath(); g.arc(px, py, pr + 2, Math.PI * 0.9, Math.PI * 1.7); g.stroke();
   }, true);
-  const starMat = new StandardMaterial();
-  starMat.diffuse.set(0, 0, 0);
-  starMat.emissive = new Color(0.9, 0.95, 1.1);
-  starMat.emissiveMap = stars;
-  starMat.emissiveMapTiling.set(3, 3);
-  starMat.useLighting = false;
-  starMat.useFog = false;
-  starMat.depthWrite = false;
-  starMat.update();
-  const backdrop = new Entity("void");
-  root.addChild(backdrop);
-  world.backdrop = backdrop;
-  const plane = new Entity("starfield");
-  plane.addComponent("render", { type: "plane", material: starMat, castShadows: false, receiveShadows: false });
-  plane.setLocalScale(300, 1, 300);
-  plane.setLocalPosition(0, -60, -40);
-  backdrop.addChild(plane);
-  const haze = (x: number, z: number, size: number, color: RGB, k: number) => {
-    const e = new Entity("nebula");
-    e.addComponent("render", { type: "plane", material: hazeMaterial(app, color, k), castShadows: false, receiveShadows: false });
-    e.setLocalScale(size, 1, size);
-    e.setLocalPosition(x, -58, z);
-    backdrop.addChild(e);
-  };
-  haze(-70, -30, 150, [0.25, 0.12, 0.45], 0.9);
-  haze(80, -90, 170, [0.08, 0.25, 0.45], 0.8);
-  haze(-40, -130, 120, [0.4, 0.12, 0.3], 0.7);
-  const planetMat = new StandardMaterial();
-  planetMat.diffuse.set(0.05, 0.08, 0.12);
-  planetMat.emissive = new Color(0.12, 0.3, 0.45);
-  planetMat.useFog = false;
-  planetMat.update();
-  const planet = new Entity("planet");
-  planet.addComponent("render", { type: "sphere", material: planetMat, castShadows: false, receiveShadows: false });
-  planet.setLocalScale(90, 90, 90);
-  planet.setLocalPosition(70, -95, -95);
-  backdrop.addChild(planet);
+  const material = new StandardMaterial();
+  material.diffuse.set(0, 0, 0);
+  material.emissive = new Color(1, 1, 1);
+  material.emissiveMap = texture;
+  material.useLighting = false;
+  material.useFog = false;
+  material.useSkybox = false;
+  material.cull = 0;
+  material.update();
+  const quad = new Entity("void");
+  quad.addComponent("render", { type: "plane", material, castShadows: false, receiveShadows: false });
+  // Parented to the camera (found when the level is attached, see SHIP_BIOME.update).
+  const side = VOID_DISTANCE * 2.6;
+  quad.setLocalScale(side, 1, side);
+  quad.setLocalEulerAngles(90, 0, 0);
+  quad.setLocalPosition(0, 0, -VOID_DISTANCE);
+  material.emissiveMapTiling.set(side / VOID_TILE, side / VOID_TILE);
+  world.backdrop = quad;
+  world.voidMaterial = material;
+  world.camera = null;
+  quad.enabled = false;
+  root.addChild(quad);
+  void app;
 }
 
 /** The Project Gate's portal: a standing ring and a swirling disc (additive), on a dais. */
@@ -869,8 +892,25 @@ export const SHIP_BIOME: Biome<FacilityModel> = {
     update(dt, hero) {
       world.time += dt;
       world.shown += (world.arena - world.shown) * Math.min(1, dt * 1.5);
-      // The void follows the hero (parallax).
-      world.backdrop?.setLocalPosition(hero.x * 0.85, 0, hero.z * 0.85);
+      // The void rides on the camera and drifts slowly (parallax).
+      const quad = world.backdrop;
+      if (quad) {
+        if (!world.camera) {
+          world.camera = (quad.root.findByName("Camera") as Entity | null) ?? null;
+          if (world.camera) { quad.reparent(world.camera); quad.enabled = true; }
+        }
+        const cam = world.camera?.getPosition();
+        // Just inside the far plane (the map view pulls the camera far back).
+        const far = world.camera?.camera?.farClip ?? VOID_DISTANCE / 0.94;
+        const d = far * 0.94, side = d * 2.6;
+        quad.setLocalPosition(0, 0, -d);
+        quad.setLocalScale(side, 1, side);
+        if (cam && world.voidMaterial) {
+          world.voidMaterial.emissiveMapTiling.set(side / VOID_TILE, side / VOID_TILE);
+          world.voidMaterial.emissiveMapOffset.set((cam.x * VOID_PARALLAX) / VOID_TILE, (cam.z * VOID_PARALLAX) / VOID_TILE);
+          world.voidMaterial.update();
+        }
+      }
       // Accent paint takes the colour of the sector the hero is in.
       const accent = world.accent;
       if (accent) {
