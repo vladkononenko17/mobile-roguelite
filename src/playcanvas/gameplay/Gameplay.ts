@@ -653,6 +653,10 @@ export class Gameplay {
     this.hud.setXp(s.level, s.xp, s.xpNeeded);
     const boss = d.boss && isAlive(d.boss) ? d.boss : null;
     this.hud.setBoss(boss ? boss.def.label : null, boss ? boss.hp / boss.maxHp : 0);
+    // Where the boss is when it is off screen (the arenas are large; its attacks can land from there).
+    const combatBoss = boss && this.phase === "combat" ? boss : null;
+    const hero = this.player.entity.getPosition();
+    this.hud.setBossPointer(combatBoss?.position ?? null, combatBoss ? Math.hypot(combatBoss.position.x - hero.x, combatBoss.position.z - hero.z) : 0);
     this.hud.update(dt, this.projector);
     this.targetDebug.update(this.gun.debug);
   }

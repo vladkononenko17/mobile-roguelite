@@ -83,6 +83,10 @@ const CSS = `
 #hud .dmg.heal { color: #9fcf78; font-size: 17px; }
 #hud .dmg.burn { color: #f08a3c; font-size: 13px; }
 #hud .dmg.tech { color: #8fd0ff; font-size: 14px; }
+/* Off-screen boss: a badge with the distance at the screen edge, its tip pointing at the boss. */
+#hud .pointer { position: absolute; left: 0; top: 0; width: 34px; height: 34px; margin: -17px 0 0 -17px; display: none; pointer-events: none; }
+#hud .pointer b { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 50%; background: rgba(60, 10, 6, 0.85); border: 1px solid #e0573a; box-shadow: 0 0 10px -2px #ff5a2e; font: 700 12px/1 "Barlow Condensed", system-ui, sans-serif; color: #ffd9c4; letter-spacing: 0.02em; }
+#hud .pointer i { position: absolute; left: 50%; top: 50%; width: 0; height: 0; margin: -7px 0 0 -5px; border-left: 11px solid #ff6a3a; border-top: 7px solid transparent; border-bottom: 7px solid transparent; transform-origin: 5px 7px; filter: drop-shadow(0 0 3px #ff4a1a); }
 #hud .weapon-new { --c: #ff7a2e; position: absolute; left: 50%; bottom: calc(16% + env(safe-area-inset-bottom)); transform: translate(-50%, 12px); width: min(78vw, 330px); box-sizing: border-box; padding: 10px 14px 11px; border-radius: 6px; background: rgba(16, 12, 10, 0.86); border: 1px solid var(--c); box-shadow: 0 0 18px -4px var(--c); opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; text-align: center; }
 #hud .weapon-new.show { opacity: 1; transform: translate(-50%, 0); }
 #hud .weapon-new i { display: block; font: 700 11px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.22em; color: var(--c); }
@@ -259,6 +263,11 @@ export class Hud {
   private bannerTimer = 0;
   private readonly upgrade: HTMLElement;
   private readonly weaponCard: HTMLElement;
+  private readonly pointer: HTMLElement;
+  private readonly pointerTip: HTMLElement;
+  private readonly pointerText: HTMLElement;
+  private pointerTarget: Vec3 | null = null;
+  private pointerDistance = 0;
   private weaponTimer = 0;
   private readonly pulse: HTMLElement;
   private readonly upgradeQueue: UpgradeNotice[] = [];
@@ -322,6 +331,12 @@ export class Hud {
     this.weaponCard.className = "weapon-new";
     this.weaponCard.innerHTML = "<i>NEW WEAPON</i><b></b><small></small><ul></ul>";
     this.upgrade.parentElement!.append(this.weaponCard);
+    this.pointer = document.createElement("div");
+    this.pointer.className = "pointer";
+    this.pointer.innerHTML = "<i></i><b></b>";
+    this.pointerTip = this.pointer.querySelector("i")!;
+    this.pointerText = this.pointer.querySelector("b")!;
+    this.upgrade.parentElement!.append(this.pointer);
     this.pulse = q(".pulse");
     this.upgrade.addEventListener("animationend", (e) => {
       if (e.target !== this.upgrade) return;
@@ -414,6 +429,13 @@ export class Hud {
     this.bossBar.style.width = `${Math.max(0, fraction) * 100}%`;
   }
 
+  /** Points at an off-screen boss (null hides it); `distance` in metres is shown in the badge. */
+  setBossPointer(target: Vec3 | null, distance = 0): void {
+    this.pointerTarget = target;
+    this.pointerDistance = distance;
+    if (!target) this.pointer.style.display = "none";
+  }
+
   showBanner(text: string, seconds = 2): void {
     this.banner.textContent = text;
     this.banner.style.opacity = "1";
@@ -492,6 +514,7 @@ export class Hud {
   }
 
   update(dt: number, camera: ScreenProjector): void {
+    if (this.pointerTarget) this.placePointer(camera);
     if (this.weaponTimer > 0) {
       this.weaponTimer -= dt;
       if (this.weaponTimer <= 0) this.weaponCard.classList.remove("show");
@@ -519,6 +542,32 @@ export class Hud {
       f.el.style.top = `${this.screen.y}px`;
       f.el.style.opacity = `${Math.min(1, f.life / 0.3)}`;
     }
+  }
+
+  /**
+   * The boss pointer: hidden while the boss is on screen; otherwise on the line from the screen's
+   * middle toward the boss, clamped inside an inset frame (clear of the top plates and the stick).
+   */
+  private placePointer(camera: ScreenProjector): void {
+    const p = camera.toScreen(this.pointerTarget!, this.screen);
+    const w = camera.width, h = camera.height;
+    // On screen, or close enough that its body is in view (a big boss's feet can be off the bottom edge).
+    if (this.pointerDistance < 9 || (p.z > 0 && p.x > 8 && p.x < w - 8 && p.y > 8 && p.y < h - 8)) {
+      this.pointer.style.display = "none";
+      return;
+    }
+    const cx = w / 2, cy = h * 0.55;
+    let dx = p.x - cx, dy = p.y - cy;
+    if (p.z <= 0) { dx = -dx; dy = -dy; }
+    const left = 28, right = w - 28, top = 150, bottom = h - 70;
+    const tx = dx > 0 ? (right - cx) / dx : dx < 0 ? (left - cx) / dx : Infinity;
+    const ty = dy > 0 ? (bottom - cy) / dy : dy < 0 ? (top - cy) / dy : Infinity;
+    const t = Math.min(tx, ty);
+    if (!Number.isFinite(t)) return;
+    this.pointer.style.display = "block";
+    this.pointer.style.transform = `translate(${cx + dx * t}px, ${cy + dy * t}px)`;
+    this.pointerTip.style.transform = `rotate(${Math.atan2(dy, dx)}rad) translateX(19px)`;
+    this.pointerText.textContent = `${Math.round(this.pointerDistance)}m`;
   }
 
   /** Opens the modal with a title, text, optional cards (each a button) and optional actions. */
