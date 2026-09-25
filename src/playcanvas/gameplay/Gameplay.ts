@@ -4,7 +4,7 @@ import type { PlayerController } from "../player/PlayerController";
 import type { WeaponHolder } from "../player/WeaponHolder";
 import type { Hud } from "../ui/Hud";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
-import type { Biome, Campaign, LevelBounds } from "../world/level/Biome";
+import type { Biome, Campaign, LevelBounds, WayPoint, Zone } from "../world/level/Biome";
 import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, WEAPON_CARDS, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
 import { BossBrain } from "./BossBrain";
 import { HELL_BOSSES, HELL_TYPE_SKINS } from "./hellConfig";
@@ -22,7 +22,8 @@ import { Drones } from "./Drones";
 import { ScreenProjector } from "../camera/ScreenProjector";
 import { applyUpgrade, availableUpgrades, rollUpgrades, tagCounts, upgradeStacks, type SynergyReached } from "./Upgrades";
 
-export type RunPhase = "loading" | "combat" | "cleared" | "shop" | "dead" | "complete";
+/** "travel": a campaign level is won and the hero walks to the way on (see Zone.exit). */
+export type RunPhase = "loading" | "combat" | "cleared" | "shop" | "travel" | "dead" | "complete";
 
 async function loadBody(app: AppBase, url: string): Promise<BodySource> {
   const asset = await new Promise<Asset>((resolve, reject) => {
@@ -62,6 +63,9 @@ export class Gameplay {
   private readonly hazards: Hazards;
   readonly pickups: Pickups;
   private readonly tmp = new Vec3();
+  /** The walk to the next level's zone (phase "travel"). */
+  private travel: { next: number; zone: string; exits: WayPoint[]; opened: boolean[]; exit: NonNullable<Zone["exit"]>; region: LevelBounds } | null = null;
+  private readonly wayPoint = new Vec3();
   private navTimer = 0;
   private clearTimer = 0;
   /** Level-ups waiting for an upgrade choice (the choice modal pauses the game). */
@@ -252,7 +256,9 @@ export class Gameplay {
     return zone && this.campaign ? this.campaign.zones[zone] ?? null : null;
   }
 
-  startWave(index: number): void {
+  /** Starts level `index`; `arrived`: the hero walked into its zone (no move to the zone's start). */
+  startWave(index: number, arrived = false): void {
+    this.travel = null;
     this.enemies.clear();
     this.pickups.clear();
     // The level's zone: its region bounds the player, the nav grid and spawning.
@@ -271,11 +277,14 @@ export class Gameplay {
     this.meteorTimer = this.levels[index].meteors?.every ?? 0;
     // Every wave starts in the zone's (or map's) open area.
     const start = zone?.start ?? this.biome.runStart;
-    this.player.entity.setPosition(start.x, 0, start.z);
-    this.player.yawDeg = start.yawDeg;
-    this.player.velocity.set(0, 0, 0);
-    this.onTeleport();
-    this.nav.build(start.x, start.z);
+    if (!arrived) {
+      this.player.entity.setPosition(start.x, 0, start.z);
+      this.player.yawDeg = start.yawDeg;
+      this.player.velocity.set(0, 0, 0);
+      this.onTeleport();
+    }
+    const here = this.player.entity.getPosition();
+    this.nav.build(here.x, here.z);
     this.hazards.reset();
     this.combat.reset();
     if (index > 0) this.stats.rerolls += LEVEL_UP.rerollsPerWave;
@@ -469,7 +478,7 @@ export class Gameplay {
         this.buy(item);
         this.openShop(next);
       },
-      actions: [{ label: `Start ${this.levels[next].label}`, onClick: () => this.beforeLevel(next) }],
+      actions: [{ label: `${this.wayOn(next) ? "On to" : "Start"} ${this.levels[next].label}`, onClick: () => this.beforeLevel(next) }],
     });
   }
 
@@ -479,11 +488,55 @@ export class Gameplay {
       this.hud.openModal({
         title: "THE FINAL ENCOUNTER",
         text: "The Archfiend waits on its throne. There is no way back and no second chance: read its attacks, move, and trust your build.",
-        actions: [{ label: `Enter ${this.levels[next].label}`, onClick: () => this.startWave(next) }],
+        actions: [{ label: `Enter ${this.levels[next].label}`, onClick: () => this.proceed(next) }],
       });
       return;
     }
-    this.startWave(next);
+    this.proceed(next);
+  }
+
+  /** The current zone's way on to level `next` (campaigns whose zones have exits), or null. */
+  private wayOn(next: number): { zone: string; exit: NonNullable<Zone["exit"]>; region: LevelBounds } | null {
+    const zone = this.levels[this.director.waveIndex]?.zone;
+    const from = this.zoneOf(this.director.waveIndex), to = this.zoneOf(next);
+    return zone && from?.exit && to && this.campaign?.exits ? { zone, exit: from.exit, region: to.region } : null;
+  }
+
+  /** Next level: walk there over the map when the zone has a way on, else start it in place. */
+  private proceed(next: number): void {
+    const way = this.wayOn(next);
+    const exits = way ? this.campaign!.exits!(way.zone) : [];
+    if (!way || !exits.length) {
+      this.startWave(next);
+      return;
+    }
+    this.travel = { next, zone: way.zone, exits, opened: exits.map(() => false), exit: way.exit, region: way.region };
+    this.phase = "travel";
+    this.hud.closeModal();
+    this.player.controlsEnabled = true;
+    // Free to walk this zone and the next one (the island rims and bridge walls still hold).
+    const a = this.region, b = way.region;
+    this.player.bounds = { minX: Math.min(a.minX, b.minX), maxX: Math.max(a.maxX, b.maxX), minZ: Math.min(a.minZ, b.minZ), maxZ: Math.max(a.maxZ, b.maxZ) };
+    this.hud.showBanner("The way is open", 2.4);
+  }
+
+  /** Walking to the way on: seals open as the hero comes near; past the line, the next level starts. */
+  private updateTravel(position: Vec3): void {
+    const t = this.travel!;
+    for (let i = 0; i < t.exits.length; i++) {
+      if (t.opened[i] || wayDistance(t.exits[i], position, this.wayPoint) > TRAVEL.openDistance) continue;
+      t.opened[i] = true;
+      this.campaign?.openExit?.(t.zone, i);
+      const w = t.exits[i];
+      this.effects.explosion(this.tmp.set(w.x, 0.4, w.z), Math.min(3, w.width / 2));
+    }
+    const along = (t.exit.axis === "z" ? position.z : position.x) - t.exit.at;
+    const r = t.region;
+    const inside = position.x > r.minX + 1 && position.x < r.maxX - 1 && position.z > r.minZ + 1 && position.z < r.maxZ - 1;
+    if (along * t.exit.dir > TRAVEL.crossDistance && inside) {
+      this.travel = null;
+      this.startWave(t.next, true);
+    }
   }
 
   /**
@@ -628,6 +681,8 @@ export class Gameplay {
       this.enemies.update(dt, position, false);
       this.clearTimer -= dt;
       if (this.clearTimer <= 0 && !this.choosing) this.afterWave();
+    } else if (this.phase === "travel" && !this.choosing) {
+      this.updateTravel(position);
     }
     this.gun.update(dt, this.player, this.weapons, this.characterScale(), combat && this.stats.alive);
     this.drones.update(dt, position, this.stats.drones, this.characterScale(), combat && this.stats.alive);
@@ -635,7 +690,7 @@ export class Gameplay {
     this.effects.update(dt);
     this.campaign?.update?.(dt);
     // Level-ups wait for combat (or the wave-complete pause) and a living hero.
-    if (this.pendingLevelUps > 0 && !this.choosing && (combat || this.phase === "cleared") && this.stats.alive) this.openLevelUp();
+    if (this.pendingLevelUps > 0 && !this.choosing && (combat || this.phase === "cleared" || this.phase === "travel") && this.stats.alive) this.openLevelUp();
     this.updateHud(dt);
   }
 
@@ -649,15 +704,47 @@ export class Gameplay {
     this.hud.setWeapon(label, this.gun.ammo, ws?.magazine ?? 0, this.gun.reloading > 0);
     const remaining = Math.max(0, d.duration - d.time);
     const right = d.phase === "waves" ? `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(Math.floor(remaining % 60)).padStart(2, "0")}` : d.phase === "boss" ? "BOSS" : "CLEAR";
-    this.hud.setWave(d.wave.label, d.progress, right);
+    if (this.travel) this.hud.setWave(this.levels[this.travel.next].label, 0, "GO");
+    else this.hud.setWave(d.wave.label, d.progress, right);
     this.hud.setXp(s.level, s.xp, s.xpNeeded);
     const boss = d.boss && isAlive(d.boss) ? d.boss : null;
     this.hud.setBoss(boss ? boss.def.label : null, boss ? boss.hp / boss.maxHp : 0);
-    // Where the boss is when it is off screen (the arenas are large; its attacks can land from there).
-    const combatBoss = boss && this.phase === "combat" ? boss : null;
+    // Off-screen pointer: the way on while travelling, else the boss (the arenas are large; its
+    // attacks can land from off screen).
     const hero = this.player.entity.getPosition();
-    this.hud.setBossPointer(combatBoss?.position ?? null, combatBoss ? Math.hypot(combatBoss.position.x - hero.x, combatBoss.position.z - hero.z) : 0);
+    const combatBoss = boss && this.phase === "combat" ? boss : null;
+    if (this.travel) {
+      let best = Infinity;
+      for (const w of this.travel.exits) {
+        const dist = wayDistance(w, hero, this.tmp);
+        if (dist < best) {
+          best = dist;
+          this.wayPoint.copy(this.tmp);
+        }
+      }
+      this.hud.setPointer(Number.isFinite(best) ? this.wayPoint : null, best, "way");
+    } else {
+      this.hud.setPointer(combatBoss?.position ?? null, combatBoss ? Math.hypot(combatBoss.position.x - hero.x, combatBoss.position.z - hero.z) : 0, "boss");
+    }
     this.hud.update(dt, this.projector);
     this.targetDebug.update(this.gun.debug);
   }
+}
+
+/** The walk between campaign levels. */
+const TRAVEL = {
+  /** A way-on seal opens when the hero comes this close (m). */
+  openDistance: 4.5,
+  /** The next level starts this far past the exit line (m), inside the next region. */
+  crossDistance: 3,
+};
+
+/** Distance (m, ground plane) from `p` to a way-on seal; its nearest point goes to `out`. */
+function wayDistance(w: WayPoint, p: Vec3, out: Vec3): number {
+  const half = w.width / 2;
+  const alongX = Math.abs(((w.yawDeg % 180) + 180) % 180) < 45;
+  const x = alongX ? Math.min(w.x + half, Math.max(w.x - half, p.x)) : w.x;
+  const z = alongX ? w.z : Math.min(w.z + half, Math.max(w.z - half, p.z));
+  out.set(x, 0, z);
+  return Math.hypot(p.x - x, p.z - z);
 }

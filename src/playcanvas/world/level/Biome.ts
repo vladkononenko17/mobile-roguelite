@@ -57,6 +57,20 @@ export interface Biome<Id extends string = string> {
 export interface Zone {
   region: LevelBounds;
   start: Placement2D;
+  /**
+   * The way on to the next level's zone: a line on this region's edge (`axis` = its coordinate,
+   * `at` its value) crossed in direction `dir`. After the level is won the hero walks there (the seals
+   * on it open as he comes near) and the next level starts once he is inside the next region.
+   */
+  exit?: { axis: "x" | "z"; at: number; dir: 1 | -1 };
+}
+
+/** A seal on a zone's way on: centre, width across, facing (0: spans x, 90: spans z). */
+export interface WayPoint {
+  x: number;
+  z: number;
+  width: number;
+  yawDeg: number;
 }
 
 export interface Campaign {
@@ -74,4 +88,8 @@ export interface Campaign {
   update?(dt: number): void;
   /** Hands the world's lava to the campaign (boss-phase brightness). */
   attach?(lava: Lava): void;
+  /** The seals on `zone`'s way on (see Zone.exit), in a stable order. */
+  exits?(zone: string): WayPoint[];
+  /** Opens exit seal `index` of `zone` (it sinks away). */
+  openExit?(zone: string, index: number): void;
 }

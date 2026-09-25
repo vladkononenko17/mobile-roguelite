@@ -86,6 +86,8 @@ const CSS = `
 /* Off-screen boss: a badge with the distance at the screen edge, its tip pointing at the boss. */
 #hud .pointer { position: absolute; left: 0; top: 0; width: 34px; height: 34px; margin: -17px 0 0 -17px; display: none; pointer-events: none; }
 #hud .pointer b { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 50%; background: rgba(60, 10, 6, 0.85); border: 1px solid #e0573a; box-shadow: 0 0 10px -2px #ff5a2e; font: 700 12px/1 "Barlow Condensed", system-ui, sans-serif; color: #ffd9c4; letter-spacing: 0.02em; }
+#hud .pointer.way b { background: rgba(48, 32, 6, 0.88); border-color: #f0c050; box-shadow: 0 0 10px -2px #ffc040; color: #ffeec0; }
+#hud .pointer.way i { border-left-color: #ffcc55; filter: drop-shadow(0 0 3px #ffb020); }
 #hud .pointer i { position: absolute; left: 50%; top: 50%; width: 0; height: 0; margin: -7px 0 0 -5px; border-left: 11px solid #ff6a3a; border-top: 7px solid transparent; border-bottom: 7px solid transparent; transform-origin: 5px 7px; filter: drop-shadow(0 0 3px #ff4a1a); }
 #hud .weapon-new { --c: #ff7a2e; position: absolute; left: 50%; bottom: calc(16% + env(safe-area-inset-bottom)); transform: translate(-50%, 12px); width: min(78vw, 330px); box-sizing: border-box; padding: 10px 14px 11px; border-radius: 6px; background: rgba(16, 12, 10, 0.86); border: 1px solid var(--c); box-shadow: 0 0 18px -4px var(--c); opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; text-align: center; }
 #hud .weapon-new.show { opacity: 1; transform: translate(-50%, 0); }
@@ -429,10 +431,14 @@ export class Hud {
     this.bossBar.style.width = `${Math.max(0, fraction) * 100}%`;
   }
 
-  /** Points at an off-screen boss (null hides it); `distance` in metres is shown in the badge. */
-  setBossPointer(target: Vec3 | null, distance = 0): void {
+  /**
+   * Points at an off-screen target (null hides it); `distance` in metres is shown in the badge.
+   * "boss": red; "way": gold, the way on to the next level.
+   */
+  setPointer(target: Vec3 | null, distance = 0, kind: "boss" | "way" = "boss"): void {
     this.pointerTarget = target;
     this.pointerDistance = distance;
+    this.pointer.classList.toggle("way", kind === "way");
     if (!target) this.pointer.style.display = "none";
   }
 

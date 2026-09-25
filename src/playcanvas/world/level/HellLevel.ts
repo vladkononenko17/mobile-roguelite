@@ -7,13 +7,14 @@ import type { GroundSpec } from "../Ground";
 import type { Lava, LavaFall, LavaPool } from "../Lava";
 import type { ModelKit, SpawnOptions } from "../props/ModelKit";
 import { HELL_MODELS, type HellModel } from "../props/HellKit";
-import type { Biome, LevelBounds, Zone } from "./Biome";
+import type { Biome, LevelBounds, WayPoint, Zone } from "./Biome";
 
 /**
  * HELL - one connected infernal world, ~120 x 760 m, crossed south to north over nine levels. Seven
  * basalt islands stand out of a lava sea (LAVA_Y below the ground), joined by walled bridges; each
  * level is fought inside one zone (its region bounds the hero, the nav grid and the spawns) and the
- * way on is sealed by a burning rune until the level is won.
+ * way on is sealed by a burning rune; once the level is won the hero walks there, the seal sinks away
+ * and the next level starts as he enters its zone.
  *
  *   z  154  GATES OF HELL (A)        arrival; the gate pillars and their guardian statues
  *   z  110   ~~ bridge ~~
@@ -93,18 +94,20 @@ const r = (x0: number, z0: number, x1: number, z1: number): LevelBounds => ({ mi
 const zr = (x0: number, z0: number, x1: number, z1: number, exact: { z0?: number; z1?: number } = {}): LevelBounds =>
   r(x0 * S + 0.6, exact.z0 !== undefined ? exact.z0 * S : z0 * S + 0.6, x1 * S - 0.6, exact.z1 !== undefined ? exact.z1 * S : z1 * S - 0.6);
 const start = (x: number, z: number) => ({ x: x * S, z: z * S, yawDeg: 180 });
+/** Every level's way on leads south (-z), across the line at layout z. */
+const south = (z: number) => ({ axis: "z" as const, at: z * S, dir: -1 as const });
 /** Each level's zone: its playable region (a little inside the islands) and where it starts. */
 export const ZONES: Record<string, Zone> = {
-  gates: { region: zr(-22, 118, 22, 154), start: start(0, 147) },
-  wastes: { region: zr(-30, 62, 30, 110), start: start(0, 104) },
-  pentagram: { region: zr(-24, 6, 24, 54), start: start(0, 46) },
-  crossing: { region: zr(-26, -56, 26, -4), start: start(-15, -9) },
+  gates: { region: zr(-22, 118, 22, 154), start: start(0, 147), exit: south(118) },
+  wastes: { region: zr(-30, 62, 30, 110), start: start(0, 104), exit: south(62) },
+  pentagram: { region: zr(-24, 6, 24, 54), start: start(0, 46), exit: south(6) },
+  crossing: { region: zr(-26, -56, 26, -4), start: start(-15, -9), exit: south(-56) },
   // The outer yard ends at the inner wall (its gate is sealed).
-  approach: { region: zr(-30, 0, 30, -34, { z0: -86.2 }), start: start(0, -40) },
-  citadel: { region: zr(-30, -114, 30, 0, { z1: -86.3 }), start: start(0, -91) },
-  abyss: { region: zr(-28, -170, 28, -122), start: start(0, -128) },
+  approach: { region: zr(-30, 0, 30, -34, { z0: -86.2 }), start: start(0, -40), exit: south(-86) },
+  citadel: { region: zr(-30, -114, 30, 0, { z1: -86.3 }), start: start(0, -91), exit: south(-114) },
+  abyss: { region: zr(-28, -170, 28, -122), start: start(0, -128), exit: south(-170) },
   // The abyss and the throne island up to the wall of runes.
-  brink: { region: zr(-28, 0, 28, -122, { z0: -196 }), start: start(0, -160) },
+  brink: { region: zr(-28, 0, 28, -122, { z0: -196 }), start: start(0, -160), exit: south(-196) },
   throne: { region: zr(-25, -228, 25, -178), start: start(0, -185) },
 };
 
@@ -268,9 +271,14 @@ const CLUSTER_PROPS: Record<ClusterKind, [HellModel, number, number, number, num
  * World state driven by the campaign: the rune seals on the way on, the arena's glow.
  * ---------------------------------------------------------------------------------------------- */
 
-interface Seal { entity: Entity; x: number; z: number }
+/** A rune seal; `open` runs 0..1 while it sinks away (-1: standing). */
+interface Seal { entity: Entity; x: number; z: number; width: number; yawDeg: number; open: number }
+const SEAL_HEIGHT = 3.4;
+const SEAL_OPEN_SECONDS = 0.8;
 const world = {
   seals: [] as Seal[],
+  /** The current way-on seals (exits()), by index. */
+  exitSeals: [] as Seal[],
   sigils: [] as StandardMaterial[],
   lava: null as Lava | null,
   arena: 0,
@@ -415,12 +423,12 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
   const addSeal = (x: number, z: number, width: number, yaw: number) => {
     const e = new Entity("seal");
     e.addComponent("render", { type: "plane", material: sealMat, castShadows: false, receiveShadows: false });
-    e.setLocalScale(width, 1, 3.4);
-    e.setLocalPosition(x, 1.7, z);
+    e.setLocalScale(width, 1, SEAL_HEIGHT);
+    e.setLocalPosition(x, SEAL_HEIGHT / 2, z);
     e.setLocalEulerAngles(90, yaw, 0);
     e.enabled = false;
     root.addChild(e);
-    world.seals.push({ entity: e, x, z });
+    world.seals.push({ entity: e, x, z, width, yawDeg: yaw, open: -1 });
   };
   for (const b of BRIDGES) {
     // One seal at each end of every bridge; a level shows those on its region's edge.
@@ -491,7 +499,7 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
     // The approach to the gate: an avenue of broken columns and impaled dead.
     ["columnBroken", -8, 144, 30], ["column", 8, 146, 0, { scale: [0.8, 0.9, 0.8] }], ["columnStump", -9, 134, 0], ["columnBroken", 9, 128, 200],
     ["cross", -18, 140, 20], ["cross", 19, 146, -30], ["fleshStalk", -19, 121, 40], ["gear", 12, 139, 0, { tiltX: 72, y: 0.3 }],
-    ["crag", 0, 125, 40, { scale: 0.5 }], ["rockMid4", -6, 139, 10], ["stockade", 18, 124, 0],
+    ["crag", 14, 150, 40, { scale: 0.5 }], ["rockMid4", -6, 139, 10], ["stockade", 18, 124, 0],
   ]);
 
   // ------------------------------------------------------------------ B: INFERNAL WASTES (z 62..110)
@@ -507,7 +515,7 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
     ["columnBroken", 15, 104, 80], ["columnStump", -18, 78, 0],
     // More of the wastes: a second ribcage, burnt cages, flesh taking the rock.
     ["boneRib", 16, 70, 160, { tiltZ: 14 }], ["boneRib2", 19, 68, 190, { tiltZ: -10 }], ["fleshGut", -12, 76, 80], ["fleshSpire", 8, 78, 0, { scale: 0.8 }],
-    ["cage", 24, 92, 40], ["skeleton", -20, 108, 10], ["gearSmall", -26, 104, 30, { tiltX: 80, y: 0.2 }], ["crag", -4, 104, 90, { scale: 0.55 }],
+    ["cage", 24, 92, 40], ["skeleton", -20, 108, 10], ["gearSmall", -26, 104, 30, { tiltX: 80, y: 0.2 }], ["crag", -14, 96, 90, { scale: 0.55 }],
     ["rack", -2, 64, 0], ["cross", 26, 64, 20], ["rockMid4", 4, 94, 60],
   ]);
 
@@ -678,8 +686,21 @@ export const HELL_BIOME: Biome<HellModel> = {
       // Seal every way out of this level's region (bridge ends and gates on its edge).
       const region = ZONES[zone]?.region;
       for (const s of world.seals) {
+        s.open = -1;
+        s.entity.setLocalScale(s.width, 1, SEAL_HEIGHT);
+        s.entity.setLocalPosition(s.x, SEAL_HEIGHT / 2, s.z);
         s.entity.enabled = !!region && onEdge(region, s.x, s.z);
       }
+      world.exitSeals = [];
+    },
+    exits(zone): WayPoint[] {
+      const exit = ZONES[zone]?.exit;
+      world.exitSeals = exit ? world.seals.filter((s) => s.entity.enabled && Math.abs((exit.axis === "z" ? s.z : s.x) - exit.at) < 0.7) : [];
+      return world.exitSeals.map((s) => ({ x: s.x, z: s.z, width: s.width, yawDeg: s.yawDeg }));
+    },
+    openExit(_zone, index) {
+      const s = world.exitSeals[index];
+      if (s && s.open < 0 && s.entity.enabled) s.open = 0;
     },
     arena(intensity) {
       world.arena = intensity;
@@ -689,6 +710,15 @@ export const HELL_BIOME: Biome<HellModel> = {
     },
     update(dt) {
       world.time += dt;
+      // Opening seals sink into the ground.
+      for (const s of world.exitSeals) {
+        if (s.open < 0 || !s.entity.enabled) continue;
+        s.open = Math.min(1, s.open + dt / SEAL_OPEN_SECONDS);
+        const f = 1 - s.open * s.open;
+        s.entity.setLocalScale(s.width, 1, Math.max(0.01, SEAL_HEIGHT * f));
+        s.entity.setLocalPosition(s.x, (SEAL_HEIGHT / 2) * f, s.z);
+        if (s.open >= 1) s.entity.enabled = false;
+      }
       world.shown += (world.arena - world.shown) * Math.min(1, dt * 1.5);
       if (world.lava) world.lava.boost = world.shown;
       for (const m of world.sigils) {
