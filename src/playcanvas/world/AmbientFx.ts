@@ -8,7 +8,7 @@ import {
  * a smoke column / wisp from a fire or wreck (or steam from a vent), occasional spark bursts from a
  * generator or lamp, or a coloured pool of light on the floor under a screen or lamp (optionally
  * pulsing, for alarms); a fire (licking flames over a flickering light pool: burning wrecks,
- * barrels, camp fires); leaves and scraps blowing across an area; "birds" marks where ravens fly over
+ * barrels, camp fires; braziers); a failing lamp (flicker); leaves and scraps blowing across an area; "birds" marks where ravens fly over
  * now and then (see flyBy). Positions are world metres; `size` is the area (dust, glow, leaves, birds) or the
  * emitter spread (smoke / sparks / fire).
  */
@@ -18,6 +18,8 @@ export interface AmbientEmitter {
   color?: [number, number, number];
   /** Glow: pulses per second (0 = steady). */
   pulse?: number;
+  /** Glow: a failing lamp - steady, then now and then it stutters and blacks out for a moment. */
+  flicker?: boolean;
   x: number;
   y?: number;
   z: number;
@@ -51,6 +53,8 @@ const SPARK_POOL = 30;
 
 /** Emitters farther than this from the focus (the hero) are switched off (+ hysteresis). */
 const ACTIVE_RADIUS = 20;
+/** Small emitters (fires, smoke, sparks) run only this close: about the visible area (draw calls). */
+const SMALL_RADIUS = 13;
 
 /**
  * Cheap ambient life for a level: dust and smoke are GPU particle systems (one draw call each, no
@@ -61,10 +65,12 @@ const ACTIVE_RADIUS = 20;
 export class AmbientFx {
   private readonly root = new Entity("AmbientFx");
   private readonly bursts: Burst[] = [];
-  private readonly emitters: { entity: Entity; reach: number }[] = [];
+  private readonly emitters: { entity: Entity; reach: number; radius: number }[] = [];
   private readonly sparks: Spark[] = [];
   private readonly pulses: { material: StandardMaterial; rate: number; base: number; phase: number }[] = [];
   private readonly glowMaterials = new Map<string, StandardMaterial>();
+  /** Failing lamps: each stutters on its own timer. */
+  private readonly faulty: { material: StandardMaterial; next: number; left: number; off: boolean }[] = [];
   /** Fire light pools flicker (irregular, not the alarm pulse). */
   private readonly flickers: { material: StandardMaterial; base: number; phase: number }[] = [];
   /** Crow fly-bys (see flyBy): areas where they happen, a small pool of 3D ravens, the next time. */
@@ -101,7 +107,8 @@ export class AmbientFx {
     const entity = new Entity(`ambient-${e.kind}`);
     entity.setPosition(e.x, e.y ?? 0, e.z);
     this.root.addChild(entity);
-    this.emitters.push({ entity, reach: Math.max(...(e.size ?? [1, 1])) / 2 });
+    const small = e.kind === "fire" || e.kind === "smoke" || e.kind === "sparks";
+    this.emitters.push({ entity, reach: Math.max(...(e.size ?? [1, 1])) / 2, radius: small ? SMALL_RADIUS : ACTIVE_RADIUS });
     const k = e.intensity ?? 1;
     const [sx, sz] = e.size ?? [1, 1];
     if (e.kind === "glow" || e.kind === "sigil") {
@@ -140,19 +147,20 @@ export class AmbientFx {
     } else if (e.kind === "fire") {
       // Licking flames: bright additive tongues rising fast and shrinking, over a flickering light pool.
       entity.addComponent("particlesystem", {
-        ...common, numParticles: Math.round(26 * k), lifetime: 0.9, rate: 0.03 / k, rate2: 0.05 / k, preWarm: true, loop: true,
+        ...common, numParticles: Math.round(16 * k), lifetime: 0.8, rate: 0.045 / k, rate2: 0.07 / k, preWarm: true, loop: true,
         emitterExtents: new Vec3(sx * 0.5, 0.1, sz * 0.5), blendType: BLEND_ADDITIVE,
         velocityGraph: new CurveSet([[0, -0.15, 1, 0.1], [0, 1.1, 1, 1.8], [0, -0.15, 1, 0.1]]),
         velocityGraph2: new CurveSet([[0, 0.15, 1, -0.1], [0, 1.6, 1, 2.4], [0, 0.15, 1, -0.1]]),
-        scaleGraph: new Curve([0, 0.6, 0.3, 0.75, 1, 0.12]), scaleGraph2: new Curve([0, 0.85, 0.3, 1.0, 1, 0.2]),
-        alphaGraph: new Curve([0, 0, 0.12, 1, 0.6, 0.8, 1, 0]),
-        colorGraph: new CurveSet([[0, 1.6, 1, 1.2], [0, 1.0, 0.5, 0.55, 1, 0.22], [0, 0.35, 1, 0.05]]),
+        scaleGraph: new Curve([0, 0.4, 0.3, 0.5, 1, 0.08]), scaleGraph2: new Curve([0, 0.55, 0.3, 0.65, 1, 0.12]),
+        alphaGraph: new Curve([0, 0, 0.12, 0.8, 0.6, 0.5, 1, 0]),
+        // Yellow at the base, orange, then dull red as they rise (additive: kept well under white).
+        colorGraph: new CurveSet([[0, 0.75, 1, 0.45], [0, 0.45, 0.5, 0.2, 1, 0.05], [0, 0.1, 1, 0]]),
       });
       const light = new Entity("fire-light");
       entity.addChild(light);
-      this.addGlow(light, { kind: "glow", x: e.x, z: e.z, size: [sx * 5 + 3, sz * 5 + 3], color: [1, 0.55, 0.18], intensity: 0.55 * k });
+      this.addGlow(light, { kind: "glow", x: e.x, z: e.z, size: [sx * 5 + 3, sz * 5 + 3], color: [1, 0.55, 0.18], intensity: 0.32 * k });
       const m = light.render!.meshInstances[0].material as StandardMaterial;
-      this.flickers.push({ material: m, base: 0.55 * k, phase: Math.random() * 100 });
+      this.flickers.push({ material: m, base: 1, phase: Math.random() * 100 });
     } else if (e.kind === "leaves") {
       // Dry leaves and paper scraps skittering across the ground with the wind.
       entity.addComponent("particlesystem", {
@@ -194,7 +202,7 @@ export class AmbientFx {
     const [r, g, b] = e.color ?? [0.4, 0.7, 1];
     const k = e.intensity ?? 1;
     const key = `${e.kind},${r},${g},${b},${k}`;
-    let material = e.pulse ? undefined : this.glowMaterials.get(key);
+    let material = e.pulse || e.flicker ? undefined : this.glowMaterials.get(key);
     if (!material) {
       this.glowTexture ??= softGlow(this.app);
       material = new StandardMaterial();
@@ -209,6 +217,7 @@ export class AmbientFx {
       material.depthWrite = false;
       material.update();
       if (e.pulse) this.pulses.push({ material, rate: e.pulse, base: k, phase: Math.random() * 6.28 });
+      else if (e.flicker) this.faulty.push({ material, next: 1 + Math.random() * 5, left: 0, off: false });
       else this.glowMaterials.set(key, material);
     }
     const [sx, sz] = e.size ?? [4, 4];
@@ -311,6 +320,27 @@ export class AmbientFx {
       p.material.emissiveIntensity = p.base * level;
       p.material.update();
     }
+    for (const f of this.faulty) {
+      // Mostly on; every few seconds a burst of rapid on/off stutters (and sometimes a blackout).
+      if (f.left > 0) {
+        f.left -= dt;
+        f.next -= dt;
+        if (f.next <= 0) {
+          f.off = !f.off;
+          f.next = f.off ? 0.04 + Math.random() * 0.12 : 0.03 + Math.random() * 0.1;
+        }
+        if (f.left <= 0) { f.off = false; f.next = 2 + Math.random() * 6; }
+      } else {
+        f.next -= dt;
+        if (f.next <= 0) { f.left = 0.3 + Math.random() * 0.9; f.next = 0; }
+      }
+      // (The material's emissive colour already carries the intensity.)
+      const level = f.off ? 0.08 : 1;
+      if (f.material.emissiveIntensity !== level) {
+        f.material.emissiveIntensity = level;
+        f.material.update();
+      }
+    }
     for (const f of this.flickers) {
       // Fire light: two beating frequencies plus a random crackle.
       const t = this.time + f.phase;
@@ -318,11 +348,11 @@ export class AmbientFx {
       f.material.update();
     }
     this.flyBy(dt, focus);
-    for (const { entity, reach } of this.emitters) {
+    for (const { entity, reach, radius } of this.emitters) {
       const p = entity.getPosition();
       const d = Math.hypot(p.x - focus.x, p.z - focus.z) - reach;
-      if (entity.enabled && d > ACTIVE_RADIUS + 2) entity.enabled = false;
-      else if (!entity.enabled && d < ACTIVE_RADIUS) entity.enabled = true;
+      if (entity.enabled && d > radius + 2) entity.enabled = false;
+      else if (!entity.enabled && d < radius) entity.enabled = true;
     }
     for (const b of this.bursts) {
       if (!b.entity.enabled) continue;

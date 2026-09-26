@@ -386,6 +386,26 @@ export class Gameplay {
   /** Damages the hero; returns whether any damage was taken. */
   /** Screen shake (set by Game: the camera's). */
   onShake: (amount: number) => void = () => {};
+  /** Bloaters about to pop (death bursts): where, when, how hard; their warning rings. */
+  private readonly pops: { x: number; z: number; left: number; radius: number; damage: number; marker: ReturnType<Hazards["ring"]> }[] = [];
+
+  private updatePops(dt: number, hero: Vec3): void {
+    for (let i = this.pops.length - 1; i >= 0; i--) {
+      const p = this.pops[i];
+      p.left -= dt;
+      if (p.left > 0) continue;
+      this.pops.splice(i, 1);
+      this.hazards.clear(p.marker);
+      this.tmp.set(p.x, 0.6, p.z);
+      this.effects.goreBurst(this.tmp, 2.6, "goo");
+      this.effects.explosion(this.tmp, p.radius * 0.7);
+      this.effects.ring(this.tmp.set(p.x, 0.1, p.z), p.radius, false);
+      this.effects.bloodDecal(p.x, p.z, 2.2, "goo");
+      this.shakeAt(p.x, p.z, 0.3);
+      if (Math.hypot(hero.x - p.x, hero.z - p.z) <= p.radius) this.hurtPlayer(Math.round(p.damage));
+    }
+  }
+
   /** Boss-kill slow motion left (scaled seconds). */
   private slowMo = 0;
 
@@ -714,7 +734,22 @@ export class Gameplay {
       this.slowMo = SLOW_MO.seconds * SLOW_MO.scale;
       this.app.timeScale = SLOW_MO.scale;
     } else if (enemy.def.maxHp >= 150) this.shakeAt(x, z, 0.18);
-    if (enemy.def.deathFx === "ember") {
+    if (enemy.def.deathFx === "burst" && enemy.def.deathBurst) {
+      // Swells over a warning ring, then pops (see updatePops).
+      const b = enemy.def.deathBurst;
+      this.pops.push({ x, z, left: b.delay, radius: b.radius, damage: b.damage * enemy.damageScale, marker: this.hazards.ring(x, z, b.radius, b.delay) });
+      this.effects.bloodDecal(x, z, enemy.scale * 1.2, "goo");
+    } else if (enemy.def.deathFx === "bones") {
+      this.effects.boneShards(this.tmp.set(x, 0.5 * enemy.scale + enemy.lift, z), enemy.scale);
+    } else if (enemy.def.deathFx === "blast") {
+      // Machines blow apart: a fireball, sparks, oil.
+      this.tmp.set(x, 0.8 * enemy.scale + enemy.lift, z);
+      this.effects.explosion(this.tmp, (enemy.def.boss ? 2.6 : 1.1) * Math.min(2, enemy.scale));
+      for (let i = 0; i < 3; i++) this.effects.spark(this.tmp.set(x + (Math.random() - 0.5), 0.6 + Math.random(), z + (Math.random() - 0.5)), 0.5);
+      this.effects.goreBurst(this.tmp.set(x, 0.6 * enemy.scale, z), enemy.scale, "oil");
+      this.effects.bloodDecal(x, z, enemy.scale * 1.2, "oil");
+      this.shakeAt(x, z, 0.25);
+    } else if (enemy.def.deathFx === "ember") {
       // Demons burst into embers and leave a scorch mark.
       this.tmp.set(x, 0.6 * enemy.scale + enemy.lift, z);
       this.effects.explosion(this.tmp, (enemy.def.boss ? 2.4 : 0.55) * Math.min(2, enemy.scale));
@@ -864,6 +899,7 @@ export class Gameplay {
     if (combat || this.phase === "cleared") this.pickups.update(dt, position, this.characterScale(), this.phase === "cleared");
     this.effects.update(dt);
     this.campaign?.update?.(dt, position);
+    if (this.pops.length) this.updatePops(dt, position);
     // Level-ups wait for combat (or the wave-complete pause) and a living hero.
     if (this.pendingLevelUps > 0 && !this.choosing && (combat || this.phase === "cleared" || this.phase === "travel") && this.stats.alive) this.openLevelUp();
     this.updateHud(dt);

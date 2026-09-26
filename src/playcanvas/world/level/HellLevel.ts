@@ -231,7 +231,12 @@ const FALLS: LavaFall[] = [
 ].map((f) => ({ ...f, x: f.x * S, z: f.z * S, y: f.y * 1.3, width: f.width * 1.4, height: f.height * 1.3 }));
 
 export const AMBIENT: AmbientEmitter[] = [
-  ...BRAZIERS.map(([x, z]): AmbientEmitter => ({ kind: "glow", x, z, size: [5.5, 5.5], color: FIRE, intensity: 0.4 })),
+  // Braziers burn: licking flames in the bowl (1.4 m up) over a flickering light pool, and soot.
+  // (Every other one: flames are a draw call each; the rest keep a steady fire-light pool.)
+  ...BRAZIERS.map(([x, z], i): AmbientEmitter => (i % 2 === 0
+    ? { kind: "fire", x, y: 1.3, z, size: [0.4, 0.4], intensity: 1.1 }
+    : { kind: "glow", x, z, size: [5.5, 5.5], color: FIRE, intensity: 0.4 })),
+  ...BRAZIERS.filter((_, i) => i % 4 === 0).map(([x, z]): AmbientEmitter => ({ kind: "smoke", x, y: 1.8, z, size: [0.5, 0.5], intensity: 0.3, color: SOOT })),
   ...BRAZIERS.filter((_, i) => i % 3 === 0).map(([x, z], i): AmbientEmitter => ({ kind: "sparks", x, y: 1.4, z, every: 4 + (i % 3) })),
   // Lava light on every island rim and embers rising out of the chasms and the sea.
   ...Object.values(ISLANDS).flatMap((isl): AmbientEmitter[] => [

@@ -166,6 +166,30 @@ export const AMBIENT: AmbientEmitter[] = [
   { kind: "dust", x: GATE.x, y: 1.2, z: GATE.z, size: [40, 40], intensity: 0.5, color: [0.7, 0.55, 1] },
   // Asteroid: drifting dust.
   { kind: "dust", x: 0, y: 1.2, z: -484, size: [60, 60], intensity: 0.7, color: [0.75, 0.65, 0.95] },
+  // Damage spreads north: failing lamps (a stutter now and then, more of them the deeper you go),
+  // steam from burst pipes, small fires in the machinery, sparks from smashed panels.
+  ...([
+    [-30, 20, WHITE], [34, 54, CYAN], // dock
+    [-38, -30, WHITE], [20, -80, WHITE], [38, -66, WHITE], // ops
+    [-38, -110, ICE], [26, -160, ICE], // lab
+    [-37, -196, WHITE], [37, -226, WHITE], [-20, -246, RED], [14, -183, WHITE], [-12, -228, WHITE], // quarantine
+    [-45, -280, ORANGE], [45, -336, ORANGE], [-20, -338, WHITE], // reactor
+    [-18, -398, VIOLET], [20, -366, VIOLET], // gate
+  ] as [number, number, RGB][]).map(([x, z, color]): AmbientEmitter => ({ kind: "glow", x, z, size: [7, 7], color, intensity: 0.4, flicker: true })),
+  { kind: "smoke", x: -38, y: 0.3, z: 6, size: [1.5, 1.5], intensity: 0.35, color: STEAM },
+  { kind: "smoke", x: 41, y: 0.3, z: -40, size: [1.5, 1.5], intensity: 0.35, color: STEAM },
+  { kind: "smoke", x: 37, y: 0.3, z: -190, size: [2, 2], intensity: 0.45, color: STEAM },
+  { kind: "smoke", x: -37, y: 0.3, z: -240, size: [2, 2], intensity: 0.45, color: STEAM },
+  { kind: "smoke", x: 0, y: 0.3, z: -266, size: [2, 2], intensity: 0.4, color: STEAM },
+  { kind: "smoke", x: -44, y: 0.3, z: -300, size: [2.5, 2.5], intensity: 0.5, color: STEAM },
+  { kind: "smoke", x: 44, y: 0.3, z: -310, size: [2.5, 2.5], intensity: 0.5, color: STEAM },
+  { kind: "fire", x: -36, y: 0.9, z: -210, size: [0.8, 0.6], intensity: 0.8 },
+  { kind: "fire", x: 42, y: 0.8, z: -292, size: [0.9, 0.7], intensity: 0.9 },
+  { kind: "fire", x: -42, y: 0.8, z: -318, size: [0.9, 0.7], intensity: 0.9 },
+  { kind: "fire", x: 36, y: 1, z: -335, size: [1, 0.8], intensity: 1 },
+  { kind: "sparks", x: -38.6, y: 1.6, z: -214, every: 2.5 },
+  { kind: "sparks", x: 38, y: 1.8, z: -214, every: 3.5 },
+  { kind: "sparks", x: 0, y: 2.4, z: -220, every: 4 },
   // Corridors: strip lights (the airlock tube violet).
   ...CORRIDORS.map((c): AmbientEmitter => ({ kind: "glow", x: 0, z: (c.z0 + c.z1) / 2, size: [7, c.z1 - c.z0], color: c.tube ? VIOLET : WHITE, intensity: 0.2 })),
 ];

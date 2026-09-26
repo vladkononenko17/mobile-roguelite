@@ -113,7 +113,7 @@ export const SPACE_ENEMIES: Record<SpaceEnemyId, EnemyDef> = {
   },
   // ELITE: a hijacked security mech - armoured, charges.
   secmech: {
-    label: "Security Mech", gore: "oil", visuals: ["mech"], scale: 1.0, behavior: "charger", armor: 0.4, glow: [1.4, 0.3, 0.2],
+    label: "Security Mech", gore: "oil", deathFx: "blast", visuals: ["mech"], scale: 1.0, behavior: "charger", armor: 0.4, glow: [1.4, 0.3, 0.2],
     maxHp: 320, speed: 1.9, radius: 0.7, damage: 18, attackRange: 1.7, attackWindup: 0.55, attackCooldown: 1.3,
     cash: 15, xp: 70, drops: { cash: 1, health: 0.3, upgrade: 0.06 },
     charge: { cooldown: 6, telegraph: 0.9, speed: 11, distance: 10, recover: 1.0, damage: 22 },
@@ -141,7 +141,7 @@ export const SPACE_ENEMIES: Record<SpaceEnemyId, EnemyDef> = {
   },
   // BOSS 1: THE WARDEN - the ship's security mech, turned. Guns, a charge, a stomp.
   warden: {
-    label: "The Warden", gore: "oil", visuals: ["mech"], scale: 2.3, behavior: "boss", script: "warden", boss: true, glow: [2, 0.4, 0.2],
+    label: "The Warden", gore: "oil", deathFx: "blast", visuals: ["mech"], scale: 2.3, behavior: "boss", script: "warden", boss: true, glow: [2, 0.4, 0.2],
     maxHp: 2600, speed: 1.8, radius: 1.4, damage: 28, attackRange: 3.0, attackWindup: 0.6, attackCooldown: 1.5, knockback: 7,
     cash: 60, xp: 200, drops: { cash: 1, health: 1, upgrade: 0 },
   },

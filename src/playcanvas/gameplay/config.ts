@@ -272,7 +272,9 @@ export interface EnemyDef {
   /** Aim point height per unit of scale (default TARGETING.aimHeight). */
   aimHeight?: number;
   /** Death effect: embers and ash instead of blood (demons). */
-  deathFx?: "ember";
+  deathFx?: "ember" | "burst" | "bones" | "blast";
+  /** "burst": the corpse swells over a warning ring for `delay` s, then pops (bile; hurts the hero inside). */
+  deathBurst?: { radius: number; damage: number; delay: number };
   /** What hits spill (default red blood): glowing alien "goo", or a machine's "oil" and sparks. */
   gore?: "goo" | "oil";
   /** Emissive tint for the body's emissive map (glowing eyes / cracks); default white. */

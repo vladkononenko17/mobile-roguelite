@@ -63,7 +63,7 @@ export const WASTELAND_ENEMIES: Record<WastelandEnemyId, EnemyDef> = {
   },
   // FAST: a stripped skeleton that sprints and leaps.
   ripper: {
-    label: "Ripper", visuals: ["zkRipper"], scale: 1, scaleJitter: 0.05, behavior: "chaser",
+    label: "Ripper", visuals: ["zkRipper"], scale: 1, scaleJitter: 0.05, behavior: "chaser", deathFx: "bones",
     maxHp: 26, speed: 4.3, radius: 0.3, damage: 8, attackRange: 1.05, attackWindup: 0.26, attackCooldown: 0.85,
     cash: 1, xp: 13, drops: { cash: 0.35, health: 0.02, upgrade: 0.006 },
     cripple: { slow: 0.7, seconds: 0.8 },
@@ -78,6 +78,8 @@ export const WASTELAND_ENEMIES: Record<WastelandEnemyId, EnemyDef> = {
   // CASTER / TANK: the bloater keeps coming and spews bile from range.
   bloater: {
     label: "Bloater", visuals: ["zkBloater"], scale: 1, behavior: "thrower", armor: 0.1,
+    // Killed, it swells over a warning ring and pops in bile - don't finish it at arm's length.
+    deathFx: "burst", deathBurst: { radius: 2.8, damage: 22, delay: 0.65 },
     maxHp: 150, speed: 1.05, radius: 0.55, damage: 14, attackRange: 1.4, attackWindup: 0.55, attackCooldown: 1.5, knockback: 4,
     cash: 4, xp: 36, drops: { cash: 0.8, health: 0.12, upgrade: 0.02 },
     projectile: { damage: 16, speed: 5.2, radius: 1.6, cooldown: 4.2, minRange: 4, maxRange: 11 },

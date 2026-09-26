@@ -90,6 +90,7 @@ export class Effects {
   private readonly oil: Bit[] = [];
   private readonly decalMats = {} as Record<Gore, StandardMaterial>;
   private readonly dust: Bit[] = [];
+  private readonly bones: Bit[] = [];
   private readonly casings: Bit[] = [];
   private readonly decals: Decal[] = [];
   private readonly fire: Bit[] = [];
@@ -114,6 +115,9 @@ export class Effects {
     const oilMat = flat(new Color(0.04, 0.04, 0.05));
     for (let i = 0; i < 12; i++) this.oil.push(this.bit("oil", "box", oilMat));
     for (let i = 0; i < 12; i++) this.dust.push(this.bit("dust", "sphere", dustMat));
+    // Bone shards (a skeleton's death).
+    const boneMat = flat(new Color(0.78, 0.74, 0.62));
+    for (let i = 0; i < 18; i++) this.bones.push(this.bit("bone", "box", boneMat));
     for (let i = 0; i < 10; i++) this.casings.push(this.bit("casing", "cylinder", brass));
     const flame = glow(new Color(1, 0.48, 0.12));
     const ice = glow(new Color(0.45, 0.75, 1));
@@ -218,6 +222,15 @@ export class Effects {
       this.groundGlows.set(key, m);
     }
     return m;
+  }
+
+  /** A skeleton falls apart: bone shards thrown out and bouncing to rest, a puff of dust. */
+  boneShards(position: Vec3, size: number): void {
+    for (let i = 0; i < 9; i++) {
+      const a = Math.random() * Math.PI * 2, v = 1.5 + Math.random() * 2.5;
+      this.launch(this.bones, position, Math.cos(a) * v, 2 + Math.random() * 3, Math.sin(a) * v, 1.2 + Math.random() * 0.8, 0.06 + Math.random() * 0.06 * size, 14);
+    }
+    for (let i = 0; i < 3; i++) this.launch(this.dust, position, (Math.random() - 0.5) * 1.2, 0.4, (Math.random() - 0.5) * 1.2, 0.8, 0.35 * size, 0, 0.12);
   }
 
   /** A kill's pop: a bright burst of `size` metres at the body. */
@@ -505,7 +518,7 @@ export class Effects {
       r.entity.setLocalScale(s, 1, s);
       r.mesh.setParameter("material_opacity", 1 - t);
     }
-    for (const pool of [this.blood, this.goo, this.oil, this.dust, this.casings, this.fire, this.frost]) {
+    for (const pool of [this.blood, this.goo, this.oil, this.dust, this.bones, this.casings, this.fire, this.frost]) {
       for (const b of pool) {
         if (!b.entity.enabled) continue;
         b.life -= dt;
@@ -521,8 +534,10 @@ export class Effects {
         b.entity.setPosition(this.tmp);
         b.spin += dt * 720;
         if (pool === this.casings) b.entity.setLocalEulerAngles(b.spin, 0, 90);
+        else if (pool === this.bones && b.velocity.lengthSq() > 0) b.entity.setLocalEulerAngles(b.spin, b.spin * 0.7, 0);
         const s = b.size * (1 + b.grow * (1 - b.life / b.total) * 10) * (pool === this.dust ? b.life / b.total : 1);
         if (pool === this.casings) b.entity.setLocalScale(s * 0.6, s * 1.6, s * 0.6);
+        else if (pool === this.bones) b.entity.setLocalScale(s * 0.5, s * 0.5, s * 2.4);
         else b.entity.setLocalScale(s, s, s);
       }
     }
