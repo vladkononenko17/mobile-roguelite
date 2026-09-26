@@ -27,11 +27,11 @@ const RULES: Record<string, Rule> = {
   shot_plasma: { volume: 0.3, pitch: 0.08, voices: 4 },
   shot_hellfire: { volume: 0.55, pitch: 0.05, voices: 2 },
   reload: { volume: 0.45, voices: 1 },
-  step_sand: { volume: 0.22, pitch: 0.1, voices: 2 },
-  step_concrete: { volume: 0.26, pitch: 0.1, voices: 2 },
-  step_metal: { volume: 0.16, pitch: 0.1, voices: 2 },
-  step_grass: { volume: 0.22, pitch: 0.1, voices: 2 },
-  step_stone: { volume: 0.26, pitch: 0.1, voices: 2 },
+  step_sand: { volume: 0.12, pitch: 0.1, voices: 2 },
+  step_concrete: { volume: 0.13, pitch: 0.1, voices: 2 },
+  step_metal: { volume: 0.09, pitch: 0.1, voices: 2 },
+  step_grass: { volume: 0.12, pitch: 0.1, voices: 2 },
+  step_stone: { volume: 0.13, pitch: 0.1, voices: 2 },
   hurt: { volume: 0.55, pitch: 0.08, voices: 1, gap: 0.25 },
   die: { volume: 0.7, voices: 1 },
   cash: { volume: 0.3, pitch: 0.08, voices: 2, gap: 0.07 },
@@ -48,7 +48,7 @@ const RULES: Record<string, Rule> = {
 };
 /** Enemy voices share one rule per kind of sound. */
 const VOICE_RULES: Record<string, Rule> = {
-  groan: { volume: 0.32, pitch: 0.12, voices: 2, gap: 0.6 },
+  groan: { volume: 0.32, pitch: 0.14, voices: 2, gap: 0.6 },
   attack: { volume: 0.34, pitch: 0.1, voices: 2, gap: 0.2 },
   hit: { volume: 0.22, pitch: 0.12, voices: 2, gap: 0.12 },
   death: { volume: 0.36, pitch: 0.1, voices: 3, gap: 0.06 },

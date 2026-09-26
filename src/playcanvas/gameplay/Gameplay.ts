@@ -1,7 +1,7 @@
 import { Vec3, type AnimTrack, type AppBase, type Asset, type ContainerResource, type Entity, type Texture } from "playcanvas";
 import { WEAPONS, type WeaponId } from "../config";
 import { audio } from "../audio/Audio";
-import { BIOME_AUDIO, BOSS_MUSIC, COMMON_SOUNDS, footstepAt, footstepsOf, voiceOf } from "../audio/soundMap";
+import { BIOME_AUDIO, BOSS_MUSIC, COMMON_SOUNDS, footstepAt, footstepsOf, voiceOf, voiceRate } from "../audio/soundMap";
 import type { PlayerController } from "../player/PlayerController";
 import type { WeaponHolder } from "../player/WeaponHolder";
 import type { Hud } from "../ui/Hud";
@@ -151,7 +151,7 @@ export class Gameplay {
     this.combat = new Combat(this.enemies, this.effects, this.stats);
     this.combat.onHit = (position, amount, style, enemy) => {
       this.hud.damageNumber(position, String(amount), style);
-      if (style !== "burn") audio.voice(voiceOf(enemy.id, enemy.def), "hit", { x: position.x, z: position.z });
+      if (style !== "burn") audio.voice(voiceOf(enemy.id, enemy.def), "hit", { x: position.x, z: position.z, rate: voiceRate(enemy.scale) });
     };
     this.gun = new PlayerGun(this.enemies, this.effects, collision, this.stats, this.projector, this.combat);
     this.drones = new Drones(app, this.effects, this.combat, this.gun);
@@ -166,7 +166,7 @@ export class Gameplay {
         this.player.push.set((dx / d) * push, 0, (dz / d) * push);
       } else if (push <= 0) this.hurtPlayer(damage);
     };
-    this.enemies.onAttack = (enemy) => audio.voice(voiceOf(enemy.id, enemy.def), "attack", { x: enemy.position.x, z: enemy.position.z, rate: enemy.def.boss ? 0.75 : 1 });
+    this.enemies.onAttack = (enemy) => audio.voice(voiceOf(enemy.id, enemy.def), "attack", { x: enemy.position.x, z: enemy.position.z, rate: enemy.def.boss ? 0.75 : voiceRate(enemy.scale) });
     this.enemies.onSlam = (position, radius) => {
       audio.play("slam", { x: position.x, z: position.z });
       this.effects.ring(position, radius, false);
@@ -768,7 +768,7 @@ export class Gameplay {
     this.effects.killFlash(this.tmp.set(x, 0.55 * enemy.scale + enemy.lift, z), enemy.def.boss ? 2.4 : Math.min(1.2, 0.45 * enemy.scale));
     const voice = voiceOf(enemy.id, enemy.def);
     if (enemy.def.boss) audio.voice(voice, "roar", { x, z, rate: 0.8 });
-    else audio.voice(voice, "death", { x, z, rate: enemy.scale > 1.3 ? 0.8 : 1 });
+    else audio.voice(voice, "death", { x, z, rate: voiceRate(enemy.scale) });
     if (enemy.def.deathFx === "blast") audio.play("explosion", { x, z, rate: enemy.def.boss ? 0.7 : 1 });
     if (enemy.def.boss) {
       this.onShake(0.9);
@@ -866,7 +866,7 @@ export class Gameplay {
         this.groanTimer = GROAN_EVERY[0] + Math.random() * (GROAN_EVERY[1] - GROAN_EVERY[0]);
         const alive = this.enemies.alive;
         const e = alive.length ? alive[Math.floor(Math.random() * alive.length)] : null;
-        if (e && isAlive(e)) audio.voice(voiceOf(e.id, e.def), e.def.boss ? "roar" : "groan", { x: e.position.x, z: e.position.z, rate: e.def.boss ? 0.9 : 1 });
+        if (e && isAlive(e)) audio.voice(voiceOf(e.id, e.def), e.def.boss ? "roar" : "groan", { x: e.position.x, z: e.position.z, rate: e.def.boss ? 0.9 : voiceRate(e.scale) });
       }
     }
     const boss = this.director.boss;

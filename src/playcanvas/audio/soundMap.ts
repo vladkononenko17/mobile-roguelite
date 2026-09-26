@@ -37,12 +37,25 @@ export function footstepsOf(ground: GroundSpec): Set<string> {
   return new Set(surfaces.map((s) => STEP[s] ?? "step_concrete"));
 }
 
-/** Enemy voice: set per type (hounds), else from the look of its death (aliens bleed goo, machines oil, demons burn). */
-export type Voice = "zombie" | "demon" | "alien" | "hound" | "mech";
-const VOICES: Partial<Record<EnemyId, Voice>> = { hound: "hound", stray: "hound" };
+/**
+ * Enemy voice: set per type (hounds; fast, big and bloated zombies), else from the look of its death
+ * (aliens bleed goo, machines oil, demons burn), else a walker's.
+ */
+export type Voice = "zombie" | "runner" | "brute" | "bloater" | "demon" | "alien" | "hound" | "mech";
+const VOICES: Partial<Record<EnemyId, Voice>> = {
+  hound: "hound", stray: "hound",
+  runner: "runner", ripper: "runner", sprinter: "runner",
+  brute: "brute", charger: "brute", tank: "brute", abomination: "brute",
+  bloater: "bloater",
+};
 
 export function voiceOf(id: EnemyId, def: EnemyDef): Voice {
   return VOICES[id] ?? (def.gore === "goo" ? "alien" : def.gore === "oil" ? "mech" : def.deathFx === "ember" ? "demon" : "zombie");
+}
+
+/** Voice pitch from body size: small ones higher, big ones deeper (spawn size jitter varies each one). */
+export function voiceRate(scale: number): number {
+  return Math.min(1.15, Math.max(0.78, scale ** -0.45));
 }
 
 /** Sounds every map uses. */

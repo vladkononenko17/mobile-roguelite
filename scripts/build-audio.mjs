@@ -36,6 +36,11 @@ const one = (layer) => [layer];
 /** Enemy voices: groan (idle, throttled), attack (wind-up), hit (hurt), death. */
 const zombie = (n) => ({ src: `zombies/zombie-${n}.wav` });
 const monster = (n, rate = 1) => ({ src: `monsters/${n < 9 ? "Monster" : "monster"}-${n}.wav`, rate });
+/** "80 CC0 creature SFX" by name (e.g. "grunt_03"). */
+const creature = (name, rate = 1, extra = {}) => ({ src: `creatures80/${name}.ogg`, rate, ...extra });
+/** "Zombie moans" (one 16 s take): the separate moans in it (start, end s). */
+const MOANS = [[0.32, 2.64], [3.7, 5.98], [6.7, 8.6], [9.34, 10.14], [10.48, 11.22], [11.72, 14.22], [14.82, 15.6]];
+const moan = ([a, b], rate = 1) => ({ src: "zombie-moans/moans.ogg", start: a - 0.05, dur: b - a + 0.15, rate });
 
 const SOUNDS = {
   // Weapons (The Free Firearm Sound Library, CC0; Kenney lasers).
@@ -82,29 +87,47 @@ const SOUNDS = {
   },
 
   // Enemy voices (Zombies Sound Pack and Monster Sound Pack, CC0; Kenney for machines).
-  zombie_groan: { variants: [16, 17, 18, 21, 12, 15].map((n) => one(zombie(n))) },
-  zombie_attack: { variants: [4, 10, 7, 6].map((n) => one(zombie(n))) },
-  zombie_hit: { variants: [24, 11, 5, 13, 3].map((n) => one(zombie(n))) },
-  zombie_death: { variants: [1, 8, 19, 20, 23, 9].map((n) => one(zombie(n))) },
+  // Walkers: the zombie pack, the long moans, pained grunts.
+  zombie_groan: { variants: [...[16, 17, 18, 21, 12, 15].map((n) => one(zombie(n))), ...MOANS.map((m) => one(moan(m))), ...MOANS.slice(0, 3).map((m) => one(moan(m, 0.85)))], fade: 0.3 },
+  zombie_attack: { variants: [...[4, 10, 7, 6, 2, 14].map((n) => one(zombie(n))), ...["grunt_01", "grunt_03", "grunt_05"].map((c) => one(creature(c, 0.8)))] },
+  zombie_hit: { variants: [...[24, 11, 5, 13, 3, 22].map((n) => one(zombie(n))), ...["hurt_01", "hurt_02", "hurt_03", "hurt_04", "hurt_05"].map((c) => one(creature(c, 0.78))), one({ src: "zombie-pain/zombie_pain.wav", start: 0.08, dur: 0.6 })], fade: 0.15 },
+  zombie_death: { variants: [...[1, 8, 19, 20, 23, 9].map((n) => one(zombie(n))), one({ src: "zombie-pain/zombie_pain.wav" }), ...["cough_03", "grunt_02", "ooh"].map((c) => one(creature(c, 0.75)))] },
+  // Runners and rippers: shrieks and snarls.
+  runner_groan: { variants: [one(creature("breath", 0.9)), one(creature("weird_01", 0.8)), one(creature("weird_05", 0.8)), ...[16, 21].map((n) => one({ ...zombie(n), rate: 1.2 }))] },
+  runner_attack: { variants: [one(creature("scream_01")), one(creature("scream_02")), one(creature("scream_01", 1.15)), one(creature("scream_02", 0.9)), ...[4, 7].map((n) => one({ ...zombie(n), rate: 1.25 }))], fade: 0.25 },
+  runner_hit: { variants: ["hurt_01", "hurt_02", "hurt_03", "hurt_05"].map((c) => one(creature(c, 0.95))) },
+  runner_death: { variants: [one(creature("scream_02", 0.8, { dur: 0.6 })), one(creature("scream_01", 0.75, { dur: 0.6 })), ...[19, 23].map((n) => one({ ...zombie(n), rate: 1.2 }))], fade: 0.3 },
+  // Brutes, chargers, tanks, the Abomination: deep, heavy.
+  brute_groan: { variants: [...["troll_01", "troll_02", "troll_03"].map((c) => one(creature(c, 0.7))), ...["monster_01", "monster_03", "monster_06"].map((c) => one(creature(c, 0.7))), one(moan(MOANS[0], 0.65)), one(moan(MOANS[5], 0.65))], fade: 0.3 },
+  brute_attack: { variants: ["roar_01", "roar_02", "roar_03", "troll_02"].map((c) => one(creature(c, 0.72))) },
+  brute_hit: { variants: ["grunt_04", "grunt_05", "grunt_02", "troll_03"].map((c) => one(creature(c, 0.7))) },
+  brute_death: { variants: ["monster_04", "monster_07", "monster_05"].map((c) => one(creature(c, 0.62))), fade: 0.4 },
+  // The bloater: gurgles, burps, spitting.
+  bloater_groan: { variants: ["burble_01", "burble_02", "burp_01", "burp_02"].map((c) => one(creature(c, 0.8))) },
+  bloater_attack: { variants: ["spit_01", "spit_02", "spit_03"].map((c) => one(creature(c, 0.8))) },
+  bloater_hit: { variants: [one(creature("burble_01", 0.9, { dur: 0.35 })), one(creature("burble_02", 1, { dur: 0.35 })), one(creature("eat_02", 0.8)), one(creature("eat_04", 0.8))], fade: 0.12 },
+  bloater_death: { variants: [one(creature("burp_02", 0.65)), one(creature("burble_02", 0.6))] },
   demon_groan: { variants: [1, 2, 3].map((n) => one(monster(n, 0.85))) },
   demon_attack: { variants: [4, 7, 8, 16].map((n) => one(monster(n, 0.85))) },
   demon_hit: { variants: [9, 10, 18].map((n) => one(monster(n, 0.9))) },
   demon_death: { variants: [11, 14, 15, 12].map((n) => one(monster(n, 0.8))) },
-  alien_groan: { variants: [5, 6, 13, 17].map((n) => one(monster(n, 1.4))) },
-  alien_attack: { variants: [4, 8].map((n) => one(monster(n, 1.45))) },
+  alien_groan: { variants: [...[5, 6, 13, 17].map((n) => one(monster(n, 1.4))), ...["alien_01", "alien_02", "alien_03", "bug_01", "bug_02"].map((c) => one(creature(c)))] },
+  alien_attack: { variants: [...[4, 8].map((n) => one(monster(n, 1.45))), ...["alien_04", "alien_05", "alien_06", "bug_03", "bug_04"].map((c) => one(creature(c)))] },
   alien_hit: { variants: [9, 10].map((n) => [monster(n, 1.5), kenney("scifi", "slime_000", { dur: 0.25, rate: 1.3, volume: 0.5 })]), fade: 0.1 },
   alien_death: { variants: [11, 14].map((n) => [monster(n, 1.3), kenney("scifi", "slime_000", { rate: 1.1, volume: 0.7 })]) },
-  hound_groan: { variants: [5, 6].map((n) => one(monster(n, 1.2))) },
-  hound_attack: { variants: [7, 8].map((n) => one(monster(n, 1.25))) },
-  hound_hit: { variants: [one(monster(18, 1.3))] },
-  hound_death: { variants: [one(monster(12, 1.2))] },
+  // Hounds: real barks, a howl, snarls.
+  hound_groan: { variants: [one(creature("howl", 0.9)), one(creature("barking_01", 0.85)), one(creature("barking_02", 0.85)), one(creature("snore", 0.8)), ...[5, 6].map((n) => one(monster(n, 1.2)))] },
+  hound_attack: { variants: [one(creature("barking_01")), one(creature("barking_02")), one(creature("barking_01", 0.9)), one(creature("barking_02", 1.1)), ...[7, 8].map((n) => one(monster(n, 1.25)))] },
+  hound_hit: { variants: [one(monster(18, 1.3)), one(creature("cute_07", 0.7)), one(creature("hurt_04", 1.2))] },
+  hound_death: { variants: [one(monster(12, 1.2)), one(creature("howl", 1.1, { dur: 0.5 }))], fade: 0.2 },
   mech_groan: { variants: [0, 1].map((i) => one(kenney("scifi", `forceField_${pad(i)}`, { rate: 0.7 }))), fade: 0.3 },
   mech_attack: { variants: [0, 1].map((i) => one(kenney("scifi", `laserRetro_${pad(i)}`, { rate: 0.8 }))) },
   mech_hit: { variants: range(3, (i) => one(kenney("scifi", `impactMetal_${pad(i)}`, { dur: 0.3 }))), fade: 0.15 },
   mech_death: { variants: [[kenney("scifi", "explosionCrunch_004"), kenney("scifi", "impactMetal_003", { delay: 0.1, volume: 0.6 })]] },
 
   // Boss roars (on arrival and phase changes), per voice.
-  roar_zombie: { variants: [one({ ...zombie(17), rate: 0.7 }), one({ ...zombie(16), rate: 0.72 })], fade: 0.5 },
+  roar_zombie: { variants: [one({ ...zombie(17), rate: 0.7 }), one({ ...zombie(16), rate: 0.72 }), one(creature("roar_02", 0.6)), one(creature("monster_04", 0.6))], fade: 0.5 },
+  roar_brute: { variants: [one(creature("roar_02", 0.6)), one(creature("monster_04", 0.58)), one({ ...zombie(17), rate: 0.68 })], fade: 0.5 },
   roar_demon: { variants: [one(monster(2, 0.62)), one(monster(1, 0.6))], fade: 0.4 },
   roar_alien: { variants: [one(monster(3, 0.9)), one(monster(13, 0.85))], fade: 0.3 },
   roar_mech: { variants: [[kenney("scifi", "forceField_002", { rate: 0.5 }), kenney("scifi", "lowFrequency_explosion_001", { volume: 0.7, dur: 1.4 })]], fade: 0.6 },
