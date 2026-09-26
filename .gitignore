@@ -36,3 +36,5 @@ assets-src/hallwaypack/
 # Quaternius Zombie Apocalypse Kit (CC0) and Majadroid LowPoly Apocalyptic Buildings (CC0): raw files local only; built into outpost-kit.glb / public/models/infected/
 assets-src/zombie-kit/
 assets-src/ruined-city/
+# CC0 raven (OpenGameArt): raw .blend and its Blender export local only; built into public/models/raven/
+assets-src/raven/

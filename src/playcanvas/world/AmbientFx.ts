@@ -1,6 +1,6 @@
 import {
   BLEND_ADDITIVE, BLEND_NORMAL, Color, Curve, CurveSet, EMITTERSHAPE_BOX, Entity, PIXELFORMAT_SRGBA8, StandardMaterial, Texture, Vec3,
-  type AppBase,
+  type AnimTrack, type AppBase, type Asset, type ContainerResource, type RenderComponent,
 } from "playcanvas";
 
 /**
@@ -8,8 +8,8 @@ import {
  * a smoke column / wisp from a fire or wreck (or steam from a vent), occasional spark bursts from a
  * generator or lamp, or a coloured pool of light on the floor under a screen or lamp (optionally
  * pulsing, for alarms); a fire (licking flames over a flickering light pool: burning wrecks,
- * barrels, camp fires); leaves and scraps blowing across an area; a flock of crows circling high over
- * it. Positions are world metres; `size` is the area (dust, glow, leaves, the flock's circle) or the
+ * barrels, camp fires); leaves and scraps blowing across an area; "birds" marks where ravens fly over
+ * now and then (see flyBy). Positions are world metres; `size` is the area (dust, glow, leaves, birds) or the
  * emitter spread (smoke / sparks / fire).
  */
 export interface AmbientEmitter {
@@ -43,6 +43,10 @@ interface Spark {
 }
 
 const SPARKS_PER_BURST = 10;
+
+/** Crow fly-bys: seconds between them (random in range), path length across the view, flight speed
+ * and height (m), the pool, and the model's yaw offset (its beak points along -z). */
+const CROWS = { every: [26, 50] as [number, number], firstDelay: 12, path: 34, speed: 6.5, height: [6, 8] as [number, number], pool: 3, yawOffset: 180 };
 const SPARK_POOL = 30;
 
 /** Emitters farther than this from the focus (the hero) are switched off (+ hysteresis). */
@@ -63,8 +67,10 @@ export class AmbientFx {
   private readonly glowMaterials = new Map<string, StandardMaterial>();
   /** Fire light pools flicker (irregular, not the alarm pulse). */
   private readonly flickers: { material: StandardMaterial; base: number; phase: number }[] = [];
-  private readonly flocks: { entity: Entity; homeX: number; homeZ: number; birds: { entity: Entity; angle: number; speed: number; radius: number; height: number; flap: number }[] }[] = [];
-  private birdMaterial: StandardMaterial | null = null;
+  /** Crow fly-bys (see flyBy): areas where they happen, a small pool of 3D ravens, the next time. */
+  private readonly crowAreas: { x: number; z: number; reach: number }[] = [];
+  private readonly crows: { entity: Entity; active: boolean; dirX: number; dirZ: number; speed: number; travelled: number; bob: number; y: number }[] = [];
+  private nextFlyBy = CROWS.firstDelay;
   private leafTexture: Texture | null = null;
   private glowTexture: Texture | null = null;
   private sigilTexture: Texture | null = null;
@@ -103,7 +109,9 @@ export class AmbientFx {
       return;
     }
     if (e.kind === "birds") {
-      this.addFlock(entity, e);
+      // Not an emitter: the area where crows fly over now and then (see flyBy).
+      this.crowAreas.push({ x: e.x, z: e.z, reach: Math.max(...(e.size ?? [20, 20])) / 2 });
+      if (this.crowAreas.length === 1) void this.loadCrows();
       return;
     }
     const [cr, cg, cb] = e.color ?? [1, 1, 1];
@@ -209,22 +217,75 @@ export class AmbientFx {
     entity.addComponent("render", { type: "plane", material, castShadows: false, receiveShadows: false });
   }
 
-  /**
-   * A flock of crows circling high over an area: flat dark silhouettes (one shared material) wheeling
-   * at different radii and heights, wings flapping (their width pulses). Only near the hero.
-   */
-  private addFlock(entity: Entity, e: AmbientEmitter): void {
-    this.birdMaterial ??= birdMaterial(this.app);
-    const [sx] = e.size ?? [16, 16];
-    const count = Math.max(2, Math.round(4 * (e.intensity ?? 1)));
-    const birds = [];
-    for (let i = 0; i < count; i++) {
-      const bird = new Entity("crow");
-      bird.addComponent("render", { type: "plane", material: this.birdMaterial, castShadows: true, receiveShadows: false });
-      entity.addChild(bird);
-      birds.push({ entity: bird, angle: Math.random() * Math.PI * 2, speed: 0.35 + Math.random() * 0.25, radius: Math.min(7, sx * (0.12 + Math.random() * 0.15)), height: (e.y ?? 6.5) + Math.random() * 2, flap: Math.random() * 10 });
+  /** The raven model (models/raven/raven.glb: rigged, one "fly" clip) as a pool of CROWS.pool birds. */
+  private async loadCrows(): Promise<void> {
+    const url = `${import.meta.env.BASE_URL}models/raven/raven.glb`;
+    const asset = await new Promise<Asset | null>((resolve) => {
+      this.app.assets.loadFromUrlAndFilename(url, "raven.glb", "container", (error, loaded) => resolve(error || !loaded ? null : (loaded as Asset)));
+    });
+    if (!asset) return;
+    const resource = asset.resource as ContainerResource;
+    // `animations` is documented on ContainerResource but missing from the published typings.
+    const clip = ((resource as unknown as { animations: Asset[] }).animations ?? [])[0];
+    for (let i = 0; i < CROWS.pool; i++) {
+      const entity = resource.instantiateRenderEntity();
+      for (const r of entity.findComponents("render") as RenderComponent[]) {
+        r.castShadows = true;
+        r.receiveShadows = false;
+      }
+      if (clip) {
+        entity.addComponent("anim", { activate: true, speed: 0.9 + Math.random() * 0.3 });
+        entity.anim!.assignAnimation("fly", clip.resource as AnimTrack);
+      }
+      entity.enabled = false;
+      this.root.addChild(entity);
+      this.crows.push({ entity, active: false, dirX: 0, dirZ: 0, speed: 0, travelled: 0, bob: 0, y: 0 });
     }
-    this.flocks.push({ entity, homeX: e.x, homeZ: e.z, birds });
+  }
+
+  /**
+   * Now and then (every CROWS.every seconds, only where the level asked for crows) two or three
+   * ravens fly across the view in a loose line, high over the hero, and are gone - their shadows
+   * sweeping over the ground.
+   */
+  private flyBy(dt: number, focus: Vec3): void {
+    for (const c of this.crows) {
+      if (!c.active) continue;
+      c.travelled += c.speed * dt;
+      c.bob += dt;
+      const p = c.entity.getPosition();
+      c.entity.setPosition(p.x + c.dirX * c.speed * dt, c.y + Math.sin(c.bob * 1.7) * 0.25, p.z + c.dirZ * c.speed * dt);
+      if (c.travelled > CROWS.path) {
+        c.active = false;
+        c.entity.enabled = false;
+      }
+    }
+    if (!this.crows.length || this.crows.some((c) => c.active)) return;
+    this.nextFlyBy -= dt;
+    if (this.nextFlyBy > 0) return;
+    this.nextFlyBy = CROWS.every[0] + Math.random() * (CROWS.every[1] - CROWS.every[0]);
+    if (!this.crowAreas.some((a) => Math.hypot(a.x - focus.x, a.z - focus.z) < a.reach + 10)) return;
+    // Across the view: from one side to the other, slightly diagonal.
+    const angle = (Math.random() < 0.5 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.9;
+    const dirX = Math.cos(angle), dirZ = Math.sin(angle);
+    const count = 2 + Math.floor(Math.random() * 2);
+    const baseY = CROWS.height[0] + Math.random() * (CROWS.height[1] - CROWS.height[0]);
+    const across = (Math.random() - 0.5) * 8;
+    for (let i = 0; i < count && i < this.crows.length; i++) {
+      const c = this.crows[i];
+      const back = CROWS.path / 2 + i * 1.6, side = across + (i % 2 ? 1.2 : -1.2) * i;
+      c.entity.setPosition(focus.x - dirX * back - dirZ * side, baseY, focus.z - dirZ * back + dirX * side);
+      // Turn it along its flight (the model's beak points -z).
+      c.entity.setEulerAngles(0, (Math.atan2(dirX, dirZ) * 180) / Math.PI + CROWS.yawOffset, 0);
+      c.dirX = dirX;
+      c.dirZ = dirZ;
+      c.speed = CROWS.speed * (0.92 + Math.random() * 0.16);
+      c.travelled = -i * 1.6;
+      c.bob = Math.random() * 6;
+      c.y = baseY + i * 0.4;
+      c.active = true;
+      c.entity.enabled = true;
+    }
   }
 
   private burst(at: Vec3): void {
@@ -256,26 +317,7 @@ export class AmbientFx {
       f.material.emissiveIntensity = f.base * (0.75 + 0.15 * Math.sin(t * 13) + 0.1 * Math.sin(t * 31.7) + (Math.random() - 0.5) * 0.12);
       f.material.update();
     }
-    for (const flock of this.flocks) {
-      if (!flock.entity.enabled) continue;
-      // Scavengers: the flock drifts after the fight (slowly, on a leash from its home), so it
-      // wheels over the hero's view.
-      const c = flock.entity.getPosition();
-      const k = Math.min(1, dt * 0.35), leash = 22;
-      const tx = Math.max(flock.homeX - leash, Math.min(flock.homeX + leash, focus.x + 3));
-      const tz = Math.max(flock.homeZ - leash, Math.min(flock.homeZ + leash, focus.z + 4));
-      flock.entity.setPosition(c.x + (tx - c.x) * k, c.y, c.z + (tz - c.z) * k);
-      for (const b of flock.birds) {
-        b.angle += b.speed * dt;
-        b.flap += dt * 9;
-        const x = Math.cos(b.angle) * b.radius, z = Math.sin(b.angle) * b.radius;
-        b.entity.setLocalPosition(x, b.height + Math.sin(b.flap * 0.3) * 0.4, z);
-        // Heading along the circle; wings beat, with a glide now and then.
-        b.entity.setLocalEulerAngles(0, (-b.angle * 180) / Math.PI, 0);
-        const beat = Math.sin(b.flap) > -0.2 || Math.sin(b.flap * 0.21) > 0.6 ? 0.55 + 0.45 * Math.abs(Math.sin(b.flap)) : 1;
-        b.entity.setLocalScale(1.05 * beat, 1, 0.5);
-      }
-    }
+    this.flyBy(dt, focus);
     for (const { entity, reach } of this.emitters) {
       const p = entity.getPosition();
       const d = Math.hypot(p.x - focus.x, p.z - focus.z) - reach;
@@ -320,32 +362,6 @@ function leafTexture(app: AppBase): Texture {
   const texture = new Texture(app.graphicsDevice, { format: PIXELFORMAT_SRGBA8, mipmaps: true });
   texture.setSource(canvas);
   return texture;
-}
-
-/** A crow seen from above: dark wings spread in a shallow V, head and tail (alpha cut-out). */
-function birdMaterial(app: AppBase): StandardMaterial {
-  const w = 64, h = 32;
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const g = canvas.getContext("2d")!;
-  g.fillStyle = "#fff";
-  g.beginPath();
-  // Wings (across x), body along the middle.
-  g.moveTo(2, 18); g.quadraticCurveTo(18, 6, 30, 13); g.lineTo(32, 6); g.lineTo(34, 13);
-  g.quadraticCurveTo(46, 6, 62, 18); g.quadraticCurveTo(46, 14, 35, 19); g.lineTo(36, 28); g.lineTo(32, 25); g.lineTo(28, 28);
-  g.lineTo(29, 19); g.quadraticCurveTo(18, 14, 2, 18);
-  g.fill();
-  const texture = new Texture(app.graphicsDevice, { format: PIXELFORMAT_SRGBA8, mipmaps: true });
-  texture.setSource(canvas);
-  const m = new StandardMaterial();
-  m.diffuse.set(0.03, 0.03, 0.035);
-  m.opacityMap = texture;
-  m.opacityMapChannel = "a";
-  m.alphaTest = 0.5;
-  m.cull = 0;
-  m.update();
-  return m;
 }
 
 /** Soft round white sprite (alpha falloff) shared by every ambient emitter. */

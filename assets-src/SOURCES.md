@@ -35,6 +35,8 @@ Quaternius "Zombie Apocalypse Kit" (quaternius.com/packs/zombieapocalypsekit.htm
 
 Majadroid (Maik Hoffmann) "LowPoly Apocalyptic Buildings" (opengameart.org/content/3d-apocalyptic-building-city-cc0, CC0) in `assets-src/ruined-city/` (git-ignored; FBX converted with FBX2glTF into `glb/`): five of the seven skyscraper ruins (x0.4, simplified, their concrete / facade / rust textures kept at 512 px), the billboards, the rubble mounds and the fire stairs, in the outpost kit as the dead city's skyline. Kenney "Nature Kit" (CC0, `assets-src/kenney/nature`): trees, bushes, grass and a log, tinted olive.
 
+"Raven" (opengameart.org/content/raven-0, CC0): ~590 polygons, rigged, a flight animation; `assets-src/raven/raven.blend` (git-ignored) exported with Blender's Python module by `scripts/export-raven.py`, then `scripts/build-raven.mjs` -> `public/models/raven/raven.glb` (the "fly" clip only, crow black, ~1 m span) for the Wasteland's raven fly-bys.
+
 ## Quaternius Ultimate Modular Sci-Fi Pack (CC0) and HallwayPACK (CC0)
 
 Quaternius "Ultimate Modular Sci-Fi Pack" (quaternius.com, CC0; its public Google Drive folder, `License.txt` kept with the files): the FBX walls, columns, doors, floor tiles, props and details the ORION station uses, converted to GLB with FBX2glTF into `assets-src/quaternius-scifi/glb/` (git-ignored). Baked into `public/models/facility/facility-kit.glb` by `scripts/build-facility-kit.mjs`: fixed colours per material (off-white, graphite), the orange "Accent" paint as a runtime-tinted `accent` material (the sector's colour), light strips self-lit, low cutaway variants of the walls (clipped and capped), the busiest props simplified.
