@@ -1,6 +1,8 @@
 import { CHARACTERS, DEFAULT_CHARACTER, type CharacterId } from "./config";
+import { audio } from "./audio/Audio";
 import { Game } from "./Game";
-import { pickBiome } from "./world/level/Biomes";
+import { chapterName, menuWanted, showMainMenu } from "./ui/MainMenu";
+import { pickBiome, type BiomeId } from "./world/level/Biomes";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#app-canvas")!;
 const loading = document.querySelector<HTMLElement>("#loading")!;
@@ -33,30 +35,45 @@ modelSelect.addEventListener("change", () => {
   location.replace(url);
 });
 
-const game = new Game({
-  canvas,
-  debugRoot: document.querySelector<HTMLElement>("#debug")!,
-  character,
-  biome: pickBiome(),
-  onProgress: (loaded, total) => {
-    const mb = (loaded / 1048576).toFixed(1);
-    const name = CHARACTERS[character].label;
-    if (total > 0) {
-      loadingBar.style.transform = `scaleX(${loaded / total})`;
-      loadingText.textContent = `Loading ${name}… ${mb} / ${(total / 1048576).toFixed(1)} MB`;
-    } else {
-      loadingText.textContent = `Loading ${name}… ${mb} MB`;
-    }
-  },
-});
+/** Title screen (unless the link names a map), then the game. */
+async function main(): Promise<void> {
+  audio.init(import.meta.env.BASE_URL);
+  const biome: BiomeId = menuWanted() ? await showMainMenu() : pickBiome();
 
-game.start().then(
-  () => loading.classList.add("done"),
-  (error: unknown) => {
-    console.error(error);
-    loadingText.textContent = `Failed to start: ${error instanceof Error ? error.message : String(error)}`;
-  },
-);
+  // The loading screen wears the chapter's art and name.
+  loading.style.background = `linear-gradient(rgba(13, 10, 8, 0.78), rgba(13, 10, 8, 0.94)), center / cover no-repeat url("${import.meta.env.BASE_URL}menu/${biome}.webp"), #1c1612`;
+  const title = document.createElement("div");
+  title.id = "loading-title";
+  title.textContent = chapterName(biome);
+  loading.prepend(title);
 
-// Handy for poking at the prototype from the devtools console.
-(window as unknown as { game: Game }).game = game;
+  const game = new Game({
+    canvas,
+    debugRoot: document.querySelector<HTMLElement>("#debug")!,
+    character,
+    biome,
+    onProgress: (loaded, total) => {
+      const mb = (loaded / 1048576).toFixed(1);
+      const name = CHARACTERS[character].label;
+      if (total > 0) {
+        loadingBar.style.transform = `scaleX(${loaded / total})`;
+        loadingText.textContent = `Loading ${name}… ${mb} / ${(total / 1048576).toFixed(1)} MB`;
+      } else {
+        loadingText.textContent = `Loading ${name}… ${mb} MB`;
+      }
+    },
+  });
+
+  game.start().then(
+    () => loading.classList.add("done"),
+    (error: unknown) => {
+      console.error(error);
+      loadingText.textContent = `Failed to start: ${error instanceof Error ? error.message : String(error)}`;
+    },
+  );
+
+  // Handy for poking at the prototype from the devtools console.
+  (window as unknown as { game: Game }).game = game;
+}
+
+void main();

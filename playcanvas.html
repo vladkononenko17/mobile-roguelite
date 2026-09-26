@@ -10,8 +10,10 @@
       html, body { margin: 0; height: 100%; overflow: hidden; background: #66503e; touch-action: none; }
       body { font: 12px/1.4 system-ui, sans-serif; color: #f3e7d3; }
       #app-canvas { display: block; width: 100%; height: 100%; }
-      #loading { position: fixed; inset: 0; display: grid; place-content: center; gap: 12px; background: #1c1612; transition: opacity 0.4s; }
+      #loading { position: fixed; inset: 0; z-index: 25; display: grid; place-content: center; gap: 12px; background: #1c1612; transition: opacity 0.4s; }
       #loading.done { opacity: 0; pointer-events: none; }
+      #loading-title { font: 800 30px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; text-align: center; color: #ece3cf; }
+      #loading-text { text-align: center; opacity: 0.8; }
       #loading-track { width: min(280px, 70vw); height: 6px; background: #3b2f26; overflow: hidden; }
       #loading-bar { height: 100%; background: #e8a92f; transform: scaleX(0); transform-origin: left; }
       #debug { position: fixed; top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); width: min(420px, calc(100vw - 16px)); max-height: 45vh; overflow-y: auto; padding: 8px 10px; background: rgba(20, 15, 12, 0.72); border-radius: 8px; box-sizing: border-box; font-size: 12px; -webkit-user-select: none; user-select: none; }

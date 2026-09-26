@@ -163,7 +163,7 @@ const CSS = `
 @keyframes lvl-pop { 0% { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
 @keyframes card-in { 0% { transform: translateY(14px); opacity: 0; } 100% { transform: none; opacity: 1; } }
 #overlay .card:disabled { opacity: 0.4; }
-#overlay .actions { margin-top: 14px; display: flex; gap: 10px; justify-content: center; }
+#overlay .actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
 #overlay .primary { padding: 12px 22px; border-radius: 10px; border: 0; background: #e8a92f; color: #1b140f; font: 700 16px system-ui, sans-serif; }
 body:not(.debug-on) #debug { display: none; }
 `;

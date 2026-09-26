@@ -19,6 +19,7 @@ import { Pickups, type PickupKind } from "./Pickups";
 import { PlayerStats } from "./PlayerStats";
 import { SpawnDirector } from "./SpawnDirector";
 import { TargetDebug } from "../ui/TargetDebug";
+import { clearedCampaign, menuUrl, reachedLevel } from "../ui/progress";
 import { Combat } from "./Combat";
 import { Drones } from "./Drones";
 import { ScreenProjector } from "../camera/ScreenProjector";
@@ -54,6 +55,9 @@ async function loadTexture(app: AppBase, url: string): Promise<Texture> {
  * hazards, effects and the HUD, and steps them every frame. The player controller, weapon holder and
  * hand/pose systems stay as they are; this only reads the hero's position and steers aiming.
  */
+/** End-screen button back to the title screen. */
+const MAIN_MENU = { label: "Main menu", onClick: () => location.assign(menuUrl()) };
+
 /** Footstep spacing (m of ground per step, times the hero's scale) and the horde's idle groan interval (s). */
 const STEP_LENGTH = 1.25;
 const GROAN_EVERY = [1.4, 3.2];
@@ -309,9 +313,10 @@ export class Gameplay {
     this.player.controlsEnabled = false;
     this.hud.openModal({
       title: "CHOOSE YOUR DOOM",
-      text: last && all[last] ? `Last time: ${all[last].label}` : "How deep into Hell do you dare?",
+      text: last && all[last] ? `Last time: ${all[last].label}` : "How hard do you want it?",
       cards: ids.map((id) => ({ title: all[id].label, text: all[id].text, tag: id === this.campaign?.defaultDifficulty ? "intended" : "", kind: id === "nightmare" ? "special" : "player" })),
       onCard: (i) => apply(ids[i]),
+      actions: [MAIN_MENU],
     });
   }
 
@@ -368,6 +373,7 @@ export class Gameplay {
     }
     this.player.bounds = region;
     this.campaign?.onLevel?.(index, this.levels[index].zone ?? "");
+    reachedLevel(this.biome.id, index + 1);
     this.bossMusic = false;
     audio.music(BIOME_AUDIO[this.biome.id]?.music ?? null);
     this.campaign?.arena?.(0);
@@ -467,6 +473,7 @@ export class Gameplay {
       actions: [
         { label: "Restart run", onClick: () => this.startRun() },
         ...(this.difficulty ? [{ label: "Change difficulty", onClick: () => { this.difficulty = null; this.params.delete("difficulty"); this.startRun(); } }] : []),
+        MAIN_MENU,
       ],
     });
   }
@@ -495,10 +502,11 @@ export class Gameplay {
     this.player.controlsEnabled = false;
     this.player.aimYawDeg = null;
     const victory = this.campaign?.victory ?? { title: "RUN COMPLETE", text: "The outpost is quiet." };
+    clearedCampaign(this.biome.id, this.difficulty?.label ?? "Normal");
     this.hud.openModal({
       title: victory.title,
       text: `${victory.text} ${this.difficultyTag}Level ${this.stats.level} · ${this.stats.kills} kills · ${this.stats.cash}$ left.`,
-      actions: [{ label: "New run", onClick: () => this.startRun() }],
+      actions: [{ label: "New run", onClick: () => this.startRun() }, MAIN_MENU],
     });
   }
 
