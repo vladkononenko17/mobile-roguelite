@@ -1,5 +1,6 @@
 import { Entity, Mat4, Quat, Vec3, type AppBase, type Asset, type ContainerResource, type RenderComponent, type StandardMaterial } from "playcanvas";
 import { WEAPON_CLASSES, WEAPONS, type CharacterModel, type WeaponClassProfile, type WeaponDef, type WeaponGrip, type WeaponId } from "../config";
+import { WEAPON_MODS, weaponMod, type WeaponModId } from "../weaponMods";
 import { gripMatrix } from "./GripFrame";
 import { CHARACTER_LIGHT_MASK } from "../world/Environment";
 
@@ -18,16 +19,18 @@ export type GripSide = "right" | "left";
  */
 export class WeaponHolder {
   private readonly templates = new Map<WeaponId, Entity>();
+  private readonly attachmentTemplates = new Map<WeaponModId, Entity>();
   private hand: Entity | null = null;
   /** The right palm grip frame (child of the hand bone); null for characters without `hands`. */
   private socketEntity: Entity | null = null;
   private held: Entity | null = null;
   private readonly markers = new Map<GripSide, Entity>();
+  private readonly muzzles: Entity[] = [];
   private stockMarker: Entity | null = null;
+  private activeMods = new Set<WeaponModId>();
   /** Runtime replacements for WEAPONS entries (the tune panel's weapon tuner). */
   private readonly overrides = new Map<WeaponId, WeaponDef>();
   private readonly handRoll = new Quat();
-  private readonly muzzleLocal = new Vec3(0, 0, -0.3);
   current: WeaponId | null = null;
 
   /** Called with the held weapon's upper-body clip (or null) whenever the weapon changes. */
@@ -45,18 +48,7 @@ export class WeaponHolder {
       });
     });
     const root = (asset.resource as ContainerResource).instantiateRenderEntity();
-    for (const render of root.findComponents("render") as RenderComponent[]) {
-      for (const meshInstance of render.meshInstances) {
-        meshInstance.mask |= CHARACTER_LIGHT_MASK;
-        // Flat-colour guns carry their colours per vertex (see scripts/build-weapons.mjs).
-        const material = meshInstance.material as StandardMaterial;
-        if (material.name === "flat" && !material.diffuseVertexColor) {
-          material.diffuseVertexColor = true;
-          material.update();
-        }
-      }
-      render.castShadows = true;
-    }
+    this.prepareModel(root);
     for (const [id, weapon] of Object.entries(WEAPONS.list) as [WeaponId, (typeof WEAPONS.list)[WeaponId]][]) {
       const node = root.findByName(weapon.node) as Entity | null;
       if (!node) {
@@ -65,6 +57,35 @@ export class WeaponHolder {
       }
       node.parent?.removeChild(node);
       this.templates.set(id, node);
+    }
+    // The three tiny CC0 attachment files are loaded once and cloned onto the chosen weapon.
+    await Promise.all(WEAPON_MODS.filter((mod) => mod.visual).map(async (mod) => {
+      const visual = mod.visual!;
+      const attachment = await new Promise<Asset>((resolve, reject) => {
+        const full = visual.url;
+        this.app.assets.loadFromUrlAndFilename(full, visual.url.split("/").pop()!, "container", (error, loaded) => {
+          if (error || !loaded) reject(new Error(`Failed to load weapon attachment ${full}: ${error}`));
+          else resolve(loaded);
+        });
+      });
+      const model = (attachment.resource as ContainerResource).instantiateRenderEntity();
+      this.prepareModel(model);
+      this.attachmentTemplates.set(mod.id, model);
+    }));
+  }
+
+  private prepareModel(root: Entity): void {
+    for (const render of root.findComponents("render") as RenderComponent[]) {
+      for (const meshInstance of render.meshInstances) {
+        meshInstance.mask |= CHARACTER_LIGHT_MASK;
+        // Packed Flat Guns use vertex colour; individual attachment GLBs use their own flat materials.
+        const material = meshInstance.material as StandardMaterial;
+        if (material.name === "flat" && !material.diffuseVertexColor) {
+          material.diffuseVertexColor = true;
+          material.update();
+        }
+      }
+      render.castShadows = true;
     }
   }
 
@@ -91,6 +112,7 @@ export class WeaponHolder {
     this.held?.destroy();
     this.held = null;
     this.markers.clear();
+    this.muzzles.length = 0;
     this.current = id;
     const template = id ? this.templates.get(id) : undefined;
     this.stockMarker = null;
@@ -102,7 +124,15 @@ export class WeaponHolder {
     const def = this.definition(id);
     const scale = def.scale ?? 1;
     const held = new Entity(`weapon-${id}`);
-    held.addChild(template.clone());
+    const guns = [template.clone()];
+    held.addChild(guns[0]);
+    if (def.dual) {
+      const second = template.clone();
+      second.setLocalPosition(def.dual.offset[0], def.dual.offset[1], def.dual.offset[2]);
+      held.addChild(second);
+      guns.push(second);
+    }
+    this.applyMods(def, guns);
     if (def.grips && this.socketEntity) {
       // Weapon in socket space = inverse of (scale * right grip frame at the handle surface).
       const grip = new Mat4().setScale(scale, scale, scale).mul(gripMatrix(def.grips.right, new Mat4(), def.grips.right.radius));
@@ -132,18 +162,70 @@ export class WeaponHolder {
       this.hand.addChild(held);
     }
     this.held = held;
-    this.measureMuzzle(held);
+    this.buildMuzzles(held, guns, def);
     this.onChange();
   }
 
-  /** Finds the muzzle: the front-most (-Z) point of the weapon's meshes, in the weapon's space. */
-  private measureMuzzle(held: Entity): void {
+  /** Adds visual modules and stretches the gun's own magazine mesh for the extended-mag module. */
+  private applyMods(def: WeaponDef, guns: Entity[]): void {
+    for (const id of this.activeMods) {
+      const mod = weaponMod(id);
+      for (const gun of guns) {
+        if (mod.magazineScale && def.magazineNode) {
+          const magazine = gun.findByName(def.magazineNode) as Entity | null;
+          if (magazine) {
+            const s = magazine.getLocalScale();
+            if (def.magazineAxis === "z") magazine.setLocalScale(s.x, s.y, s.z * mod.magazineScale);
+            else magazine.setLocalScale(s.x, s.y * mod.magazineScale, s.z);
+          }
+        }
+        if (!mod.visual) continue;
+        const template = this.attachmentTemplates.get(id);
+        const mountDef = def.modMounts?.[id];
+        if (!template || !mountDef) continue;
+        const anchor = mountDef.anchor ? (gun.findByName(mountDef.anchor) as Entity | null) : null;
+        const parent = anchor ?? gun;
+        const attachment = template.clone();
+        const p = anchor ? [0, 0, 0] : mountDef.position ?? [0, 0, 0];
+        const r = mountDef.rotation ?? [0, 0, 0];
+        const s = mountDef.scale ?? 1;
+        attachment.setLocalPosition(p[0], p[1], p[2]);
+        attachment.setLocalEulerAngles(r[0], r[1], r[2]);
+        attachment.setLocalScale(s, s, s);
+        parent.addChild(attachment);
+      }
+    }
+  }
+
+  /** Exact mount bones on Flat Guns; a measured mesh-front fallback on older weapon models. */
+  private buildMuzzles(held: Entity, guns: Entity[], def: WeaponDef): void {
+    const suppressor = this.activeMods.has("suppressor") ? weaponMod("suppressor").visual?.muzzleExtension ?? 0 : 0;
+    for (const gun of guns) {
+      const mountDef = def.modMounts?.suppressor;
+      const anchor = mountDef?.anchor ? (gun.findByName(mountDef.anchor) as Entity | null) : null;
+      const marker = new Entity("Muzzle");
+      if (anchor) {
+        marker.setLocalPosition(0, 0, -suppressor);
+        anchor.addChild(marker);
+      } else if (mountDef?.position) {
+        marker.setLocalPosition(mountDef.position[0], mountDef.position[1], mountDef.position[2] - suppressor);
+        gun.addChild(marker);
+      } else {
+        marker.setLocalPosition(this.measureMuzzle(gun, held));
+        held.addChild(marker);
+      }
+      this.muzzles.push(marker);
+    }
+  }
+
+  /** Finds the front-most (-Z) point of `model`, returned in `held` space. */
+  private measureMuzzle(model: Entity, held: Entity): Vec3 {
     const inverse = held.getWorldTransform().clone().invert();
     const corner = new Vec3();
     const local = new Vec3();
     let best = Infinity;
-    let sumY = 0, count = 0;
-    for (const render of held.findComponents("render") as RenderComponent[]) {
+    let sumX = 0, sumY = 0, count = 0;
+    for (const render of model.findComponents("render") as RenderComponent[]) {
       for (const mi of render.meshInstances) {
         const box = mi.aabb;
         const c = box.center, h = box.halfExtents;
@@ -151,18 +233,19 @@ export class WeaponHolder {
           corner.set(c.x + (i & 1 ? h.x : -h.x), c.y + (i & 2 ? h.y : -h.y), c.z + (i & 4 ? h.z : -h.z));
           inverse.transformPoint(corner, local);
           if (local.z < best) best = local.z;
+          sumX += local.x;
           sumY += local.y;
           count++;
         }
       }
     }
-    this.muzzleLocal.set(0, count ? sumY / count : 0, Number.isFinite(best) ? best : -0.3);
+    return new Vec3(count ? sumX / count : 0, count ? sumY / count : 0, Number.isFinite(best) ? best : -0.3);
   }
 
-  /** World position of the held weapon's muzzle (null when empty-handed). */
-  muzzle(out: Vec3): Vec3 | null {
-    if (!this.held) return null;
-    return this.held.getWorldTransform().transformPoint(this.muzzleLocal, out);
+  /** World position of the active muzzle; dual guns alternate on successive shots. */
+  muzzle(out: Vec3, shot = 0): Vec3 | null {
+    if (!this.held || !this.muzzles.length) return null;
+    return out.copy(this.muzzles[Math.abs(shot) % this.muzzles.length].getPosition());
   }
 
   /** The held weapon's one-shot attack clip, if it has one. */
@@ -190,6 +273,14 @@ export class WeaponHolder {
     if (def) this.overrides.set(id, def);
     else this.overrides.delete(id);
     if (this.current === id) this.equip(id);
+  }
+
+  /** Replaces the visible attachment set; optionally waits for the caller's following equip. */
+  setMods(mods: Iterable<WeaponModId>, refresh = true): void {
+    const next = new Set(mods);
+    if (next.size === this.activeMods.size && [...next].every((id) => this.activeMods.has(id))) return;
+    this.activeMods = next;
+    if (refresh && this.current) this.equip(this.current);
   }
 
   /** The held weapon's class profile (null when empty-handed). */

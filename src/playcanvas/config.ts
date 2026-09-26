@@ -2,6 +2,8 @@
 // Everything a designer is likely to tweak while judging the visual direction lives here.
 // The in-game "tune" panel edits the CAMERA and CHARACTER values live.
 
+import type { WeaponModId } from "./weaponMods";
+
 export interface CharacterModel {
   label: string;
   url: string;
@@ -159,6 +161,12 @@ export const WEAPONS = {
         right: { position: [0, -0.035, 0.058], axis: [0, 0.88, -0.47], palm: [0.85, 0.25, 0.47], radius: 0.021 },
         left: { position: [0, 0.096, -0.23], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
       },
+      magazineNode: "ar_magazine_2",
+      modMounts: {
+        suppressor: { position: [0, 0.0855, -0.614] },
+        reflex: { position: [0, 0.15, -0.12] },
+        foregrip: { position: [0, 0.035, -0.3] },
+      },
     },
     // 86 cm pump gun: pistol grip y -0.08..-0.01 (z 0.05-0.13, top further back), pump / fore-end
     // under the barrel z -0.26..-0.09 (y 0-0.05), butt plate at z 0.29.
@@ -188,8 +196,33 @@ export const WEAPONS = {
     // "Flat Guns East" (flat colours)
     eastRifle: { label: "Rifle (East)", class: "rifle", node: "Rifle_Assault_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
     eastBattleRifle: { label: "Battle rifle (East)", class: "rifle", node: "Rifle_Battle_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
-    eastSmg: { label: "SMG (East)", class: "rifle", node: "SMG_Full_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
-    eastSmgCompact: { label: "Compact SMG (East)", class: "rifle", node: "SMG_Compact_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
+    // Full-size, MP5-like SMG: quick reload and controllable automatic fire. The model's attachment
+    // bones line up directly with the matching CC0 Flat Gun Attachments.
+    mp5: {
+      label: "MP5 SMG", class: "rifle", node: "SMG_Full_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.073, 0.073], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
+        left: { position: [0, -0.006, -0.115], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.026, rollRangeDeg: 35 },
+      },
+      magazineNode: "Magazine",
+      magazineAxis: "z",
+      modMounts: {
+        suppressor: { anchor: "Attach_Muzzle" }, reflex: { anchor: "Attach_Scope" }, foregrip: { anchor: "Attach_Rail.Bottom" },
+      },
+    },
+    // Two compact SMGs share one held root. The second copy and its left grip sit 34 cm to the
+    // hero's left, so the existing two-arm IK produces a proper separated dual-wield silhouette.
+    dualUzi: {
+      label: "Dual Uzis", class: "dual", node: "SMG_Compact_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.07, 0.035], axis: [0, 0.98, -0.2], palm: [0.9, 0.09, 0.42], radius: 0.018 },
+        left: { position: [-0.34, -0.07, 0.035], axis: [0, 0.98, -0.2], palm: [-0.9, 0.09, 0.42], radius: 0.018, rollRangeDeg: 12 },
+      },
+      dual: { offset: [-0.34, 0, 0] },
+      magazineNode: "Magazine",
+      magazineAxis: "z",
+      modMounts: { suppressor: { anchor: "Attach_Muzzle" }, reflex: { anchor: "Attach_Scope" } },
+    },
     // Box-magazine auto shotgun: pistol grip y -0.12..-0.02 at z ~0.2, fore-end z -0.28..-0.05, butt z 0.39.
     eastShotgun: {
       label: "Auto shotgun (East)", class: "shotgun", node: "Shotgun_Auto_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
@@ -264,7 +297,7 @@ export const WEAPONS = {
  * with `hands`) are placed by the class `hold`; the others hang from the hand with their legacy
  * transform and only get the class `pose`.
  */
-export type WeaponClass = "pistol" | "rifle" | "shotgun" | "axe" | "heavy";
+export type WeaponClass = "pistol" | "rifle" | "dual" | "shotgun" | "axe" | "heavy";
 
 export interface WeaponClassProfile {
   /** Upper-body clip over locomotion: a clip name, "@idle" (the character's own idle, a calm base
@@ -314,6 +347,12 @@ export const WEAPON_CLASSES: Record<WeaponClass, WeaponClassProfile> = {
   },
   // The aiming clip drives the arms; hands are fitted to the rifle.
   rifle: { pose: "Run_and_Shoot", hold: "clip", leftHandIK: true, fingerGrip: true, aimTwist: true },
+  // Two compact guns held apart in front of the chest; the second gun's grip is the left IK target.
+  dual: {
+    pose: "@idle", hold: "chest", anchor: [0.17, -0.045, 0.42], pitchDeg: -3, runPitchDeg: -8,
+    runAnchorShift: [0, -0.04, -0.02], elbows: [0.95, -0.3, 0.35], elbowWeight: 1.8,
+    leftHandIK: true, fingerGrip: true, aimTwist: false,
+  },
   // Stock in the right shoulder pocket (inside the shoulder joint), level; at a run the stock drops
   // off the shoulder toward the chest and the muzzle dips into a low ready carry across the body.
   shotgun: {
@@ -338,6 +377,13 @@ export interface WeaponDef {
   grips?: { right: WeaponGrip; left?: WeaponGrip };
   /** Butt plate centre (weapon space), for shoulder-held classes. */
   stock?: Vec3Tuple;
+  /** A second copy of the same model, in weapon-root space (dual wield). */
+  dual?: { offset: Vec3Tuple };
+  /** Existing magazine mesh to stretch when an extended magazine is fitted. */
+  magazineNode?: string;
+  magazineAxis?: "y" | "z";
+  /** Named attachment bones, or a manual local transform for older models without mount bones. */
+  modMounts?: Partial<Record<WeaponModId, { anchor?: string; position?: Vec3Tuple; rotation?: Vec3Tuple; scale?: number }>>;
   attack: string | null;
 }
 

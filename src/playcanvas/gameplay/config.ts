@@ -63,6 +63,8 @@ export interface WeaponStats {
   reloadSeconds: number;
   /** Knockback per hit (m). */
   knockback: number;
+  /** Reuses the small shared sound library; volume/rate let compact and suppressed guns differ. */
+  audio?: { id: string; volume?: number; rate?: number };
   /** Look and extra effects (energy / infernal guns); plain bullets without it. */
   fx?: WeaponFx;
 }
@@ -88,6 +90,16 @@ export const WEAPON_STATS: Partial<Record<WeaponId, WeaponStats>> = {
   pistol: { damage: 14, fireRate: 3.2, range: 11, spreadDeg: 1.5, pellets: 1, penetration: 0, magazine: 12, reloadSeconds: 1.1, knockback: 0.12 },
   shotgun: { damage: 9, fireRate: 1.25, range: 7, spreadDeg: 11, pellets: 7, penetration: 0, magazine: 6, reloadSeconds: 1.6, knockback: 0.35 },
   rifle: { damage: 10, fireRate: 7.5, range: 14, spreadDeg: 3, pellets: 1, penetration: 1, magazine: 30, reloadSeconds: 1.8, knockback: 0.08 },
+  // Wasteland test weapons: the MP5 is accurate and quick to reload; the two Uzis trade range and
+  // control for the highest raw close-range output. Their muzzles alternate visually.
+  mp5: {
+    damage: 7.5, fireRate: 11, range: 11.5, spreadDeg: 4.2, pellets: 1, penetration: 0, magazine: 30, reloadSeconds: 1.45, knockback: 0.055,
+    audio: { id: "shot_rifle", volume: 0.72, rate: 1.13 },
+  },
+  dualUzi: {
+    damage: 6.2, fireRate: 15, range: 8.5, spreadDeg: 7, pellets: 1, penetration: 0, magazine: 40, reloadSeconds: 2, knockback: 0.045,
+    audio: { id: "shot_pistol", volume: 0.62, rate: 1.18 },
+  },
   // Hell rifles. Plasma: a hose of small energy bolts (fire rate and crit builds).
   plasma: {
     damage: 7, fireRate: 12, range: 14, spreadDeg: 2.2, pellets: 1, penetration: 1, magazine: 44, reloadSeconds: 1.6, knockback: 0.04,
@@ -102,6 +114,8 @@ export const WEAPON_STATS: Partial<Record<WeaponId, WeaponStats>> = {
 
 /** The NEW WEAPON card per weapon (Hud.showWeapon): one line of identity, stat chips, accent colour. */
 export const WEAPON_CARDS: Partial<Record<WeaponId, { text: string; stats: string[]; color: string }>> = {
+  mp5: { text: "Fast, controllable automatic fire for the dead streets.", stats: ["11 SHOTS/S", "30 MAG", "FAST RELOAD"], color: "#e6b24a" },
+  dualUzi: { text: "Two compact SMGs. Huge close-range output, wider spread.", stats: ["15 SHOTS/S", "40 MAG", "DUAL WIELD"], color: "#f07c42" },
   plasma: { text: "A hose of plasma bolts. Loves fire rate and crits.", stats: ["12 SHOTS/S", "44 MAG", "PIERCE"], color: "#4fd8ff" },
   hellfire: { text: "Heavy soul rounds that pierce, burst and burn.", stats: ["36 DMG", "PIERCE 2", "SPLASH", "BURN"], color: "#ff7a2e" },
 };
@@ -752,7 +766,7 @@ export const COMBAT_FX = {
 /** "Damage Resistance +10%" */
 export const upgradeText = (u: UpgradeDef): string => `${u.stat} ${u.value}`;
 
-export type ShopItemId = "heal" | "maxHp" | "armor" | "damage" | "fireRate" | "shotgun" | "rifle" | "plasma" | "hellfire";
+export type ShopItemId = "heal" | "maxHp" | "armor" | "damage" | "fireRate" | "shotgun" | "rifle" | "mp5" | "dualUzi" | "plasma" | "hellfire";
 
 export interface ShopItem {
   id: ShopItemId;
@@ -763,6 +777,8 @@ export interface ShopItem {
   weapon?: WeaponId;
   /** Only sold in campaigns (Hell) once the run has seen its armory. */
   campaign?: boolean;
+  /** Chapter ids in which this item appears (missing: every chapter). */
+  biomes?: string[];
   /** Each purchase multiplies the next one's price by this (stat items get dearer). */
   growth?: number;
   /** Purchases allowed per run (stat items; the shop can't carry a build on its own). */
@@ -783,6 +799,8 @@ export const SHOP: ShopItem[] = [
   { id: "fireRate", title: "Spring Kit", text: "+10% fire rate", cost: 28, growth: 1.6, max: 4 },
   { id: "shotgun", title: "Shotgun", text: "7 pellets, brutal up close", cost: 30, weapon: "shotgun" },
   { id: "rifle", title: "Assault Rifle", text: "Fast, long range, pierces", cost: 45, weapon: "rifle" },
+  { id: "mp5", title: "MP5 SMG", text: "11 shots/s, stable and quick to reload", cost: 55, weapon: "mp5", biomes: ["outpost"] },
+  { id: "dualUzi", title: "Dual Uzis", text: "15 shots/s, 40 rounds, wide close-range spray", cost: 75, weapon: "dualUzi", biomes: ["outpost"] },
   { id: "plasma", title: "Plasma Rifle", text: "12 bolts a second, pierces", cost: 110, weapon: "plasma", campaign: true },
   { id: "hellfire", title: "Hellfire Rifle", text: "Heavy rounds: pierce, splash, burn", cost: 110, weapon: "hellfire", campaign: true },
 ];

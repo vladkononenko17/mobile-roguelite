@@ -1,5 +1,6 @@
 import { LEVEL_UP, PLAYER_COMBAT, WEAPON_STATS, xpToNext, type UpgradeId, type UpgradeTag, type WeaponStats } from "./config";
 import type { WeaponId } from "../config";
+import { applyWeaponMods, weaponMod, type WeaponModId } from "../weaponMods";
 
 /**
  * The hero's run state: health, cash (the shop currency), character level / XP (level-ups offer
@@ -55,6 +56,8 @@ export class PlayerStats {
   vampireHeal = 5;
   weapon: WeaponId = "pistol";
   readonly owned = new Set<WeaponId>(["pistol"]);
+  /** Run-scoped attachments, kept separately for every owned weapon. */
+  readonly weaponMods = new Map<WeaponId, Set<WeaponModId>>();
   /** Shop purchases this run, per item (prices grow, stat items are capped). */
   readonly bought = new Map<string, number>();
   readonly upgrades = new Map<UpgradeId, number>();
@@ -91,18 +94,40 @@ export class PlayerStats {
     return this.hp > 0;
   }
 
+  /** Attachments currently fitted to `weapon` (an empty stable copy when none are fitted). */
+  modsFor(weapon: WeaponId): ReadonlySet<WeaponModId> {
+    return this.weaponMods.get(weapon) ?? EMPTY_MODS;
+  }
+
+  /** Fits a module when it is compatible and its slot is still free. */
+  installMod(weapon: WeaponId, id: WeaponModId): boolean {
+    const def = weaponMod(id);
+    if (!def.weapons.includes(weapon)) return false;
+    let mods = this.weaponMods.get(weapon);
+    if (!mods) this.weaponMods.set(weapon, (mods = new Set()));
+    if (mods.has(id) || [...mods].some((owned) => weaponMod(owned).slot === def.slot)) return false;
+    mods.add(id);
+    return true;
+  }
+
+  /** One weapon's stats with its attachments and every run-wide modifier applied. */
+  weaponStatsFor(weapon: WeaponId): WeaponStats | null {
+    const base = WEAPON_STATS[weapon];
+    if (!base) return null;
+    const modified = applyWeaponMods(base, this.modsFor(weapon), `shot_${weapon}`);
+    return {
+      ...modified,
+      damage: modified.damage * this.damageMult,
+      fireRate: modified.fireRate * this.fireRateMult,
+      reloadSeconds: modified.reloadSeconds * this.reloadTimeMult,
+      magazine: modified.magazine + this.magazineBonus,
+      penetration: modified.penetration + this.penetration,
+    };
+  }
+
   /** The current weapon's stats with every modifier applied. */
   weaponStats(): WeaponStats | null {
-    const base = WEAPON_STATS[this.weapon];
-    if (!base) return null;
-    return {
-      ...base,
-      damage: base.damage * this.damageMult,
-      fireRate: base.fireRate * this.fireRateMult,
-      reloadSeconds: base.reloadSeconds * this.reloadTimeMult,
-      magazine: base.magazine + this.magazineBonus,
-      penetration: base.penetration + this.penetration,
-    };
+    return this.weaponStatsFor(this.weapon);
   }
 
   /** Applies incoming damage (armor, invulnerability). Returns the damage actually taken. */
@@ -118,3 +143,5 @@ export class PlayerStats {
     this.hp = Math.min(this.maxHp, this.hp + amount);
   }
 }
+
+const EMPTY_MODS: ReadonlySet<WeaponModId> = new Set();

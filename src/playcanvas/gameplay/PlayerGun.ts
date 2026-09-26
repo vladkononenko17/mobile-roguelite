@@ -230,8 +230,9 @@ export class PlayerGun {
     this.cooldown = 1 / stats.fireRate;
     this.ammo--;
     this.shotCount++;
-    audio.play(`shot_${this.weaponKey}`);
-    const muzzle = weapon.muzzle(this.muzzle) ?? this.muzzle.copy(this.origin);
+    const shot = stats.audio ?? { id: `shot_${this.weaponKey}`, volume: 1, rate: 1 };
+    audio.play(shot.id, { volume: shot.volume, rate: shot.rate });
+    const muzzle = weapon.muzzle(this.muzzle, this.shotCount - 1) ?? this.muzzle.copy(this.origin);
     const fx = stats.fx;
     this.effects.muzzleFlash(muzzle, fx?.muzzleSize ?? (stats.pellets > 1 ? 0.32 : 0.22), fx?.muzzle);
     const baseAngle = Math.atan2(tx, tz);

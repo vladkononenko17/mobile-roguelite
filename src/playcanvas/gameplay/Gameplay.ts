@@ -24,6 +24,7 @@ import { Combat } from "./Combat";
 import { Drones } from "./Drones";
 import { ScreenProjector } from "../camera/ScreenProjector";
 import { applyUpgrade, availableUpgrades, rollUpgrades, tagCounts, upgradeStacks, type SynergyReached } from "./Upgrades";
+import { modsForWeapon, weaponMod } from "../weaponMods";
 
 /** "travel": a campaign level is won and the hero walks to the way on (see Zone.exit). */
 export type RunPhase = "loading" | "combat" | "cleared" | "shop" | "travel" | "dead" | "complete";
@@ -329,11 +330,13 @@ export class Gameplay {
     Object.assign(s, new PlayerStats());
     s.owned.clear();
     s.owned.add("pistol");
+    s.weaponMods.clear();
     s.upgrades.clear();
     this.unlocked = null;
     this.armorySeen = false;
     const kit = this.campaign?.run;
     const requested = this.params.get("weapon");
+    this.weapons.setMods([], false);
     this.equip(requested && requested in WEAPON_STATS ? (requested as WeaponId) : kit?.startWeapon ?? "pistol");
     this.pendingLevelUps = 0;
     if (kit) {
@@ -410,6 +413,7 @@ export class Gameplay {
     if (this.phase !== "loading" && !this.stats.owned.has(weapon) && WEAPON_CARDS[weapon]) this.unlocked = weapon;
     this.stats.weapon = weapon;
     this.stats.owned.add(weapon);
+    this.weapons.setMods(this.stats.modsFor(weapon), false);
     this.weapons.equip(weapon);
     this.gun.reset();
   }
@@ -606,7 +610,9 @@ export class Gameplay {
   private openShop(next: number): void {
     this.phase = "shop";
     const s = this.stats;
-    const items = SHOP.filter((item) => (!item.weapon || WEAPON_STATS[item.weapon]) && (!item.campaign || this.armorySeen));
+    const items = SHOP.filter((item) =>
+      (!item.weapon || WEAPON_STATS[item.weapon]) && (!item.campaign || this.armorySeen) && (!item.biomes || item.biomes.includes(this.biome.id)),
+    );
     const count = (item: ShopItem) => s.bought.get(item.id) ?? 0;
     const maxed = (item: ShopItem) => item.max !== undefined && count(item) >= item.max;
     const soldOut = (item: ShopItem) => (item.weapon ? s.owned.has(item.weapon) : false) || (item.id === "heal" && s.hp >= s.maxHp) || maxed(item);
@@ -631,7 +637,71 @@ export class Gameplay {
         this.buy(item);
         this.openShop(next);
       },
-      actions: [{ label: `${this.wayOn(next) ? "On to" : "Start"} ${this.levels[next].label}`, onClick: () => this.beforeLevel(next) }],
+      actions: [{
+        label: this.biome.id === "outpost" ? "Choose loadout" : `${this.wayOn(next) ? "On to" : "Start"} ${this.levels[next].label}`,
+        onClick: () => this.biome.id === "outpost" ? this.openLoadout(next) : this.beforeLevel(next),
+      }],
+    });
+  }
+
+  /** Wasteland-only test: choose any owned weapon before the next level, then tune it at the bench. */
+  private openLoadout(next: number): void {
+    this.phase = "shop";
+    const s = this.stats;
+    const weapons = [...s.owned].filter((id) => !!WEAPON_STATS[id]);
+    this.hud.openModal({
+      title: "LOADOUT",
+      text: `Choose a weapon for ${this.levels[next].label}. Tap one to inspect its attachments.`,
+      cards: weapons.map((id) => {
+        const stats = s.weaponStatsFor(id)!;
+        const count = s.modsFor(id).size;
+        return {
+          title: WEAPONS.list[id].label,
+          text: `${stats.damage.toFixed(stats.damage < 10 ? 1 : 0)} dmg · ${stats.fireRate.toFixed(1)}/s · ${stats.magazine} mag · ${stats.range.toFixed(1)} m`,
+          tag: id === s.weapon ? "equipped" : count ? `${count} mod${count === 1 ? "" : "s"}` : "owned",
+          kind: "weapon" as const,
+        };
+      }),
+      onCard: (i) => {
+        this.equip(weapons[i]);
+        this.openWeaponBench(next, weapons[i]);
+      },
+      actions: [{ label: `Continue with ${WEAPONS.list[s.weapon].label}`, onClick: () => this.beforeLevel(next) }],
+    });
+  }
+
+  /** Weapon-specific modules bought with run cash. Each slot is permanent for this run. */
+  private openWeaponBench(next: number, weapon: WeaponId): void {
+    const s = this.stats;
+    const installed = s.modsFor(weapon);
+    const mods = modsForWeapon(weapon);
+    const occupied = new Set([...installed].map((id) => weaponMod(id).slot));
+    this.hud.openModal({
+      title: "WEAPON BENCH",
+      text: `${WEAPONS.list[weapon].label} · ${s.cash}$ · modules are fitted to this weapon for the run.`,
+      cards: mods.map((mod) => {
+        const owned = installed.has(mod.id);
+        const blocked = !owned && occupied.has(mod.slot);
+        return {
+          title: owned ? mod.name : `${mod.name} — ${mod.cost}$`,
+          text: owned ? `${mod.text} · fitted` : blocked ? `${mod.text} · slot occupied` : mod.text,
+          tag: owned ? "installed" : mod.slot,
+          kind: "weapon" as const,
+          disabled: owned || blocked || s.cash < mod.cost,
+        };
+      }),
+      onCard: (i) => {
+        const mod = mods[i];
+        if (s.cash < mod.cost || !s.installMod(weapon, mod.id)) return;
+        s.cash -= mod.cost;
+        this.weapons.setMods(s.modsFor(weapon));
+        this.gun.reset();
+        this.openWeaponBench(next, weapon);
+      },
+      actions: [
+        { label: "Back to weapons", onClick: () => this.openLoadout(next) },
+        { label: `${this.wayOn(next) ? "On to" : "Start"} ${this.levels[next].label}`, onClick: () => this.beforeLevel(next) },
+      ],
     });
   }
 
@@ -835,7 +905,8 @@ export class Gameplay {
 
   /** Starts loading the sounds this run can play: the map's, the weapons', its enemies' voices. */
   private preloadSounds(types: Set<EnemyId>): void {
-    const sounds = new Set<string>([...COMMON_SOUNDS, ...footstepsOf(this.biome), ...Object.keys(WEAPON_STATS).map((w) => `shot_${w}`)]);
+    const weaponSounds = Object.entries(WEAPON_STATS).map(([id, stats]) => stats?.audio?.id ?? `shot_${id}`);
+    const sounds = new Set<string>([...COMMON_SOUNDS, ...footstepsOf(this.biome), ...weaponSounds]);
     for (const id of types) {
       const def = ENEMIES[id];
       const voice = voiceOf(id, def);

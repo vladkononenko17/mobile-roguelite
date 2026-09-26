@@ -2,7 +2,7 @@ name: Deploy game to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/phaser-playcanvas-migration-hdbnh2]
   workflow_dispatch:
 
 permissions:
