@@ -113,11 +113,30 @@ export class CameraController {
     y += cosPitch * shift;
     z += -cosYaw * sinPitch * shift;
 
+    // Shake: trauma squared, as a smooth wobble in the view plane (screen right / up).
+    if (this.trauma > 0) {
+      this.trauma = Math.max(0, this.trauma - dt * 1.8);
+      this.shakeTime += dt;
+      const k = this.trauma * this.trauma * 0.45;
+      const sx = Math.sin(this.shakeTime * 47) * k, sy = Math.sin(this.shakeTime * 59 + 1.3) * k;
+      x += cosYaw * sx;
+      z += -sinYaw * sx;
+      y += cosPitch * sy;
+    }
+
     this.position.set(x, y, z);
     this.entity.setPosition(this.position);
     this.entity.setEulerAngles(-pitchDeg, yawDeg, 0);
     camera.horizontalFov = false;
     camera.fov = fovDeg;
+  }
+
+  private trauma = 0;
+  private shakeTime = 0;
+
+  /** Adds screen shake (0..1 trauma; it decays in about half a second). */
+  shake(amount: number): void {
+    this.trauma = Math.min(1, this.trauma + amount);
   }
 
   /** Fits the map-view rectangle on screen for the current aspect ratio. */

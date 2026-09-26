@@ -236,6 +236,7 @@ export class Game {
     // The roguelite run on this arena (enemies, combat, levels). ?sandbox=1 skips it.
     if (new URLSearchParams(location.search).get("sandbox") !== "1") {
       this.gameplay = new Gameplay(app, this.camera.entity, this.collision, biome, this.player, this.weapons, new Hud(), () => this.characterScale, () => this.camera.snap());
+      this.gameplay.onShake = (amount) => this.camera.shake(amount);
       this.gameplay.init().catch((error: unknown) => console.error("[Gameplay] failed to start.", error));
     }
     app.on("update", this.update, this);

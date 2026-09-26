@@ -1,4 +1,5 @@
 import { BLEND_ADDITIVE, BLEND_ADDITIVEALPHA, BLEND_NORMAL, Color, Entity, PIXELFORMAT_RGBA8, StandardMaterial, Texture, Vec3, type AppBase, type MeshInstance } from "playcanvas";
+import { softGlow } from "../world/AmbientFx";
 
 /** A small moving particle (blood droplet, dust puff, shell casing): ballistic, then gone. */
 interface Bit {
@@ -179,9 +180,54 @@ export class Effects {
     this.glowOf = (c) => glow(new Color(c[0], c[1], c[2]));
     const spark = glow(new Color(1, 0.45, 0.25));
     for (let i = 0; i < 6; i++) this.flashes.push(this.make("flash", "sphere", flash));
+    // Kill pops: a hot white-gold burst that swells and fades at a dying enemy.
+    const pop = glow(new Color(1, 0.9, 0.62));
+    for (let i = 0; i < 10; i++) this.pops.push(this.make("pop", "sphere", pop));
+    // Muzzle light: a soft warm pool on the ground under each shot (a light without a light).
+    this.softGlowTexture = softGlow(app);
+    for (let i = 0; i < 6; i++) {
+      const entity = new Entity("muzzle-light");
+      entity.addComponent("render", { type: "plane", material: this.groundGlow([1, 0.72, 0.35]), castShadows: false, receiveShadows: false });
+      entity.enabled = false;
+      this.root.addChild(entity);
+      this.muzzleLights.push({ entity, life: 0, total: 1, width: 1, length: 0 });
+    }
     for (let i = 0; i < 24; i++) this.tracers.push(this.make("tracer", "box", tracer));
     for (let i = 0; i < 16; i++) this.sparks.push(this.make("spark", "sphere", spark));
     for (let i = 0; i < 20; i++) this.shots.push(Object.assign(this.make("energy", "sphere", tracer), { from: new Vec3(), to: new Vec3() }));
+  }
+
+  private readonly pops: Pooled[] = [];
+  private readonly muzzleLights: Pooled[] = [];
+  private softGlowTexture!: Texture;
+  private readonly groundGlows = new Map<string, StandardMaterial>();
+
+  /** A soft additive light pool of colour `c` (shared per colour). */
+  private groundGlow(c: readonly [number, number, number]): StandardMaterial {
+    const key = c.join(",");
+    let m = this.groundGlows.get(key);
+    if (!m) {
+      m = new StandardMaterial();
+      m.diffuse.set(0, 0, 0);
+      m.emissive.set(c[0] * 0.55, c[1] * 0.55, c[2] * 0.55);
+      m.emissiveMap = this.softGlowTexture;
+      m.useLighting = false;
+      m.blendType = BLEND_ADDITIVE;
+      m.depthWrite = false;
+      m.update();
+      this.groundGlows.set(key, m);
+    }
+    return m;
+  }
+
+  /** A kill's pop: a bright burst of `size` metres at the body. */
+  killFlash(position: Vec3, size: number): void {
+    const p = this.take(this.pops);
+    p.entity.enabled = true;
+    p.entity.setPosition(position);
+    p.life = p.total = size > 1.5 ? 0.3 : 0.14;
+    p.width = size;
+    p.entity.setLocalScale(size * 0.5, size * 0.5, size * 0.5);
   }
 
   private flashMat!: StandardMaterial;
@@ -390,6 +436,14 @@ export class Effects {
     p.life = p.total = 0.06;
     p.width = size;
     p.entity.setLocalScale(size, size, size);
+    // Its light on the ground.
+    const l = this.take(this.muzzleLights);
+    l.entity.render!.meshInstances[0].material = this.groundGlow(color ?? [1, 0.72, 0.35]);
+    l.entity.enabled = true;
+    l.entity.setPosition(position.x, 0.06, position.z);
+    l.life = l.total = 0.07;
+    l.width = 2.2 + size * 4;
+    l.entity.setLocalScale(l.width, 1, l.width);
   }
 
   /** A streak from `from` to `to` (weapons may colour, widen and lengthen it). */
@@ -492,6 +546,22 @@ export class Effects {
         const s = p.width * (0.4 + 0.6 * (p.life / p.total));
         p.entity.setLocalScale(s, s, s);
       }
+    }
+    for (const p of this.pops) {
+      if (!p.entity.enabled) continue;
+      p.life -= dt;
+      if (p.life <= 0) {
+        p.entity.enabled = false;
+        continue;
+      }
+      const t = 1 - p.life / p.total;
+      const s = p.width * (0.5 + 0.9 * t) * (1 - t * t);
+      p.entity.setLocalScale(s, s, s);
+    }
+    for (const l of this.muzzleLights) {
+      if (!l.entity.enabled) continue;
+      l.life -= dt;
+      if (l.life <= 0) l.entity.enabled = false;
     }
     for (const p of [...this.tracers, ...this.bolts]) {
       if (!p.entity.enabled) continue;

@@ -83,6 +83,20 @@ export const AMBIENT: AmbientEmitter[] = [
   { kind: "sparks", x: 5.5, y: 4, z: -79, every: 6 },
   { kind: "dust", x: 0, y: 1.2, z: -88, size: [30, 30], intensity: 1 },
   { kind: "dust", x: 0, y: 1.2, z: -166, size: [30, 30], intensity: 1 },
+  // Fires: the camp fire, burning wrecks and oil drums; crows wheeling over every zone; leaves and
+  // scraps blowing through the city.
+  { kind: "fire", x: -12.8, y: 0.15, z: 12.1, size: [0.5, 0.5], intensity: 0.8 },
+  { kind: "fire", x: -3, y: 0.9, z: -71, size: [1.2, 1], intensity: 1 },
+  { kind: "fire", x: 15, y: 1, z: -87, size: [1.2, 1], intensity: 0.9 },
+  { kind: "fire", x: -24, y: 1.2, z: -163, size: [1.4, 1.2], intensity: 1 },
+  { kind: "fire", x: 21.4, y: 1.1, z: -99.3, size: [0.5, 0.5], intensity: 0.7 },
+  { kind: "fire", x: -26.1, y: 1.1, z: -183.6, size: [0.5, 0.5], intensity: 0.7 },
+  { kind: "birds", x: 4, y: 5, z: 0, size: [22, 22], intensity: 1 },
+  { kind: "birds", x: -6, y: 5, z: -90, size: [26, 26], intensity: 1.2 },
+  { kind: "birds", x: 6, y: 5.5, z: -166, size: [24, 24], intensity: 1 },
+  { kind: "leaves", x: 0, y: 0.4, z: -88, size: [28, 28], intensity: 1, color: [1, 1, 1] },
+  { kind: "leaves", x: 0, y: 0.4, z: -166, size: [26, 26], intensity: 0.8, color: [1, 1, 1] },
+  { kind: "leaves", x: -12, y: 0.4, z: -104, size: [14, 14], intensity: 0.8, color: [0.8, 1, 0.6] },
 ];
 
 export const GROUND_SPEC: GroundSpec = {

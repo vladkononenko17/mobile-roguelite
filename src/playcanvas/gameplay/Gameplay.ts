@@ -52,6 +52,9 @@ async function loadTexture(app: AppBase, url: string): Promise<Texture> {
  * hazards, effects and the HUD, and steps them every frame. The player controller, weapon holder and
  * hand/pose systems stay as they are; this only reads the hero's position and steers aiming.
  */
+/** A boss's death plays in slow motion: this long (real seconds) at this time scale. */
+const SLOW_MO = { seconds: 1.1, scale: 0.3 };
+
 export class Gameplay {
   phase: RunPhase = "loading";
   readonly stats = new PlayerStats();
@@ -143,7 +146,10 @@ export class Gameplay {
         this.player.push.set((dx / d) * push, 0, (dz / d) * push);
       } else if (push <= 0) this.hurtPlayer(damage);
     };
-    this.enemies.onSlam = (position, radius) => this.effects.ring(position, radius, false);
+    this.enemies.onSlam = (position, radius) => {
+      this.effects.ring(position, radius, false);
+      this.shakeAt(position.x, position.z, 0.4);
+    };
     this.hazards.onImpact = (position, radius, damage) => {
       const p = this.player.entity.getPosition();
       if (Math.hypot(p.x - position.x, p.z - position.z) <= radius) this.hurtPlayer(damage);
@@ -161,14 +167,20 @@ export class Gameplay {
     };
     this.hazards.onBlast = (position, radius, kind) => {
       if (kind === "bolt") this.effects.spark(position, 0.3);
-      else this.effects.explosion(position, radius);
+      else {
+        this.effects.explosion(position, radius);
+        this.shakeAt(position.x, position.z, 0.3);
+      }
     };
     this.brain.onWindup = (enemy) => {
       this.tmp.set(enemy.position.x, enemy.lift + 1.2 * enemy.scale * 0.5, enemy.position.z);
       this.effects.ring(this.tmp, 1.2 + enemy.def.radius, true);
       this.effects.flame(this.tmp);
     };
-    this.brain.onBlast = (position, radius) => this.effects.ring(position, radius, false);
+    this.brain.onBlast = (position, radius) => {
+      this.effects.ring(position, radius, false);
+      this.shakeAt(position.x, position.z, 0.45);
+    };
     this.brain.onSummon = (type, x, z) => {
       const w = this.director.wave;
       this.effects.explosion(this.tmp.set(x, 0.1, z), 0.8);
@@ -372,11 +384,24 @@ export class Gameplay {
   }
 
   /** Damages the hero; returns whether any damage was taken. */
+  /** Screen shake (set by Game: the camera's). */
+  onShake: (amount: number) => void = () => {};
+  /** Boss-kill slow motion left (scaled seconds). */
+  private slowMo = 0;
+
+  /** Shakes the screen for a blow at (x, z), fading with distance from the hero. */
+  private shakeAt(x: number, z: number, amount: number, reach = 14): void {
+    const p = this.player.entity.getPosition();
+    const k = Math.max(0, 1 - Math.hypot(p.x - x, p.z - z) / reach);
+    if (k > 0) this.onShake(amount * k);
+  }
+
   private hurtPlayer(damage: number): boolean {
     if (this.phase !== "combat") return false;
     const taken = this.stats.hurt(damage);
     if (taken <= 0) return false;
     this.hud.flashHurt();
+    this.onShake(Math.min(0.45, 0.12 + taken / 80));
     this.tmp.copy(this.player.entity.getPosition());
     this.tmp.y += 2.1 * this.characterScale();
     this.hud.damageNumber(this.tmp, `-${taken}`, "player");
@@ -680,6 +705,15 @@ export class Gameplay {
     if (this.stats.vampireChance > 0 && Math.random() < this.stats.vampireChance) this.killHeal(this.stats.vampireHeal);
     // Drops: most zombies leave nothing, so the ground stays readable.
     const { x, z } = enemy.position;
+    // Every kill pops: a quick bright flash at the body; big ones shake the screen, a boss's death
+    // slows time for a moment.
+    this.effects.killFlash(this.tmp.set(x, 0.55 * enemy.scale + enemy.lift, z), enemy.def.boss ? 2.4 : Math.min(1.2, 0.45 * enemy.scale));
+    if (enemy.def.boss) {
+      this.onShake(0.9);
+      this.effects.ring(this.tmp.set(x, 0.1, z), 6, true);
+      this.slowMo = SLOW_MO.seconds * SLOW_MO.scale;
+      this.app.timeScale = SLOW_MO.scale;
+    } else if (enemy.def.maxHp >= 150) this.shakeAt(x, z, 0.18);
     if (enemy.def.deathFx === "ember") {
       // Demons burst into embers and leave a scorch mark.
       this.tmp.set(x, 0.6 * enemy.scale + enemy.lift, z);
@@ -787,6 +821,11 @@ export class Gameplay {
 
   update(dt: number): void {
     if (this.phase === "loading") return;
+    if (this.slowMo > 0) {
+      this.slowMo -= dt;
+      // Back to full speed (unless a menu has paused the game meanwhile).
+      if (this.slowMo <= 0 && this.app.timeScale === SLOW_MO.scale) this.app.timeScale = 1;
+    }
     // Screen projections for this frame (targeting, spawning, HUD), read before any DOM writes.
     this.projector.refresh();
     const position = this.player.entity.getPosition();

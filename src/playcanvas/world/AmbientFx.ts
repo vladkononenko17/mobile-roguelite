@@ -7,11 +7,13 @@ import {
  * One ambient emitter placed by a level (a biome lists its own): drifting dust motes over an area,
  * a smoke column / wisp from a fire or wreck (or steam from a vent), occasional spark bursts from a
  * generator or lamp, or a coloured pool of light on the floor under a screen or lamp (optionally
- * pulsing, for alarms). Positions are world metres; `size` is the area (dust, glow) or the emitter
- * spread (smoke / sparks).
+ * pulsing, for alarms); a fire (licking flames over a flickering light pool: burning wrecks,
+ * barrels, camp fires); leaves and scraps blowing across an area; a flock of crows circling high over
+ * it. Positions are world metres; `size` is the area (dust, glow, leaves, the flock's circle) or the
+ * emitter spread (smoke / sparks / fire).
  */
 export interface AmbientEmitter {
-  kind: "dust" | "smoke" | "sparks" | "glow" | "embers" | "sigil";
+  kind: "dust" | "smoke" | "sparks" | "glow" | "embers" | "sigil" | "fire" | "leaves" | "birds";
   /** Tint (linear 0..1): dust and smoke colour, glow light colour. */
   color?: [number, number, number];
   /** Glow: pulses per second (0 = steady). */
@@ -59,6 +61,11 @@ export class AmbientFx {
   private readonly sparks: Spark[] = [];
   private readonly pulses: { material: StandardMaterial; rate: number; base: number; phase: number }[] = [];
   private readonly glowMaterials = new Map<string, StandardMaterial>();
+  /** Fire light pools flicker (irregular, not the alarm pulse). */
+  private readonly flickers: { material: StandardMaterial; base: number; phase: number }[] = [];
+  private readonly flocks: { entity: Entity; homeX: number; homeZ: number; birds: { entity: Entity; angle: number; speed: number; radius: number; height: number; flap: number }[] }[] = [];
+  private birdMaterial: StandardMaterial | null = null;
+  private leafTexture: Texture | null = null;
   private glowTexture: Texture | null = null;
   private sigilTexture: Texture | null = null;
   private time = 0;
@@ -95,6 +102,10 @@ export class AmbientFx {
       this.addGlow(entity, e);
       return;
     }
+    if (e.kind === "birds") {
+      this.addFlock(entity, e);
+      return;
+    }
     const [cr, cg, cb] = e.color ?? [1, 1, 1];
     const common = { colorMap: sprite, depthWrite: false, lighting: false, localSpace: false, emitterShape: EMITTERSHAPE_BOX };
     if (e.kind === "dust") {
@@ -117,6 +128,36 @@ export class AmbientFx {
         scaleGraph: new Curve([0, 0.05, 1, 0.02]), scaleGraph2: new Curve([0, 0.08, 1, 0.03]),
         alphaGraph: new Curve([0, 0, 0.1, 1, 0.7, 0.8, 1, 0]),
         colorGraph: new CurveSet([[0, 1.0 * cr, 1, 0.9 * cr], [0, 0.55 * cg, 1, 0.25 * cg], [0, 0.18 * cb, 1, 0.05 * cb]]),
+      });
+    } else if (e.kind === "fire") {
+      // Licking flames: bright additive tongues rising fast and shrinking, over a flickering light pool.
+      entity.addComponent("particlesystem", {
+        ...common, numParticles: Math.round(26 * k), lifetime: 0.9, rate: 0.03 / k, rate2: 0.05 / k, preWarm: true, loop: true,
+        emitterExtents: new Vec3(sx * 0.5, 0.1, sz * 0.5), blendType: BLEND_ADDITIVE,
+        velocityGraph: new CurveSet([[0, -0.15, 1, 0.1], [0, 1.1, 1, 1.8], [0, -0.15, 1, 0.1]]),
+        velocityGraph2: new CurveSet([[0, 0.15, 1, -0.1], [0, 1.6, 1, 2.4], [0, 0.15, 1, -0.1]]),
+        scaleGraph: new Curve([0, 0.6, 0.3, 0.75, 1, 0.12]), scaleGraph2: new Curve([0, 0.85, 0.3, 1.0, 1, 0.2]),
+        alphaGraph: new Curve([0, 0, 0.12, 1, 0.6, 0.8, 1, 0]),
+        colorGraph: new CurveSet([[0, 1.6, 1, 1.2], [0, 1.0, 0.5, 0.55, 1, 0.22], [0, 0.35, 1, 0.05]]),
+      });
+      const light = new Entity("fire-light");
+      entity.addChild(light);
+      this.addGlow(light, { kind: "glow", x: e.x, z: e.z, size: [sx * 5 + 3, sz * 5 + 3], color: [1, 0.55, 0.18], intensity: 0.55 * k });
+      const m = light.render!.meshInstances[0].material as StandardMaterial;
+      this.flickers.push({ material: m, base: 0.55 * k, phase: Math.random() * 100 });
+    } else if (e.kind === "leaves") {
+      // Dry leaves and paper scraps skittering across the ground with the wind.
+      entity.addComponent("particlesystem", {
+        ...common, colorMap: (this.leafTexture ??= leafTexture(this.app)), numParticles: Math.round(18 * k), lifetime: 6, rate: 0.25 / k, rate2: 0.4 / k, preWarm: true, loop: true,
+        emitterExtents: new Vec3(sx, 1.2, sz), blendType: BLEND_NORMAL,
+        velocityGraph: new CurveSet([[0, 0.6, 0.5, 1.4, 1, 0.8], [0, -0.1, 0.5, 0.25, 1, -0.2], [0, -0.2, 1, 0.2]]),
+        velocityGraph2: new CurveSet([[0, 1.2, 0.5, 2.2, 1, 1.4], [0, 0.15, 0.5, -0.1, 1, 0.1], [0, 0.2, 1, -0.2]]),
+        scaleGraph: new Curve([0, 0.22]), scaleGraph2: new Curve([0, 0.32]),
+        rotationSpeedGraph: new Curve([0, -360]), rotationSpeedGraph2: new Curve([0, 360]),
+        alphaGraph: new Curve([0, 0, 0.1, 1, 0.9, 1, 1, 0]),
+        colorGraph: new CurveSet([[0, 0.7 * cr], [0, 0.55 * cg], [0, 0.28 * cb]]),
+        colorGraph2: new CurveSet([[0, 0.95 * cr], [0, 0.78 * cg], [0, 0.45 * cb]]),
+        startAngle: 0, startAngle2: 360,
       });
     } else if (e.kind === "smoke") {
       // Soft grey puffs rising and widening, drifting with a light wind.
@@ -168,6 +209,24 @@ export class AmbientFx {
     entity.addComponent("render", { type: "plane", material, castShadows: false, receiveShadows: false });
   }
 
+  /**
+   * A flock of crows circling high over an area: flat dark silhouettes (one shared material) wheeling
+   * at different radii and heights, wings flapping (their width pulses). Only near the hero.
+   */
+  private addFlock(entity: Entity, e: AmbientEmitter): void {
+    this.birdMaterial ??= birdMaterial(this.app);
+    const [sx] = e.size ?? [16, 16];
+    const count = Math.max(2, Math.round(4 * (e.intensity ?? 1)));
+    const birds = [];
+    for (let i = 0; i < count; i++) {
+      const bird = new Entity("crow");
+      bird.addComponent("render", { type: "plane", material: this.birdMaterial, castShadows: true, receiveShadows: false });
+      entity.addChild(bird);
+      birds.push({ entity: bird, angle: Math.random() * Math.PI * 2, speed: 0.35 + Math.random() * 0.25, radius: Math.min(7, sx * (0.12 + Math.random() * 0.15)), height: (e.y ?? 6.5) + Math.random() * 2, flap: Math.random() * 10 });
+    }
+    this.flocks.push({ entity, homeX: e.x, homeZ: e.z, birds });
+  }
+
   private burst(at: Vec3): void {
     let n = 0;
     for (const s of this.sparks) {
@@ -190,6 +249,32 @@ export class AmbientFx {
       const level = 0.25 + 0.75 * Math.pow(Math.max(0, Math.sin(t * Math.PI)), 2);
       p.material.emissiveIntensity = p.base * level;
       p.material.update();
+    }
+    for (const f of this.flickers) {
+      // Fire light: two beating frequencies plus a random crackle.
+      const t = this.time + f.phase;
+      f.material.emissiveIntensity = f.base * (0.75 + 0.15 * Math.sin(t * 13) + 0.1 * Math.sin(t * 31.7) + (Math.random() - 0.5) * 0.12);
+      f.material.update();
+    }
+    for (const flock of this.flocks) {
+      if (!flock.entity.enabled) continue;
+      // Scavengers: the flock drifts after the fight (slowly, on a leash from its home), so it
+      // wheels over the hero's view.
+      const c = flock.entity.getPosition();
+      const k = Math.min(1, dt * 0.35), leash = 22;
+      const tx = Math.max(flock.homeX - leash, Math.min(flock.homeX + leash, focus.x + 3));
+      const tz = Math.max(flock.homeZ - leash, Math.min(flock.homeZ + leash, focus.z + 4));
+      flock.entity.setPosition(c.x + (tx - c.x) * k, c.y, c.z + (tz - c.z) * k);
+      for (const b of flock.birds) {
+        b.angle += b.speed * dt;
+        b.flap += dt * 9;
+        const x = Math.cos(b.angle) * b.radius, z = Math.sin(b.angle) * b.radius;
+        b.entity.setLocalPosition(x, b.height + Math.sin(b.flap * 0.3) * 0.4, z);
+        // Heading along the circle; wings beat, with a glide now and then.
+        b.entity.setLocalEulerAngles(0, (-b.angle * 180) / Math.PI, 0);
+        const beat = Math.sin(b.flap) > -0.2 || Math.sin(b.flap * 0.21) > 0.6 ? 0.55 + 0.45 * Math.abs(Math.sin(b.flap)) : 1;
+        b.entity.setLocalScale(1.05 * beat, 1, 0.5);
+      }
     }
     for (const { entity, reach } of this.emitters) {
       const p = entity.getPosition();
@@ -218,6 +303,49 @@ export class AmbientFx {
       s.entity.setLocalScale(k, k, k);
     }
   }
+}
+
+/** A leaf / paper scrap: a pointed oval with a soft edge (the particles' alpha sprite). */
+function leafTexture(app: AppBase): Texture {
+  const size = 32;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext("2d")!;
+  g.fillStyle = "#fff";
+  g.beginPath();
+  g.moveTo(16, 2);
+  g.quadraticCurveTo(30, 14, 16, 30);
+  g.quadraticCurveTo(2, 14, 16, 2);
+  g.fill();
+  const texture = new Texture(app.graphicsDevice, { format: PIXELFORMAT_SRGBA8, mipmaps: true });
+  texture.setSource(canvas);
+  return texture;
+}
+
+/** A crow seen from above: dark wings spread in a shallow V, head and tail (alpha cut-out). */
+function birdMaterial(app: AppBase): StandardMaterial {
+  const w = 64, h = 32;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const g = canvas.getContext("2d")!;
+  g.fillStyle = "#fff";
+  g.beginPath();
+  // Wings (across x), body along the middle.
+  g.moveTo(2, 18); g.quadraticCurveTo(18, 6, 30, 13); g.lineTo(32, 6); g.lineTo(34, 13);
+  g.quadraticCurveTo(46, 6, 62, 18); g.quadraticCurveTo(46, 14, 35, 19); g.lineTo(36, 28); g.lineTo(32, 25); g.lineTo(28, 28);
+  g.lineTo(29, 19); g.quadraticCurveTo(18, 14, 2, 18);
+  g.fill();
+  const texture = new Texture(app.graphicsDevice, { format: PIXELFORMAT_SRGBA8, mipmaps: true });
+  texture.setSource(canvas);
+  const m = new StandardMaterial();
+  m.diffuse.set(0.03, 0.03, 0.035);
+  m.opacityMap = texture;
+  m.opacityMapChannel = "a";
+  m.alphaTest = 0.5;
+  m.cull = 0;
+  m.update();
+  return m;
 }
 
 /** Soft round white sprite (alpha falloff) shared by every ambient emitter. */
