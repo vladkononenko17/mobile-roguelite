@@ -62,7 +62,7 @@ const FAR = 26;
 /** Screen-space x offset (m) at which a sound pans fully to one side (capped at PAN_MAX). */
 const PAN_RANGE = 14;
 const PAN_MAX = 0.7;
-const MUSIC_VOLUME = 0.32;
+const MUSIC_VOLUME = 0.6;
 const MUSIC_FADE = 1.6;
 const STORAGE_KEY = "roguelite.sound";
 
@@ -107,6 +107,10 @@ class AudioManager {
     } catch {
       /* storage unavailable */
     }
+    // iOS: the "playback" session plays even with the ring / silent switch on (Safari 16.4+);
+    // otherwise Web Audio follows the switch and the game is silent.
+    const session = (navigator as unknown as { audioSession?: { type: string } }).audioSession;
+    if (session) session.type = "playback";
     const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctx) return;
     this.ctx = new Ctx();
@@ -118,19 +122,34 @@ class AudioManager {
     this.musicBus = this.ctx.createGain();
     this.musicBus.gain.value = MUSIC_VOLUME;
     this.musicBus.connect(this.master);
+    let htmlKick = false;
     const unlock = () => {
-      if (!this.ctx || document.hidden) return;
-      this.ctx.resume().then(() => {
+      const ctx = this.ctx;
+      if (!ctx || document.hidden || (this.unlocked && ctx.state === "running")) return;
+      // iOS: a (silent) sound started inside the gesture opens the output; an HTML audio element
+      // played once moves older iOS to the playback session (sound with the silent switch on).
+      const blank = ctx.createBufferSource();
+      blank.buffer = ctx.createBuffer(1, 1, 22050);
+      blank.connect(ctx.destination);
+      blank.start(0);
+      if (!htmlKick && !session) {
+        htmlKick = true;
+        const el = new Audio(`${this.base}silence.mp3`);
+        el.setAttribute("playsinline", "");
+        void el.play().catch(() => {});
+      }
+      ctx.resume().then(() => {
         this.unlocked = true;
         // Music asked for before the gesture starts now.
         if (!this.musicSource && this.musicId) this.startMusic(this.musicId);
       }, () => {});
     };
-    for (const type of ["pointerdown", "touchend", "keydown"]) window.addEventListener(type, unlock, { capture: true, passive: true });
+    // Resumed on every gesture until it runs (iOS also "interrupts" it after calls / backgrounding).
+    for (const type of ["pointerdown", "pointerup", "touchend", "click", "keydown"]) window.addEventListener(type, unlock, { capture: true, passive: true });
     document.addEventListener("visibilitychange", () => {
       if (!this.ctx) return;
       if (document.hidden) void this.ctx.suspend();
-      else if (this.unlocked) void this.ctx.resume();
+      else if (this.unlocked) void this.ctx.resume().catch(() => {});
     });
     this.loadCounts();
   }

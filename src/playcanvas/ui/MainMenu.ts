@@ -141,6 +141,8 @@ export function showMainMenu(): Promise<BiomeId> {
     audio.music(BIOME_AUDIO[c.id]?.music ?? null);
     if (sound) audio.play("ui");
   };
+  // Menu sounds and the chapter's music load right away, so the first tap already plays them.
+  audio.preload(["ui", "upgrade", BIOME_AUDIO[CHAPTERS[index].id]?.music].filter((id): id is string => !!id));
   select(index, false);
 
   root.querySelectorAll<HTMLElement>("[data-tab]").forEach((el, i) => el.addEventListener("click", () => select(i)));
