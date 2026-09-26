@@ -30,7 +30,7 @@ interface PendingExplosion {
  */
 export class Combat {
   /** Damage number hook: (world position, amount, style). */
-  onHit: (position: Vec3, amount: number, style: HitStyle) => void = () => {};
+  onHit: (position: Vec3, amount: number, style: HitStyle, enemy: Enemy) => void = () => {};
   private readonly explosions: PendingExplosion[] = [];
   private readonly point = new Vec3();
   private readonly from = new Vec3();
@@ -62,7 +62,7 @@ export class Combat {
     amount = Math.max(1, Math.round(amount));
     const wasBurning = e.burnTime > 0;
     const killed = this.enemies.damage(e, amount, fromX, fromZ, knockback);
-    this.onHit(this.chest(e, this.point), amount, source === "burn" ? "burn" : crit ? "crit" : TECH.has(source) ? "tech" : "normal");
+    this.onHit(this.chest(e, this.point), amount, source === "burn" ? "burn" : crit ? "crit" : TECH.has(source) ? "tech" : "normal", e);
     if (killed) {
       this.onKilled(e, wasBurning);
       return true;

@@ -1,5 +1,7 @@
 import { Vec3, type AnimTrack, type AppBase, type Asset, type ContainerResource, type Entity, type Texture } from "playcanvas";
 import { WEAPONS, type WeaponId } from "../config";
+import { audio } from "../audio/Audio";
+import { BIOME_AUDIO, BOSS_MUSIC, COMMON_SOUNDS, footstepAt, footstepsOf, voiceOf } from "../audio/soundMap";
 import type { PlayerController } from "../player/PlayerController";
 import type { WeaponHolder } from "../player/WeaponHolder";
 import type { Hud } from "../ui/Hud";
@@ -52,6 +54,10 @@ async function loadTexture(app: AppBase, url: string): Promise<Texture> {
  * hazards, effects and the HUD, and steps them every frame. The player controller, weapon holder and
  * hand/pose systems stay as they are; this only reads the hero's position and steers aiming.
  */
+/** Footstep spacing (m of ground per step, times the hero's scale) and the horde's idle groan interval (s). */
+const STEP_LENGTH = 1.25;
+const GROAN_EVERY = [1.4, 3.2];
+
 /** A boss's death plays in slow motion: this long (real seconds) at this time scale. */
 const SLOW_MO = { seconds: 1.1, scale: 0.3 };
 
@@ -100,6 +106,13 @@ export class Gameplay {
   /** The armory has been visited this run (campaign-only weapons appear in the shop). */
   private armorySeen = false;
   private meteorTimer = 0;
+  /** Seconds to the next idle groan from the horde. */
+  private groanTimer = 2;
+  /** Distance walked since the last footstep (m), and where the hero was last frame. */
+  private stride = 0;
+  private readonly lastStep = new Vec3();
+  /** A boss is up: its theme plays (the chapter's music resumes when it falls). */
+  private bossMusic = false;
 
   constructor(
     private readonly app: AppBase,
@@ -132,7 +145,10 @@ export class Gameplay {
     this.enemies.brain = this.brain;
     this.projector = new ScreenProjector(camera.camera!);
     this.combat = new Combat(this.enemies, this.effects, this.stats);
-    this.combat.onHit = (position, amount, style) => this.hud.damageNumber(position, String(amount), style);
+    this.combat.onHit = (position, amount, style, enemy) => {
+      this.hud.damageNumber(position, String(amount), style);
+      if (style !== "burn") audio.voice(voiceOf(enemy.id, enemy.def), "hit", { x: position.x, z: position.z });
+    };
     this.gun = new PlayerGun(this.enemies, this.effects, collision, this.stats, this.projector, this.combat);
     this.drones = new Drones(app, this.effects, this.combat, this.gun);
     this.enemies.onPlayerHit = (damage, from) => {
@@ -146,7 +162,9 @@ export class Gameplay {
         this.player.push.set((dx / d) * push, 0, (dz / d) * push);
       } else if (push <= 0) this.hurtPlayer(damage);
     };
+    this.enemies.onAttack = (enemy) => audio.voice(voiceOf(enemy.id, enemy.def), "attack", { x: enemy.position.x, z: enemy.position.z, rate: enemy.def.boss ? 0.75 : 1 });
     this.enemies.onSlam = (position, radius) => {
+      audio.play("slam", { x: position.x, z: position.z });
       this.effects.ring(position, radius, false);
       this.shakeAt(position.x, position.z, 0.4);
     };
@@ -169,6 +187,7 @@ export class Gameplay {
       if (kind === "bolt") this.effects.spark(position, 0.3);
       else {
         this.effects.explosion(position, radius);
+        audio.play("explosion", { x: position.x, z: position.z });
         this.shakeAt(position.x, position.z, 0.3);
       }
     };
@@ -176,8 +195,10 @@ export class Gameplay {
       this.tmp.set(enemy.position.x, enemy.lift + 1.2 * enemy.scale * 0.5, enemy.position.z);
       this.effects.ring(this.tmp, 1.2 + enemy.def.radius, true);
       this.effects.flame(this.tmp);
+      audio.voice(voiceOf(enemy.id, enemy.def), "attack", { x: enemy.position.x, z: enemy.position.z, rate: 0.75, volume: 1.4 });
     };
     this.brain.onBlast = (position, radius) => {
+      audio.play("slam", { x: position.x, z: position.z });
       this.effects.ring(position, radius, false);
       this.shakeAt(position.x, position.z, 0.45);
     };
@@ -191,6 +212,7 @@ export class Gameplay {
         this.hud.showBanner(phase.enter.banner, 2.2);
         this.campaign?.arena?.(phase.enter.arena);
       }
+      audio.voice(voiceOf(enemy.id, enemy.def), "roar", { x: enemy.position.x, z: enemy.position.z });
       this.effects.ring(this.tmp.set(enemy.position.x, 0.1, enemy.position.z), 7, true);
       this.effects.explosion(this.tmp, 2);
     };
@@ -229,6 +251,7 @@ export class Gameplay {
         for (const phase of script ? BOSS_SCRIPTS[script] : []) for (const a of phase.attacks) if (a.kind === "summon") a.enemies.forEach((e) => types.add(e.type));
       }
     }
+    this.preloadSounds(types);
     const openers = Object.keys(this.levels[0].phases[0].weights) as EnemyId[];
     const first = new Set(openers.flatMap((id) => ENEMIES[id].visuals));
     const neededSkins = new Set<EnemySkinId>([...types].flatMap((id) => [
@@ -345,6 +368,8 @@ export class Gameplay {
     }
     this.player.bounds = region;
     this.campaign?.onLevel?.(index, this.levels[index].zone ?? "");
+    this.bossMusic = false;
+    audio.music(BIOME_AUDIO[this.biome.id]?.music ?? null);
     this.campaign?.arena?.(0);
     this.burn = 0;
     this.meteorTimer = this.levels[index].meteors?.every ?? 0;
@@ -402,6 +427,7 @@ export class Gameplay {
       this.effects.ring(this.tmp.set(p.x, 0.1, p.z), p.radius, false);
       this.effects.bloodDecal(p.x, p.z, 2.2, "goo");
       this.shakeAt(p.x, p.z, 0.3);
+      audio.play("pop", { x: p.x, z: p.z });
       if (Math.hypot(hero.x - p.x, hero.z - p.z) <= p.radius) this.hurtPlayer(Math.round(p.damage));
     }
   }
@@ -420,6 +446,7 @@ export class Gameplay {
     if (this.phase !== "combat") return false;
     const taken = this.stats.hurt(damage);
     if (taken <= 0) return false;
+    audio.play("hurt");
     this.hud.flashHurt();
     this.onShake(Math.min(0.45, 0.12 + taken / 80));
     this.tmp.copy(this.player.entity.getPosition());
@@ -431,6 +458,7 @@ export class Gameplay {
 
   private die(): void {
     this.phase = "dead";
+    audio.play("die");
     this.player.controlsEnabled = false;
     this.player.aimYawDeg = null;
     this.hud.openModal({
@@ -493,6 +521,7 @@ export class Gameplay {
       return;
     }
     this.choosing = true;
+    audio.play("levelup");
     this.app.timeScale = 0;
     this.player.aimYawDeg = null;
     this.showLevelUp();
@@ -649,6 +678,7 @@ export class Gameplay {
       t.opened[i] = true;
       this.campaign?.openExit?.(t.zone, i);
       const w = t.exits[i];
+      audio.play(BIOME_AUDIO[this.biome.id]?.gate ?? "gate_space", { x: w.x, z: w.z });
       this.effects.explosion(this.tmp.set(w.x, 0.4, w.z), Math.min(3, w.width / 2));
     }
     const along = (t.exit.axis === "z" ? position.z : position.x) - t.exit.at;
@@ -728,6 +758,10 @@ export class Gameplay {
     // Every kill pops: a quick bright flash at the body; big ones shake the screen, a boss's death
     // slows time for a moment.
     this.effects.killFlash(this.tmp.set(x, 0.55 * enemy.scale + enemy.lift, z), enemy.def.boss ? 2.4 : Math.min(1.2, 0.45 * enemy.scale));
+    const voice = voiceOf(enemy.id, enemy.def);
+    if (enemy.def.boss) audio.voice(voice, "roar", { x, z, rate: 0.8 });
+    else audio.voice(voice, "death", { x, z, rate: enemy.scale > 1.3 ? 0.8 : 1 });
+    if (enemy.def.deathFx === "blast") audio.play("explosion", { x, z, rate: enemy.def.boss ? 0.7 : 1 });
     if (enemy.def.boss) {
       this.onShake(0.9);
       this.effects.ring(this.tmp.set(x, 0.1, z), 6, true);
@@ -776,6 +810,7 @@ export class Gameplay {
 
   private collect(kind: PickupKind, value: number, upgrade: UpgradeId | null): void {
     const s = this.stats;
+    audio.play(kind === "cash" ? "cash" : kind === "health" ? "heal" : "upgrade");
     if (kind === "cash") s.cash += value;
     else if (kind === "health") {
       const before = s.hp;
@@ -787,6 +822,51 @@ export class Gameplay {
       // The pickup carries the upgrade it shows; reroll if that one got maxed out meanwhile.
       const pick = upgrade && availableUpgrades(s, "drop").some((u) => u.id === upgrade) ? upgrade : rollUpgrades(s, 1, "drop")[0]?.id;
       if (pick) this.announce(applyUpgrade(s, pick));
+    }
+  }
+
+  /** Starts loading the sounds this run can play: the map's, the weapons', its enemies' voices. */
+  private preloadSounds(types: Set<EnemyId>): void {
+    const sounds = new Set<string>([...COMMON_SOUNDS, ...footstepsOf(this.biome.ground), ...Object.keys(WEAPON_STATS).map((w) => `shot_${w}`)]);
+    for (const id of types) {
+      const def = ENEMIES[id];
+      const voice = voiceOf(id, def);
+      for (const kind of ["groan", "attack", "hit", "death"]) sounds.add(`${voice}_${kind}`);
+      if (def.boss) sounds.add(`roar_${voice}`);
+      if (def.deathFx === "burst") sounds.add("pop");
+    }
+    const biome = BIOME_AUDIO[this.biome.id];
+    if (biome) [biome.music, biome.gate, BOSS_MUSIC].forEach((s) => sounds.add(s));
+    audio.preload(sounds);
+  }
+
+  /** Footsteps, the horde's idle groans, and the boss theme while a boss is up. */
+  private updateSounds(dt: number, position: Vec3, combat: boolean): void {
+    // A step every stride of ground covered (teleports do not count).
+    const moved = Math.hypot(position.x - this.lastStep.x, position.z - this.lastStep.z);
+    this.lastStep.copy(position);
+    if (moved < 3 && this.stats.alive && this.phase !== "dead") {
+      this.stride += moved;
+      if (this.stride >= STEP_LENGTH * this.characterScale()) {
+        this.stride = 0;
+        audio.play(footstepAt(this.biome.ground, position.x, position.z));
+      }
+    }
+    if (combat) {
+      this.groanTimer -= dt;
+      if (this.groanTimer <= 0) {
+        this.groanTimer = GROAN_EVERY[0] + Math.random() * (GROAN_EVERY[1] - GROAN_EVERY[0]);
+        const alive = this.enemies.alive;
+        const e = alive.length ? alive[Math.floor(Math.random() * alive.length)] : null;
+        if (e && isAlive(e)) audio.voice(voiceOf(e.id, e.def), e.def.boss ? "roar" : "groan", { x: e.position.x, z: e.position.z, rate: e.def.boss ? 0.9 : 1 });
+      }
+    }
+    const boss = this.director.boss;
+    const up = combat && !!boss && isAlive(boss);
+    if (up !== this.bossMusic) {
+      this.bossMusic = up;
+      if (up) audio.voice(voiceOf(boss!.id, boss!.def), "roar", { x: boss!.position.x, z: boss!.position.z });
+      audio.music(up ? BOSS_MUSIC : BIOME_AUDIO[this.biome.id]?.music ?? null);
     }
   }
 
@@ -900,6 +980,7 @@ export class Gameplay {
     this.effects.update(dt);
     this.campaign?.update?.(dt, position);
     if (this.pops.length) this.updatePops(dt, position);
+    this.updateSounds(dt, position, combat);
     // Level-ups wait for combat (or the wave-complete pause) and a living hero.
     if (this.pendingLevelUps > 0 && !this.choosing && (combat || this.phase === "cleared" || this.phase === "travel") && this.stats.alive) this.openLevelUp();
     this.updateHud(dt);

@@ -38,3 +38,5 @@ assets-src/zombie-kit/
 assets-src/ruined-city/
 # CC0 raven (OpenGameArt): raw .blend and its Blender export local only; built into public/models/raven/
 assets-src/raven/
+# CC0 audio sources (Kenney, OpenGameArt): scripts/build-audio.mjs encodes them to public/audio/
+assets-src/audio/

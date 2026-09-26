@@ -1,4 +1,5 @@
 import { Vec3 } from "playcanvas";
+import { audio } from "../audio/Audio";
 import type { ScreenProjector } from "../camera/ScreenProjector";
 import { COMBAT_FX, TARGETING, type WeaponStats } from "./config";
 import type { Combat } from "./Combat";
@@ -94,6 +95,7 @@ export class PlayerGun {
     // Empty: reload at once. Partly empty with nothing to shoot for a moment: top up.
     if (this.reloading <= 0 && this.ammo < stats.magazine && (this.ammo <= 0 || this.idle > 1.5)) {
       this.reloading = stats.reloadSeconds;
+      audio.play("reload");
       // Shock Reload: a pulse around the hero as the magazine drops.
       const p = player.entity.getPosition();
       this.combat.shockwave(p.x, p.z);
@@ -228,6 +230,7 @@ export class PlayerGun {
     this.cooldown = 1 / stats.fireRate;
     this.ammo--;
     this.shotCount++;
+    audio.play(`shot_${this.weaponKey}`);
     const muzzle = weapon.muzzle(this.muzzle) ?? this.muzzle.copy(this.origin);
     const fx = stats.fx;
     this.effects.muzzleFlash(muzzle, fx?.muzzleSize ?? (stats.pellets > 1 ? 0.32 : 0.22), fx?.muzzle);

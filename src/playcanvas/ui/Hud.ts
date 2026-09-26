@@ -1,4 +1,5 @@
 import { Vec3, type Entity } from "playcanvas";
+import { audio } from "../audio/Audio";
 import type { ScreenProjector } from "../camera/ScreenProjector";
 import "@fontsource/barlow-condensed/latin-700.css";
 import "@fontsource/barlow-condensed/latin-800.css";
@@ -45,6 +46,9 @@ const CSS = `
 #hud .gear { pointer-events: auto; width: 26px; height: 26px; align-self: center; padding: 0; display: grid; place-items: center; color: var(--cream); opacity: 0.75; }
 #hud .gear svg { width: 15px; height: 15px; }
 #hud .gear:active { opacity: 1; }
+#hud .snd.off { opacity: 0.4; }
+#hud .snd.off .wave { display: none; }
+#hud .snd:not(.off) .mute { display: none; }
 /* Money: note icon + amount; pops, flashes and floats "+N" when cash comes in. */
 #hud .money { display: flex; align-items: center; gap: 6px; padding: 4px 9px 4px 7px; transform-origin: 100% 50%; }
 #hud .money svg { width: 19px; height: 13px; fill: var(--green); }
@@ -166,6 +170,9 @@ body:not(.debug-on) #debug { display: none; }
 
 /** Settings cog: a dashed ring makes the teeth. */
 const GEAR_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="8.2" stroke-width="3.2" stroke-dasharray="3.2 3.24"/><circle cx="12" cy="12" r="5.6" stroke-width="2.4"/></svg>`;
+
+/** Speaker: waves when on, a cross when muted. */
+const SOUND_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5H7L12 5V19L7 14.5H3Z" fill="currentColor"/><path class="wave" d="M15.5 9A4.5 4.5 0 0 1 15.5 15M18.5 6.5A8 8 0 0 1 18.5 17.5"/><path class="mute" d="M16 9.5L21 14.5M21 9.5L16 14.5"/></svg>`;
 
 /** Banknote: a frame with a round seal in the middle. */
 const NOTE_SVG = `<svg viewBox="0 0 30 20" aria-hidden="true"><path fill-rule="evenodd" d="M1 2H29V18H1Z M3.5 4.5V15.5H26.5V4.5Z M15 6.2A3.8 3.8 0 1 1 14.99 6.2Z M5.5 8.5H8.5V11.5H5.5Z M21.5 8.5H24.5V11.5H21.5Z"/></svg>`;
@@ -291,7 +298,8 @@ export class Hud {
         <div class="plate xp"><span class="cap"></span><div class="bar"><i></i></div></div>
         <div class="row">
           <div class="plate ammo">${bulletSvg}<span class="cap"></span><span class="count"><b></b><small></small></span></div>
-          <button type="button" class="plate gear" aria-label="settings">${GEAR_SVG}</button>
+          <button type="button" class="plate gear snd" aria-label="sound">${SOUND_SVG}</button>
+          <button type="button" class="plate gear cog" aria-label="settings">${GEAR_SVG}</button>
         </div>
       </div>
       <div class="corner tr">
@@ -347,7 +355,17 @@ export class Hud {
       this.nextUpgrade();
     });
     if (new URLSearchParams(location.search).get("debug") === "1") document.body.classList.add("debug-on");
-    q(".gear").addEventListener("click", () => document.body.classList.toggle("debug-on"));
+    q(".cog").addEventListener("click", () => document.body.classList.toggle("debug-on"));
+    const sound = q(".snd");
+    sound.classList.toggle("off", audio.muted);
+    sound.addEventListener("click", () => {
+      audio.setMuted(!audio.muted);
+      sound.classList.toggle("off", audio.muted);
+    });
+    // Every modal button clicks.
+    this.overlay.addEventListener("click", (e) => {
+      if ((e.target as Element).closest("button")) audio.play("ui");
+    });
     for (let i = 0; i < 24; i++) {
       const el = document.createElement("div");
       el.className = "dmg";

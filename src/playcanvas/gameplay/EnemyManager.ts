@@ -20,6 +20,8 @@ export interface BodySource {
  */
 export type EnemyState = "move" | "attack" | "telegraph" | "charge" | "recover" | "throw" | "slam" | "cast" | "dive" | "boss" | "dying" | "dead";
 type State = EnemyState;
+/** States that start an attack (EnemyManager.onAttack: the attack cry). */
+const ATTACK_STATES = new Set<State>(["attack", "telegraph", "throw", "cast", "slam"]);
 
 /** Alive = spawned and not dying / dead. */
 export function isAlive(e: Enemy): boolean {
@@ -119,6 +121,8 @@ export class EnemyManager {
 
   /** Called when an enemy lands a melee (or charge / slam) hit on the player. */
   onPlayerHit: (damage: number, from: Enemy) => void = () => {};
+  /** Called when an enemy starts an attack (melee wind-up, charge / dive telegraph, throw, cast, slam). */
+  onAttack: (enemy: Enemy) => void = () => {};
   /** Called when an enemy dies. */
   onDeath: (enemy: Enemy) => void = () => {};
   /** Called for a boss stranded somewhere unreachable (move it); regular enemies are recycled. */
@@ -446,6 +450,7 @@ export class EnemyManager {
     enemy.state = state;
     enemy.stateTime = 0;
     enemy.hitDone = false;
+    if (ATTACK_STATES.has(state)) this.onAttack(enemy);
   }
 
   update(dt: number, player: Vec3, playerAlive: boolean): void {

@@ -10,6 +10,7 @@ import {
   FOG_NONE,
   type RenderComponent,
 } from "playcanvas";
+import { audio } from "./audio/Audio";
 import { CameraController } from "./camera/CameraController";
 import { Gameplay } from "./gameplay/Gameplay";
 import { CAMERA, CHARACTER, CHARACTERS, DEBUG, DEFAULT_WEAPON, PLAYER, WEAPONS, type CharacterId, type CharacterModel, type WeaponId } from "./config";
@@ -83,6 +84,7 @@ export class Game {
 
   constructor(private readonly options: GameOptions) {
     this.biome = BIOMES[options.biome];
+    audio.init(import.meta.env.BASE_URL);
     this.app = new Application(options.canvas, {
       graphicsDeviceOptions: { antialias: true, alpha: false, powerPreference: "high-performance" },
     });
@@ -259,6 +261,8 @@ export class Game {
     const runBlend = Math.min(1, this.player.speed / PLAYER.runSpeed);
     this.weaponHands?.update(this.weapons, aimWeight, this.player.yawDeg, runBlend);
     // Combat after the hands are posed (tracers start at the posed muzzle).
+    const hero = this.player.entity.getPosition();
+    audio.setListener(hero.x, hero.z, this.camera.yawDeg);
     this.gameplay?.update(dt);
     this.ambient?.update(dt, this.player.entity.getPosition());
     this.lava?.update(dt);
