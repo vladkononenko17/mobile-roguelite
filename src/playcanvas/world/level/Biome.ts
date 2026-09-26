@@ -1,5 +1,5 @@
 import type { Entity } from "playcanvas";
-import type { LightingSpec, WeaponId } from "../../config";
+import type { GroundSurface, LightingSpec, WeaponId } from "../../config";
 import type { DifficultyDef } from "../../gameplay/config";
 import type { WaveDef } from "../../gameplay/config";
 import type { AmbientEmitter } from "../AmbientFx";
@@ -40,6 +40,8 @@ export interface Biome<Id extends string = string> {
   };
   lighting: LightingSpec;
   ground: GroundSpec;
+  /** Walkable models that sound unlike the ground under them (road tiles on sand): footsteps use their surface. */
+  stepAreas?: { x0: number; z0: number; x1: number; z1: number; surface: GroundSurface }[];
   bounds: LevelBounds;
   /** Where the hero stands while the game loads (and in the ?sandbox=1 movement sandbox). */
   spawn: Placement2D;

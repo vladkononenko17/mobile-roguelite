@@ -22,9 +22,16 @@ const STEP: Partial<Record<GroundSurface, string>> = {
 
 const inside = (r: { x0: number; z0: number; x1: number; z1: number }, x: number, z: number) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1;
 
-/** The footstep sound for the ground at (x, z): the top pad, else the area, else the base. */
-export function footstepAt(ground: GroundSpec, x: number, z: number): string {
+/** A map's ground and its walkable models with their own surface (Biome.stepAreas). */
+interface StepGround {
+  ground: GroundSpec;
+  stepAreas?: { x0: number; z0: number; x1: number; z1: number; surface: GroundSurface }[];
+}
+
+/** The footstep sound at (x, z): a step area (road tiles...), else the top pad, else the area, else the base. */
+export function footstepAt({ ground, stepAreas = [] }: StepGround, x: number, z: number): string {
   let surface: GroundSurface | undefined;
+  for (let i = stepAreas.length - 1; i >= 0 && !surface; i--) if (inside(stepAreas[i], x, z)) surface = stepAreas[i].surface;
   for (let i = ground.pads.length - 1; i >= 0 && !surface; i--) if (inside(ground.pads[i], x, z)) surface = ground.pads[i].surface;
   const areas = ground.areas ?? [];
   for (let i = areas.length - 1; i >= 0 && !surface; i--) if (inside(areas[i], x, z)) surface = areas[i].surface ?? ground.base;
@@ -32,8 +39,8 @@ export function footstepAt(ground: GroundSpec, x: number, z: number): string {
 }
 
 /** Every footstep sound a map can use (for preloading). */
-export function footstepsOf(ground: GroundSpec): Set<string> {
-  const surfaces = [ground.base, ...ground.pads.map((p) => p.surface), ...(ground.areas ?? []).map((a) => a.surface ?? ground.base)];
+export function footstepsOf({ ground, stepAreas = [] }: StepGround): Set<string> {
+  const surfaces = [ground.base, ...stepAreas.map((a) => a.surface), ...ground.pads.map((p) => p.surface), ...(ground.areas ?? []).map((a) => a.surface ?? ground.base)];
   return new Set(surfaces.map((s) => STEP[s] ?? "step_concrete"));
 }
 

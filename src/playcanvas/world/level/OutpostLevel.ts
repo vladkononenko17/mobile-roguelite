@@ -148,6 +148,13 @@ type Placement = [OutpostModel, number, number, number?, SpawnOptions?];
  * to a few centimetres so the hero walks on it. */
 const ROAD_TILE = 6.6;
 const ROAD_SCALE: SpawnOptions = { scale: [ROAD_TILE / 12, 0.12, ROAD_TILE / 12] };
+/** The asphalt of the outpost's road tiles (see buildOutpost), for footsteps: half the road's width. */
+const ROAD_HALF = 2.9;
+const ROAD_STEPS = [
+  // North-south from the T junction to the south fence; west to the dead end, east to the exit.
+  { x0: -ROAD_HALF, z0: -ROAD_HALF, x1: ROAD_HALF, z1: 6.5 * ROAD_TILE, surface: "asphalt" as const },
+  { x0: -3.5 * ROAD_TILE, z0: -ROAD_HALF, x1: 3.5 * ROAD_TILE, z1: ROAD_HALF, surface: "asphalt" as const },
+];
 
 interface WallRunOptions {
   /** Models cycled along the run; "" leaves a gap (broken wall). */
@@ -430,6 +437,7 @@ export const OUTPOST_BIOME: Biome<OutpostModel> = {
   kit: { url: OUTPOST.url, models: OUTPOST_MODELS, brightness: OUTPOST.brightness, batchCellMetres: OUTPOST.batchCellMetres },
   lighting: LIGHTING,
   ground: GROUND_SPEC,
+  stepAreas: ROAD_STEPS,
   bounds: BOUNDS,
   spawn: SPAWN,
   // Every wave starts in the open main yard.
