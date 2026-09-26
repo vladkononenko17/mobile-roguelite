@@ -477,7 +477,9 @@ function rng(seed: number): () => number {
 function buildCity(kit: ModelKit<OutpostModel>, root: Entity, place: Place, placeAll: (list: Placement[]) => void, wallRun: WallRun, edge: Edge): void {
   void kit; void root;
   const random = rng(4711);
-  const STREET: SpawnOptions = { scale: [1, 0.25, 1] };
+  // Street tiles lifted clear of the ground and its patches (flattened to the ground they
+  // z-fought with them - blinking); the hero's feet sink a few centimetres, unseen.
+  const STREET: SpawnOptions = { scale: [1, 0.5, 1], y: 0.05 };
   const street = (id: OutpostModel, x: number, z: number, yaw: number) => place(id, x, z, yaw, STREET);
 
   // ------------------------------------------------------------------ streets (8 m tiles)
@@ -502,7 +504,7 @@ function buildCity(kit: ModelKit<OutpostModel>, root: Entity, place: Place, plac
   }
   placeAll([
     ["zkStreetLight", -GAP - 1.2, -47, 90], ["zkStreetLight", GAP + 1.2, -129, -90],
-    ["zkCone", 2.4, -45, 0], ["zkCone", -2.8, -50.5, 40], ["zkTrash", 3.1, -53, 0], ["zkBlood2", -1.2, -48, 30],
+    ["zkCone", 2.4, -45, 0], ["zkCone", -2.8, -50.5, 40], ["zkTrash", 3.1, -53, 0], ["zkBlood2", -1.2, -48, 30, { y: 0.12 }],
     ["zkTownSign", 0, -131, 0, { scale: 1.1 }],
   ]);
 
@@ -536,7 +538,7 @@ function buildCity(kit: ModelKit<OutpostModel>, root: Entity, place: Place, plac
     ["zkTrafficLight", -5.2, -79, 0], ["zkTrafficLight", 5.2, -89, 180], ["zkTrafficLight2", 5.2, -79, -90], ["zkTrafficLight2", -5.2, -89, 90],
     ["vSports", -2.6, -71, 28], ["vTruck", 15, -86.5, 97], ["vPickup", -17, -82.5, 72, { tiltZ: 6 }], ["vSports", 1.8, -103, 200],
     ["zkHydrant", -5.4, -66, 0], ["zkHydrant", 5.4, -101, 0],
-    ["zkBlood", 11, -83, 0], ["zkBlood2", -1, -94, 50], ["zkBlood", -20, -89, 120],
+    ["zkBlood", 11, -83, 0, { y: 0.12 }], ["zkBlood2", -1, -94, 50, { y: 0.12 }], ["zkBlood", -20, -89, 120, { y: 0.12 }],
   ]);
   for (const z of [-62, -110]) for (const s of [-1, 1]) place("zkStreetLight", s * 5.6, z, s > 0 ? -90 : 90);
 
@@ -618,7 +620,7 @@ function buildCity(kit: ModelKit<OutpostModel>, root: Entity, place: Place, plac
     ["nTreeOak", -21, -141, 0], ["nTreeFat", 20, -142, 60], ["nTreeOak", -22, -190, 30], ["nTree", 14, -191, 0],
     ["nBushDetailed", -19, -143, 0], ["nBush", 18, -189, 0],
     // The square itself stays open: blood, a cone, weeds.
-    ["zkBlood", -4, -160, 0], ["zkBlood2", 7, -174, 80], ["zkCone", 9, -150, 0], ["zkTrash", -9, -182, 0],
+    ["zkBlood", -4, -160, 0, { y: 0.03 }], ["zkBlood2", 7, -174, 80, { y: 0.03 }], ["zkCone", 9, -150, 0], ["zkTrash", -9, -182, 0],
   ]);
   // Cover round the square's edge: a flipped car, barrier lines, a crate stack; bushes on the walls.
   placeAll([
@@ -636,12 +638,19 @@ function buildCity(kit: ModelKit<OutpostModel>, root: Entity, place: Place, plac
   // ------------------------------------------------------------------ the skyline
   // Ruined towers either side of the city and beyond the plaza (never south of a zone, where they
   // would stand between the camera and the hero). Billboards on the rubble lots.
-  const towers: [OutpostModel, number, number, number][] = [
-    ["bld1", -50, -66, 0], ["bld5", -50, -96, 90], ["bld2", -52, -124, 0], ["bld6", -54, -160, 90], ["bld1", -50, -192, 180],
-    ["bld6", 54, -70, 90], ["bld7", 50, -104, 0], ["bld5", 50, -134, 180], ["bld2", 52, -166, 90], ["bld5", 50, -198, 0],
-    ["bld6", -28, -226, 0], ["bld1", 30, -224, 90],
+  // Each side tower's face starts right behind the zone wall (the portrait view reaches only ~8 m
+  // past the hero, so towers farther out were never seen from the play).
+  const FOOT: Partial<Record<OutpostModel, [number, number]>> = { bld1: [20, 20], bld2: [20, 30], bld5: [20, 20], bld6: [32, 20], bld7: [20, 25] };
+  const sideTowers: [OutpostModel, -1 | 1, number, number, number][] = [
+    ["bld1", -1, -66, 0, STREETS.x1], ["bld5", -1, -98, 90, STREETS.x1], ["bld2", -1, -128, 0, PLAZA.x1], ["bld6", -1, -162, 90, PLAZA.x1], ["bld1", -1, -190, 180, PLAZA.x1],
+    ["bld6", 1, -70, 90, STREETS.x1], ["bld7", 1, -104, 0, STREETS.x1], ["bld5", 1, -130, 180, PLAZA.x1], ["bld2", 1, -164, 90, PLAZA.x1], ["bld5", 1, -192, 0, PLAZA.x1],
   ];
-  for (const [id, x, z, yaw] of towers) place(id, x, z, yaw, { noCollider: true });
+  for (const [id, s, z, yaw, edgeX] of sideTowers) {
+    const [w, d] = FOOT[id]!;
+    const half = (yaw % 180 === 0 ? w : d) / 2;
+    place(id, s * (edgeX + 1.5 + half), z, yaw, { noCollider: true });
+  }
+  for (const [id, x, z, yaw] of [["bld6", -28, -226, 0], ["bld1", 30, -224, 90]] as [OutpostModel, number, number, number][]) place(id, x, z, yaw, { noCollider: true });
   // The tower that fell across the far end of the plaza.
   place("bld7", 2, -222, 70, { tiltX: 62, y: -4, noCollider: true });
   for (const [x, z] of [[-34, -84], [34, -84], [-36, -116], [36, -60], [-34, -175], [34, -150]]) place("wreckage", x, z, random() * 360, { noCollider: true, scale: 0.8 + random() * 0.5 });
