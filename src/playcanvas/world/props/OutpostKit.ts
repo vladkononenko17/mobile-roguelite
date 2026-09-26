@@ -123,15 +123,16 @@ export const OUTPOST_MODELS = {
   vTruck: box(0.92),
   vPickupArmored: box(0.92),
   vTruckArmored: box(0.92),
-  // Majadroid ruined skyscrapers (backdrop, outside the play zones), billboards, wreckage
-  bld1: decor,
-  bld2: decor,
-  bld5: decor,
-  bld6: decor,
-  bld7: decor,
-  billboards: decor,
+  // Majadroid ruined skyscrapers (backdrop, outside the play zones; no shadows: they would darken
+  // whole streets and cost a shadow pass), billboards, wreckage
+  bld1: clutter,
+  bld2: clutter,
+  bld5: clutter,
+  bld6: clutter,
+  bld7: clutter,
+  billboards: clutter,
   wreckage: clutter,
-  fireStairs: decor,
+  fireStairs: clutter,
   // Kenney nature: the city grown over
   nTreeOak: circle(0.35),
   nTree: circle(0.3),
@@ -142,7 +143,6 @@ export const OUTPOST_MODELS = {
   nGrass: clutter,
   nGrassLeafs: clutter,
   nLog: box(0.9),
-  arBush: clutter,
 } satisfies Record<string, KitModelDef>;
 
 export type OutpostModel = keyof typeof OUTPOST_MODELS;

@@ -491,10 +491,11 @@ function buildCity(kit: ModelKit<OutpostModel>, root: Entity, place: Place, plac
   for (const x of [-40, -32, -24, -16, -8, 8, 16, 24, 32, 40]) street(crack[n++ % crack.length], x, -84, 90);
 
   // ------------------------------------------------------------------ connectors
-  // Broken walls either side of the two short streets (low: the camera looks over them).
+  // Broken walls either side of the two short streets (low: the camera looks over them). The city
+  // uses the light wall modules (the brick and holed ones are thousands of triangles each).
   for (const [z0, z1] of [[-40, -56], [-120, -136]]) {
     for (const s of [-1, 1]) {
-      wallRun(s * (GAP + 0.6), z0, s * (GAP + 0.6), z1, { pattern: ["wall", "wallHole", "wallBrick", "wall"], flip: s > 0, columnsEvery: 2 });
+      wallRun(s * (GAP + 0.6), z0, s * (GAP + 0.6), z1, { pattern: ["wall", "wall", "wallWindow2", "wall"], flip: s > 0, columnsEvery: 2 });
       place("nBush", s * (GAP + 2.2), (z0 + z1) / 2 + random() * 4, random() * 360);
       place("nGrass", s * (GAP + 1.4), z0 - 3 - random() * 8, random() * 360);
     }
@@ -508,15 +509,15 @@ function buildCity(kit: ModelKit<OutpostModel>, root: Entity, place: Place, plac
   // ------------------------------------------------------------------ THE DEAD STREETS
   const q = STREETS;
   // Zone edges: rubble, wrecks and walls (low south, taller north), invisible walls on the lines.
-  wallRun(q.x0, q.z1, -GAP, q.z1, { pattern: ["wall", "wallBrick", "wallHole", "wall", "", "wallBoarded", "wall"], columnsEvery: 2 });
-  wallRun(GAP, q.z1, q.x1, q.z1, { pattern: ["wall", "wallWindow", "wall", "wallBrick", "", "wall", "wallHole"], columnsEvery: 2 });
-  wallRun(q.x0, q.z0, -GAP, q.z0, { rows: 2, pattern: ["wallConcreteMetal", "wall", "wallBrick", "wall"], upper: ["wall", "", "wallWindow", ""], columnsEvery: 2, flip: true });
-  wallRun(GAP, q.z0, q.x1, q.z0, { rows: 2, pattern: ["wall", "wallBrick", "wallConcreteMetal", "wall"], upper: ["", "wallWindow", "", "wall"], columnsEvery: 2, flip: true });
+  wallRun(q.x0, q.z1, -GAP, q.z1, { pattern: ["wall", "wallWindow2", "wall", "wall", "", "wallBoarded", "wall"], columnsEvery: 2 });
+  wallRun(GAP, q.z1, q.x1, q.z1, { pattern: ["wall", "wallWindow", "wall", "wallWindow2", "", "wall", "wall"], columnsEvery: 2 });
+  wallRun(q.x0, q.z0, -GAP, q.z0, { rows: 2, pattern: ["wallConcreteMetal", "wall", "wallWindow2", "wall"], upper: ["wall", "", "wallWindow", ""], columnsEvery: 2, flip: true });
+  wallRun(GAP, q.z0, q.x1, q.z0, { rows: 2, pattern: ["wall", "wallWindow2", "wallConcreteMetal", "wall"], upper: ["", "wallWindow", "", "wall"], columnsEvery: 2, flip: true });
   for (const s of [-1, 1]) {
     // Side edges: ruined shopfronts, rubble mounds; the east-west street barricaded where it leaves.
     const x = s * q.x1;
-    wallRun(x, q.z1, x, -88.5, { pattern: ["wall", "wallWindow2", "wallBoarded", "wall", "wallHole", "wallWindow"], flip: s < 0, columnsEvery: 2 });
-    wallRun(x, -79.5, x, q.z0, { pattern: ["wallBrick", "wall", "wallWindow", "", "wall", "wallBoarded", "wall"], flip: s < 0, columnsEvery: 2 });
+    wallRun(x, q.z1, x, -88.5, { pattern: ["wall", "wallWindow2", "wallBoarded", "wall", "wall", "wallWindow"], flip: s < 0, columnsEvery: 2 });
+    wallRun(x, -79.5, x, q.z0, { pattern: ["wallWindow2", "wall", "wallWindow", "", "wall", "wallBoarded", "wall"], flip: s < 0, columnsEvery: 2 });
     place(s < 0 ? "vPickupArmored" : "vTruckArmored", s * (q.x1 + 3), -84, 90 + random() * 20);
     place("zkBarrier", s * (q.x1 - 1.5), -82, 90);
     place("zkBarrier", s * (q.x1 - 1.5), -86, 90);
@@ -541,8 +542,8 @@ function buildCity(kit: ModelKit<OutpostModel>, root: Entity, place: Place, plac
 
   // South-west: a collapsed storefront - its shell open to the street, furniture dragged out.
   wallRun(-28, -60, -12, -60, { pattern: ["wallWindow", "wall", "wallWindow2", "wall", "wallBoarded", "wall", "wallWindow", "wall"], columnsEvery: 2, flip: true });
-  wallRun(-28, -60, -28, -76, { pattern: ["wall", "wallBrick", "wallHole", "wall"], columnsEvery: 2 });
-  wallRun(-12, -60, -12, -66, { pattern: ["wall", "wallHole", "wall"], flip: true, columnsEvery: 3 });
+  wallRun(-28, -60, -28, -76, { pattern: ["wall", "wallWindow2", "wall", "wall"], columnsEvery: 2 });
+  wallRun(-12, -60, -12, -66, { pattern: ["wall", "wall", "wall"], flip: true, columnsEvery: 3 });
   placeAll([
     ["zkCouch", -21, -64, 20], ["crate", -25.5, -63, 10], ["crate", -24.6, -62.5, -8, { y: 1.15 }], ["zkTrash2", -14, -67.5, 0],
     ["zkTrash", -15.2, -69, 40], ["cardboard", -18.5, -70, 15], ["cart", -9.5, -72, 60], ["zkPalletBroken", -23, -73, 30],
@@ -566,13 +567,13 @@ function buildCity(kit: ModelKit<OutpostModel>, root: Entity, place: Place, plac
     ["zkBarrier", 9.5, -93, 0], ["zkBarrier", 13, -93.4, 8], ["zkBarrier2", 17, -93, -4], ["sandbags", 11, -101, 90],
     ["razorWire", 20.5, -104, 0], ["floodlight", 27, -104, -90], ["zkBarrel", 21, -99, 0], ["zkBarrel", 21.8, -99.6, 0], ["crate", 12.5, -109, 10],
   ]);
-  // Street trees on the pavements, bushes grown along every wall, debris in the corners.
-  for (const z of [-62, -74, -96, -108, -116]) for (const s of [-1, 1]) if (random() < 0.8) place(random() < 0.5 ? "nTreeOak" : "nTreeFat", s * (6.8 + random()), z + random() * 3, random() * 360, { scale: 0.8 + random() * 0.4 });
+  // Bushes grown along every wall, debris in the corners (trees only at the edges: they would hide
+  // the fight from the camera).
   const hedge = (ax: number, az: number, bx: number, bz: number) => {
     const len = Math.hypot(bx - ax, bz - az);
     for (let d = 1; d < len; d += 2.4 + random() * 2.5) {
       const t = d / len, x = ax + (bx - ax) * t + (random() - 0.5), z = az + (bz - az) * t + (random() - 0.5);
-      place(random() < 0.5 ? "arBush" : random() < 0.5 ? "nBush" : "nBushDetailed", x, z, random() * 360, { scale: 0.8 + random() * 0.6 });
+      place(random() < 0.5 ? "nBush" : "nBushDetailed", x, z, random() * 360, { scale: 0.9 + random() * 0.7 });
     }
   };
   hedge(q.x0 + 1.4, q.z1 - 1.5, q.x0 + 1.4, q.z0 + 1.5);
@@ -597,10 +598,10 @@ function buildCity(kit: ModelKit<OutpostModel>, root: Entity, place: Place, plac
 
   // ------------------------------------------------------------------ THE PLAZA
   const p = PLAZA;
-  wallRun(p.x0, p.z1, -GAP, p.z1, { pattern: ["wall", "wallHole", "wallBrick", "wall", "", "wall"], columnsEvery: 2 });
-  wallRun(GAP, p.z1, p.x1, p.z1, { pattern: ["wall", "", "wallBrick", "wallWindow", "wall", "wallHole"], columnsEvery: 2 });
-  wallRun(p.x0, p.z0, p.x1, p.z0, { rows: 2, pattern: ["wallConcreteMetal", "wall", "wallBrick", "wall", "wallConcreteMetal"], upper: ["wall", "", "wallWindow", "", "wall", ""], columnsEvery: 3, flip: true });
-  for (const s of [-1, 1]) wallRun(s * p.x1, p.z1, s * p.x1, p.z0, { pattern: ["wall", "wallWindow", "wallBrick", "", "wall", "wallBoarded"], flip: s < 0, columnsEvery: 2 });
+  wallRun(p.x0, p.z1, -GAP, p.z1, { pattern: ["wall", "wall", "wallWindow2", "wall", "", "wall"], columnsEvery: 2 });
+  wallRun(GAP, p.z1, p.x1, p.z1, { pattern: ["wall", "", "wallWindow2", "wallWindow", "wall", "wall"], columnsEvery: 2 });
+  wallRun(p.x0, p.z0, p.x1, p.z0, { rows: 2, pattern: ["wallConcreteMetal", "wall", "wallWindow2", "wall", "wallConcreteMetal"], upper: ["wall", "", "wallWindow", "", "wall", ""], columnsEvery: 3, flip: true });
+  for (const s of [-1, 1]) wallRun(s * p.x1, p.z1, s * p.x1, p.z0, { pattern: ["wall", "wallWindow", "wallWindow2", "", "wall", "wallBoarded"], flip: s < 0, columnsEvery: 2 });
   edge((p.x0 - GAP) / 2, p.z1 + 0.5, -GAP - p.x0, 1);
   edge((p.x1 + GAP) / 2, p.z1 + 0.5, p.x1 - GAP, 1);
   edge(0, p.z0 - 0.5, p.x1 - p.x0 + 2, 1);

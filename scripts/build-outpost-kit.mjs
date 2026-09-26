@@ -125,7 +125,6 @@ const KN = "assets-src/kenney/nature/Models/GLTF format";
 /** Kenney's bright greens pulled towards a dusty olive (less blue). */
 const OLIVE = [1.0, 0.95, 0.45];
 const CITY = {
-  arBush: [`${AR}/into-the-wild/bush_1.glb`, { grade: [0.9, 0.9] }],
   zkStreet: [`${ZK}/Street_Straight.gltf`, { textured: true }],
   zkStreetCrack: [`${ZK}/Street_Straight_Crack1.gltf`, { textured: true }],
   zkStreetCrack2: [`${ZK}/Street_Straight_Crack2.gltf`, { textured: true }],
@@ -168,10 +167,10 @@ const CITY = {
   billboards: [`${RC}/billboards-4-types.glb`, { textured: true }],
   wreckage: [`${RC}/wreckage-3-types.glb`, { textured: true, scale: 0.5 }],
   fireStairs: [`${RC}/fire-stairs.glb`, { grade: [0.6, 0.8] }],
-  nTreeOak: [`${KN}/tree_oak_dark.glb`, { scale: 5, grade: [0.8, 0.5], tint: OLIVE }],
-  nTree: [`${KN}/tree_default_dark.glb`, { scale: 4.5, grade: [0.8, 0.5], tint: OLIVE }],
-  nTreeFat: [`${KN}/tree_fat_darkh.glb`, { scale: 5, grade: [0.8, 0.5], tint: OLIVE }],
-  nTreeTall: [`${KN}/tree_tall_dark.glb`, { scale: 5, grade: [0.8, 0.5], tint: OLIVE }],
+  nTreeOak: [`${KN}/tree_oak_dark.glb`, { scale: 3.6, grade: [0.8, 0.5], tint: OLIVE }],
+  nTree: [`${KN}/tree_default_dark.glb`, { scale: 3.2, grade: [0.8, 0.5], tint: OLIVE }],
+  nTreeFat: [`${KN}/tree_fat_darkh.glb`, { scale: 3.8, grade: [0.8, 0.5], tint: OLIVE }],
+  nTreeTall: [`${KN}/tree_tall_dark.glb`, { scale: 3.6, grade: [0.8, 0.5], tint: OLIVE }],
   nBush: [`${KN}/plant_bushLarge.glb`, { scale: 5, grade: [0.8, 0.5], tint: OLIVE }],
   nBushDetailed: [`${KN}/plant_bushDetailed.glb`, { scale: 4, grade: [0.8, 0.5], tint: OLIVE }],
   nGrass: [`${KN}/grass_large.glb`, { scale: 4, grade: [0.8, 0.5], tint: OLIVE }],
@@ -260,7 +259,7 @@ const SLOPPY = {
   car: 0.55, spikeBarricade: 0.5, floodlight: 0.45, tyreStack: 0.5,
   // The dead city: heavy vehicles and the skyscrapers (backdrop, seen from far).
   vPickup: 0.4, vSports: 0.4, vTruck: 0.4, vPickupArmored: 0.3, vTruckArmored: 0.3, zkCouch: 0.4, zkTrash2: 0.4,
-  bld1: 0.5, bld2: 0.5, bld5: 0.5, bld6: 0.5, bld7: 0.6, billboards: 0.15, fireStairs: 0.4, zkWheels: 0.4, zkBarrel: 0.5, zkHydrant: 0.5,
+  bld1: 0.25, bld2: 0.25, bld5: 0.25, bld6: 0.25, bld7: 0.3, billboards: 0.15, fireStairs: 0.4, zkWheels: 0.4, zkBarrel: 0.5, zkHydrant: 0.5,
 };
 await MeshoptSimplifier.ready;
 for (const [id, ratio] of Object.entries(SLOPPY)) {

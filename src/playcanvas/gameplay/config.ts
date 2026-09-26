@@ -532,11 +532,12 @@ export function xpToNext(level: number): number {
 export const SPAWNING = {
   /** Groups appear just outside the visible area (so they walk in soon, never pop in on screen): a
    * spawn point is the first point along a random direction that is off-screen by `screenMargin` px,
-   * pushed out a further `extra` metres. Farther than `maxDistance`, the direction is skipped. */
+   * pushed out a further `extra` metres. Farther than `maxDistance`, the direction is skipped (scaled
+   * with the camera: at 19 m the screen edge ahead is ~25 m away). */
   screenMargin: 30,
   extra: [0.6, 2.8] as [number, number],
-  minDistance: 4.5,
-  maxDistance: 24,
+  minDistance: 5.6,
+  maxDistance: 32,
   /** Candidates tried per group before giving up this tick. */
   attempts: 14,
   /** Groups scatter this far around their centre. */

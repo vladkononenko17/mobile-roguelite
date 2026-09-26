@@ -14,8 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
-import { dedup, prune, quantize, simplify, weld } from "@gltf-transform/functions";
-import { MeshoptSimplifier } from "meshoptimizer";
+import { dedup, prune } from "@gltf-transform/functions";
 import sharp from "sharp";
 
 const ROOT = process.env.REPO_ROOT ?? path.resolve(import.meta.dirname, "..");
@@ -58,7 +57,7 @@ for (const c of CREATURES) {
   for (const anim of root.listAnimations()) anim.setName(anim.getName().replace(/^.*\|/, ""));
   // Only the clips the game plays (the kit's emotes and jumps would double the file).
   for (const anim of root.listAnimations()) if (!KEEP.has(anim.getName())) anim.dispose();
-  await doc.transform(prune(), dedup(), weld(), simplify({ simplifier: MeshoptSimplifier, ratio: 0.5, error: 0.004 }), quantize());
+  await doc.transform(prune(), dedup());
   const outPath = path.join(outDir, `${c.name}.glb`);
   await io.write(outPath, doc);
   console.log(`wrote ${outPath} (${(fs.statSync(outPath).size / 1e3).toFixed(0)} KB), textures ${textures.length}, clips: ${root.listAnimations().map((a) => a.getName()).join(", ")}, skins: ${skinIds.join(", ")}`);
