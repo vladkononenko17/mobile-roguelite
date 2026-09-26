@@ -385,6 +385,10 @@ export const GROUND = {
     hangardeck: { base: "#3f4247", dark: "#35383d", light: "#4a4d53", speckDark: "#2a2c30", speckLight: "#6a6250", specks: 350, slabs: 3, seam: "#23252a" },
     /** The meteor: grey-violet rock dust, flecked with crystal glints. */
     asteroid: { base: "#4d4852", dark: "#423e47", light: "#58535e", speckDark: "#35313a", speckLight: "#9a7fd0", specks: 1000 },
+    /** The dead city: cracked asphalt and pavement, grey with tar seams. */
+    asphalt: { base: "#5a5856", dark: "#504e4c", light: "#63615e", speckDark: "#403e3c", speckLight: "#6e6b66", specks: 700, slabs: 3, seam: "#3c3a38" },
+    /** The dead city taken back: moss and weeds over the pavement. */
+    overgrowth: { base: "#5b6343", dark: "#4f573a", light: "#66704b", speckDark: "#3f4630", speckLight: "#7a8456", specks: 900 },
     /** ORION station: off-white deck panels (2 m) with graphite seams. */
     stationdeck: { base: "#a9adb3", dark: "#9fa3a9", light: "#b2b6bc", speckDark: "#8a8f96", speckLight: "#bcc0c5", specks: 160, slabs: 5, seam: "#6a6f76" },
     /** ORION docking bay: mid-grey composite deck, big panels. */

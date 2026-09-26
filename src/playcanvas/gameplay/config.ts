@@ -5,6 +5,7 @@ import type { WeaponId } from "../config";
 import type { UpgradeCategory, UpgradeIcon, UpgradeRarity } from "../ui/UpgradeIcons";
 import { HELL_ENEMIES, HELL_SKINS, HELL_VISUALS, type HellEnemyId, type HellSkinId, type HellVisualId } from "./hellConfig";
 import { SPACE_ENEMIES, SPACE_SKINS, SPACE_VISUALS, type SpaceEnemyId, type SpaceSkinId, type SpaceVisualId } from "./spaceConfig";
+import { WASTELAND_ENEMIES, WASTELAND_SKINS, WASTELAND_VISUALS, type WastelandEnemyId, type WastelandSkinId, type WastelandVisualId } from "./wastelandConfig";
 
 /* ------------------------------------------------------------------------------------------------
  * Player combat
@@ -109,7 +110,7 @@ export const WEAPON_CARDS: Partial<Record<WeaponId, { text: string; stats: strin
  * Enemies
  * ---------------------------------------------------------------------------------------------- */
 
-export type EnemyId = "walker" | "runner" | "thrower" | "brute" | "charger" | "tank" | HellEnemyId | SpaceEnemyId;
+export type EnemyId = "walker" | "runner" | "thrower" | "brute" | "charger" | "tank" | HellEnemyId | SpaceEnemyId | WastelandEnemyId;
 /** chaser / charger / thrower / tank: melee walkers with specials; caster: keeps its distance and
  * fires bolts; flyer: flies over everything (orbits, bolts, dives); boss: driven by a BossScript. */
 export type EnemyBehavior = "chaser" | "charger" | "thrower" | "tank" | "caster" | "flyer" | "boss";
@@ -121,15 +122,16 @@ export type EnemyBehavior = "chaser" | "charger" | "thrower" | "tank" | "caster"
 export type EnemyVisualId =
   | "zombieMaleCasual" | "zombieMaleFarmer" | "zombieFemaleCasual" | "zombieFemaleOffice"
   | "zombieRunnerMale" | "zombieRunnerFemale" | "zombieThrower" | "zombieBrute"
-  | "vanguard" | HellVisualId | SpaceVisualId;
+  | "vanguard" | HellVisualId | SpaceVisualId | WastelandVisualId;
 
 /** Zombie colour skins: recoloured copies of the zombie pack's swatch palette (one small texture
  * each, shared by every zombie model), built by scripts/build-zombies.mjs. */
-export type EnemySkinId = "green" | "darkgreen" | "purple" | "brown" | "toxic" | "brute" | HellSkinId | SpaceSkinId;
+export type EnemySkinId = "green" | "darkgreen" | "purple" | "brown" | "toxic" | "brute" | HellSkinId | SpaceSkinId | WastelandSkinId;
 
 export const ENEMY_SKINS: Record<EnemySkinId, string> = {
   ...HELL_SKINS,
   ...SPACE_SKINS,
+  ...WASTELAND_SKINS,
   green: "models/zombies/skins/green.webp",
   darkgreen: "models/zombies/skins/darkgreen.webp",
   purple: "models/zombies/skins/purple.webp",
@@ -199,6 +201,7 @@ const RUNNER: Partial<EnemyVisual> = { clips: { ...ZOMBIE_CLIPS, move: "Zombie_R
 export const ENEMY_VISUALS: Record<EnemyVisualId, EnemyVisual> = {
   ...HELL_VISUALS,
   ...SPACE_VISUALS,
+  ...WASTELAND_VISUALS,
   zombieMaleCasual: zombie("zombie_male_casual", 0.98),
   zombieMaleFarmer: zombie("zombie_male_farmer", 1.04),
   zombieFemaleCasual: zombie("zombie_female_casual", 1.05),
@@ -281,6 +284,7 @@ const WALKER_LOOKS: EnemyVisualId[] = ["zombieMaleCasual", "zombieMaleFarmer", "
 export const ENEMIES: Record<EnemyId, EnemyDef> = {
   ...HELL_ENEMIES,
   ...SPACE_ENEMIES,
+  ...WASTELAND_ENEMIES,
   // Hero is ~1.95 m (1.70 m model x 1.15); walkers are 0.9 - 1.0x of that, hunched.
   walker: {
     label: "Walker", visuals: WALKER_LOOKS, scale: 1.1, scaleJitter: 0.05, behavior: "chaser",
@@ -347,7 +351,7 @@ export const ENEMY_LIMITS = {
  * ---------------------------------------------------------------------------------------------- */
 
 /** Boss enemy types (a wave's `boss`); every other type can be in a wave's weights. */
-export type BossId = Extract<EnemyId, "brute" | "charger" | "tank" | "glutton" | "wyrm" | "archfiend" | "warden" | "broodmother">;
+export type BossId = Extract<EnemyId, "brute" | "charger" | "tank" | "glutton" | "wyrm" | "archfiend" | "warden" | "broodmother" | "abomination">;
 export type WaveEnemyId = Exclude<EnemyId, BossId>;
 
 /** One pacing step of a wave, in effect from `at` seconds until the next step. */

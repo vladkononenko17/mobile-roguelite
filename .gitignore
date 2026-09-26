@@ -33,3 +33,6 @@ assets-src/quaternius-space/
 # Quaternius Ultimate Modular Sci-Fi Pack (CC0) and HallwayPACK modules (CC0): raw files local only; used models are baked into facility-kit.glb
 assets-src/quaternius-scifi/
 assets-src/hallwaypack/
+# Quaternius Zombie Apocalypse Kit (CC0) and Majadroid LowPoly Apocalyptic Buildings (CC0): raw files local only; built into outpost-kit.glb / public/models/infected/
+assets-src/zombie-kit/
+assets-src/ruined-city/

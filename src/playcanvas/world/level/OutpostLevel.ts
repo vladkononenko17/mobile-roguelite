@@ -1,14 +1,23 @@
 import type { AmbientEmitter } from "../AmbientFx";
 import { Entity } from "playcanvas";
+import { WASTELAND_DIFFICULTIES, WASTELAND_LEVELS, WASTELAND_RUN } from "../../gameplay/wastelandConfig";
 import type { GroundSpec } from "../Ground";
 import type { ModelKit, SpawnOptions } from "../props/ModelKit";
 import { declareCollider } from "../collision/CollisionWorld";
 import { OUTPOST_MODELS, type OutpostModel } from "../props/OutpostKit";
 import { LIGHTING, OUTPOST } from "../../config";
-import type { Biome, LevelBounds } from "./Biome";
+import type { Biome, LevelBounds, WayPoint, Zone } from "./Biome";
 
 /**
- * LEVEL 1 - "Dustline Outpost": an abandoned industrial compound fortified by survivors, 48 x 80 m,
+ * CHAPTER 1 - THE WASTELAND: a three-level campaign, south to north (~120 x 240 m):
+ *   1 DUSTLINE OUTPOST (z 40..-40)   the survivors' compound, below (48 x 80 m)
+ *   2 THE DEAD STREETS (z -56..-120) a ruined city block round a crossroads (64 x 64 m)
+ *   3 THE PLAZA        (z -136..-196) the Abomination's square (60 x 60 m)
+ * joined by short streets through barricades that fall when a level is won (the same walk-on flow
+ * as Hell and the ORION). Ruined skyscrapers stand either side of the city and a fallen tower beyond
+ * the plaza; trees and weeds take the streets back (see buildCity).
+ *
+ * The outpost: an abandoned industrial compound fortified by survivors, 48 x 80 m,
  * built from the Atomic Realm kit (see world/props/OutpostKit.ts).
  *
  * The camera looks towards -Z: the player starts at the south edge (z = +36) and progresses "up the
@@ -34,7 +43,21 @@ import type { Biome, LevelBounds } from "./Biome";
  * the kit (ModelKit + OutpostKit), the ground from world/Ground.ts.
  */
 
-export const BOUNDS: LevelBounds = { minX: -23.4, maxX: 23.4, minZ: -39.4, maxZ: 39.4 };
+/** The outpost compound (zone 1). */
+export const OUTPOST_AREA: LevelBounds = { minX: -23.4, maxX: 23.4, minZ: -39.4, maxZ: 39.4 };
+/** The dead city's two zones (their edges; the regions are 1 m inside). */
+const STREETS = { x0: -32, z0: -120, x1: 32, z1: -56 };
+const PLAZA = { x0: -30, z0: -196, x1: 30, z1: -136 };
+/** Half width of the streets joining the zones (and of the gaps the barricades close). */
+const GAP = 4;
+/** The whole chapter. */
+export const BOUNDS: LevelBounds = { minX: -60, maxX: 60, minZ: -230, maxZ: 41 };
+
+export const ZONES: Record<string, Zone> = {
+  outpost: { region: OUTPOST_AREA, start: { x: 0, z: 14, yawDeg: 180 }, exit: { axis: "z", at: -40, dir: -1 } },
+  streets: { region: { minX: STREETS.x0 + 1, maxX: STREETS.x1 - 1, minZ: STREETS.z0 + 1, maxZ: STREETS.z1 - 1 }, start: { x: 0, z: -61, yawDeg: 180 }, exit: { axis: "z", at: STREETS.z0, dir: -1 } },
+  plaza: { region: { minX: PLAZA.x0 + 1, maxX: PLAZA.x1 - 1, minZ: PLAZA.z0 + 1, maxZ: PLAZA.z1 - 1 }, start: { x: 0, z: -141, yawDeg: 180 } },
+};
 
 /** The player starts on the road outside the gate, facing north. */
 export const SPAWN = { x: 0.6, z: 36.4, yawDeg: 180 };
@@ -53,11 +76,25 @@ export const AMBIENT: AmbientEmitter[] = [
   { kind: "sparks", x: 6.4, y: 4.2, z: 28.9, every: 9 },
   { kind: "dust", x: 0, y: 1.2, z: 14, size: [16, 16], intensity: 1 },
   { kind: "dust", x: -14, y: 1.2, z: -12, size: [12, 12], intensity: 0.8 },
+  // The dead city: burning wrecks, a sparking traffic light, dust in the streets and on the plaza.
+  { kind: "smoke", x: -3, y: 0.8, z: -71, size: [0.8, 0.8], intensity: 0.8 },
+  { kind: "smoke", x: 15, y: 0.8, z: -87, size: [0.8, 0.8], intensity: 0.6 },
+  { kind: "smoke", x: -24, y: 0.8, z: -163, size: [1, 1], intensity: 0.7 },
+  { kind: "sparks", x: 5.5, y: 4, z: -79, every: 6 },
+  { kind: "dust", x: 0, y: 1.2, z: -88, size: [30, 30], intensity: 1 },
+  { kind: "dust", x: 0, y: 1.2, z: -166, size: [30, 30], intensity: 1 },
 ];
 
 export const GROUND_SPEC: GroundSpec = {
   base: "sand",
+  areas: [
+    // Desert all round; the city's pavement from the outpost's north wall on.
+    { x0: -130, z0: -40, x1: 130, z1: 140 },
+    { x0: -130, z0: -300, x1: 130, z1: -40, surface: "asphalt" },
+  ],
   pads: [
+    // The plaza's paving.
+    { x0: -22, z0: -188, x1: 22, z1: -144, surface: "concrete" },
     // Industrial yard: poured concrete up to the east wall.
     { x0: 5.5, z0: -25.5, x1: 24.5, z1: 5.2, surface: "concrete" },
   ],
@@ -77,6 +114,17 @@ export const GROUND_SPEC: GroundSpec = {
     { x: -19, z: -1, w: 11, d: 9, surface: "ash", seed: 1 },
     { x: -7, z: -3, w: 7, d: 6, surface: "ash", seed: 2 },
     { x: -18, z: -30, w: 11, d: 9, surface: "ash", seed: 1 },
+    // The dead city grown over: moss and weeds in the park and along the edges; dirt drifts; scorch.
+    { x: -18, z: -104, w: 24, d: 26, surface: "overgrowth", seed: 0 },
+    { x: -27, z: -70, w: 10, d: 22, surface: "overgrowth", seed: 1 },
+    { x: 27, z: -110, w: 10, d: 16, surface: "overgrowth", seed: 2 },
+    { x: 20, z: -64, w: 18, d: 12, surface: "dirt", seed: 3 },
+    { x: -26, z: -150, w: 10, d: 16, surface: "overgrowth", seed: 3 },
+    { x: 25, z: -186, w: 12, d: 12, surface: "overgrowth", seed: 0 },
+    { x: -3, z: -71, w: 8, d: 7, surface: "ash", seed: 2 },
+    { x: 15, z: -87, w: 7, d: 6, surface: "ash", seed: 1 },
+    { x: 0, z: -48, w: 10, d: 14, surface: "dirt", seed: 2 },
+    { x: 0, z: -128, w: 10, d: 14, surface: "dirt", seed: 0 },
   ],
 };
 
@@ -317,9 +365,9 @@ export function buildOutpostLevel(kit: ModelKit<OutpostModel>): Entity {
     ["container", -19.4, -36.6, 90], ["container", -19.4, -36.6, 92, { y: 2.62, noCollider: true }],
     ["generator", 18.6, -34.4, 90], ["drumRack", 19.8, -30, 90],
   ]);
-  // Landmark beyond the north wall: a ship hull beached in the sand.
-  place("crashedShip", 3.5, -48.5, 65, { scale: 0.6, noCollider: true });
-  placeAll([["pole", -8, -42.5, 0], ["pole", 12, -43, 0]]);
+  // Landmark west of the city gate: a ship hull beached in the sand.
+  place("crashedShip", -44, -30, 65, { scale: 0.6, noCollider: true });
+  placeAll([["pole", -10, -42.5, 0], ["pole", 12, -43, 0]]);
 
   // ------------------------------------------------------------------ outer boundary
   // South: fence either side of the road.
@@ -337,7 +385,9 @@ export function buildOutpostLevel(kit: ModelKit<OutpostModel>): Entity {
   wallRun(23.8, -25, 23.8, -40, { pattern: ["wallConcreteMetal", "wallMetalRed", "wallConcreteMetal"], columnsEvery: 2 });
   placeAll([["jersey", 22.4, -2, 90], ["jersey2", 22.4, 1.6, 90], ["wreckBarricade", 25.6, 0, 90, { noCollider: true }]]);
   // North: a taller wall behind the arena.
-  wallRun(-23.8, -40.2, 23.8, -40.2, { rows: 2, pattern: ["wallConcreteMetal", "wallConcreteMetal", "wall", "wallConcreteMetal"], upper: ["wallMetalRed", "", "wallMetalBlue", "wallMetalRed", ""], columnsEvery: 3 });
+  // North: a taller wall behind the arena, its gate (x -4..4) the way into the city.
+  wallRun(-23.8, -40.2, 23.8, -40.2, { rows: 2, pattern: ["wallConcreteMetal", "wallConcreteMetal", "wall", "wallConcreteMetal"], upper: ["wallMetalRed", "", "wallMetalBlue", "wallMetalRed", ""], columnsEvery: 3, skip: [10, 11, 12, 13] });
+  placeAll([["wallColumn", -4.4, -40.2, 0, { scale: [2.2, 2.4, 2.2] }], ["wallColumn", 4.4, -40.2, 0, { scale: [2.2, 2.4, 2.2] }]]);
 
   // Invisible walls exactly on the map edge, so nothing can slip between boundary pieces.
   const edge = (x: number, z: number, width: number, depth: number) => {
@@ -346,19 +396,23 @@ export function buildOutpostLevel(kit: ModelKit<OutpostModel>): Entity {
     root.addChild(e);
     declareCollider(e, { kind: "box", width, depth });
   };
-  const { minX, maxX, minZ, maxZ } = BOUNDS;
-  edge((minX + maxX) / 2, minZ - 0.5, maxX - minX + 2, 1);
+  const { minX, maxX, minZ, maxZ } = OUTPOST_AREA;
+  // North: open at the city gate.
+  edge((minX - GAP) / 2, minZ - 0.5, -GAP - minX + 1, 1);
+  edge((maxX + GAP) / 2, minZ - 0.5, maxX - GAP + 1, 1);
   edge((minX + maxX) / 2, maxZ + 0.5, maxX - minX + 2, 1);
   edge(minX - 0.5, (minZ + maxZ) / 2, 1, maxZ - minZ + 2);
   edge(maxX + 0.5, (minZ + maxZ) / 2, 1, maxZ - minZ + 2);
 
+  buildCity(kit, root, place, placeAll, wallRun, edge);
+  buildSeals(kit, root);
   return root;
 }
 
-/** Chapter 1: the Dustline outpost. */
+/** Chapter 1: the Wasteland - the Dustline outpost and the dead city. */
 export const OUTPOST_BIOME: Biome<OutpostModel> = {
   id: "outpost",
-  label: "Dustline Outpost",
+  label: "Wasteland",
   kit: { url: OUTPOST.url, models: OUTPOST_MODELS, brightness: OUTPOST.brightness, batchCellMetres: OUTPOST.batchCellMetres },
   lighting: LIGHTING,
   ground: GROUND_SPEC,
@@ -368,4 +422,262 @@ export const OUTPOST_BIOME: Biome<OutpostModel> = {
   runStart: { x: 0, z: 14, yawDeg: 180 },
   ambient: AMBIENT,
   build: buildOutpostLevel,
+  campaign: {
+    levels: WASTELAND_LEVELS,
+    zones: ZONES,
+    run: WASTELAND_RUN,
+    difficulties: WASTELAND_DIFFICULTIES,
+    defaultDifficulty: "hard",
+    victory: { title: "THE CITY IS QUIET", text: "The Abomination is down. Beyond the plaza the highway runs north - towards the ORION's landing site." },
+    onLevel(_index, zoneId) {
+      const region = ZONES[zoneId]?.region;
+      for (const s of world.seals) {
+        s.open = -1;
+        s.entity.setLocalPosition(s.x, 0, s.z);
+        s.entity.enabled = !!region && onEdge(region, s.x, s.z);
+      }
+      world.exitSeals = [];
+    },
+    exits(zoneId): WayPoint[] {
+      const exit = ZONES[zoneId]?.exit;
+      world.exitSeals = exit ? world.seals.filter((s) => s.entity.enabled && Math.abs(s.z - exit.at) < 1.5) : [];
+      return world.exitSeals.map((s) => ({ x: s.x, z: s.z, width: GAP * 2, yawDeg: 0 }));
+    },
+    openExit(_zoneId, index) {
+      const s = world.exitSeals[index];
+      if (s && s.open < 0 && s.entity.enabled) s.open = 0;
+    },
+    update(dt) {
+      for (const s of world.exitSeals) {
+        if (s.open < 0 || !s.entity.enabled) continue;
+        s.open = Math.min(1, s.open + dt / SEAL_OPEN_SECONDS);
+        s.entity.setLocalPosition(s.x, -1.3 * s.open * s.open, s.z);
+        if (s.open >= 1) s.entity.enabled = false;
+      }
+    },
+  },
 };
+
+type Place = (id: OutpostModel, x: number, z: number, yaw?: number, options?: SpawnOptions) => Entity | null;
+type Edge = (x: number, z: number, width: number, depth: number) => void;
+type WallRun = (ax: number, az: number, bx: number, bz: number, o: WallRunOptions) => void;
+
+/** Deterministic RNG so the layout is the same on every load. */
+function rng(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296);
+}
+
+/**
+ * The dead city north of the outpost: the connecting streets, THE DEAD STREETS (a crossroads with
+ * a collapsed storefront, a parking lot, an overgrown park and an abandoned checkpoint in its four
+ * corners), THE PLAZA (open, a wrecked convoy and a water tower at its edges) and the skyline of
+ * ruined towers round them - only at the sides and beyond, never between the camera and the play.
+ */
+function buildCity(kit: ModelKit<OutpostModel>, root: Entity, place: Place, placeAll: (list: Placement[]) => void, wallRun: WallRun, edge: Edge): void {
+  void kit; void root;
+  const random = rng(4711);
+  const STREET: SpawnOptions = { scale: [1, 0.25, 1] };
+  const street = (id: OutpostModel, x: number, z: number, yaw: number) => place(id, x, z, yaw, STREET);
+
+  // ------------------------------------------------------------------ streets (8 m tiles)
+  // North-south from the outpost gate through the crossroads to the plaza; east-west across.
+  const crack: OutpostModel[] = ["zkStreet", "zkStreetCrack", "zkStreet", "zkStreetCrack2"];
+  let n = 0;
+  for (let z = -44; z >= -132; z -= 8) {
+    if (z === -84) street("zkStreet4", 0, z, 0);
+    else street(crack[n++ % crack.length], 0, z, 0);
+  }
+  for (const x of [-40, -32, -24, -16, -8, 8, 16, 24, 32, 40]) street(crack[n++ % crack.length], x, -84, 90);
+
+  // ------------------------------------------------------------------ connectors
+  // Broken walls either side of the two short streets (low: the camera looks over them).
+  for (const [z0, z1] of [[-40, -56], [-120, -136]]) {
+    for (const s of [-1, 1]) {
+      wallRun(s * (GAP + 0.6), z0, s * (GAP + 0.6), z1, { pattern: ["wall", "wallHole", "wallBrick", "wall"], flip: s > 0, columnsEvery: 2 });
+      place("nBush", s * (GAP + 2.2), (z0 + z1) / 2 + random() * 4, random() * 360);
+      place("nGrass", s * (GAP + 1.4), z0 - 3 - random() * 8, random() * 360);
+    }
+  }
+  placeAll([
+    ["zkStreetLight", -GAP - 1.2, -47, 90], ["zkStreetLight", GAP + 1.2, -129, -90],
+    ["zkCone", 2.4, -45, 0], ["zkCone", -2.8, -50.5, 40], ["zkTrash", 3.1, -53, 0], ["zkBlood2", -1.2, -48, 30],
+    ["zkTownSign", 0, -131, 0, { scale: 1.1 }],
+  ]);
+
+  // ------------------------------------------------------------------ THE DEAD STREETS
+  const q = STREETS;
+  // Zone edges: rubble, wrecks and walls (low south, taller north), invisible walls on the lines.
+  wallRun(q.x0, q.z1, -GAP, q.z1, { pattern: ["wall", "wallBrick", "wallHole", "wall", "", "wallBoarded", "wall"], columnsEvery: 2 });
+  wallRun(GAP, q.z1, q.x1, q.z1, { pattern: ["wall", "wallWindow", "wall", "wallBrick", "", "wall", "wallHole"], columnsEvery: 2 });
+  wallRun(q.x0, q.z0, -GAP, q.z0, { rows: 2, pattern: ["wallConcreteMetal", "wall", "wallBrick", "wall"], upper: ["wall", "", "wallWindow", ""], columnsEvery: 2, flip: true });
+  wallRun(GAP, q.z0, q.x1, q.z0, { rows: 2, pattern: ["wall", "wallBrick", "wallConcreteMetal", "wall"], upper: ["", "wallWindow", "", "wall"], columnsEvery: 2, flip: true });
+  for (const s of [-1, 1]) {
+    // Side edges: ruined shopfronts, rubble mounds; the east-west street barricaded where it leaves.
+    const x = s * q.x1;
+    wallRun(x, q.z1, x, -88.5, { pattern: ["wall", "wallWindow2", "wallBoarded", "wall", "wallHole", "wallWindow"], flip: s < 0, columnsEvery: 2 });
+    wallRun(x, -79.5, x, q.z0, { pattern: ["wallBrick", "wall", "wallWindow", "", "wall", "wallBoarded", "wall"], flip: s < 0, columnsEvery: 2 });
+    place(s < 0 ? "vPickupArmored" : "vTruckArmored", s * (q.x1 + 3), -84, 90 + random() * 20);
+    place("zkBarrier", s * (q.x1 - 1.5), -82, 90);
+    place("zkBarrier", s * (q.x1 - 1.5), -86, 90);
+    place("wreckage", s * (q.x1 + 6), -64, random() * 360, { noCollider: true });
+    place("wreckage", s * (q.x1 + 6), -108, random() * 360, { noCollider: true });
+  }
+  edge((q.x0 - GAP) / 2, q.z1 + 0.5, -GAP - q.x0, 1);
+  edge((q.x1 + GAP) / 2, q.z1 + 0.5, q.x1 - GAP, 1);
+  edge((q.x0 - GAP) / 2, q.z0 - 0.5, -GAP - q.x0, 1);
+  edge((q.x1 + GAP) / 2, q.z0 - 0.5, q.x1 - GAP, 1);
+  edge(q.x0 - 0.5, (q.z0 + q.z1) / 2, 1, q.z1 - q.z0);
+  edge(q.x1 + 0.5, (q.z0 + q.z1) / 2, 1, q.z1 - q.z0);
+
+  // The crossroads: traffic lights at the corners, wrecked cars left where they stopped.
+  placeAll([
+    ["zkTrafficLight", -5.2, -79, 0], ["zkTrafficLight", 5.2, -89, 180], ["zkTrafficLight2", 5.2, -79, -90], ["zkTrafficLight2", -5.2, -89, 90],
+    ["vSports", -2.6, -71, 28], ["vTruck", 15, -86.5, 97], ["vPickup", -17, -82.5, 72, { tiltZ: 6 }], ["vSports", 1.8, -103, 200],
+    ["zkHydrant", -5.4, -66, 0], ["zkHydrant", 5.4, -101, 0],
+    ["zkBlood", 11, -83, 0], ["zkBlood2", -1, -94, 50], ["zkBlood", -20, -89, 120],
+  ]);
+  for (const z of [-62, -110]) for (const s of [-1, 1]) place("zkStreetLight", s * 5.6, z, s > 0 ? -90 : 90);
+
+  // South-west: a collapsed storefront - its shell open to the street, furniture dragged out.
+  wallRun(-28, -60, -12, -60, { pattern: ["wallWindow", "wall", "wallWindow2", "wall", "wallBoarded", "wall", "wallWindow", "wall"], columnsEvery: 2, flip: true });
+  wallRun(-28, -60, -28, -76, { pattern: ["wall", "wallBrick", "wallHole", "wall"], columnsEvery: 2 });
+  wallRun(-12, -60, -12, -66, { pattern: ["wall", "wallHole", "wall"], flip: true, columnsEvery: 3 });
+  placeAll([
+    ["zkCouch", -21, -64, 20], ["crate", -25.5, -63, 10], ["crate", -24.6, -62.5, -8, { y: 1.15 }], ["zkTrash2", -14, -67.5, 0],
+    ["zkTrash", -15.2, -69, 40], ["cardboard", -18.5, -70, 15], ["cart", -9.5, -72, 60], ["zkPalletBroken", -23, -73, 30],
+    ["billboards", -30, -72, 90, { scale: 1.3 }],
+  ]);
+  // South-east: a parking lot, cars abandoned at angles.
+  placeAll([
+    ["vPickup", 14, -63, 80], ["vSports", 22, -66, 100], ["vTruck", 26, -74, 95, { tiltX: 4 }], ["vSports", 12, -74, 250],
+    ["zkWheels", 19, -71, 0], ["zkCone", 9, -68, 0], ["zkCone", 17.5, -60, 20], ["zkCinder", 24, -61, 0], ["zkCinder", 24.6, -61.4, 40],
+    ["zkPallet", 28.5, -63, 10],
+  ]);
+  // North-west: the park, taken back - trees, bushes, a fallen log, benches.
+  placeAll([
+    ["nTreeOak", -14, -96, 0], ["nTreeFat", -22, -100, 40], ["nTreeOak", -27, -110, 80], ["nTree", -12, -112, 20], ["nTreeTall", -20, -116, 0],
+    ["nLog", -17, -106, 30], ["bench", -9.5, -99, 90], ["bench", -24, -93, 0], ["nBushDetailed", -10, -107, 0], ["nBush", -26, -97, 0],
+    ["zkTrash", -8.6, -97.5, 0], ["nTree", -29, -92, 0],
+  ]);
+  // North-east: the checkpoint that fell - containers, barriers, sandbags, a floodlight.
+  placeAll([
+    ["zkContainerGreen", 24, -110, 90], ["zkContainerRed", 26.5, -97, 90], ["zkContainerGreen", 16, -115.5, 0],
+    ["zkBarrier", 9.5, -93, 0], ["zkBarrier", 13, -93.4, 8], ["zkBarrier2", 17, -93, -4], ["sandbags", 11, -101, 90],
+    ["razorWire", 20.5, -104, 0], ["floodlight", 27, -104, -90], ["zkBarrel", 21, -99, 0], ["zkBarrel", 21.8, -99.6, 0], ["crate", 12.5, -109, 10],
+  ]);
+  // Street trees on the pavements, bushes grown along every wall, debris in the corners.
+  for (const z of [-62, -74, -96, -108, -116]) for (const s of [-1, 1]) if (random() < 0.8) place(random() < 0.5 ? "nTreeOak" : "nTreeFat", s * (6.8 + random()), z + random() * 3, random() * 360, { scale: 0.8 + random() * 0.4 });
+  const hedge = (ax: number, az: number, bx: number, bz: number) => {
+    const len = Math.hypot(bx - ax, bz - az);
+    for (let d = 1; d < len; d += 2.4 + random() * 2.5) {
+      const t = d / len, x = ax + (bx - ax) * t + (random() - 0.5), z = az + (bz - az) * t + (random() - 0.5);
+      place(random() < 0.5 ? "arBush" : random() < 0.5 ? "nBush" : "nBushDetailed", x, z, random() * 360, { scale: 0.8 + random() * 0.6 });
+    }
+  };
+  hedge(q.x0 + 1.4, q.z1 - 1.5, q.x0 + 1.4, q.z0 + 1.5);
+  hedge(q.x1 - 1.4, q.z1 - 1.5, q.x1 - 1.4, q.z0 + 1.5);
+  hedge(q.x0 + 1.5, q.z0 + 1.4, -GAP - 1.5, q.z0 + 1.4);
+  hedge(GAP + 1.5, q.z0 + 1.4, q.x1 - 1.5, q.z0 + 1.4);
+  for (let i = 0; i < 26; i++) {
+    const x = (random() < 0.5 ? -1 : 1) * (7 + random() * 23), z = q.z0 + 3 + random() * (q.z1 - q.z0 - 6);
+    if (Math.abs(z + 84) < 5) continue;
+    const roll = random();
+    place(roll < 0.25 ? "zkPalletBroken" : roll < 0.45 ? "zkCinder" : roll < 0.65 ? "zkTrash" : roll < 0.8 ? "tire" : "zkTrash2", x, z, random() * 360);
+  }
+  // Weeds in the cracks everywhere (walk-over).
+  for (let i = 0; i < 70; i++) {
+    const x = q.x0 + 1.5 + random() * (q.x1 - q.x0 - 3), z = q.z0 + 1.5 + random() * (q.z1 - q.z0 - 3);
+    place(random() < 0.6 ? "nGrass" : "nGrassLeafs", x, z, random() * 360, { scale: 0.7 + random() * 0.6 });
+  }
+  for (let i = 0; i < 14; i++) {
+    const s = random() < 0.5 ? -1 : 1;
+    place(random() < 0.5 ? "nBush" : "nBushDetailed", s * (q.x1 - 1.5 - random() * 3), q.z0 + 3 + random() * (q.z1 - q.z0 - 6), random() * 360);
+  }
+
+  // ------------------------------------------------------------------ THE PLAZA
+  const p = PLAZA;
+  wallRun(p.x0, p.z1, -GAP, p.z1, { pattern: ["wall", "wallHole", "wallBrick", "wall", "", "wall"], columnsEvery: 2 });
+  wallRun(GAP, p.z1, p.x1, p.z1, { pattern: ["wall", "", "wallBrick", "wallWindow", "wall", "wallHole"], columnsEvery: 2 });
+  wallRun(p.x0, p.z0, p.x1, p.z0, { rows: 2, pattern: ["wallConcreteMetal", "wall", "wallBrick", "wall", "wallConcreteMetal"], upper: ["wall", "", "wallWindow", "", "wall", ""], columnsEvery: 3, flip: true });
+  for (const s of [-1, 1]) wallRun(s * p.x1, p.z1, s * p.x1, p.z0, { pattern: ["wall", "wallWindow", "wallBrick", "", "wall", "wallBoarded"], flip: s < 0, columnsEvery: 2 });
+  edge((p.x0 - GAP) / 2, p.z1 + 0.5, -GAP - p.x0, 1);
+  edge((p.x1 + GAP) / 2, p.z1 + 0.5, p.x1 - GAP, 1);
+  edge(0, p.z0 - 0.5, p.x1 - p.x0 + 2, 1);
+  edge(p.x0 - 0.5, (p.z0 + p.z1) / 2, 1, p.z1 - p.z0);
+  edge(p.x1 + 0.5, (p.z0 + p.z1) / 2, 1, p.z1 - p.z0);
+  placeAll([
+    // West: the convoy that never left.
+    ["vTruckArmored", -24.5, -158, 8], ["vPickupArmored", -23.5, -172, -14], ["zkContainerGreen", -25, -146.5, 90], ["sandbags", -18.5, -165, 90],
+    ["zkBarrier", -19, -151, 70], ["zkBarrel", -26.5, -183, 0], ["zkBarrel", -25.8, -184.2, 0],
+    // East: the water tower, a bus-stop bench, planters grown wild.
+    ["zkWaterTower", 23, -186, 0], ["bench", 26, -160, -90], ["zkStreetLight", 27, -150, -90], ["zkStreetLight", 27, -175, -90],
+    ["zkContainerRed", 25, -142, 90],
+    // Corners: trees in the old planters.
+    ["nTreeOak", -21, -141, 0], ["nTreeFat", 20, -142, 60], ["nTreeOak", -22, -190, 30], ["nTree", 14, -191, 0],
+    ["nBushDetailed", -19, -143, 0], ["nBush", 18, -189, 0],
+    // The square itself stays open: blood, a cone, weeds.
+    ["zkBlood", -4, -160, 0], ["zkBlood2", 7, -174, 80], ["zkCone", 9, -150, 0], ["zkTrash", -9, -182, 0],
+  ]);
+  // Cover round the square's edge: a flipped car, barrier lines, a crate stack; bushes on the walls.
+  placeAll([
+    ["vSports", 14, -160, 60, { tiltZ: 90, y: 1.3 }], ["vPickup", -10, -190, 175], ["zkBarrier", 10, -181, 30], ["zkBarrier2", 13, -183, 50],
+    ["zkBarrier", -12, -148, -20], ["crate", 18.5, -170, 10], ["crate", 19.4, -171, -20], ["crate", 18.9, -170.5, 5, { y: 1.15 }],
+  ]);
+  hedge(p.x0 + 1.4, p.z1 - 1.5, p.x0 + 1.4, p.z0 + 1.5);
+  hedge(p.x1 - 1.4, p.z1 - 1.5, p.x1 - 1.4, p.z0 + 1.5);
+  hedge(p.x0 + 1.5, p.z0 + 1.4, p.x1 - 1.5, p.z0 + 1.4);
+  for (let i = 0; i < 40; i++) {
+    const x = p.x0 + 1.5 + random() * (p.x1 - p.x0 - 3), z = p.z0 + 1.5 + random() * (p.z1 - p.z0 - 3);
+    place(random() < 0.6 ? "nGrass" : "nGrassLeafs", x, z, random() * 360, { scale: 0.6 + random() * 0.6 });
+  }
+
+  // ------------------------------------------------------------------ the skyline
+  // Ruined towers either side of the city and beyond the plaza (never south of a zone, where they
+  // would stand between the camera and the hero). Billboards on the rubble lots.
+  const towers: [OutpostModel, number, number, number][] = [
+    ["bld1", -50, -66, 0], ["bld5", -50, -96, 90], ["bld2", -52, -124, 0], ["bld6", -54, -160, 90], ["bld1", -50, -192, 180],
+    ["bld6", 54, -70, 90], ["bld7", 50, -104, 0], ["bld5", 50, -134, 180], ["bld2", 52, -166, 90], ["bld5", 50, -198, 0],
+    ["bld6", -28, -226, 0], ["bld1", 30, -224, 90],
+  ];
+  for (const [id, x, z, yaw] of towers) place(id, x, z, yaw, { noCollider: true });
+  // The tower that fell across the far end of the plaza.
+  place("bld7", 2, -222, 70, { tiltX: 62, y: -4, noCollider: true });
+  for (const [x, z] of [[-34, -84], [34, -84], [-36, -116], [36, -60], [-34, -175], [34, -150]]) place("wreckage", x, z, random() * 360, { noCollider: true, scale: 0.8 + random() * 0.5 });
+  placeAll([["billboards", 36.5, -98, -90, { scale: 1.4, noCollider: true }], ["billboards", -36.5, -150, 90, { scale: 1.4, noCollider: true }], ["fireStairs", 38, -120, -90, { noCollider: true }]]);
+  // Trees and bushes on the lots round the towers.
+  for (let i = 0; i < 30; i++) {
+    const s = random() < 0.5 ? -1 : 1, x = s * (35 + random() * 8), z = -60 - random() * 140;
+    place(random() < 0.4 ? "nTreeOak" : random() < 0.5 ? "nTreeFat" : "nBush", x, z, random() * 360, { noCollider: true, scale: 0.8 + random() * 0.6 });
+  }
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Barricades (the way on): a row of striped barriers across each street gap; when the level is won
+ * the one ahead sinks into the ground as the hero comes near.
+ * ---------------------------------------------------------------------------------------------- */
+
+interface Seal { entity: Entity; x: number; z: number; open: number }
+const SEAL_OPEN_SECONDS = 0.8;
+const world = { seals: [] as Seal[], exitSeals: [] as Seal[] };
+
+function buildSeals(kit: ModelKit<OutpostModel>, root: Entity): void {
+  world.seals = [];
+  world.exitSeals = [];
+  for (const z of [-40.4, STREETS.z1, STREETS.z0, PLAZA.z1]) {
+    const e = new Entity("barricade");
+    e.setLocalPosition(0, 0, z);
+    root.addChild(e);
+    for (const x of [-2.9, -1, 1, 2.9]) kit.spawn(x === -1 || x === 1 ? "zkBarrier" : "zkBarrier2", x, 0, x < 0 ? 4 : -4, e, { noCollider: true });
+    e.enabled = false;
+    world.seals.push({ entity: e, x: 0, z, open: -1 });
+  }
+}
+
+/** Whether (x, z) lies on (within 1.5 m of) the edge of `region`. */
+function onEdge(region: LevelBounds, x: number, z: number): boolean {
+  const inX = x >= region.minX - 1.5 && x <= region.maxX + 1.5, inZ = z >= region.minZ - 1.5 && z <= region.maxZ + 1.5;
+  const nearZ = Math.abs(z - region.minZ) < 1.5 || Math.abs(z - region.maxZ) < 1.5;
+  const nearX = Math.abs(x - region.minX) < 1.5 || Math.abs(x - region.maxX) < 1.5;
+  return (inX && nearZ) || (inZ && nearX);
+}

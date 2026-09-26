@@ -2,9 +2,10 @@
 import type { EnemyId, EnemySkinId } from "./config";
 import { HELL_BOSSES, HELL_TYPE_SKINS, type BossPhase } from "./hellConfig";
 import { SPACE_BOSSES, SPACE_TYPE_SKINS } from "./spaceConfig";
+import { WASTELAND_BOSSES, WASTELAND_TYPE_SKINS } from "./wastelandConfig";
 
 /** Boss scripts by name (EnemyDef.script). */
-export const BOSS_SCRIPTS: Record<string, BossPhase[]> = { ...HELL_BOSSES, ...SPACE_BOSSES };
+export const BOSS_SCRIPTS: Record<string, BossPhase[]> = { ...HELL_BOSSES, ...SPACE_BOSSES, ...WASTELAND_BOSSES };
 
 /** Skins per enemy type, overriding the look's own list. */
-export const TYPE_SKINS: Partial<Record<EnemyId, EnemySkinId[]>> = { ...HELL_TYPE_SKINS, ...SPACE_TYPE_SKINS };
+export const TYPE_SKINS: Partial<Record<EnemyId, EnemySkinId[]>> = { ...HELL_TYPE_SKINS, ...SPACE_TYPE_SKINS, ...WASTELAND_TYPE_SKINS };
