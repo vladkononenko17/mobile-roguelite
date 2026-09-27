@@ -45,11 +45,11 @@ const moan = ([a, b], rate = 1) => ({ src: "zombie-moans/moans.ogg", start: a - 
 const SOUNDS = {
   // Weapons (The Free Firearm Sound Library, CC0; Kenney lasers).
   shot_pistol: { variants: cuts("firearms/X_39P.wav", [1.41, 6.45, 10.66], 0.5), fade: 0.3 },
-  // Purpose-built Hollywood-style suppressed shot (CC0, Freesound 855656). Short variants keep
+  // Purpose-built Hollywood-style suppressed shot (CC0, Freesound 819269). Short variants keep
   // the metallic action and distinctive suppressor tail clear at the Uzi rapid cadence.
   shot_suppressed: {
     variants: [0.94, 1, 1.06].map((rate) => one({
-      src: "freesound/855656-suppressed-handgun.mp3", dur: 0.48, rate,
+      src: "freesound/819269-gunshot-with-silencer.mp3", dur: 0.46, rate,
     })),
     fade: 0.16,
   },
