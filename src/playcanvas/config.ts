@@ -347,10 +347,13 @@ export const WEAPON_CLASSES: Record<WeaponClass, WeaponClassProfile> = {
   },
   // The aiming clip drives the arms; hands are fitted to the rifle.
   rifle: { pose: "Run_and_Shoot", hold: "clip", leftHandIK: true, fingerGrip: true, aimTwist: true },
-  // Two compact guns held apart in front of the chest; the second gun's grip is the left IK target.
+  // Two compact guns held apart and pushed forward.  The hands sit close to the arms' maximum
+  // reach (ArmIK keeps a small 4% safety bend), which gives the classic almost-straight dual-SMG
+  // silhouette instead of tucking both elbows beside the ribs.  The light pole influence only
+  // decides which way that remaining bend points.
   dual: {
-    pose: "@idle", hold: "chest", anchor: [0.17, -0.045, 0.42], pitchDeg: -3, runPitchDeg: -8,
-    runAnchorShift: [0, -0.04, -0.02], elbows: [0.95, -0.3, 0.35], elbowWeight: 1.8,
+    pose: "@idle", hold: "chest", anchor: [0.17, -0.055, 0.57], pitchDeg: -3, runPitchDeg: -6,
+    runAnchorShift: [0, -0.025, -0.015], elbows: [0.35, -0.3, 0.85], elbowWeight: 0.55,
     leftHandIK: true, fingerGrip: true, aimTwist: false,
   },
   // Stock in the right shoulder pocket (inside the shoulder joint), level; at a run the stock drops
