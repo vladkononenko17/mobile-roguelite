@@ -45,9 +45,14 @@ const moan = ([a, b], rate = 1) => ({ src: "zombie-moans/moans.ogg", start: a - 
 const SOUNDS = {
   // Weapons (The Free Firearm Sound Library, CC0; Kenney lasers).
   shot_pistol: { variants: cuts("firearms/X_39P.wav", [1.41, 6.45, 10.66], 0.5), fade: 0.3 },
-  // Pre-filtered rather than filtered at playback: stable on iOS and still clearly audible on its
-  // small speaker. All suppressed firearms share this dry mechanical pop.
-  shot_suppressed: { variants: cuts("firearms/X_39P.wav", [1.41, 6.45, 10.66], 0.42), filter: "lowpass=f=2400:p=2,highpass=f=120", fade: 0.2 },
+  // Purpose-built Hollywood-style suppressed shot (CC0, Freesound 855656). Short variants keep
+  // the metallic action and distinctive suppressor tail clear at the Uzi rapid cadence.
+  shot_suppressed: {
+    variants: [0.94, 1, 1.06].map((rate) => one({
+      src: "freesound/855656-suppressed-handgun.mp3", dur: 0.48, rate,
+    })),
+    fade: 0.16,
+  },
   shot_rifle: { variants: cuts("firearms/C_28P.wav", [0.61, 3.26, 6.02, 9.16], 0.38), fade: 0.25 },
   shot_shotgun: { variants: [...cuts("firearms/O_21P.wav", [0.43, 3.46], 0.85), ...cuts("firearms/H_21P.wav", [0.47, 3.07], 0.85)], fade: 0.5 },
   shot_plasma: { variants: [0, 2, 4].map((i) => one(kenney("scifi", `laserSmall_${pad(i)}`))), fade: 0.1 },

@@ -38,7 +38,23 @@ modelSelect.addEventListener("change", () => {
 /** Title screen (unless the link names a map), then the game. */
 async function main(): Promise<void> {
   audio.init(import.meta.env.BASE_URL);
-  const biome: BiomeId = menuWanted() ? await showMainMenu() : pickBiome();
+  const wantsMenu = menuWanted();
+  if (!wantsMenu) {
+    loadingText.textContent = "Tap to start with sound";
+    await new Promise<void>((resolve) => {
+      let started = false;
+      const start = () => {
+        if (started) return;
+        started = true;
+        loadingText.textContent = "Starting…";
+        resolve();
+      };
+      window.addEventListener("pointerup", start, { capture: true, once: true });
+      window.addEventListener("touchend", start, { capture: true, once: true });
+      window.addEventListener("keydown", start, { capture: true, once: true });
+    });
+  }
+  const biome: BiomeId = wantsMenu ? await showMainMenu() : pickBiome();
 
   // The loading screen wears the chapter's art and name.
   loading.style.background = `linear-gradient(rgba(13, 10, 8, 0.78), rgba(13, 10, 8, 0.94)), center / cover no-repeat url("${import.meta.env.BASE_URL}menu/${biome}.webp"), #1c1612`;

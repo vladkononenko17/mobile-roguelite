@@ -22,7 +22,7 @@ interface Rule {
 
 const RULES: Record<string, Rule> = {
   shot_pistol: { volume: 0.5, pitch: 0.06, voices: 3 },
-  shot_suppressed: { volume: 0.5, pitch: 0.04, voices: 4 },
+  shot_suppressed: { volume: 1.5, pitch: 0.04, voices: 4 },
   shot_rifle: { volume: 0.4, pitch: 0.06, voices: 4 },
   shot_shotgun: { volume: 0.55, pitch: 0.05, voices: 2 },
   shot_plasma: { volume: 0.3, pitch: 0.08, voices: 4 },
