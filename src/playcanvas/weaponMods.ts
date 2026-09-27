@@ -26,6 +26,7 @@ export interface WeaponModDef {
     magazine?: number;
     reload?: number;
     soundVolume?: number;
+    soundLowpassHz?: number;
     muzzleSize?: number;
   };
 }
@@ -48,10 +49,12 @@ export const WEAPON_MODS: readonly WeaponModDef[] = [
     name: "Suppressor",
     slot: "muzzle",
     cost: 35,
-    text: "Quieter shots · -20% spread · smaller muzzle flash",
+    text: "Muffled shots · -20% spread · smaller muzzle flash",
     weapons: TEST_WEAPONS,
     visual: { url: SUPPRESSOR_URL, mount: "Attach_Muzzle", muzzleExtension: 0.148 },
-    stats: { spread: 0.8, soundVolume: 0.32, muzzleSize: 0.45 },
+    // Keep the shot audible on a phone speaker. The low-pass provides the suppressed character;
+    // gain reduction alone made compact weapons effectively silent under music and enemy voices.
+    stats: { spread: 0.8, soundVolume: 0.78, soundLowpassHz: 2400, muzzleSize: 0.45 },
   },
   {
     id: "reflex",
@@ -98,7 +101,12 @@ export function applyWeaponMods(base: WeaponStats, mods: Iterable<WeaponModId>, 
   const result: WeaponStats = {
     ...base,
     fx: base.fx ? { ...base.fx } : undefined,
-    audio: { id: base.audio?.id ?? fallbackSound, volume: base.audio?.volume ?? 1, rate: base.audio?.rate ?? 1 },
+    audio: {
+      id: base.audio?.id ?? fallbackSound,
+      volume: base.audio?.volume ?? 1,
+      rate: base.audio?.rate ?? 1,
+      lowpassHz: base.audio?.lowpassHz,
+    },
   };
   for (const id of mods) {
     const m = weaponMod(id).stats;
@@ -109,6 +117,7 @@ export function applyWeaponMods(base: WeaponStats, mods: Iterable<WeaponModId>, 
     result.magazine = Math.max(1, Math.round(result.magazine * (m.magazine ?? 1)));
     result.reloadSeconds *= m.reload ?? 1;
     result.audio!.volume! *= m.soundVolume ?? 1;
+    if (m.soundLowpassHz !== undefined) result.audio!.lowpassHz = m.soundLowpassHz;
     if (m.muzzleSize !== undefined) {
       result.fx ??= {};
       result.fx.muzzleSize = (result.fx.muzzleSize ?? (result.pellets > 1 ? 0.32 : 0.22)) * m.muzzleSize;

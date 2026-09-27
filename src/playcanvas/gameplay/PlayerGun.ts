@@ -231,7 +231,7 @@ export class PlayerGun {
     this.ammo--;
     this.shotCount++;
     const shot = stats.audio ?? { id: `shot_${this.weaponKey}`, volume: 1, rate: 1 };
-    audio.play(shot.id, { volume: shot.volume, rate: shot.rate });
+    audio.play(shot.id, { volume: shot.volume, rate: shot.rate, lowpassHz: shot.lowpassHz });
     const muzzle = weapon.muzzle(this.muzzle, this.shotCount - 1) ?? this.muzzle.copy(this.origin);
     const fx = stats.fx;
     this.effects.muzzleFlash(muzzle, fx?.muzzleSize ?? (stats.pellets > 1 ? 0.32 : 0.22), fx?.muzzle);

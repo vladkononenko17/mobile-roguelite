@@ -21,7 +21,8 @@ test("suppressor and reflex sight project their weapon stats", () => {
   assert.ok(Math.abs(result.range - 11.8) < 1e-9);
   assert.ok(Math.abs(result.spreadDeg - 5.76) < 1e-9);
   assert.equal(result.audio?.id, "shot_test");
-  assert.equal(result.audio?.volume, 0.32);
+  assert.equal(result.audio?.volume, 0.78);
+  assert.equal(result.audio?.lowpassHz, 2400);
   assert.ok(Math.abs((result.fx?.muzzleSize ?? 0) - 0.099) < 1e-9);
 });
 
