@@ -63,8 +63,8 @@ export interface WeaponStats {
   reloadSeconds: number;
   /** Knockback per hit (m). */
   knockback: number;
-  /** Reuses the small shared sound library; gain, pitch and filtering distinguish weapon variants. */
-  audio?: { id: string; volume?: number; rate?: number; lowpassHz?: number };
+  /** Reuses the small shared sound library; gain and pitch distinguish weapon variants. */
+  audio?: { id: string; volume?: number; rate?: number };
   /** Look and extra effects (energy / infernal guns); plain bullets without it. */
   fx?: WeaponFx;
 }

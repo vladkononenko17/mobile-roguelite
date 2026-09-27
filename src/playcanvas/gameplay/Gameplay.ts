@@ -906,7 +906,7 @@ export class Gameplay {
   /** Starts loading the sounds this run can play: the map's, the weapons', its enemies' voices. */
   private preloadSounds(types: Set<EnemyId>): void {
     const weaponSounds = Object.entries(WEAPON_STATS).map(([id, stats]) => stats?.audio?.id ?? `shot_${id}`);
-    const sounds = new Set<string>([...COMMON_SOUNDS, ...footstepsOf(this.biome), ...weaponSounds]);
+    const sounds = new Set<string>([...COMMON_SOUNDS, ...footstepsOf(this.biome), ...weaponSounds, "shot_suppressed"]);
     for (const id of types) {
       const def = ENEMIES[id];
       const voice = voiceOf(id, def);

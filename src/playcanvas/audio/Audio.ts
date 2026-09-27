@@ -22,6 +22,7 @@ interface Rule {
 
 const RULES: Record<string, Rule> = {
   shot_pistol: { volume: 0.5, pitch: 0.06, voices: 3 },
+  shot_suppressed: { volume: 0.5, pitch: 0.04, voices: 4 },
   shot_rifle: { volume: 0.4, pitch: 0.06, voices: 4 },
   shot_shotgun: { volume: 0.55, pitch: 0.05, voices: 2 },
   shot_plasma: { volume: 0.3, pitch: 0.08, voices: 4 },
@@ -74,8 +75,6 @@ export interface PlayOptions {
   volume?: number;
   /** Playback rate multiplier (lower = deeper). */
   rate?: number;
-  /** Optional low-pass cutoff used for muffled/suppressed weapon shots. */
-  lowpassHz?: number;
 }
 
 type Loaded = AudioBuffer[] | Promise<void> | null;
@@ -237,15 +236,7 @@ class AudioManager {
     source.playbackRate.value = jitter * (options.rate ?? 1);
     const gain = ctx.createGain();
     gain.gain.value = volume;
-    let filter: BiquadFilterNode | null = null;
-    if (options.lowpassHz !== undefined) {
-      filter = ctx.createBiquadFilter();
-      filter.type = "lowpass";
-      filter.frequency.value = options.lowpassHz;
-      filter.Q.value = 0.7;
-      source.connect(filter);
-      filter.connect(gain);
-    } else source.connect(gain);
+    source.connect(gain);
     if (pan && ctx.createStereoPanner) {
       const panner = ctx.createStereoPanner();
       panner.pan.value = pan;
@@ -257,7 +248,6 @@ class AudioManager {
     source.onended = () => {
       this.active.set(id, Math.max(0, (this.active.get(id) ?? 1) - 1));
       source.disconnect();
-      filter?.disconnect();
       gain.disconnect();
     };
     source.start();
