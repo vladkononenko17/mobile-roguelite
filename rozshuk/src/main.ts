@@ -1,7 +1,14 @@
 import "./rozshuk.css";
 import { Scene3D } from "./Scene3D";
 import { Music } from "./music";
-import { isMusicMuted, isMuted, play, setMusicMuted, setMuted, unlockAudio } from "./sfx";
+import { isMusicMuted, isMuted, play, setMusicMuted, setMuted, unlockAudio as unlockSfx } from "./sfx";
+import { voice } from "./voice";
+
+let voiceUnlocked = false;
+function unlockAudio(): void {
+  unlockSfx();
+  if (!voiceUnlocked) { voiceUnlocked = true; voice.unlock(); }
+}
 import {
   ACTIONS, ENDINGS, KNOCK_TEXT, PERKS, SPEAKERS, TRAITS, perkById,
   type ActionId, type Msg, type PerkId, type TraitId,
@@ -476,6 +483,9 @@ function handleOutingEvents(ev: OutingEvent[]): void {
         stepT++;
         if (stepT % 1 === 0) play("step");
         break;
+      case "say":
+        voice.say(e.text, e.id === "babka" ? "babka" : e.id === "me" ? "me" : "officer");
+        break;
       case "spotted":
         play("spotted");
         setTimeout(() => play("whistle"), 250);
@@ -493,6 +503,7 @@ function handleOutingEvents(ev: OutingEvent[]): void {
         break;
       }
       case "caught":
+        voice.say("Ні-ні-ні, я ж на удальонці!", "me");
         play("van");
         setTimeout(() => play("fail"), 700);
         void finishOuting();
@@ -864,6 +875,9 @@ function syncGfx(): void {
 }
 
 function syncAudio(): void {
+  const v = $("#voice-button");
+  v.textContent = voice.available ? `ГОЛОСИ: ${voice.on ? "ВКЛ" : "ВИКЛ"}` : "ГОЛОСИ: НЕМАЄ УКР. ГОЛОСУ";
+  v.setAttribute("aria-pressed", String(voice.on && voice.available));
   const s = $("#sound-button");
   const m = $("#music-button");
   s.textContent = `ЗВУКИ: ${isMuted() ? "ВИКЛ" : "ВКЛ"}`;
@@ -917,6 +931,7 @@ $("#quit-button").addEventListener("click", () => {
 });
 $("#sound-button").addEventListener("click", () => { setMuted(!isMuted()); syncAudio(); play("click"); });
 $("#music-button").addEventListener("click", () => { setMusicMuted(!isMusicMuted()); syncAudio(); });
+$("#voice-button").addEventListener("click", () => { voice.on = !voice.on; syncAudio(); if (voice.on) voice.say("Голоси увімкнено", "me"); });
 $("#gfx-button").addEventListener("click", () => { scene.setQuality(GFX_NEXT[scene.quality]); syncGfx(); play("click"); });
 document.addEventListener("visibilitychange", () => { if (document.hidden && sim && sim.phase === "explore") togglePause(); });
 
@@ -926,8 +941,10 @@ scene.onFrame = (dt) => {
   if (sim) frameOuting(dt);
 };
 
+voice.load();
 syncAudio();
 syncGfx();
+window.speechSynthesis?.addEventListener?.("voiceschanged", syncAudio);
 renderStart();
 scene.showMenu();
 music.mode = "home";
