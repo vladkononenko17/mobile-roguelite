@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#2b5a9a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Розшук</title>
+    <link rel="manifest" href="%BASE_URL%rozshuk/manifest.webmanifest" />
+    <link rel="icon" href="%BASE_URL%rozshuk/icon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <main id="game-shell" aria-label="Гра «Розшук»">
+      <div id="game"></div>
+      <div id="fx" aria-hidden="true"></div>
+      <div class="paper-grain" aria-hidden="true"></div>
+      <div id="alert-vignette" aria-hidden="true"></div>
+
+      <!-- ===== home HUD ===== -->
+      <section id="home-hud" class="hidden" aria-label="Стан">
+        <div class="day-row">
+          <div class="day-chip"><span id="day-text">ДЕНЬ 1/30</span><b id="level-title">Повістка в ящику</b></div>
+          <button id="home-pause" class="icon-button" aria-label="Меню">Ⅱ</button>
+        </div>
+        <div class="stats">
+          <div class="stat"><em>💰</em><b id="st-money">15 000 ₴</b></div>
+          <div class="stat"><em>🥫</em><b id="st-food">3</b><small>запаси</small></div>
+          <div class="stat bar" title="Ситість"><em>🍲</em><small>ситість</small><div class="ink-bar"><i id="st-satiety" class="fill-food"></i></div></div>
+          <div class="stat bar" title="Нерви"><em>🧠</em><small>нерви</small><div class="ink-bar"><i id="st-nerves" class="fill-nerves"></i></div></div>
+          <div class="stat bar" title="Розшук"><em>🔎</em><small>розшук</small><div class="ink-bar"><i id="st-heat" class="fill-heat"></i></div></div>
+        </div>
+        <div id="status-row" class="status-row"></div>
+      </section>
+
+      <section id="home-panel" class="hidden" aria-label="Дії вдома">
+        <div class="ap-row"><span>ДІЇ НА СЬОГОДНІ</span><div id="ap-pips" class="ap-pips"></div></div>
+        <div id="action-grid" class="action-grid"></div>
+        <div class="home-buttons">
+          <button id="chat-button" class="secondary-button chat-btn">💬<i id="chat-badge" class="hidden">!</i></button>
+          <button id="go-button" class="primary-button">НА ВИЛАЗКУ →</button>
+        </div>
+      </section>
+
+      <!-- ===== outing HUD ===== -->
+      <section id="out-hud" class="hidden" aria-label="Вилазка">
+        <div class="hud-row">
+          <div class="alert-block"><span class="hud-tag">👁</span><div class="ink-bar"><i id="alert-bar"></i></div><b id="alert-text">ТИХО</b></div>
+          <button id="out-pause" class="icon-button" aria-label="Пауза">Ⅱ</button>
+        </div>
+        <div class="mission-strip"><span id="out-day">ДЕНЬ 1</span><b id="out-time">0:00</b><span id="out-money">0 ₴</span></div>
+        <ul id="obj-list" class="obj-list"></ul>
+        <div class="stamina"><span>⚡</span><div class="ink-bar"><i id="stamina-fill"></i></div></div>
+      </section>
+      <div id="controls" class="hidden">
+        <div id="stick-zone"><div id="stick-base" class="hidden"><div id="stick-knob"></div></div><p class="stick-hint">ТЯГНИ, ЩОБ ЙТИ</p></div>
+        <button id="act-button" class="round act hidden">ПЕРЕ&shy;ЛІЗТИ</button>
+        <button id="sprint-button" class="round">БІГ</button>
+      </div>
+
+      <!-- ===== QTE ===== -->
+      <section id="qte" class="hidden" aria-live="assertive">
+        <div class="qte-card">
+          <p id="qte-title" class="eyebrow"></p>
+          <h3 id="qte-prompt"></h3>
+          <div class="qte-timer"><i id="qte-timer"></i></div>
+          <div id="qte-body"></div>
+        </div>
+      </section>
+
+      <!-- ===== screens ===== -->
+      <section id="start-screen" class="screen active">
+        <div class="sticker">РОГЛАЙТ · 18+</div>
+        <p class="eyebrow">30 ДНІВ · 15 ВИЛАЗОК · 2 ШЛЯХИ</p>
+        <h1>РОЗ<br /><span>ШУК</span></h1>
+        <p class="lead">Тебе оголосили в розшук. Протримайся місяць у квартирі — і вирішуй: через ліс чи офіційно.</p>
+        <div id="trait-list" class="trait-list" role="group" aria-label="Хто ти"></div>
+        <button id="continue-button" class="primary-button hidden">ПРОДОВЖИТИ</button>
+        <button id="start-button" class="primary-button">НОВИЙ ЗАБІГ</button>
+        <p id="meta-line" class="hint"></p>
+      </section>
+
+      <section id="chat-screen" class="screen chat">
+        <div class="chat-head"><b>💬 ПОВІДОМЛЕННЯ</b><span id="chat-day"></span></div>
+        <div id="chat-list" class="chat-list"></div>
+        <button id="chat-ok" class="primary-button">ЗРОЗУМІВ</button>
+      </section>
+
+      <section id="event-screen" class="screen compact">
+        <div id="event-icon" class="big-icon">📦</div>
+        <p class="eyebrow">ПОДІЯ</p>
+        <h2 id="event-title"></h2>
+        <p id="event-text" class="lead"></p>
+        <div id="event-choices" class="choice-col"></div>
+      </section>
+
+      <section id="brief-screen" class="screen">
+        <p id="brief-eyebrow" class="eyebrow">ДНІ 1–2 · ВИЛАЗКА</p>
+        <h2 id="brief-title"></h2>
+        <p id="brief-text" class="lead"></p>
+        <ul id="brief-objs" class="brief-objs"></ul>
+        <div id="brief-notes" class="brief-notes"></div>
+        <button id="brief-go" class="primary-button">ВИХОДИМО</button>
+        <button id="brief-back" class="secondary-button">ЩЕ ПОСИДЖУ ВДОМА</button>
+        <p class="hint">Стій у кущах і підʼїздах — тебе не видно. Біг — гучний. Червоний конус — тебе помітили.</p>
+      </section>
+
+      <section id="result-screen" class="screen">
+        <p id="result-eyebrow" class="eyebrow">ВИЛАЗКА</p>
+        <h2 id="result-title">ПОВЕРНУВСЯ</h2>
+        <div id="result-stats" class="results"></div>
+        <div id="result-chat" class="chat-list mini"></div>
+        <button id="result-next" class="primary-button">ДАЛІ</button>
+      </section>
+
+      <section id="perk-screen" class="screen">
+        <p class="eyebrow">ДОСВІД ВТІКАЧА</p>
+        <h2>ОБЕРИ ОДНЕ</h2>
+        <div id="perk-list" class="perk-list"></div>
+        <button id="perk-skip" class="secondary-button">НІЧОГО НЕ ТРЕБА</button>
+      </section>
+
+      <section id="fork-screen" class="screen">
+        <p class="eyebrow">ДЕНЬ 14 · РОЗВИЛКА</p>
+        <h2>ЯК ВИБИРАТИСЯ?</h2>
+        <button class="path-card border" data-path="border">
+          <b>🌲 КОРДОН — НЕЗАКОННО</b>
+          <span>Мольфар веде через ліс і річку. ~70 000 ₴. Вокзал, нічний потяг, село, дрони з тепловізором, прикордонники, крижана вода. Документів немає — тільки тікати.</span>
+          <small>Складніше на вилазках · дешевше</small>
+        </button>
+        <button class="path-card legal" data-path="legal">
+          <b>🕴️ ОФІЦІЙНО — ДОРОГО</b>
+          <span>Аркадій «вирішує»: робота на критичному підприємстві, бронь, відрядження. ~170 000 ₴ і походи по установах — навіть у ТЦК. З броню перевірку можна пройти.</span>
+          <small>Треба багато працювати · безпечніше потім</small>
+        </button>
+      </section>
+
+      <section id="end-screen" class="screen">
+        <div id="end-sticker" class="sticker">КІНЕЦЬ</div>
+        <h2 id="end-title"></h2>
+        <p id="end-text" class="lead"></p>
+        <div id="end-stats" class="results"></div>
+        <p id="end-xp" class="unlock-line"></p>
+        <button id="end-button" class="primary-button">НОВИЙ ЗАБІГ</button>
+      </section>
+
+      <section id="pause-screen" class="screen compact">
+        <p class="eyebrow">ПЕРЕКУР</p>
+        <h2>ПАУЗА</h2>
+        <button id="resume-button" class="primary-button">ДАЛІ</button>
+        <div class="audio-row" role="group" aria-label="Звук">
+          <button id="sound-button" class="audio-toggle">ЗВУКИ: ВКЛ</button>
+          <button id="music-button" class="audio-toggle">МУЗИКА: ВКЛ</button>
+        </div>
+        <button id="quit-button" class="secondary-button">В МЕНЮ</button>
+        <p class="hint">Забіг зберігається вдома. Покинута вилазка — розшук +10.</p>
+      </section>
+
+      <div id="toast" role="status" aria-live="polite"></div>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

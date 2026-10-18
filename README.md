@@ -1,6 +1,6 @@
 # Neon Hollow: Dustline
 
-> This repo also hosts a second game, **«Не клюёт»** (Russian-language fishing rage-management roguelite) at `/fishing/` — see [its section below](#не-клюёт-fishing).
+> This repo also hosts two more games: **«Не клюёт»** (fishing rage-management roguelite) at `/fishing/` — see [its section](#не-клюёт-fishing) — and **«Розшук»** (Ukrainian-language survival stealth roguelite) at `/rozshuk/` — see [its section](#розшук-rozshuk).
 
 A mobile-first comic-wasteland action roguelite inspired by the tactile weapon loop of arcade survival shooters. The game runs directly in the browser and is designed for portrait play on iPhone.
 
@@ -79,3 +79,20 @@ VOICE_TOLIK=<id> npm run voices -- --force        # re-record with your own voic
 The shipped recordings (`public/fishing/voice/`, 133 lines, ~3.3 MB, trimmed and loudness-normalised) were made with ElevenLabs `eleven_v4` and inline direction tags: Tolik — *Alex, Calm Russian Analyst*; the hero — *Mikhail*; the announcer — *Nester Surovy*. The game plays a recording when one exists and falls back to device speech otherwise. The API key is only used by the script and never ships with the game. For playtesting in the browser console: `__fishing.sim.rage = 95`.
 
 Desktop keys: Space strike/hold to reel · 1 beer · 2 smoke · 3 TikTok/next · X close phone · hold 4 steal · P pause.
+
+## «Розшук» (rozshuk)
+
+A third vertical slice in the same toolchain, in Ukrainian: a roguelite + survival + QTE game rendered in low-poly 3D with Three.js. Served at `/mobile-roguelite/rozshuk/`.
+
+You are wanted by the draft office (ТЦК) and have to last **30 days** in your flat. The month is **15 levels** (two days each): a morning at home, then an outing (вилазка) — take out the trash, buy food, pick up a laptop charger, fetch a power station in a blackout, rescue a friend's cat from a raided market. After day 14 the story **forks**:
+
+- **Кордон (illegal):** cheaper (~70 000 ₴) but harder — a guarded station, a raid on the night train, a village with dogs, a forest watched by a thermal drone, and a freezing river crossing.
+- **Офіційно (legal):** a fixer arranges a job at a "critical" company, a deferment and a business trip — ~170 000 ₴ of remote work and visits to the bank, ЦНАП and even the draft office itself; with papers in hand a document check can be passed, and the border booth asks questions only the right papers answer.
+
+- **Home (survival):** money, food stock, satiety, nerves and heat (розшук). Three actions a day: remote work (a ticket-closing timing minigame), eat, sleep, read the «Де бус?» chat to see patrol routes, call mum, push-ups, pet the cat. Random events (blackouts, scam calls, a parcel from mum, rising prices) and, at high heat, a knock on the door — hold your breath.
+- **Outing (stealth):** patrols see in cones that turn yellow → red; standing still in a bush or doorway hides you; sprinting is loud; grannies on benches phone it in; vans unload officers; curfew brings police. Get caught and a QTE chain decides: wriggle free (mash), talk your way out (swipe), show your deferment (choice), then jump out of the van (mash). Fail and the run ends — «Бусифікація».
+- **Roguelite:** per-run seeds shuffle bushes, objective spots and extra patrols (more with heat); pick one of three perks after every level (sneakers, black hoodie, a dog, parkour, a lawyer on speed dial…); finished runs bank experience that unlocks starting traits (IT guy, athlete, quiet one, mummy's boy, an MP's nephew).
+
+Rules are pure TypeScript with no rendering imports — `rozshuk/src/outing.ts` (stealth simulation on ASCII maps from `maps.ts`), `qte.ts`, `run.ts` (the month, home actions, fork, endings) and `content.ts` (story, levels, perks, events) — covered by `tests/rozshuk.test.mjs`, including checks that every level is reachable and finishable and that a careful player can afford the legal path. All 3D is original low-poly geometry built in code (`rozshuk/src/three/models.ts`) with procedural canvas textures (panel-block facades with lit windows, pixel camo, garages with graffiti, the carpet on the wall), so there are no third-party assets to license; sound effects and the score are synthesized with WebAudio. Static props are merged per material at load, so a level renders in roughly 100–300 draw calls.
+
+Controls: drag anywhere in the lower part of the screen to walk, hold **БІГ** to sprint, **ПЕРЕЛІЗТИ** appears next to climbable fences. Desktop: WASD/arrows, Shift sprint, E vault, Space/arrows/1–4 in QTEs, P pause. Progress (the run in progress and meta experience) is saved on the device. For playtesting from the console: `__rozshuk.run`, `__rozshuk.sim`.
