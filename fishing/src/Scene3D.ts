@@ -1198,7 +1198,7 @@ export class Scene3D {
         this.onHazard(e.hazard);
         break;
       case "hazardEnd":
-        if (e.hazard === "nadzor" && !this.sim.snapshot().fines) this.toast("РЫБНАДЗОР УПЛЫЛ. ПРОНЕСЛО");
+        if (e.hazard === "nadzor" && !this.sim.snapshot().fines) this.toast("РИБПАТРУЛЬ УПЛЫЛ. ПРОНЕСЛО");
         if (e.hazard === "mosquito") this.toast("КОМАРЫ НАЕЛИСЬ");
         break;
       case "fine":

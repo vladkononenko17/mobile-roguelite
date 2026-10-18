@@ -97,7 +97,7 @@ const THEME_COLOR: Record<string, string> = {
 const TIPS: Record<number, string> = {
   1: "Поплавок справится", 2: "Опарыш спасёт нервы", 3: "Тут нужен фидер", 4: "Фидер + кукуруза",
   5: "Спиннинг по мутантам", 6: "Карп на фидер", 7: "Только мормышка", 8: "Щука на спиннинг",
-  9: "Без пива при надзоре", 10: "Лучшее, что есть",
+  9: "Без пива при рибпатруле", 10: "Лучшее, что есть",
 };
 const fmtMoney = (n: number) => `${Math.round(n).toLocaleString("ru-RU")} ГРН`;
 const fmtKg = (n: number) => String(Math.round(n * (n >= 10 ? 10 : 100)) / (n >= 10 ? 10 : 100)).replace(".", ",");
@@ -140,7 +140,7 @@ function buzz(ms: number | number[]): void {
 const HAZARD_ICON: Record<string, string> = {
   wife: "📞 ЖЕНА НА ПРОВОДЕ", mosquito: "🦟 КОМАРЫ", gopniki: "🧢 ГОПНИКИ", jetski: "🚤 ГИДРОЦИКЛ", neighbors: "🎸 СОСЕДИ",
   dump: "🏭 СБРОС ВОДЫ", ashot: "👮 АШОТ БДИТ", tolikCheat: "💸 ТОЛИК ЖУЛЬНИЧАЕТ", iceCrack: "⚠️ ЛЁД ТРЕЩИТ", leech: "🩸 ПИЯВКА",
-  nadzor: "🚨 РЫБНАДЗОР", crowd: "📣 ТОЛПА", drone: "🛸 ДРОН",
+  nadzor: "🚨 РИБПАТРУЛЬ", crowd: "📣 ТОЛПА", drone: "🛸 ДРОН",
 };
 
 function hookLabel(s: SimSnapshot): string {
