@@ -265,6 +265,10 @@ describe('run', () => {
   });
   it('hunger and nerves bite; perks are offered between levels', () => {
     const s = newRun('it', 2);
+    // level 1 has no perk offer: straight to the next morning
+    endOuting(s, autoplay(new OutingSim(outingContext(s))).result());
+    assert.equal(s.phase, 'home');
+    assert.equal(s.levelId, '2');
     s.satiety = 10; s.nerves = 95;
     const sim = autoplay(new OutingSim(outingContext(s)));
     endOuting(s, sim.result());
@@ -274,7 +278,7 @@ describe('run', () => {
     choosePerk(s, s.perkOffer[0]);
     assert.equal(s.satiety, 0);
     assert.ok(s.breakdown, 'nerves at 100 cause a breakdown');
-    assert.equal(s.levelId, '2');
+    assert.equal(s.levelId, '3');
   });
 });
 

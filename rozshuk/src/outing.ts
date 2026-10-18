@@ -58,6 +58,10 @@ export interface OutingContext {
   doorWatch: boolean;
   /** Shop price multiplier. */
   prices: number;
+  /** Money still owed from an earlier payment (legal path). */
+  debt?: number;
+  /** Papers held back until that debt is paid. */
+  owed?: string[];
 }
 
 export type PatrolState = "route" | "pause" | "look" | "investigate" | "chase" | "search" | "return" | "stunned" | "parked";
@@ -91,6 +95,8 @@ export interface Patrol {
   step: number;
   /** Van that spawned officers waits. */
   spawned: boolean;
+  /** Seconds the courier disguise has already bought from this patrol. */
+  fooled: number;
 }
 
 export interface Babka { x: number; z: number; suspicion: number; cooldown: number; friendly: boolean; calling: number }
@@ -149,6 +155,9 @@ export interface OutingResult {
   perfect: boolean;
   time: number;
   lawyerUsed: boolean;
+  /** Outstanding debt after this outing. */
+  debt: number;
+  settled: string[];
 }
 
 interface KindStats { speed: number; chase: number; fov: number; range: number; rate: number }
@@ -223,6 +232,12 @@ export class OutingSim {
   flagsSet: string[] = [];
   unpaid: string[] = [];
   lawyerUsed = false;
+  /** Times you were grabbed this outing. */
+  grabs = 0;
+  /** Owed to the fixer: added to the next payment. */
+  debtLeft = 0;
+  /** Papers released by paying off the debt during this outing. */
+  settled: string[] = [];
   private riverFails = 0;
   private boothStep = 0;
   private boothFails = 0;
@@ -242,6 +257,7 @@ export class OutingSim {
     this.w = this.rows[0].length;
     this.cells = this.rows.map((row) => row.split("").map((ch) => (ch === "*" && this.rng() < 0.18 ? "." : ch)));
     this.heatMult = 1 + clamp(ctx.heat, 0, 100) / 100 * 0.6;
+    this.debtLeft = ctx.debt ?? 0;
     const has = (p: string) => ctx.perks.includes(p);
 
     // stamina
@@ -281,6 +297,7 @@ export class OutingSim {
 
     // objectives (pick one of "1|2" style slots per run)
     for (const def of ctx.level.objectives) {
+      if (def.onlyIfDebt && !(ctx.debt ?? 0)) continue;
       const options = def.slot.split("|");
       const slot = options[Math.floor(this.rng() * options.length)];
       const pos = this.slotPos(slot);
@@ -290,8 +307,9 @@ export class OutingSim {
     // patrols: fixed + some from the pool by heat and luck
     for (const def of ctx.level.patrols) this.addPatrol(def);
     const pool = [...ctx.level.pool];
-    let extra = Math.floor(ctx.heat / 30) + (this.rng() < 0.3 ? 1 : 0);
-    if (ctx.level.n <= 1) extra = Math.min(extra, 0);
+    // one more patrol per ~35 heat plus some luck, never more than two extra
+    let extra = Math.min(2, Math.floor(ctx.heat / 35) + (this.rng() < 0.3 ? 1 : 0));
+    if (ctx.level.n <= 1) extra = 0;
     else if (ctx.level.n <= 3) extra = Math.min(extra, 1);
     while (extra-- > 0 && pool.length) {
       const i = Math.floor(this.rng() * pool.length);
@@ -438,7 +456,7 @@ export class OutingSim {
     const p: Patrol = {
       id: this.nextId++, kind: def.kind, x: pos.x, z: pos.z, dir: this.rng() * Math.PI * 2, state: "route",
       suspicion: 0, seeing: 0, route, ping: !!def.ping, wp, wpStep: 1, path: [], timer: 0, scanBase: 0,
-      lastSeen: { ...pos }, losT: 0, repath: 0, seenFor: 0, ignoreT: 0, moving: false, step: this.rng() * 10, spawned: false,
+      lastSeen: { ...pos }, losT: 0, repath: 0, seenFor: 0, ignoreT: 0, moving: false, step: this.rng() * 10, spawned: false, fooled: 0,
     };
     p.scanBase = p.dir;
     if (route.length > 1) p.wp = (wp + 1) % route.length;
@@ -531,7 +549,7 @@ export class OutingSim {
     const moving = Math.hypot(this.moveX, this.moveZ) > 0.08;
     const wantSprint = this.sprintHeld && moving && this.stamina > 1;
     this.sprinting = wantSprint;
-    let walk = 3.3 * (has("scooter") ? 1.15 : 1);
+    let walk = 3.3 * (has("scooter") ? 1.2 : 1);
     if (this.ctx.satiety < 15) walk *= 0.9;
     const speed = this.sprinting ? 5.7 : walk;
     if (this.sprinting) {
@@ -694,11 +712,12 @@ export class OutingSim {
       p.seenFor += dt;
       p.lastSeen = { x: this.px, z: this.pz };
       let rate = 0.95 * k.rate * see * this.heatMult;
-      if (has("dog")) rate *= 0.75;
+      if (has("dog")) rate *= 0.65;
       if (this.ctx.trait === "quietguy") rate *= 0.8;
       if (this.sprinting) rate *= 1.5;
       if (this.curfewOn) rate *= 1.3;
-      if (has("courier") && p.seenFor < 1.5) rate = 0;
+      // the courier disguise fools each patrol once, for under a second in total
+      if (has("courier") && p.fooled < 0.8) { p.fooled += dt; rate = 0; }
       if (p.state !== "chase") p.suspicion = Math.min(1, p.suspicion + rate * dt);
     } else {
       p.seenFor = 0;
@@ -810,7 +829,7 @@ export class OutingSim {
           p.scanBase = p.dir;
           p.suspicion = 0.55;
           this.escapes++;
-          this.heatGain += 4;
+          this.heatGain += 3;
           this.emit({ type: "lost", id: p.id });
           this.emit({ type: "say", id: p.id, text: SHOUT_LOST[Math.floor(this.rng() * SHOUT_LOST.length)], x: p.x, z: p.z });
         }
@@ -841,7 +860,7 @@ export class OutingSim {
     p.losT = 0;
     p.repath = 0;
     this.spotted++;
-    this.heatGain += 3;
+    this.heatGain += 2;
     this.emit({ type: "spotted", id: p.id });
     this.emit({ type: "say", id: p.id, text: SHOUT_SPOT[Math.floor(this.rng() * SHOUT_SPOT.length)], x: p.x, z: p.z });
   }
@@ -869,7 +888,7 @@ export class OutingSim {
       } else {
         // drone / boat: call the nearest ground patrol
         p.suspicion = 0.35;
-        this.heatGain += 4;
+        this.heatGain += 3;
         this.emit({ type: "droneSpot", id: p.id });
         const ground = this.patrols.filter((g) => g.kind !== "drone" && g.kind !== "boat" && g.kind !== "van" && g.state !== "stunned");
         ground.sort((a, b) => Math.hypot(a.x - this.px, a.z - this.pz) - Math.hypot(b.x - this.px, b.z - this.pz));
@@ -930,7 +949,7 @@ export class OutingSim {
         b.suspicion = 0;
         b.cooldown = 15;
         b.calling = 3;
-        this.heatGain += 5;
+        this.heatGain += 4;
         this.emit({ type: "babkaCall", x: b.x, z: b.z });
         this.emit({ type: "say", id: "babka", text: BABKA_CALL[Math.floor(this.rng() * BABKA_CALL.length)], x: b.x, z: b.z });
         // the nearest patrol comes to check
@@ -1002,6 +1021,7 @@ export class OutingSim {
 
   priceOf(o: ObjState): number {
     const base = o.def.cost ?? 0;
+    if (o.def.kind === "pay") return base + this.debtLeft;
     return o.def.kind === "shop" ? Math.round(base * this.ctx.prices) : base;
   }
 
@@ -1028,8 +1048,18 @@ export class OutingSim {
     if (def.kind === "booth") { this.boothStep = 0; this.boothFails = 0; this.nextBooth(); return; }
     const price = this.priceOf(o);
     if (price > 0) {
-      if (this.wallet >= price) this.moneyDelta -= price;
-      else {
+      if (this.wallet >= price) {
+        this.moneyDelta -= price;
+        if (def.kind === "pay") {
+          // paying off the debt releases the papers held back
+          if (this.debtLeft > 0) for (const paper of this.ctx.owed ?? []) {
+            if (paper === "bron") this.items.push(paper);
+            else this.flagsSet.push(paper);
+            this.settled.push(paper);
+          }
+          this.debtLeft = 0;
+        }
+      } else {
         o.short = true;
         this.emit({ type: "noMoney", slot: o.slot });
         if (def.kind === "shop" && def.gives?.food) {
@@ -1041,6 +1071,8 @@ export class OutingSim {
           return;
         }
         if (def.kind === "pay") {
+          // what you could not pay is owed at the next payment
+          this.debtLeft = price;
           if (def.gives?.flag) this.unpaid.push(def.gives.flag);
           if (def.gives?.item) this.unpaid.push(def.gives.item);
           this.finish(o, false);
@@ -1087,12 +1119,15 @@ export class OutingSim {
 
   private grab(p: Patrol): void {
     this.grabbedBy = p.id;
+    this.grabs++;
     this.emit({ type: "grab", id: p.id });
     const opts = [
       { id: "run", label: "ВИРВАТИСЯ Й БІГТИ" },
       { id: "talk", label: "ЗАГОВОРИТИ ЗУБИ" },
     ];
     if (this.ctx.items.includes("bron")) opts.push({ id: "docs", label: "ПОКАЗАТИ БРОНЬ" });
+    else if (this.level.id === "11b") opts.push({ id: "docs", label: "«Я НА ОНОВЛЕННЯ ДАНИХ, ОСЬ ЗАПИС»" });
+    else if (this.ctx.flags.job) opts.push({ id: "docs", label: "ДОВІДКА З РОБОТИ" });
     if (this.ctx.perks.includes("dog")) opts.push({ id: "dog", label: "«Я ПСА ВИГУЛЮЮ!»" });
     const time = this.ctx.perks.includes("tongue") ? 1.5 : 1;
     this.startQte("grab", choiceSpec("ПОПАВСЯ!", "«Чоловіче, ваші документи!» — що робиш?", opts, { ...this.mods, time: this.mods.time * time }, 3.6, "none"));
@@ -1110,8 +1145,10 @@ export class OutingSim {
         if (q.kind === "van" || q.kind === "drone" || q.kind === "boat") continue;
         if (Math.hypot(q.x - this.px, q.z - this.pz) < 4.5) { q.state = "stunned"; q.timer = how === "van" ? 2.6 : 2.1; q.suspicion = 1; }
       }
+      // the one who held you loses you for a moment: no instant re-grab in a corridor
+      if (p) { p.state = "search"; p.timer = 3.5; p.suspicion = 0.5; p.ignoreT = how === "van" ? 5 : 4; p.scanBase = p.dir + Math.PI; }
       this.stamina = Math.max(this.stamina, this.staminaMax * 0.7);
-      this.heatGain += how === "van" ? 14 : 7;
+      this.heatGain += how === "van" ? 12 : 6;
       this.escapes++;
     } else if (p) {
       p.state = "return";
@@ -1119,7 +1156,7 @@ export class OutingSim {
       p.ignoreT = how === "docs" ? 25 : 10;
       p.path = [];
       this.backToRoute(p);
-      this.heatGain += how === "docs" ? -2 : how === "lawyer" ? 10 : 8;
+      this.heatGain += how === "docs" ? -2 : how === "lawyer" ? 8 : 6;
       // others who were chasing calm down too
       for (const q of this.patrols) if (q !== p && q.state === "chase") { q.state = "search"; q.timer = 2; q.suspicion = 0.5; }
     }
@@ -1157,7 +1194,7 @@ export class OutingSim {
   private nextBooth(): void {
     const q = BOOTH[this.boothStep];
     const opts = [...q.wrong.map((w, i) => ({ id: `w${i}`, label: w }))];
-    if (this.ctx.flags[q.paper] || this.ctx.items.includes(q.paper)) opts.splice(Math.floor(this.rng() * (opts.length + 1)), 0, { id: "right", label: q.right });
+    if (this.ctx.flags[q.paper] || this.ctx.items.includes(q.paper) || this.flagsSet.includes(q.paper) || this.items.includes(q.paper)) opts.splice(Math.floor(this.rng() * (opts.length + 1)), 0, { id: "right", label: q.right });
     opts.push({ id: "bluff", label: "Блефувати впевнено" });
     this.startQte("booth", choiceSpec(`КПП ${this.boothStep + 1}/3`, `Прикордонник: «${q.q}»`, opts, this.mods, 7, "w0"));
   }
@@ -1171,13 +1208,16 @@ export class OutingSim {
     switch (ctx) {
       case "grab": {
         const choice = typeof r === "object" && r ? r.choice : "none";
-        if (choice === "run") this.startQte("escape", mashSpec("ВИРИВАЙСЯ!", "Тисни якомога швидше!", this.mods));
-        else if (choice === "talk") this.startQte("talkout", swipeSpec("ЗАГОВОРИ ЗУБИ", "Повторюй жести — бреши впевнено!", this.mods, 3));
+        // every grab in the same outing they hold on tighter
+        if (choice === "run") this.startQte("escape", mashSpec("ВИРИВАЙСЯ!", this.grabs > 1 ? `Тримають міцніше (${this.grabs}-й раз)! Тисни!` : "Тисни якомога швидше!", this.mods, (this.grabs - 1) * 4));
+        else if (choice === "talk") this.startQte("talkout", swipeSpec("ЗАГОВОРИ ЗУБИ", "Повторюй жести — бреши впевнено!", this.mods, 3 + (this.grabs - 1)));
         else if (choice === "docs") {
-          if (this.rng() < 0.88) this.release("docs");
+          // a deferment nearly always works; an appointment or a job paper sometimes
+          const odds = this.ctx.items.includes("bron") ? 0.88 : this.level.id === "11b" ? 0.7 : 0.5;
+          if (this.rng() < odds) this.release("docs");
           else { this.emit({ type: "say", id: this.grabbedBy, text: "Бронь? Покажіть оригінал…", x: this.px, z: this.pz }); this.toVan(); }
         } else if (choice === "dog") {
-          if (this.rng() < 0.55) this.release("dog");
+          if (this.rng() < 0.65) this.release("dog");
           else { this.emit({ type: "say", id: this.grabbedBy, text: "А де пес?", x: this.px, z: this.pz }); this.toVan(); }
         } else this.toVan();
         break;
@@ -1218,6 +1258,7 @@ export class OutingSim {
           if (opt.effect.nerves) this.nervesDelta += opt.effect.nerves;
           if (opt.effect.heat) this.heatGain += opt.effect.heat;
           if (opt.effect.flag) this.flagsSet.push(opt.effect.flag);
+          if (opt.effect.debt) this.debtLeft += opt.effect.debt;
         }
         if (opt && !opt.good) this.flagsSet.push(`bad_${this.talkKey}`);
         if (this.talkKey === "arkadiyFound" && choice === "pay" && this.wallet < 0) {
@@ -1259,7 +1300,7 @@ export class OutingSim {
       }
       case "booth": {
         const choice = typeof r === "object" && r ? r.choice : "w0";
-        if (choice === "bluff") { this.startQte("bluff", swipeSpec("БЛЕФ", "Тримай обличчя!", { ...this.mods, tier: 3 }, 5)); return; }
+        if (choice === "bluff") { this.startQte("bluff", swipeSpec("БЛЕФ", "Тримай обличчя!", { ...this.mods, tier: 3 }, 3)); return; }
         if (choice !== "right") this.boothFails++;
         this.afterBooth();
         break;
@@ -1312,6 +1353,8 @@ export class OutingSim {
       perfect: this.phase === "won" && this.spotted === 0,
       time: this.time,
       lawyerUsed: this.lawyerUsed,
+      debt: this.debtLeft,
+      settled: [...this.settled],
     };
   }
 }

@@ -30,6 +30,8 @@ export interface ObjectiveDef {
   gives?: { food?: number; money?: number; nerves?: number; heat?: number; item?: string; flag?: string };
   /** A dialogue played as a choice QTE when the dwell completes. */
   talk?: string;
+  /** Only appears while you owe the fixer money. */
+  onlyIfDebt?: boolean;
 }
 
 export interface PatrolDef {
@@ -201,16 +203,15 @@ export const LEVELS: LevelDef[] = [
   // ======================= path A: border (illegal), days 15–30
   {
     id: "8a", n: 8, path: "border", title: "Спорядження", map: "market", weather: "rain", tier: 2, curfew: 190,
-    brief: "Купи рюкзак, термоковдру і гермомішок на ринку.",
+    brief: "Купи термоковдру і гермомішок на ринку.",
     objectives: [
-      { slot: "3", label: "Рюкзак", icon: "🎒", kind: "shop", dwell: 2, cost: 3500, gives: { item: "backpack" } },
       { slot: "4", label: "Термоковдра", icon: "🪩", kind: "shop", dwell: 2, cost: 2500, gives: { item: "blanket" } },
       { slot: "1|2", label: "Гермомішок", icon: "🛍️", kind: "shop", dwell: 2, cost: 2000, gives: { item: "drybag" } },
     ],
-    patrols: [{ kind: "officer", route: "bc", ping: true }, { kind: "officer", route: "de", ping: true }, { kind: "van", route: "hi", ping: true }],
-    pool: [{ kind: "officer", route: "afg" }, { kind: "police", route: "fg", ping: true }, { kind: "officer", route: "ab", ping: true }],
+    patrols: [{ kind: "officer", route: "de", ping: true }, { kind: "van", route: "hi", ping: true }],
+    pool: [{ kind: "officer", route: "bc", ping: true }, { kind: "officer", route: "afg" }, { kind: "police", route: "fg", ping: true }],
     chat: [
-      { from: "molfar", text: "Список: рюкзак, термоковдра, гермомішок. Усе є на ринку" },
+      { from: "molfar", text: "Список: термоковдра і гермомішок — на ринку. Рюкзак купиш біля ломбарду" },
       { from: "molfar", text: "Над лісом літає дрон із тепловізором. Під термоковдрою стоїш і не рухаєшся — він тебе не бачить" },
       { from: "channel", text: "На ринку знову облава, бус біля входу" },
     ],
@@ -218,10 +219,11 @@ export const LEVELS: LevelDef[] = [
   },
   {
     id: "9a", n: 9, path: "border", title: "Гроші на провідника", map: "street", weather: "rain", tier: 2, curfew: 160,
-    brief: "Здай речі в ломбард і закупи їжі в дорогу.",
+    brief: "Здай речі в ломбард, купи рюкзак і їжу в дорогу.",
     objectives: [
       { slot: "3", label: "Ломбард", icon: "💍", kind: "sell", dwell: 3, gives: { money: 9000 } },
       { slot: "2", label: "Їжа в дорогу", icon: "🥫", kind: "shop", dwell: 2.5, cost: 1500, gives: { food: 4 } },
+      { slot: "1", label: "Рюкзак", icon: "🎒", kind: "shop", dwell: 2, cost: 3500, gives: { item: "backpack" } },
     ],
     patrols: [{ kind: "officer", route: "eghf" }, { kind: "officer", route: "ab", ping: true }, { kind: "van", route: "ijkl", ping: true }],
     pool: [{ kind: "officer", route: "cd", ping: true }, { kind: "police", route: "gh", ping: true }, { kind: "officer", route: "ef", ping: true }],
@@ -280,8 +282,8 @@ export const LEVELS: LevelDef[] = [
     id: "13a", n: 13, path: "border", title: "Схрон", map: "forest", weather: "fog", tier: 3, curfew: 0,
     brief: "Забери речі зі схрону і йди лісом далі.",
     objectives: [{ slot: "1", label: "Схрон", icon: "🪵", kind: "pickup", dwell: 3, gives: { food: 2, nerves: -10 } }],
-    patrols: [{ kind: "guard", route: "bdgh" }, { kind: "drone", route: "acef" }],
-    pool: [{ kind: "guard", route: "ce", ping: true }, { kind: "guard", route: "fgh" }],
+    patrols: [{ kind: "guard", route: "bdgh" }, { kind: "guard", route: "ce", ping: true }, { kind: "drone", route: "acef" }],
+    pool: [{ kind: "guard", route: "fgh" }, { kind: "drone", route: "hg", ping: true }],
     chat: [
       { from: "molfar", text: "Схрон під поваленою ялиною. Дрон над лісом — термоковдра, не рухайся" },
     ],
@@ -291,8 +293,8 @@ export const LEVELS: LevelDef[] = [
     id: "14a", n: 14, path: "border", title: "Ліс", map: "forest", night: true, weather: "snow", tier: 3, curfew: 0,
     brief: "Перейди нічний ліс до річки.",
     objectives: [],
-    patrols: [{ kind: "guard", route: "bdgh" }, { kind: "guard", route: "ce", ping: true }, { kind: "drone", route: "afeb" }],
-    pool: [{ kind: "guard", route: "fgh" }, { kind: "drone", route: "hg", ping: true }],
+    patrols: [{ kind: "guard", route: "bdgh" }, { kind: "guard", route: "ce", ping: true }, { kind: "guard", route: "fgh" }, { kind: "drone", route: "afeb" }],
+    pool: [{ kind: "drone", route: "hg", ping: true }, { kind: "guard", route: "a" }],
     chat: [
       { from: "molfar", text: "Далі сам. Я ближче не підходжу — мене знають" },
       { from: "mama", text: "Сину. Просто напиши, що живий" },
@@ -318,14 +320,14 @@ export const LEVELS: LevelDef[] = [
     brief: "Пройди співбесіду й оплати оформлення.",
     objectives: [
       { slot: "1", label: "Співбесіда в HR", icon: "🤝", kind: "talk", dwell: 2, talk: "hr" },
-      { slot: "2", label: "Бухгалтерія: оформлення", icon: "💵", kind: "pay", dwell: 2.5, cost: 25000, after: "1", gives: { flag: "job" } },
+      { slot: "2", label: "Бухгалтерія: оформлення", icon: "💵", kind: "pay", dwell: 2.5, cost: 20000, after: "1", gives: { flag: "job" } },
       { slot: "3", label: "Кулер з водою", icon: "🚰", kind: "visit", dwell: 1.5, optional: true, gives: { nerves: -8 } },
     ],
     patrols: [{ kind: "police", route: "abc", ping: true }],
     pool: [{ kind: "officer", route: "cde", ping: true }, { kind: "officer", route: "ab", ping: true }],
     chat: [
       { from: "arkadiy", text: "Є підприємство з критичним статусом. Вас оформлять «аналітиком даних». Віддалено. Співбесіда завтра" },
-      { from: "arkadiy", text: "Оформлення — 25 тисяч у бухгалтерії. Охорона в бізнес-центрі звичайна. Майже" },
+      { from: "arkadiy", text: "Оформлення — 20 тисяч у бухгалтерії. Охорона в бізнес-центрі звичайна. Майже" },
       { from: "oleg", text: "Ти що, звільняєшся?! Ну… удачі. Пиши, якщо що" },
     ],
     outro: [{ from: "arkadiy", text: "Вітаю з новою роботою. Зарплата вища, але і мої послуги теж" }],
@@ -347,21 +349,21 @@ export const LEVELS: LevelDef[] = [
   },
   {
     id: "10b", n: 10, path: "legal", title: "Перший транш", map: "street", weather: "clear", tier: 2, curfew: 160,
-    brief: "Переведи Аркадію 60 000 ₴ через банк.",
+    brief: "Переведи Аркадію 45 000 ₴ через банк.",
     objectives: [
-      { slot: "1", label: "Банк: переказ", icon: "🏦", kind: "pay", dwell: 4, cost: 60000, gives: { flag: "paid1" } },
+      { slot: "1", label: "Банк: переказ", icon: "🏦", kind: "pay", dwell: 4, cost: 45000, gives: { flag: "paid1" } },
       { slot: "2", label: "Купити їжу", icon: "🛒", kind: "shop", dwell: 2.5, cost: 1500, optional: true, gives: { food: 4 } },
     ],
     patrols: [{ kind: "officer", route: "ab", ping: true }, { kind: "officer", route: "eghf" }, { kind: "van", route: "ijkl", ping: true }],
     pool: [{ kind: "officer", route: "cd", ping: true }, { kind: "police", route: "gh", ping: true }],
     chat: [
-      { from: "arkadiy", text: "60 тисяч через банк. Готівкою не беру, я ж офіційно" },
+      { from: "arkadiy", text: "45 тисяч через банк. Готівкою не беру, я ж офіційно" },
       { from: "mama", text: "Сину, а він точно не шахрай? По телевізору показували…" },
     ],
     outro: [{ from: "arkadiy", text: "Надійшло. Тепер — оновлення даних" }],
   },
   {
-    id: "11b", n: 11, path: "legal", title: "Оновити дані", map: "office", weather: "clear", tier: 3, curfew: 0,
+    id: "11b", n: 11, path: "legal", title: "Оновити дані", map: "office", weather: "clear", tier: 2, curfew: 0,
     brief: "Оновити дані… особисто. У ТЦК. Не попадись у коридорі.",
     objectives: [
       { slot: "1", label: "Вікно реєстрації", icon: "🪪", kind: "talk", dwell: 3, talk: "tck" },
@@ -383,8 +385,8 @@ export const LEVELS: LevelDef[] = [
       { slot: "3", label: "Офіс Аркадія: бронь", icon: "🛡️", kind: "pay", dwell: 4, cost: 50000, gives: { item: "bron" } },
       { slot: "2", label: "Банкомат", icon: "🏧", kind: "visit", dwell: 2, optional: true, gives: { nerves: -5 } },
     ],
-    patrols: [{ kind: "officer", route: "ab", ping: true }, { kind: "officer", route: "cd", ping: true }, { kind: "van", route: "ef", ping: true }],
-    pool: [{ kind: "police", route: "gh", ping: true }, { kind: "officer", route: "acdb" }, { kind: "officer", route: "gh", ping: true }],
+    patrols: [{ kind: "officer", route: "ab", ping: true }, { kind: "van", route: "ef", ping: true }],
+    pool: [{ kind: "officer", route: "cd", ping: true }, { kind: "police", route: "gh", ping: true }, { kind: "officer", route: "acdb" }],
     chat: [
       { from: "arkadiy", text: "Бронь готова. Друга частина — 50 тисяч. Офіс на площі, праворуч від фонтану" },
       { from: "arkadiy", text: "З броньою при перевірці документів просто показуйте її. Зазвичай працює" },
@@ -409,13 +411,13 @@ export const LEVELS: LevelDef[] = [
     id: "14b", n: 14, path: "legal", title: "Відрядження", map: "station", weather: "rain", tier: 3, curfew: 0,
     brief: "Забери наказ у курʼєра, заплати і купи квиток.",
     objectives: [
-      { slot: "1|2", label: "Курʼєр: наказ", icon: "📜", kind: "pay", dwell: 3, cost: 35000, gives: { flag: "trip" } },
+      { slot: "1|2", label: "Курʼєр: наказ", icon: "📜", kind: "pay", dwell: 3, cost: 40000, gives: { flag: "trip" } },
       { slot: "3", label: "Каса: квиток", icon: "🎫", kind: "shop", dwell: 3, cost: 900 },
     ],
     patrols: [{ kind: "officer", route: "ab", ping: true }, { kind: "officer", route: "cd", ping: true }, { kind: "police", route: "e" }],
     pool: [{ kind: "officer", route: "fg", ping: true }, { kind: "officer", route: "acdb" }],
     chat: [
-      { from: "arkadiy", text: "Наказ про відрядження — 35 тисяч, курʼєр чекає на пероні. Квиток купите самі" },
+      { from: "arkadiy", text: "Наказ про відрядження — 40 тисяч, курʼєр чекає на пероні. Квиток купите самі" },
       { from: "oleg", text: "Чув, ти їдеш? Привези сирок, якщо що 😅" },
     ],
     outro: [{ from: "me", text: "Папери в рюкзаку. Перевіряю їх кожні пʼять хвилин" }],
@@ -424,6 +426,7 @@ export const LEVELS: LevelDef[] = [
     id: "15b", n: 15, path: "legal", title: "КПП", map: "checkpoint", weather: "clear", tier: 3, curfew: 0, noExit: true,
     brief: "Пройди попередню перевірку і віконце прикордонника.",
     objectives: [
+      { slot: "3", label: "Курʼєр Аркадія: закрити борг", icon: "💸", kind: "pay", dwell: 2.5, cost: 0, onlyIfDebt: true },
       { slot: "2", label: "Попередня перевірка", icon: "🧾", kind: "visit", dwell: 4 },
       { slot: "1", label: "Віконце прикордонника", icon: "🛂", kind: "booth", dwell: 2, after: "2" },
     ],
@@ -451,7 +454,7 @@ export function nextLevelId(id: string, path: Path): string | null {
 
 // --------------------------------------------------------------- dialogues
 
-export interface TalkOption { id: string; label: string; good: boolean; effect?: { money?: number; nerves?: number; heat?: number; flag?: string } }
+export interface TalkOption { id: string; label: string; good: boolean; effect?: { money?: number; nerves?: number; heat?: number; flag?: string; debt?: number } }
 export interface Talk { who: Speaker; line: string; options: TalkOption[] }
 
 export const TALKS: Record<string, Talk> = {
@@ -491,8 +494,8 @@ export const TALKS: Record<string, Talk> = {
     who: "arkadiy", line: "Тихо! Не кричіть. За мною стежать. Справи йдуть, але треба ще 10 тисяч «на ризики»",
     options: [
       { id: "pay", label: "Добре, ось 10 тисяч", good: true, effect: { money: -10000 } },
-      { id: "press", label: "Ні. Ви вже отримали 115", good: true, effect: { nerves: 10 } },
-      { id: "threat", label: "Я все розкажу в чаті району!", good: false, effect: { heat: 10 } },
+      { id: "press", label: "Ні. Ви вже отримали 95", good: true, effect: { nerves: 10, debt: 15000 } },
+      { id: "threat", label: "Я все розкажу в чаті району!", good: false, effect: { heat: 10, debt: 25000 } },
     ],
   },
 };
@@ -516,21 +519,21 @@ export const PERKS: Perk[] = [
   { id: "sneakers", name: "КРОСІВКИ З РИНКУ", icon: "👟", text: "Витривалість для бігу +35%, тиснути на QTE-кнопку легше." },
   { id: "hoodie", name: "ЧОРНЕ ХУДІ", icon: "🥷", text: "Тебе бачать з меншої відстані (−20%)." },
   { id: "intel", name: "ПІДПИСКА «ДЕ БУС?»", icon: "📡", text: "Стрілки на краю екрана показують патрулі за кадром." },
-  { id: "dog", name: "ПЕС БАРБОС", icon: "🐕", text: "Чоловік із собакою підозрілий менше (−25%). Відмазка «вигулюю пса» при перевірці." },
+  { id: "dog", name: "ПЕС БАРБОС", icon: "🐕", text: "Чоловік із собакою підозрілий менше (−35%). Відмазка «вигулюю пса» при перевірці." },
   { id: "parkour", name: "ПАРКУР", icon: "🤸", text: "Зелені зони в QTE на 40% ширші." },
   { id: "calm", name: "ХОЛОДНА ГОЛОВА", icon: "🧊", text: "Нерви накопичуються на 40% повільніше." },
   { id: "stash", name: "ЗАНАЧКА", icon: "💰", text: "+12 000 ₴ одразу. Знайшов у зимовій куртці.", once: true },
-  { id: "scooter", name: "ЕЛЕКТРОСАМОКАТ", icon: "🛴", text: "Швидкість ходьби +15%." },
+  { id: "scooter", name: "ЕЛЕКТРОСАМОКАТ", icon: "🛴", text: "Швидкість ходьби +20%." },
   { id: "laptop", name: "ІГРОВИЙ НОУТ", icon: "💻", text: "Заробіток з віддаленки +30%." },
   { id: "station", name: "ЗАРЯДНА СТАНЦІЯ+", icon: "🔌", text: "Працюєш навіть у блекаут, і ще +1 дія вдома в такі дні." },
   { id: "lawyer", name: "АДВОКАТ НА ШВИДКОМУ", icon: "⚖️", text: "Один раз витягне тебе з бусу.", once: true },
   { id: "quiet", name: "МʼЯКІ КЕДИ", icon: "🩰", text: "Біг чути вдвічі тихіше." },
-  { id: "noodles", name: "МІВІНА ОПТОМ", icon: "🍜", text: "+6 запасів їжі. Ситість падає на 25% повільніше." },
+  { id: "noodles", name: "МІВІНА ОПТОМ", icon: "🍜", text: "+8 запасів їжі. Ситість падає на 25% повільніше." },
   { id: "coffee", name: "КАВА 3-В-1", icon: "☕", text: "+1 дія вдома щодня." },
   { id: "babki", name: "ДРУЖБА З БАБЦЯМИ", icon: "🧶", text: "Бабусі на лавках тебе «не бачать»." },
   { id: "tongue", name: "ЯЗИК БЕЗ КІСТОК", icon: "👅", text: "«Заговорити зуби» коротше, на відповіді більше часу." },
   { id: "lungs", name: "ДИХАЛКА", icon: "🫁", text: "Затамувати подих і пливти — значно легше." },
-  { id: "courier", name: "КУРʼЄРСЬКИЙ РЮКЗАК", icon: "🟨", text: "Перші 1,5 с тебе сприймають як курʼєра і не підозрюють." },
+  { id: "courier", name: "КУРʼЄРСЬКИЙ РЮКЗАК", icon: "🟨", text: "Кожен патруль спершу приймає тебе за курʼєра (раз за вилазку)." },
 ];
 
 export const perkById = (id: string): Perk | undefined => PERKS.find((p) => p.id === id);
@@ -553,7 +556,7 @@ export type ActionId = "work" | "eat" | "sleep" | "scroll" | "mama" | "cat" | "p
 export interface HomeAction { id: ActionId; name: string; icon: string; text: string }
 
 export const ACTIONS: HomeAction[] = [
-  { id: "work", name: "ВІДДАЛЕНКА", icon: "💻", text: "Закривай тікети — отримуй гроші. Нерви +." },
+  { id: "work", name: "ВІДДАЛЕНКА", icon: "💻", text: "Закривай тікети — отримуй гроші. Нерви +5." },
   { id: "eat", name: "ПОЇСТИ", icon: "🍲", text: "−1 запас, ситість +45." },
   { id: "sleep", name: "ПОСПАТИ", icon: "😴", text: "Нерви −25." },
   { id: "scroll", name: "ЧАТ «ДЕ БУС?»", icon: "📡", text: "На вилазці побачиш маршрути патрулів. Нерви +6." },
