@@ -424,6 +424,7 @@ function frameOuting(dt: number): void {
   vig.style.opacity = chase ? "1" : String(Math.max(0, (a - 0.3) * 0.9));
   vig.classList.toggle("chase", chase);
   music.intensity = chase ? 1 : a;
+  scene.setDanger(chase ? 1 : Math.max(0, (a - 0.35) * 0.8));
   if (a > 0.55 && sim.phase === "explore") {
     heartT -= dt;
     if (heartT <= 0) { play("heart"); heartT = chase ? 0.45 : 0.75; }
@@ -534,6 +535,7 @@ async function finishOuting(): Promise<void> {
   hud("none");
   music.intensity = 0;
   $("#alert-vignette").style.opacity = "0";
+  scene.setDanger(0);
   saveRun(run.phase === "end" ? null : run);
   if (caught) { showEnd(); return; }
   showScreen("#result-screen");
@@ -855,6 +857,12 @@ function resume(): void {
   if (sim) { scene.paused = false; hud("out"); }
   else if (run) hud("home");
 }
+const GFX_NAMES = { low: "НИЗЬКА", medium: "СЕРЕДНЯ", high: "ВИСОКА" } as const;
+const GFX_NEXT = { low: "medium", medium: "high", high: "low" } as const;
+function syncGfx(): void {
+  $("#gfx-button").textContent = `ГРАФІКА: ${GFX_NAMES[scene.quality]}`;
+}
+
 function syncAudio(): void {
   const s = $("#sound-button");
   const m = $("#music-button");
@@ -909,6 +917,7 @@ $("#quit-button").addEventListener("click", () => {
 });
 $("#sound-button").addEventListener("click", () => { setMuted(!isMuted()); syncAudio(); play("click"); });
 $("#music-button").addEventListener("click", () => { setMusicMuted(!isMusicMuted()); syncAudio(); });
+$("#gfx-button").addEventListener("click", () => { scene.setQuality(GFX_NEXT[scene.quality]); syncGfx(); play("click"); });
 document.addEventListener("visibilitychange", () => { if (document.hidden && sim && sim.phase === "explore") togglePause(); });
 
 scene.onEvents = handleOutingEvents;
@@ -918,6 +927,7 @@ scene.onFrame = (dt) => {
 };
 
 syncAudio();
+syncGfx();
 renderStart();
 scene.showMenu();
 music.mode = "home";
