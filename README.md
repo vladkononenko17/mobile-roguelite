@@ -1,5 +1,7 @@
 # Neon Hollow: Dustline
 
+> This repo also hosts a second game, **«Не клюёт»** (Russian-language fishing rage-management roguelite) at `/fishing/` — see [its section below](#не-клюёт-fishing).
+
 A mobile-first comic-wasteland action roguelite inspired by the tactile weapon loop of arcade survival shooters. The game runs directly in the browser and is designed for portrait play on iPhone.
 
 ## Vertical slice
@@ -51,3 +53,20 @@ GitHub Actions runs the tests, checks TypeScript, builds Vite, and publishes onl
 Version 0.1's Canvas implementation remains recoverable in Git history. Full rooms, multiple weapons, loot inventories, persistent progression, sound, and a production sprite atlas are not included in this vertical slice.
 
 The current art is an original code-drawn comic wasteland treatment used to validate feel and performance. The next production pass will replace it with a cohesive animated sprite atlas while keeping the same gameplay systems.
+
+## «Не клюёт» (fishing)
+
+A second vertical slice on the same stack (Phaser 3 + TypeScript + Vite, DOM HUD in the same comic-ink style). Served at `/mobile-roguelite/fishing/`.
+
+You fish next to your friend Tolik. He keeps landing fish, you don't, and every one of his catches fills your **rage** bar. At 100 you snap the rod over your knee and jump into the river. Survive three days (Sat → Mon) without a meltdown.
+
+- **Own rod:** the bobber dips — tap **ПОДСЕЧЬ** inside the bite window, then stop the marker in the green zone. Early strikes and missed bites cost rage; your own fish calms you down.
+- **Beer:** big relief, but each can makes you drunker (screen sway, smaller bite window); the fifth can puts you to sleep while Tolik keeps fishing.
+- **Cigarette:** slow relief over six seconds, limited pack.
+- **TikTok:** swipe videos (most calm you, fishing bloggers make it worse) — the scene is hidden, so listen for the bell.
+- **Steal:** hold **СТЫРИТЬ** while Tolik is distracted (phone, stretching, in the bushes). If he turns round mid-steal you get caught.
+- Between days pick one of three shop perks; rage halves overnight; Tolik gets luckier each day.
+
+Rules live in `fishing/src/sim.ts` (pure, no Phaser) and are covered by `tests/fishing.test.mjs`, including a bot balance check. Art is original low-poly faceted vector drawing in `fishing/src/art.ts`; sound is synthesized in `fishing/src/sfx.ts`, so there are no third-party assets to license. For playtesting in the browser console: `__fishing.sim.rage = 95`.
+
+Desktop keys: Space strike · 1 beer · 2 smoke · 3 TikTok/next · X close phone · hold 4 steal · P pause.

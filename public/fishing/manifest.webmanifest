@@ -1,0 +1,12 @@
+{
+  "name": "Не клюёт",
+  "short_name": "Не клюёт",
+  "description": "Рыбалка с другом, которому всегда везёт. Не дай злости победить.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#171318",
+  "theme_color": "#3f8f95",
+  "orientation": "portrait-primary",
+  "icons": [{ "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
