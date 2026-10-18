@@ -1,207 +1,270 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { FishingSim, DAYS, rankFor } from '../fishing/src/sim.ts';
+import { FishingSim } from '../fishing/src/sim.ts';
+import { LEVELS, GEAR, FISH, METHOD_POOL, combineStats } from '../fishing/src/content.ts';
 
-function run(sim, seconds, step = 0.05) {
-  const events = [];
-  for (let t = 0; t < seconds; t += step) events.push(...sim.update(step));
-  return events;
-}
-
-function runUntil(sim, predicate, limit = 120) {
-  for (let t = 0; t < limit; t += 0.05) {
-    const events = sim.update(0.05);
-    if (predicate(sim, events)) return events;
-  }
+const run = (sim, seconds, step = 0.05) => { const ev = []; for (let t = 0; t < seconds; t += step) ev.push(...sim.update(step)); return ev; };
+const runUntil = (sim, pred, limit = 120) => {
+  for (let t = 0; t < limit; t += 0.05) { const ev = sim.update(0.05); if (pred(sim, ev)) return ev; }
   throw new Error('condition never reached');
-}
+};
+const calm = (sim) => { sim.rage = Math.min(sim.rage, 40); };
 
-describe('Не клюёт: rage rules', () => {
-  it('every fish the friend lands makes you angrier', () => {
-    const sim = new FishingSim(1);
-    const before = sim.rage;
-    const events = runUntil(sim, (_, ev) => ev.some(e => e.type === 'friendCatch'));
-    assert.ok(events.some(e => e.type === 'friendCatch'));
-    assert.ok(sim.rage > before + 8);
-    assert.equal(sim.friendBucket.length, 1);
+describe('content', () => {
+  it('has ten levels with rising pressure', () => {
+    assert.equal(LEVELS.length, 10);
+    for (let i = 1; i < LEVELS.length; i++) assert.ok(LEVELS[i].rageMult >= LEVELS[i - 1].rageMult);
+    assert.ok(LEVELS[9].mustBeatTolik);
   });
-
-  it('rage at 100 breaks the rod and ends the run in the river', () => {
-    const sim = new FishingSim(2);
-    sim.rage = 99.9;
-    const events = run(sim, 1);
-    assert.ok(events.some(e => e.type === 'meltdown'));
-    assert.equal(sim.rod, 'broken');
-    assert.equal(sim.phase, 'meltdown');
-    sim.tap();
-    sim.drinkBeer();
-    const later = run(sim, 4);
-    assert.ok(later.some(e => e.type === 'lost'));
-    assert.equal(sim.phase, 'lost');
+  it('every species referenced exists and every rod has a method', () => {
+    const all = [...Object.values(METHOD_POOL).flat(), ...LEVELS.flatMap(l => [...l.extra, ...(l.friendExtra ?? [])])];
+    for (const [s] of all) assert.ok(FISH[s], s);
+    for (const g of GEAR.filter(g => g.slot === 'rod')) assert.ok(g.method, g.id);
   });
-
-  it('an idle player melts down on the first day', () => {
-    const sim = new FishingSim(3);
-    run(sim, DAYS[0].length);
-    assert.ok(['meltdown', 'lost'].includes(sim.phase));
+  it('lures only help their own method', () => {
+    assert.equal(combineStats(['lure-vasya'], 'float').bite, 1);
+    assert.equal(combineStats(['lure-vasya'], 'spin').bite, 1.5);
   });
 });
 
-describe('Не клюёт: own rod', () => {
-  it('strike on a bite, stop the marker in the zone, and the catch calms you', () => {
-    const sim = new FishingSim(4);
-    sim.rage = 60;
+describe('rage and coping', () => {
+  it('friend catches anger you; 100 rage ends the level in the river', () => {
+    const sim = new FishingSim({ seed: 1 });
+    const before = sim.rage;
+    runUntil(sim, (_, ev) => ev.some(e => e.type === 'friendCatch'));
+    assert.ok(sim.rage > before + 8);
+    sim.rage = 99.95;
+    const ev = run(sim, 5);
+    assert.ok(ev.some(e => e.type === 'meltdown'));
+    assert.ok(ev.some(e => e.type === 'lost' && e.result.reason === 'rage'));
+  });
+  it('beer calms, five beers put you to sleep', () => {
+    const sim = new FishingSim({ seed: 2 });
+    sim.beers = 9; sim.friendTimer = 999;
+    for (let i = 0; i < 5; i++) { sim.rage = 60; sim.drinkBeer(); run(sim, 1.6); }
+    assert.equal(sim.hands, 'asleep');
+  });
+  it('stealing while Tolik looks away works, while he watches it backfires', () => {
+    const sim = new FishingSim({ seed: 3 });
+    runUntil(sim, (_, ev) => ev.some(e => e.type === 'friendCatch'));
+    sim.gaze = 'distracted'; sim.gazeTimer = 10; sim.friendTimer = 999; sim.rage = 60;
+    sim.startSteal();
+    const ev = run(sim, 2);
+    assert.ok(ev.some(e => e.type === 'stolen'));
+    assert.ok(sim.rage < 40);
+  });
+});
+
+describe('methods', () => {
+  it('float: strike and stop the marker in the zone', () => {
+    const sim = new FishingSim({ seed: 4 });
+    sim.friendTimer = 999;
     runUntil(sim, s => s.rod === 'bite');
     sim.tap();
     assert.equal(sim.rod, 'reeling');
-    const before = sim.rage;
-    runUntil(sim, s => s.reelMarker >= s.reelZone[0] + 0.01 && s.reelMarker <= s.reelZone[1] - 0.01);
-    const events = [];
+    runUntil(sim, s => s.reelMarker > s.reelZone[0] + 0.01 && s.reelMarker < s.reelZone[1] - 0.01);
     sim.tap();
-    events.push(...sim.update(0.01));
-    assert.ok(events.some(e => e.type === 'catch'), JSON.stringify(events));
-    assert.equal(sim.myFish.length, 1);
-    assert.ok(sim.rage < before - 15);
+    const ev = sim.update(0.01);
+    assert.ok(ev.some(e => e.type === 'catch' || e.type === 'junk'));
   });
 
-  it('a missed bite and an early strike both cost rage', () => {
-    const sim = new FishingSim(5);
-    runUntil(sim, s => s.rod === 'bite');
-    const before = sim.rage;
-    const events = runUntil(sim, (_, ev) => ev.some(e => e.type === 'missed'));
-    assert.ok(events.some(e => e.type === 'missed'));
-    assert.ok(sim.rage > before + 7);
+  it('feeder: tapping while waiting recasts the feeder; bite leads to a tension fight', () => {
+    const sim = new FishingSim({ seed: 5, level: 3, method: 'feeder', gear: { rod: 'rod-feeder', reel: 'reel-sovok', bait: 'bait-bread' } });
+    sim.friendTimer = 999;
     runUntil(sim, s => s.rod === 'waiting');
-    const r = sim.rage;
+    sim.feed = 0.2;
     sim.tap();
-    assert.ok(sim.rage > r);
-    assert.equal(sim.rod, 'recast');
-  });
-});
-
-describe('Не клюёт: coping', () => {
-  it('beer calms you but the fifth one puts you to sleep', () => {
-    const sim = new FishingSim(6);
-    sim.applyPerk('beer');
-    sim.rage = 80;
-    sim.drinkBeer();
-    assert.equal(sim.hands, 'beer');
-    run(sim, 1.6);
-    assert.equal(sim.drunk, 1);
-    assert.ok(sim.rage < 60);
-    for (let i = 0; i < 4; i++) { sim.rage = 50; sim.drinkBeer(); run(sim, 1.6); }
-    assert.equal(sim.hands, 'asleep');
-    const events = runUntil(sim, (_, ev) => ev.some(e => e.type === 'wake'));
-    assert.ok(events.some(e => e.type === 'wake'));
-    assert.equal(sim.drunk, 2);
+    assert.equal(sim.rod, 'casting');
+    assert.equal(sim.feed, 1);
+    runUntil(sim, s => s.rod === 'bite', 200);
+    sim.tap();
+    assert.equal(sim.rod, 'fight');
   });
 
-  it('a cigarette slowly burns off rage and can not be chain-lit', () => {
-    const sim = new FishingSim(7);
-    sim.rage = 50;
-    sim.friendTimer = 999;
-    sim.lightSmoke();
-    const events = [];
-    sim.lightSmoke();
-    events.push(...sim.update(0.01));
-    assert.ok(events.some(e => e.type === 'denied'));
-    run(sim, 6.2);
-    assert.ok(sim.rage < 40);
-    assert.equal(sim.cigs, 5);
-  });
-
-  it('TikTok stops passive rage but drains the battery', () => {
-    const sim = new FishingSim(8);
-    sim.friendTimer = 999;
-    sim.openPhone();
-    assert.equal(sim.hands, 'phone');
-    const battery = sim.battery;
-    run(sim, 3);
-    assert.ok(sim.battery < battery - 5);
-    sim.closePhone();
-    assert.equal(sim.hands, 'free');
-  });
-
-  it('stealing while he looks away works, while he watches it backfires', () => {
-    const sim = new FishingSim(9);
-    runUntil(sim, (_, ev) => ev.some(e => e.type === 'friendCatch'));
-    sim.gaze = 'distracted';
-    sim.gazeTimer = 10;
-    sim.friendTimer = 999;
-    const friendKg = sim.friendKg;
-    sim.rage = 60;
-    sim.startSteal();
-    assert.equal(sim.hands, 'steal');
-    const events = run(sim, sim.stealDuration + 0.2);
-    assert.ok(events.some(e => e.type === 'stolen'));
-    assert.equal(sim.myFish.length, 1);
-    assert.ok(sim.friendKg < friendKg);
-    assert.ok(sim.rage < 40);
-
-    const sim2 = new FishingSim(10);
-    runUntil(sim2, (_, ev) => ev.some(e => e.type === 'friendCatch'));
-    sim2.gaze = 'watching';
-    sim2.gazeTimer = 10;
-    sim2.friendTimer = 999;
-    sim2.rage = 40;
-    sim2.startSteal();
-    const ev2 = run(sim2, 0.2);
-    assert.ok(ev2.some(e => e.type === 'caught'));
-    assert.ok(sim2.rage > 55);
-    assert.ok(sim2.stealCooldown > 0);
-  });
-});
-
-describe('Не клюёт: trip structure', () => {
-  it('three days with a perk between them, rage halves overnight', () => {
-    const sim = new FishingSim(11);
-    // Keep the player calm so the day can finish.
-    const calm = () => { sim.rage = 30; };
-    for (let t = 0; t < DAYS[0].length + 1; t += 0.05) { calm(); sim.update(0.05); }
-    assert.equal(sim.phase, 'dayEnd');
-    const offer = sim.offerPerks();
-    assert.equal(new Set(offer).size, 3);
-    sim.rage = 80;
-    sim.nextDay(offer[0]);
-    assert.equal(sim.day, 1);
-    assert.equal(sim.rage, 40);
-    assert.equal(sim.perks[offer[0]], 1);
-    for (let t = 0; t < DAYS[1].length + 1; t += 0.05) { calm(); sim.update(0.05); }
-    sim.nextDay(sim.offerPerks()[0]);
-    const events = [];
-    for (let t = 0; t < DAYS[2].length + 1; t += 0.05) { calm(); events.push(...sim.update(0.05)); }
-    assert.equal(sim.phase, 'won');
-    assert.ok(events.some(e => e.type === 'won'));
-  });
-
-  it('a sensible bot usually survives, but not always', () => {
-    let wins = 0;
-    const N = 40;
-    for (let seed = 100; seed < 100 + N; seed++) {
-      const sim = new FishingSim(seed);
-      for (let t = 0; t < 400 && !['won', 'lost'].includes(sim.phase); t += 0.05) {
-        if (sim.phase === 'dayEnd') { sim.nextDay(sim.offerPerks()[0]); continue; }
-        // Human-ish reaction: strike ~0.35s into a bite, and stop the marker mid-zone.
-        if (sim.rod === 'bite' && sim.rodTimer < sim.biteWindow - 0.35) sim.tap();
-        if (sim.rod === 'reeling') {
-          const mid = (sim.reelZone[0] + sim.reelZone[1]) / 2;
-          if (Math.abs(sim.reelMarker - mid) < 0.05 && seed % 3 !== 0) sim.tap();
-        }
-        if (sim.rage > 70 && sim.gaze === 'distracted' && sim.friendBucket.length && sim.hands === 'free') sim.startSteal();
-        if (sim.rage > 78 && sim.hands === 'free' && sim.beers > 0 && sim.drunk < 4) sim.drinkBeer();
-        if (sim.rage > 60 && sim.smoking <= 0 && sim.cigs > 0) sim.lightSmoke();
-        sim.update(0.05);
-      }
-      if (sim.phase === 'won') wins++;
+  it('fight: holding in the green lands the fish; never letting go snaps the line', () => {
+    const land = new FishingSim({ seed: 6, method: 'feeder', level: 3 });
+    land.friendTimer = 999;
+    runUntil(land, s => s.rod === 'bite', 200);
+    land.tap();
+    // Hold while tension is low, release when it climbs: a decent player.
+    const ev = [];
+    for (let t = 0; t < 30 && land.rod === 'fight'; t += 0.05) {
+      land.hold(land.tension < 0.62);
+      calm(land);
+      ev.push(...land.update(0.05));
     }
-    assert.ok(wins >= N * 0.35, `bot won ${wins}/${N}`);
-    assert.ok(wins <= N * 0.95, `bot won ${wins}/${N}: too easy`);
+    assert.ok(ev.some(e => e.type === 'catch' || e.type === 'junk'), JSON.stringify(ev.map(e => e.type)));
+
+    const snap = new FishingSim({ seed: 7, method: 'feeder', level: 3 });
+    snap.friendTimer = 999;
+    runUntil(snap, s => s.rod === 'bite', 200);
+    snap.tap();
+    snap.hold(true);
+    const ev2 = [];
+    for (let t = 0; t < 10 && snap.rod === 'fight'; t += 0.05) { calm(snap); ev2.push(...snap.update(0.05)); }
+    assert.ok(ev2.some(e => e.type === 'snap'));
   });
 
-  it('ranks favour out-fishing the friend', () => {
-    assert.equal(rankFor(5, 3, 0).rank, 'S');
-    assert.equal(rankFor(5, 3, 2).rank, 'A');
-    assert.equal(rankFor(2, 3, 0).rank, 'B');
-    assert.equal(rankFor(0.2, 9, 0).rank, 'C');
+  it('spin: holding retrieves the lure, stop-and-go draws strikes, idling snags', () => {
+    const sim = new FishingSim({ seed: 8, method: 'spin', level: 5, gear: { rod: 'rod-spin', reel: 'reel-sovok', bait: 'lure-vasya' } });
+    sim.friendTimer = 999;
+    runUntil(sim, s => s.rod === 'retrieve');
+    let strikes = 0;
+    for (let t = 0; t < 60; t += 0.05) {
+      sim.hold(Math.floor(t * 2) % 2 === 0);
+      calm(sim);
+      const ev = sim.update(0.05);
+      if (ev.some(e => e.type === 'bite')) { strikes++; sim.tap(); }
+      if (sim.rod === 'fight') { sim.hold(sim.tension < 0.6); }
+    }
+    assert.ok(strikes > 0);
+
+    const idle = new FishingSim({ seed: 9, method: 'spin', level: 5 });
+    idle.friendTimer = 999;
+    runUntil(idle, s => s.rod === 'retrieve');
+    idle.quietBites = 99;
+    const ev = runUntil(idle, (_, e) => e.some(x => x.type === 'snag'), 60);
+    assert.ok(ev.some(e => e.type === 'snag'));
+  });
+
+  it('ice: only a worked jig gets bites; overplaying spooks', () => {
+    const sim = new FishingSim({ seed: 10, level: 7 });
+    assert.equal(sim.method, 'ice');
+    sim.friendTimer = 999;
+    runUntil(sim, s => s.rod === 'waiting');
+    // Not jigging: no bites for a long while.
+    const lazy = run(sim, 15);
+    assert.ok(!lazy.some(e => e.type === 'bite'));
+    let bite = false;
+    for (let t = 0; t < 40 && !bite; t += 0.05) {
+      if (sim.interest < 0.55) sim.tap();
+      calm(sim);
+      bite = sim.update(0.05).some(e => e.type === 'bite');
+    }
+    assert.ok(bite);
+    const spook = new FishingSim({ seed: 11, level: 7 });
+    runUntil(spook, s => s.rod === 'waiting');
+    const ev = [];
+    for (let i = 0; i < 8; i++) { spook.tap(); ev.push(...spook.update(0.01)); }
+    assert.ok(ev.some(e => e.type === 'spooked'));
+  });
+});
+
+describe('hazards', () => {
+  it('wife call locks your hands and costs rage', () => {
+    const sim = new FishingSim({ seed: 12, level: 2 });
+    sim.trigger('wife');
+    assert.equal(sim.hands, 'call');
+    const r = sim.rage;
+    sim.tap(); sim.drinkBeer();
+    assert.equal(sim.beers, 3);
+    run(sim, 5);
+    assert.equal(sim.hands, 'free');
+    assert.ok(sim.rage > r);
+  });
+  it('gopniki take a beer; Ashot fines you for your own beer', () => {
+    const sim = new FishingSim({ seed: 13, level: 6 });
+    sim.trigger('gopniki');
+    assert.equal(sim.beers, 2);
+    sim.trigger('ashot');
+    sim.drinkBeer();
+    assert.equal(sim.fines, 300);
+  });
+  it('mosquitoes bite unless you smoke', () => {
+    const a = new FishingSim({ seed: 14, level: 4 }); a.friendTimer = 999;
+    const b = new FishingSim({ seed: 14, level: 4 }); b.friendTimer = 999;
+    a.trigger('mosquito'); b.trigger('mosquito'); b.lightSmoke();
+    run(a, 5); run(b, 5);
+    assert.ok(a.rage > b.rage + 10);
+  });
+  it('drunk on cracking ice: you go under', () => {
+    const sim = new FishingSim({ seed: 15, level: 7 });
+    sim.drunk = 3;
+    sim.trigger('iceCrack');
+    const ev = run(sim, 8);
+    assert.ok(ev.some(e => e.type === 'fell'));
+    assert.ok(ev.some(e => e.type === 'lost' && e.result.reason === 'ice'));
+  });
+  it('fish inspection: drinking during a patrol costs a fine and a fish', () => {
+    const sim = new FishingSim({ seed: 16, level: 9 });
+    sim.myFish.push({ species: 'ЩУКА', weight: 3, size: 3 });
+    sim.trigger('nadzor');
+    sim.drinkBeer();
+    run(sim, 0.2);
+    assert.equal(sim.fines, 500);
+    assert.equal(sim.myFish.length, 0);
+  });
+  it('cold: without beer or a smoke the ice level slowly cooks you', () => {
+    const sim = new FishingSim({ seed: 17, level: 7 }); sim.friendTimer = 999;
+    const warmSim = new FishingSim({ seed: 17, level: 7 }); warmSim.friendTimer = 999; warmSim.warm = 999;
+    run(sim, 10); run(warmSim, 10);
+    assert.ok(sim.rage > warmSim.rage + 2);
+  });
+});
+
+describe('level results', () => {
+  it('hitting the target passes with stars and money; missing it fails', () => {
+    const pass = new FishingSim({ seed: 18 });
+    pass.myFish.push({ species: 'ЛЕЩ', weight: 2, size: 2 });
+    pass.friendTimer = 999;
+    let ev = [];
+    for (let t = 0; t < 75; t += 0.05) { calm(pass); ev.push(...pass.update(0.05)); }
+    const won = ev.find(e => e.type === 'won');
+    assert.ok(won);
+    assert.equal(won.result.stars, 3);
+    assert.ok(won.result.money > 0);
+
+    const fail = new FishingSim({ seed: 19 });
+    ev = [];
+    for (let t = 0; t < 75; t += 0.05) { calm(fail); fail.friendTimer = 999; ev.push(...fail.update(0.05)); }
+    const lost = ev.find(e => e.type === 'lost');
+    assert.ok(lost);
+    assert.equal(lost.result.reason, 'target');
+  });
+  it('the final demands beating Tolik', () => {
+    const sim = new FishingSim({ seed: 20, level: 10 });
+    sim.myFish.push({ species: 'КАРП', weight: 7, size: 3 });
+    sim.friendFish.push({ species: 'СОМ', weight: 9, size: 3 });
+    sim.friendTimer = 999;
+    sim.dayTime = 99.9;
+    calm(sim);
+    const ev = run(sim, 0.2);
+    const lost = ev.find(e => e.type === 'lost');
+    assert.ok(lost && lost.result.reason === 'target');
+  });
+});
+
+describe('balance', () => {
+  // A competent bot per method: most early levels are passable with starter gear,
+  // the late ones need upgrades.
+  function bot(level, method, gear, seed) {
+    const sim = new FishingSim({ seed, level, method, gear });
+    for (let t = 0; t < 200 && !sim.result; t += 0.05) {
+      if (sim.rod === 'bite' && sim.rodTimer < sim.biteWindow - 0.3) sim.tap();
+      if (sim.rod === 'reeling') { const m = (sim.reelZone[0] + sim.reelZone[1]) / 2; if (Math.abs(sim.reelMarker - m) < 0.05) sim.tap(); }
+      if (sim.rod === 'fight') sim.hold(sim.tension < 0.6);
+      else if (sim.rod === 'retrieve') sim.hold(Math.floor(t * 2) % 2 === 0);
+      else sim.hold(false);
+      if (sim.method === 'ice' && sim.rod === 'waiting' && sim.interest < 0.55) sim.tap();
+      if (sim.method === 'feeder' && sim.rod === 'waiting' && sim.feed < 0.3) sim.tap();
+      if (sim.rage > 70 && sim.gaze === 'distracted' && sim.friendBucket.length && sim.hands === 'free') sim.startSteal();
+      if (sim.rage > 75 && sim.hands === 'free' && sim.beers > 0 && sim.drunk < 2 && sim.hazard !== 'nadzor' && sim.hazard !== 'ashot') sim.drinkBeer();
+      if ((sim.rage > 55 || sim.hazard === 'mosquito') && sim.smoking <= 0 && sim.cigs > 0) sim.lightSmoke();
+      sim.update(0.05);
+    }
+    return sim.result;
+  }
+  it('level 1 with starter gear is beatable most of the time', () => {
+    let pass = 0;
+    for (let s = 0; s < 30; s++) if (bot(1, 'float', undefined, 100 + s)?.pass) pass++;
+    assert.ok(pass >= 15, `${pass}/30`);
+  });
+  it('every level is beatable with good gear', () => {
+    const top = { rod: 'rod-feeder-pro', reel: 'reel-alimony', bait: 'bait-blood' };
+    for (const lvl of LEVELS) {
+      let pass = 0;
+      for (let s = 0; s < 12; s++) if (bot(lvl.id, 'feeder', top, 500 + s)?.pass) pass++;
+      assert.ok(pass >= 1, `level ${lvl.id}: ${pass}/12`);
+    }
   });
 });

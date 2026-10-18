@@ -2,7 +2,9 @@ import "./fishing.css";
 import { Scene3D } from "./Scene3D";
 import { isMusicMuted, isMuted, setMusicMuted, setMuted, unlockAudio } from "./sfx";
 import { voice } from "./voice";
-import { DAYS, PERKS, rankFor, type PerkId, type SimSnapshot, type Video } from "./sim";
+import type { LevelResult, SimSnapshot, Video } from "./sim";
+import { GEAR, HAZARD_TEXT, LEVELS, gearById, levelById, type GearSlot, type Method } from "./content";
+import { applyResult, buy, equip, equippedMethod, loadProgress } from "./save";
 
 function el<T extends HTMLElement>(selector: string): T {
   const found = document.querySelector<T>(selector);
@@ -11,8 +13,10 @@ function el<T extends HTMLElement>(selector: string): T {
 }
 
 const scene = new Scene3D();
+const progress = loadProgress();
 // Handy for playtesting from the console: __fishing.sim.rage = 95
 (window as unknown as { __fishing: Scene3D }).__fishing = scene;
+(window as unknown as { __progress: typeof progress }).__progress = progress;
 const ui = {
   hud: el("#hud"),
   rageBlock: el(".rage-block"),
@@ -20,15 +24,23 @@ const ui = {
   rageText: el("#rage-text"),
   dayText: el("#day-text"),
   clockText: el("#clock-text"),
+  normText: el("#norm-text"),
   scoreText: el("#score-text"),
   dayFill: el("#day-fill"),
   drunkRow: el("#drunk-row"),
+  hazardRow: el("#hazard-row"),
   vignette: el("#rage-vignette"),
   sleepShade: el("#sleep-shade"),
   controls: el("#controls"),
   reel: el("#reel"),
   reelZone: el("#reel-zone"),
   reelMarker: el("#reel-marker"),
+  meter: el("#meter"),
+  meterLabel: el("#meter-label"),
+  meterFill: el("#meter-fill"),
+  meterZone: el("#meter-zone"),
+  meterMarker: el("#meter-marker"),
+  meterProgress: el("#meter-progress"),
   hook: el<HTMLButtonElement>("#hook-button"),
   beer: el<HTMLButtonElement>("#beer-button"),
   beerCount: el("#beer-count"),
@@ -47,25 +59,48 @@ const ui = {
   videoRage: el("#video-rage"),
   start: el("#start-screen"),
   startButton: el<HTMLButtonElement>("#start-button"),
-  shop: el("#shop-screen"),
-  shopEyebrow: el("#shop-eyebrow"),
-  shopScore: el("#shop-score"),
-  shopList: el("#shop-list"),
+  map: el("#map-screen"),
+  mapMoney: el("#map-money"),
+  mapStars: el("#map-stars"),
+  mapGear: el<HTMLButtonElement>("#map-gear"),
+  levelList: el("#level-list"),
+  gear: el("#gear-screen"),
+  gearMoney: el("#gear-money"),
+  gearList: el("#gear-list"),
   pause: el("#pause-screen"),
   result: el("#result-screen"),
   resultEyebrow: el("#result-eyebrow"),
   resultTitle: el("#result-title"),
   resultRank: el("#result-rank"),
   resultMine: el("#result-mine"),
+  resultTarget: el("#result-target"),
   resultFriend: el("#result-friend"),
-  resultStolen: el("#result-stolen"),
+  resultMoney: el("#result-money"),
+  resultUnlock: el("#result-unlock"),
   resultNote: el("#result-note"),
+  nextButton: el<HTMLButtonElement>("#next-button"),
   toast: el("#toast"),
 };
 
 let toastTimer = 0;
 let bellTimer = 0;
 let stealPointer: number | null = null;
+let hookPointer: number | null = null;
+let currentLevel = 1;
+let gearSlot: GearSlot = "rod";
+
+const METHOD_NAME: Record<Method, string> = { float: "ПОПЛАВОК", feeder: "ФИДЕР", spin: "СПИННИНГ", ice: "МОРМЫШКА" };
+const THEME_COLOR: Record<string, string> = {
+  dacha: "#6f8f3e", garages: "#55594a", quarry: "#2fb3c2", night: "#1d2a4c", plant: "#8a8f40",
+  paid: "#4f9a8a", ice: "#8fb8d0", swamp: "#4a5a30", reserve: "#2f6a3a", champ: "#d63732",
+};
+const TIPS: Record<number, string> = {
+  1: "Поплавок справится", 2: "Опарыш спасёт нервы", 3: "Тут нужен фидер", 4: "Фидер + кукуруза",
+  5: "Спиннинг по мутантам", 6: "Карп на фидер", 7: "Только мормышка", 8: "Щука на спиннинг",
+  9: "Без пива при надзоре", 10: "Лучшее, что есть",
+};
+const fmtMoney = (n: number) => `${Math.round(n).toLocaleString("ru-RU")} ₽`;
+const fmtKg = (n: number) => String(Math.round(n * (n >= 10 ? 10 : 100)) / (n >= 10 ? 10 : 100)).replace(".", ",");
 
 function setText(target: HTMLElement, value: string): void {
   if (target.textContent !== value) target.textContent = value;
@@ -86,6 +121,7 @@ function hidePlay(): void {
   ui.controls.classList.add("hidden");
   ui.phone.classList.add("hidden");
   ui.reel.classList.add("hidden");
+  ui.meter.classList.add("hidden");
   ui.vignette.style.opacity = "0";
   ui.sleepShade.classList.remove("on");
 }
@@ -94,11 +130,77 @@ function toast(message: string): void {
   ui.toast.textContent = message;
   ui.toast.classList.add("show");
   window.clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => ui.toast.classList.remove("show"), 1500);
+  toastTimer = window.setTimeout(() => ui.toast.classList.remove("show"), message.length > 30 ? 2600 : 1500);
 }
 
 function buzz(ms: number | number[]): void {
   try { navigator.vibrate?.(ms); } catch { /* unsupported */ }
+}
+
+const HAZARD_ICON: Record<string, string> = {
+  wife: "📞 ЖЕНА НА ПРОВОДЕ", mosquito: "🦟 КОМАРЫ", gopniki: "🧢 ГОПНИКИ", jetski: "🚤 ГИДРОЦИКЛ", neighbors: "🎸 СОСЕДИ",
+  dump: "🏭 СБРОС ВОДЫ", ashot: "👮 АШОТ БДИТ", tolikCheat: "💸 ТОЛИК ЖУЛЬНИЧАЕТ", iceCrack: "⚠️ ЛЁД ТРЕЩИТ", leech: "🩸 ПИЯВКА",
+  nadzor: "🚨 РЫБНАДЗОР", crowd: "📣 ТОЛПА", drone: "🛸 ДРОН",
+};
+
+function hookLabel(s: SimSnapshot): string {
+  if (s.hands === "asleep") return "ХРРР…";
+  if (s.hands === "call") return "📞 ДА, ДОРОГАЯ…";
+  if (s.hands === "beer") return "ГЛЫК-ГЛЫК";
+  if (s.rod === "bite") return "ПОДСЕКАЙ!";
+  if (s.rod === "reeling") return "ТЯНИ!";
+  if (s.rod === "fight") return s.holding ? "ТЯНУ!" : "ДЕРЖИ — ТЯНИ!";
+  if (s.rod === "recast" || s.rod === "casting") return "ЗАБРОС…";
+  if (s.rod === "broken") return "…";
+  switch (s.method) {
+    case "feeder": return s.feed < 0.3 ? "ПЕРЕЗАБРОС!" : "ПЕРЕЗАБРОС";
+    case "spin": return s.holding ? "КРУЧУ…" : "ДЕРЖИ — КРУТИ";
+    case "ice": return "ИГРАТЬ";
+    default: return s.rod === "nibble" ? "ЖДИ…" : "ПОДСЕЧЬ";
+  }
+}
+
+function updateMeter(s: SimSnapshot): void {
+  const m = ui.meter;
+  let show = true;
+  let label = "";
+  let fill = 0;
+  let zone: [number, number] | null = null;
+  let marker: number | null = null;
+  let fight = false;
+  let low = false;
+  if (s.rod === "fight") {
+    fight = true;
+    zone = s.greenZone;
+    marker = Math.min(1, s.tension);
+    label = s.tension > s.greenZone[1] ? "ОТПУСТИ! ЛЕСКА ЛОПНЕТ" : s.tension < s.greenZone[0] ? "ДЕРЖИ! СЛАБИНА — СОЙДЁТ" : "НАТЯГ ОК — ВЫВАЖИВАЙ";
+  } else if (s.method === "spin" && (s.rod === "retrieve" || s.rod === "bite")) {
+    fill = 1 - s.lure;
+    label = "ПРОВОДКА: ДЕРЖИ И ОТПУСКАЙ — СТУПЕНЬКОЙ";
+  } else if (s.method === "ice" && (s.rod === "waiting" || s.rod === "bite")) {
+    zone = s.interestBand;
+    marker = Math.min(1, s.interest);
+    label = s.interest > s.interestBand[1] ? "ПЕРЕИГРЫВАЕШЬ!" : s.interest < s.interestBand[0] ? "ТАПАЙ В РИТМ — ИГРАЙ МОРМЫШКОЙ" : "ВОТ ТАК, РЫБА СМОТРИТ";
+  } else if (s.method === "feeder" && (s.rod === "waiting" || s.rod === "nibble" || s.rod === "bite" || s.rod === "casting")) {
+    fill = s.feed;
+    low = s.feed < 0.3;
+    label = low ? "КОРМУШКА ПУСТАЯ — ПЕРЕЗАБРОСЬ" : "КОРМ В КОРМУШКЕ";
+  } else show = false;
+  m.classList.toggle("hidden", !show || s.hands === "asleep");
+  if (!show) return;
+  m.classList.toggle("fight", fight);
+  m.classList.toggle("danger", fight && s.tension > s.greenZone[1]);
+  m.classList.toggle("nozone", !zone);
+  m.classList.toggle("nomarker", marker === null);
+  m.classList.toggle("low", low);
+  setText(ui.meterLabel, label);
+  ui.meterFill.style.transform = `scaleX(${fill})`;
+  if (zone) {
+    ui.meterZone.style.left = `${zone[0] * 100}%`;
+    ui.meterZone.style.width = `${(zone[1] - zone[0]) * 100}%`;
+  }
+  if (marker !== null) ui.meterMarker.style.left = `${marker * 100}%`;
+  ui.meterProgress.style.transform = `scaleX(${Math.min(1, s.fightProgress)})`;
 }
 
 function updateHud(s: SimSnapshot): void {
@@ -107,13 +209,20 @@ function updateHud(s: SimSnapshot): void {
   ui.rageBlock.classList.toggle("hot", s.rage > 78);
   ui.vignette.style.opacity = String(Math.max(0, (s.rage - 55) / 45));
   ui.vignette.classList.toggle("pulse", s.rage > 85);
-  setText(ui.dayText, `ДЕНЬ ${s.day + 1}/${DAYS.length}`);
+  setText(ui.dayText, `УР.${s.level} · ${METHOD_NAME[s.method]}`);
   setText(ui.clockText, s.clock);
-  setText(ui.scoreText, `ТЫ ${s.myCount} · ${s.friendCount} ТОЛИК`);
+  setText(ui.normText, `${fmtKg(s.myKg)}/${fmtKg(s.target)} КГ`);
+  ui.normText.classList.toggle("done", s.myKg >= s.target);
+  setText(ui.scoreText, `ТОЛИК ${fmtKg(s.friendKg)}`);
   ui.dayFill.style.transform = `scaleX(${s.dayProgress})`;
   const drunk = s.drunk > 0 ? `ПРОМИЛЛЕ ${"▮".repeat(s.drunk)}${"▯".repeat(Math.max(0, 5 - s.drunk))}` : "";
   const smoke = s.smoking > 0 ? "  · КУРИШЬ" : "";
-  setText(ui.drunkRow, drunk + smoke);
+  const fines = s.fines > 0 ? `  · ШТРАФЫ −${s.fines} ₽` : "";
+  setText(ui.drunkRow, drunk + smoke + fines);
+  let hz = s.hazard ? HAZARD_ICON[s.hazard] ?? "" : "";
+  if (s.hazard && s.hazardLeft > 0.5) hz += ` ${Math.ceil(s.hazardLeft)}с`;
+  if (s.cold) hz += (hz ? "  · " : "") + (s.warm > 0 ? `🔥 ТЕПЛО ${Math.ceil(s.warm)}с` : "🥶 ЗАМЕРЗАЕШЬ — ПИВО ИЛИ СИГА");
+  setText(ui.hazardRow, hz);
 
   setText(ui.beerCount, `×${s.beers}`);
   setText(ui.cigCount, `×${s.cigs}`);
@@ -127,76 +236,180 @@ function updateHud(s: SimSnapshot): void {
   ui.steal.classList.toggle("danger", s.gaze === "suspicious" || s.gaze === "watching");
   ui.stealFill.style.transform = `scaleY(${s.stealProgress})`;
 
-  let label = "ПОДСЕЧЬ";
-  if (s.rod === "bite") label = "ПОДСЕКАЙ!";
-  else if (s.rod === "reeling") label = "ТЯНИ!";
-  else if (s.hands === "asleep") label = "ХРРР…";
-  else if (s.hands === "beer") label = "ГЛЫК-ГЛЫК";
-  else if (s.rod === "recast") label = "ЗАБРОС…";
-  setText(ui.hook, label);
+  setText(ui.hook, hookLabel(s));
   ui.hook.classList.toggle("bite", s.rod === "bite");
   ui.hook.classList.toggle("reeling", s.rod === "reeling");
+  ui.hook.classList.toggle("fight", s.rod === "fight");
+  ui.hook.classList.toggle("holding", s.holding);
+  ui.hook.classList.toggle("call", s.hands === "call");
   ui.reel.classList.toggle("hidden", s.rod !== "reeling");
   if (s.rod === "reeling") {
     ui.reelZone.style.left = `${s.reelZone[0] * 100}%`;
     ui.reelZone.style.width = `${(s.reelZone[1] - s.reelZone[0]) * 100}%`;
     ui.reelMarker.style.left = `${s.reelMarker * 100}%`;
   }
+  updateMeter(s);
 }
 
-function showShop({ day, offers, snapshot }: { day: number; offers: PerkId[]; snapshot: SimSnapshot }): void {
-  releaseSteal();
-  hidePlay();
-  ui.shopEyebrow.textContent = `ВЕЧЕР · ДЕНЬ ${day + 1} ИЗ ${DAYS.length} ПОЗАДИ`;
-  ui.shopScore.textContent = `ТЫ ${snapshot.myKg.toFixed(1)} КГ · ТОЛИК ${snapshot.friendKg.toFixed(1)} КГ · ЗЛОСТЬ ЗА НОЧЬ УПАДЁТ ВДВОЕ`;
-  ui.shopList.replaceChildren();
-  offers.forEach((id) => {
-    const perk = PERKS[id];
-    const button = document.createElement("button");
-    button.className = "upgrade-card";
-    button.innerHTML = `<span class="upgrade-icon" style="--accent:${perk.accent}">${perk.icon}</span>
-      <span class="upgrade-copy"><strong>${perk.title}</strong><span>${perk.description}</span></span>`;
-    button.addEventListener("click", () => {
-      hideScreens();
-      showPlay();
-      scene.choosePerk(id);
-    }, { once: true });
-    ui.shopList.append(button);
-  });
-  ui.shop.classList.add("active");
+// ---------------------------------------------------------------- map
+function totalStars(): number {
+  return Object.values(progress.stars).reduce((a, b) => a + b, 0);
 }
 
-interface Result {
-  won: boolean; abandoned: boolean; day: number; myKg: number; myCount: number; friendKg: number; friendCount: number; stolen: number; caught: number;
-  biggest?: { species: string; weight: number };
+function starsHtml(n: number): string {
+  return `${"<b>★</b>".repeat(n)}${"☆".repeat(3 - n)}`;
 }
 
-function showResult(r: Result): void {
+function baitFits(): boolean {
+  const bait = gearById(progress.equipped.bait);
+  const method = equippedMethod(progress);
+  return !bait?.methods || bait.methods.includes(method);
+}
+
+function renderTackle(): void {
+  const rod = gearById(progress.equipped.rod);
+  const reel = gearById(progress.equipped.reel);
+  const bait = gearById(progress.equipped.bait);
+  const warn = baitFits() ? "" : `<small class="warn">⚠️ ${bait?.name} не работает с этой удочкой</small>`;
+  ui.mapGear.innerHTML = `<span>${rod?.icon} ${rod?.name} · ${METHOD_NAME[equippedMethod(progress)]}<small>${reel?.icon} ${reel?.name} · ${bait?.icon} ${bait?.name}</small>${warn}</span><em>СНАСТИ ›</em>`;
+}
+
+function showMap(): void {
+  releaseHook();
   releaseSteal();
   hidePlay();
   hideScreens();
-  if (r.won) {
-    const rank = rankFor(r.myKg, r.friendKg, r.stolen);
-    ui.resultEyebrow.textContent = "ПОНЕДЕЛЬНИК, ВЕЧЕР · ДОСИДЕЛ";
-    ui.resultEyebrow.style.color = "#b8d84a";
-    ui.resultTitle.innerHTML = r.myKg > r.friendKg ? "ПЕРЕЛОВИЛ<br />ТОЛИКА" : "НЕРВЫ<br />ЖЕЛЕЗНЫЕ";
-    ui.resultRank.textContent = `РАНГ ${rank.rank} · ${rank.title}`;
-  } else {
-    ui.resultEyebrow.textContent = r.abandoned ? "СМОТАЛ УДОЧКИ" : `ДЕНЬ ${r.day + 1} · УДОЧКА СЛОМАНА`;
-    ui.resultEyebrow.style.color = "#e8602f";
-    ui.resultTitle.innerHTML = r.abandoned ? "ДОМОЙ<br />РАНЬШЕ" : "НЫРНУЛ<br />В РЕКУ";
-    ui.resultRank.textContent = r.abandoned ? "" : "ТОЛИК ДОСТАЛ ТЕБЯ ПОДСАЧЕКОМ";
+  setText(ui.mapMoney, fmtMoney(progress.money));
+  setText(ui.mapStars, `★ ${totalStars()}/${LEVELS.length * 3}`);
+  renderTackle();
+  ui.levelList.replaceChildren();
+  for (const level of LEVELS) {
+    const locked = level.id > progress.unlocked;
+    const stars = progress.stars[level.id] ?? 0;
+    const card = document.createElement("button");
+    card.className = `level-card${locked ? " locked" : ""}${!locked && level.id === progress.unlocked && stars === 0 ? " next" : ""}`;
+    card.style.setProperty("--theme", THEME_COLOR[level.theme]);
+    const hazards = level.hazards.filter(([, w]) => w > 0).map(([h]) => HAZARD_TEXT[h].toast.split(" ")[0]).join(" ");
+    const norm = level.mustBeatTolik ? `НОРМА ${level.target} КГ + ОБОГНАТЬ ТОЛИКА` : `НОРМА ${level.target} КГ`;
+    const forced = level.forceMethod ? ` · ${METHOD_NAME[level.forceMethod]}` : "";
+    const best = progress.best[level.id] ? ` · РЕКОРД ${fmtKg(progress.best[level.id])}` : "";
+    card.innerHTML = locked
+      ? `<span class="num">🔒</span><span><strong>${level.id}. ${level.name}</strong><small>Пройди предыдущий водоём.</small><span class="meta">${norm}</span></span><span class="stars">☆☆☆</span>`
+      : `<span class="num">${level.id}</span><span><strong>${level.name}</strong><small>${level.blurb}</small><span class="meta">${norm}${forced}${best} · ${hazards}<br />СОВЕТ: ${TIPS[level.id]}</span></span><span class="stars">${starsHtml(stars)}</span>`;
+    if (!locked) card.addEventListener("click", () => startLevel(level.id));
+    else card.addEventListener("click", () => toast("СНАЧАЛА ПРОЙДИ ПРЕДЫДУЩИЙ"));
+    ui.levelList.append(card);
   }
-  ui.resultMine.textContent = r.myKg.toFixed(1);
-  ui.resultFriend.textContent = r.friendKg.toFixed(1);
-  ui.resultStolen.textContent = String(r.stolen);
-  const notes = [] as string[];
+  ui.map.classList.add("active");
+  scene.preview(Math.min(progress.unlocked, LEVELS.length));
+}
+
+// ---------------------------------------------------------------- gear shop
+function showGear(): void {
+  hideScreens();
+  renderGear();
+  ui.gear.classList.add("active");
+}
+
+function renderGear(): void {
+  setText(ui.gearMoney, fmtMoney(progress.money));
+  document.querySelectorAll<HTMLButtonElement>(".tab").forEach((t) => t.classList.toggle("active", t.dataset.slot === gearSlot));
+  ui.gearList.replaceChildren();
+  const method = equippedMethod(progress);
+  for (const g of GEAR.filter((x) => x.slot === gearSlot)) {
+    const owned = progress.owned.includes(g.id);
+    const equipped = progress.equipped[g.slot] === g.id;
+    const locked = g.unlock > progress.unlocked;
+    const card = document.createElement("div");
+    card.className = `gear-card${locked ? " locked" : ""}`;
+    const tags: string[] = [];
+    if (g.method) tags.push(METHOD_NAME[g.method]);
+    if (g.methods) tags.push(`ДЛЯ: ${g.methods.map((m) => METHOD_NAME[m]).join(", ")}`);
+    if (g.methods && !g.methods.includes(method) && g.slot === "bait") tags.push("⚠️ НЕ К ТВОЕЙ УДОЧКЕ");
+    if (g.id === "rod-ice") tags.push("ВЫДАЮТ НА ЗИМНИКЕ");
+    const button = document.createElement("button");
+    if (equipped) { button.textContent = "НАДЕТО"; button.className = "equipped"; button.disabled = true; }
+    else if (owned) { button.textContent = "ВЗЯТЬ"; button.className = "owned"; }
+    else if (locked) { button.textContent = `🔒 ОТКРОЕТСЯ НА УР. ${g.unlock}`; button.disabled = true; }
+    else if (progress.money < g.price) { button.textContent = `НЕ ХВАТАЕТ · ${fmtMoney(g.price)}`; button.disabled = true; }
+    else button.textContent = `КУПИТЬ · ${fmtMoney(g.price)}`;
+    button.addEventListener("click", () => {
+      if (owned) equip(progress, g.id);
+      else if (buy(progress, g.id)) { toast(`КУПЛЕНО: ${g.name}`); buzz(30); }
+      renderGear();
+    });
+    card.innerHTML = `<span class="icon">${g.icon}</span><div><strong>${g.name}</strong><small>${g.blurb}</small>${tags.map((t) => `<span class="tag">${t}</span>`).join(" ")}</div>`;
+    card.lastElementChild!.append(button);
+    ui.gearList.append(card);
+  }
+}
+
+document.querySelectorAll<HTMLButtonElement>(".tab").forEach((t) => t.addEventListener("click", () => {
+  gearSlot = t.dataset.slot as GearSlot;
+  renderGear();
+}));
+el("#gear-back").addEventListener("click", showMap);
+ui.mapGear.addEventListener("click", () => showGear());
+
+// ---------------------------------------------------------------- level flow
+function startLevel(id: number): void {
+  unlockAudio();
+  voice.unlock();
+  currentLevel = id;
+  const level = levelById(id);
+  const gear = { ...progress.equipped };
+  // Some places dictate the tackle: on the ice only the jigging rod works.
+  if (level.forceMethod === "ice") gear.rod = "rod-ice";
+  showPlay();
+  scene.startLevel(id, gear, level.forceMethod ?? equippedMethod(progress));
+}
+
+function showResult(r: LevelResult): void {
+  releaseHook();
+  releaseSteal();
+  hidePlay();
+  hideScreens();
+  const level = levelById(r.level);
+  const change = applyResult(progress, r);
+  const final = r.level === LEVELS.length;
+  ui.resultEyebrow.textContent = `УРОВЕНЬ ${level.id} · ${level.name}`;
+  ui.resultEyebrow.style.color = r.pass ? "#b8d84a" : "#e8602f";
+  if (r.pass) ui.resultTitle.innerHTML = final ? "ЧЕМПИОН<br />ОБЛАСТИ" : r.stars === 3 ? "УНИЗИЛ<br />ТОЛИКА" : "НОРМА<br />ВЫПОЛНЕНА";
+  else if (r.reason === "ice") ui.resultTitle.innerHTML = "ПОД ЛЁД<br />С ПИВОМ";
+  else if (r.reason === "rage") ui.resultTitle.innerHTML = level.forceMethod === "ice" ? "НЫРНУЛ<br />В ЛУНКУ" : "НЫРНУЛ<br />С ГОРЯ";
+  else if (final && r.myKg >= level.target) ui.resultTitle.innerHTML = "ТОЛИК<br />ЧЕМПИОН";
+  else ui.resultTitle.innerHTML = "НЕ ДОБРАЛ<br />НОРМУ";
+  ui.resultRank.innerHTML = starsHtml(r.stars);
+  ui.resultMine.textContent = fmtKg(r.myKg);
+  ui.resultTarget.textContent = fmtKg(level.target);
+  ui.resultFriend.textContent = fmtKg(r.friendKg);
+  const parts = [`рыба +${fmtMoney(r.fishMoney)}`];
+  if (r.starMoney) parts.push(`звёзды +${fmtMoney(r.starMoney)}`);
+  if (r.fines) parts.push(`штрафы −${fmtMoney(r.fines)}`);
+  ui.resultMoney.innerHTML = `${parts.join(" · ")} = <b>+${fmtMoney(r.money)}</b> · В КАРМАНЕ ${fmtMoney(progress.money)}`;
+  const unlock: string[] = [];
+  if (change.unlockedNew) unlock.push(`ОТКРЫТ УРОВЕНЬ ${change.unlockedNew}: ${levelById(change.unlockedNew).name}`);
+  if (change.newGear.length) unlock.push(`В МАГАЗИНЕ: ${change.newGear.map((id) => gearById(id)?.name).join(", ")}`);
+  ui.resultUnlock.textContent = unlock.join(" · ");
+  const notes: string[] = [];
   if (r.biggest) notes.push(`Лучшая рыба: ${r.biggest.species.toLowerCase()} на ${r.biggest.weight.toFixed(2)} кг.`);
   else notes.push("Ни одной своей рыбы. Классика.");
+  if (r.stolen) notes.push(`Стырено у Толика: ${r.stolen}.`);
   if (r.caught) notes.push(`Спалился на краже: ${r.caught} раз.`);
+  if (!r.pass && r.reason === "target") notes.push(final ? "Надо было поймать больше Толика. Он это запомнит." : "Нужно больше килограммов. Подумай о снастях получше.");
+  if (!r.pass && r.reason === "ice") notes.push("Три пива на тонком льду — плохая идея. Кто бы мог подумать.");
+  if (r.pass && !final && r.stars < 3) notes.push(r.myKg > r.friendKg ? "Для трёх звёзд — норма ×1,6." : "Третья звезда — если обгонишь Толика.");
+  if (final && r.pass) notes.push("Толик сказал, что это подстава и вода была «не та». Поздравляем.");
   ui.resultNote.textContent = notes.join(" ");
+  const hasNext = r.pass && r.level < LEVELS.length;
+  ui.nextButton.classList.toggle("hidden", !hasNext);
   ui.result.classList.add("active");
 }
+
+ui.nextButton.addEventListener("click", () => startLevel(Math.min(LEVELS.length, currentLevel + 1)));
+el("#restart-button").addEventListener("click", () => startLevel(currentLevel));
+el("#result-map").addEventListener("click", showMap);
+el("#result-gear").addEventListener("click", () => showGear());
 
 function showVideo(video: Video): void {
   setText(ui.videoEmoji, video.emoji);
@@ -217,7 +430,24 @@ function press(button: HTMLElement, action: () => void): void {
   });
 }
 
-press(ui.hook, () => { unlockAudio(); scene.tapRod(); });
+// Main button: a tap strikes/jigs/recasts, holding reels and pulls.
+function releaseHook(): void {
+  if (hookPointer === null) return;
+  hookPointer = null;
+  scene.hold(false);
+}
+ui.hook.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  unlockAudio();
+  if (hookPointer !== null) return;
+  hookPointer = event.pointerId;
+  try { ui.hook.setPointerCapture(event.pointerId); } catch { /* synthetic pointer */ }
+  scene.tapRod();
+  scene.hold(true);
+});
+ui.hook.addEventListener("pointerup", releaseHook);
+ui.hook.addEventListener("pointercancel", releaseHook);
+ui.hook.addEventListener("lostpointercapture", releaseHook);
 press(ui.beer, () => scene.beer());
 press(ui.smoke, () => scene.smoke());
 press(ui.phoneButton, () => scene.openPhone());
@@ -252,7 +482,7 @@ ui.steal.addEventListener("lostpointercapture", releaseSteal);
 
 window.addEventListener("keydown", (event) => {
   if (event.repeat) return;
-  if (event.code === "Space" || event.code === "Enter") { event.preventDefault(); scene.tapRod(); }
+  if (event.code === "Space" || event.code === "Enter") { event.preventDefault(); hookPointer = -1; scene.tapRod(); scene.hold(true); }
   if (event.code === "Digit1" || event.code === "KeyB") scene.beer();
   if (event.code === "Digit2" || event.code === "KeyC") scene.smoke();
   if (event.code === "Digit3" || event.code === "KeyT") ui.phone.classList.contains("hidden") ? scene.openPhone() : scene.swipe();
@@ -262,16 +492,14 @@ window.addEventListener("keydown", (event) => {
 });
 window.addEventListener("keyup", (event) => {
   if (event.code === "Digit4" || event.code === "KeyS") releaseSteal();
+  if (event.code === "Space" || event.code === "Enter") releaseHook();
 });
 
-function startRun(): void {
+ui.startButton.addEventListener("click", () => {
   unlockAudio();
   voice.unlock();
-  showPlay();
-  scene.startRun();
-}
-ui.startButton.addEventListener("click", startRun);
-el("#restart-button").addEventListener("click", startRun);
+  showMap();
+});
 el("#pause-button").addEventListener("click", () => scene.togglePause());
 el("#resume-button").addEventListener("click", () => scene.togglePause(true));
 // Three independent switches, remembered per device.
@@ -295,16 +523,16 @@ audioToggle("#voice-button", "ne-klyuet-voice-off", "ГОЛОСА", () => !voice
 el("#quit-button").addEventListener("click", () => {
   ui.pause.classList.remove("active");
   scene.abandon();
+  showMap();
 });
-window.addEventListener("blur", () => { releaseSteal(); scene.pauseIfPlaying(); });
-document.addEventListener("visibilitychange", () => { if (document.hidden) { releaseSteal(); scene.pauseIfPlaying(); } });
+window.addEventListener("blur", () => { releaseSteal(); releaseHook(); scene.pauseIfPlaying(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden) { releaseSteal(); releaseHook(); scene.pauseIfPlaying(); } });
 
 // ---------------------------------------------------------------- scene → UI
 scene.uiEvents.on("hud", updateHud);
 scene.uiEvents.on("toast", toast);
-scene.uiEvents.on("dayEnd", showShop);
 scene.uiEvents.on("result", showResult);
-scene.uiEvents.on("paused", (paused: boolean) => { releaseSteal(); ui.pause.classList.toggle("active", paused); });
+scene.uiEvents.on("paused", (paused: boolean) => { releaseSteal(); releaseHook(); ui.pause.classList.toggle("active", paused); });
 scene.uiEvents.on("phoneOpen", () => ui.phone.classList.remove("hidden"));
 scene.uiEvents.on("phoneClose", () => ui.phone.classList.add("hidden"));
 scene.uiEvents.on("video", showVideo);
@@ -317,6 +545,7 @@ scene.uiEvents.on("bell", () => {
 scene.uiEvents.on("sleep", (on: boolean) => ui.sleepShade.classList.toggle("on", on));
 scene.uiEvents.on("meltdown", () => {
   buzz([80, 60, 200]);
+  releaseHook();
   ui.controls.classList.add("hidden");
   ui.phone.classList.add("hidden");
 });
