@@ -329,6 +329,8 @@ async function boot(): Promise<void> {
   try {
     await Promise.race([document.fonts.load('700 16px "Oswald"', "АБВ"), new Promise((resolve) => setTimeout(resolve, 1500))]);
   } catch { /* fall back to system fonts */ }
+  // Pre-recorded voice lines, if they have been generated (npm run voices).
+  void voice.loadRecordings(`${import.meta.env.BASE_URL}fishing/voice/`);
   try {
     scene.mount(el("#game"), el("#fx"));
   } catch {

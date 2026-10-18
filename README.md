@@ -67,6 +67,16 @@ You fish next to your friend Tolik. He keeps landing fish, you don't, and every 
 - **Steal:** hold **СТЫРИТЬ** while Tolik is distracted (phone, stretching, in the bushes). If he turns round mid-steal you get caught.
 - Between days pick one of three shop perks; rage halves overnight; Tolik gets luckier each day.
 
-Rules live in `fishing/src/sim.ts` (pure, no Phaser) and are covered by `tests/fishing.test.mjs`, including a bot balance check. 3D models are original low-poly geometry built in code with flat shading and an ink outline (`fishing/src/three/models.ts`, scene in `fishing/src/Scene3D.ts`); all audio is generated at runtime, so there are no third-party assets to license: sound effects and river/bird/cricket ambience are synthesized with WebAudio (`sfx.ts`), the background music is a generative Karplus–Strong guitar that speeds up and adds a pulse and heartbeat as rage rises (`music.ts`), and voice lines (Tolik, the hero, a CoD-style announcer calling bites and critical rage) use the device's built-in Russian speech synthesis (`voice.ts`; silent on devices without a Russian voice). Sounds, music and voices can each be switched off in the pause menu. For playtesting in the browser console: `__fishing.sim.rage = 95`.
+Rules live in `fishing/src/sim.ts` (pure, no Phaser) and are covered by `tests/fishing.test.mjs`, including a bot balance check. 3D models are original low-poly geometry built in code with flat shading and an ink outline (`fishing/src/three/models.ts`, scene in `fishing/src/Scene3D.ts`); all audio is generated at runtime, so there are no third-party assets to license: sound effects and river/bird/cricket ambience are synthesized with WebAudio (`sfx.ts`), the background music is a generative Karplus–Strong guitar that speeds up and adds a pulse and heartbeat as rage rises (`music.ts`), and voice lines (Tolik, the hero, a CoD-style announcer calling bites and critical rage) use the device's built-in Russian speech synthesis (`voice.ts`; silent on devices without a Russian voice). Sounds, music and voices can each be switched off in the pause menu.
+
+**Better voices (ElevenLabs).** All 60 spoken lines live in `fishing/src/lines.ts`. Record them once (≈1,100 characters, fits the free tier) and commit the result:
+
+```bash
+ELEVENLABS_API_KEY=sk_... npm run voices        # writes public/fishing/voice/*.mp3 + manifest.json
+npm run voices -- --list                          # lines and character count
+VOICE_TOLIK=<id> npm run voices -- --force        # re-record with your own voice picks
+```
+
+The game plays a recording when one exists and falls back to device speech otherwise. The API key is only used by the script and never ships with the game. For playtesting in the browser console: `__fishing.sim.rage = 95`.
 
 Desktop keys: Space strike · 1 beer · 2 smoke · 3 TikTok/next · X close phone · hold 4 steal · P pause.

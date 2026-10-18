@@ -1,22 +1,13 @@
 import * as THREE from "three";
 import { Music } from "./music";
 import { play } from "./sfx";
+import { ANNOUNCER, DISTRACT_LINES, TAUNTS, TOLIK } from "./lines";
 import { voice } from "./voice";
 import { DAYS, FishingSim, type Fish, type PerkId, type SimEvent, type SimSnapshot } from "./sim";
 import {
   C, FISH_LOOK, Limb, at, makeBobber, makeBucket, makeCan, makeCig, makeCooler, makeEnvironment, makeFish,
   makeFriend, makeHero, makePhone, mesh, paintSky, type Environment, type Fisher,
 } from "./three/models";
-
-const TAUNTS = [
-  "ОПА! ЕЩЁ ОДИН!", "ТУТ МЕСТО ЗНАТЬ НАДО", "ДЕРЖИ, ПОКАЖУ КАК НАДО", "ЧЁ, НЕ КЛЮЁТ? ХЕ-ХЕ", "СЕДЬМОЙ… ИЛИ ВОСЬМОЙ?",
-  "МОЖЕТ, НАЖИВКУ ПОМЕНЯЕШЬ?", "ИДИ СЮДА, ТУТ НА ВСЕХ ХВАТИТ", "У МЕНЯ ДЕД ТАК ЖЕ ЛОВИЛ", "О, ТЯЖЁЛЕНЬКИЙ!",
-];
-const DISTRACT_LINES: Record<string, string[]> = {
-  phone: ["АЛЛО? ДА, КЛЮЁТ КАК БЕШЕНАЯ!", "ЗАЙ, Я НА РАБОТЕ… НУ ПОЧТИ"],
-  bushes: ["Я В КУСТЫ. СЛЕДИ ЗА УДОЧКОЙ", "ЩАС ПРИДУ, НЕ ТРОГАЙ НИЧЕГО"],
-  stretch: ["ЭЭЭХ, СПИНА…", "ХОРОШО СИДИМ!"],
-};
 
 type Listener = (...args: any[]) => void;
 class Emitter {
@@ -46,8 +37,6 @@ const HERO_POS = V(-0.95, 0, 0.2);
 const FRIEND_POS = V(1.05, 0, 0.1);
 const MY_BOBBER = V(-1.5, 0, -6.6);
 const FRIEND_BOBBER = V(1.9, 0, -8.2);
-
-const DAY_SPOKEN = ["Суббота", "Воскресенье", "Понедельник. Отгул"];
 
 const SKY_KEYS: Array<[number, number, number, number, number]> = [
   // progress, sky top, horizon, sun light colour, sun intensity
@@ -188,8 +177,8 @@ export class Scene3D {
     this.toast(`${DAYS[0].name} · ДЕНЬ 1 ИЗ ${DAYS.length}`);
     this.music.start();
     this.music.setCalm(false);
-    voice.say("announcer", `День первый. ${DAY_SPOKEN[0]}.`, 3);
-    this.animate(0.01, () => undefined, () => this.say("НУ ЧТО, КТО БОЛЬШЕ ПОЙМАЕТ?", 2600), 1.6);
+    voice.say("announcer", ANNOUNCER.days[0], 3);
+    this.animate(0.01, () => undefined, () => this.say(TOLIK.hello, 2600), 1.6);
     this.emitHud();
   }
 
@@ -200,8 +189,8 @@ export class Scene3D {
     this.mode = "playing";
     this.toast(`${DAYS[this.sim.day].name} · ДЕНЬ ${this.sim.day + 1} ИЗ ${DAYS.length}`);
     this.music.setCalm(false);
-    voice.say("announcer", `День ${["первый", "второй", "третий"][this.sim.day]}. ${DAY_SPOKEN[this.sim.day]}.`, 3);
-    this.say(this.sim.day === DAYS.length - 1 ? "СЕГОДНЯ Я СОМА ВОЗЬМУ, ЧУЮ" : "ВЧЕРА РАЗМИНКА БЫЛА", 2600);
+    voice.say("announcer", ANNOUNCER.days[this.sim.day], 3);
+    this.say(this.sim.day === DAYS.length - 1 ? TOLIK.day3 : TOLIK.day2, 2600);
     this.emitHud();
   }
 
@@ -723,7 +712,7 @@ export class Scene3D {
         break;
       case "early":
         this.toast("РАНО ДЁРНУЛ!");
-        if (Math.random() < 0.4) this.say("НЕ ТОРОПИСЬ, ХЕ-ХЕ", 1500);
+        if (Math.random() < 0.4) this.say(TOLIK.early, 1500);
         else voice.line("hero", "early", 2);
         break;
       case "missed":
@@ -741,7 +730,7 @@ export class Scene3D {
         this.toast(`${e.fish.species} · ${e.fish.weight.toFixed(2)} КГ`);
         play("catch");
         voice.line("hero", "catch", 3);
-        if (e.fish.size === 1 && Math.random() < 0.6) this.animate(0.01, () => undefined, () => this.say("МАЛЁК! ОТПУСТИ, ПУСТЬ ПОДРАСТЁТ", 1800), 1.4);
+        if (e.fish.size === 1 && Math.random() < 0.6) this.animate(0.01, () => undefined, () => this.say(TOLIK.small, 1800), 1.4);
         break;
       case "snap":
         this.toast("СОШЛА!");
@@ -755,7 +744,7 @@ export class Scene3D {
         play("ratchet");
         this.animate(0.01, () => undefined, () => {
           this.landFish(e.fish, this.friendBobber.position.clone(), this.friendBucket, "#e7ddc6");
-          this.say(e.fish.species === "СОМ" ? "СО-О-ОМ!!! ВИДАЛ?!" : TAUNTS[Math.floor(Math.random() * TAUNTS.length)], 1700);
+          this.say(e.fish.species === "СОМ" ? TOLIK.catfish : TAUNTS[Math.floor(Math.random() * TAUNTS.length)], 1700);
           this.shake(0.15, 0.03 * e.fish.size);
           play("friendCatch");
         }, 0.45);
@@ -764,7 +753,7 @@ export class Scene3D {
       case "friendDistracted":
         this.friendPose = e.reason === "bushes" ? "away" : e.reason;
         if (e.reason === "bushes") { play("steps"); this.animate(0.01, () => undefined, () => play("rustle"), 1.0); }
-        this.say(DISTRACT_LINES[e.reason][Math.floor(Math.random() * 2)], 1800);
+        this.say(DISTRACT_LINES[e.reason][Math.floor(Math.random() * DISTRACT_LINES[e.reason].length)], 1800);
         break;
       case "friendBack":
         if (this.friendPose === "away") play("steps");
@@ -785,7 +774,7 @@ export class Scene3D {
         break;
       case "caught":
         this.friendLookTarget = 1.3;
-        this.say("Э! ТЫ ЧЁ, МОЮ РЫБУ?!", 2000, 4);
+        this.say(TOLIK.caught, 2000, 4);
         this.toast("СПАЛИЛСЯ");
         play("caught");
         this.shake(0.25, 0.06);
@@ -827,7 +816,7 @@ export class Scene3D {
         this.uiEvents.emit("sleep", false);
         voice.line("hero", "wake", 3);
         this.toast(e.missedFish ? `ПОКА СПАЛ, ТОЛИК ПОЙМАЛ ${e.missedFish}` : "ПРОСНУЛСЯ. ГОЛОВА ГУДИТ");
-        if (e.missedFish) this.say("С ДОБРЫМ УТРОМ! ГЛЯНЬ, СКОЛЬКО У МЕНЯ", 2200);
+        if (e.missedFish) this.say(TOLIK.wake, 2200);
         break;
       case "meltdown":
         this.meltdown();
@@ -835,13 +824,13 @@ export class Scene3D {
       case "dayEnd":
         this.mode = "shop";
         this.music.setCalm(true);
-        voice.say("announcer", "День окончен.", 3);
+        voice.say("announcer", ANNOUNCER.dayEnd, 3);
         this.uiEvents.emit("dayEnd", { day: e.day, offers: this.sim.offerPerks(), snapshot: this.sim.snapshot() });
         break;
       case "won":
         this.mode = "over";
         this.music.setCalm(true);
-        voice.say("announcer", "Рыбалка окончена. Нервы выдержали.", 4);
+        voice.say("announcer", ANNOUNCER.won, 4);
         setTimeout(() => this.uiEvents.emit("result", this.result(true)), 400);
         break;
       case "lost":
@@ -950,7 +939,7 @@ export class Scene3D {
       this.floatText(splashAt.clone().add(V(0, 0.8, 0)), "БУЛЬ!", "#54b7c6", 40);
       play("splash");
       this.shake(0.3, 0.08);
-      this.say("…ВОТ ЭТО ПОЙМАЛ", 2400);
+      this.say(TOLIK.splash, 2400);
       for (let i = 0; i < 12; i++) this.animate(0.01, () => undefined, () => this.spawn(splashAt.clone().add(V((Math.random() - 0.5) * 0.4, 0, 0)), V(0, 0.6, 0), 0xe2f6f2, 0.8, 1.5, 0, 0.04), 0.2 + i * 0.12);
     }, 1.1);
   }

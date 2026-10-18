@@ -10,12 +10,13 @@ let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let sfxBus: GainNode | null = null;
 let musicBus: GainNode | null = null;
+let voiceBus: GainNode | null = null;
 let sfxMuted = false;
 let musicMuted = false;
 const unlockListeners: Array<() => void> = [];
 
-export function getAudio(): { ctx: AudioContext; sfx: GainNode; music: GainNode } | null {
-  return ctx && sfxBus && musicBus ? { ctx, sfx: sfxBus, music: musicBus } : null;
+export function getAudio(): { ctx: AudioContext; sfx: GainNode; music: GainNode; voice: GainNode } | null {
+  return ctx && sfxBus && musicBus && voiceBus ? { ctx, sfx: sfxBus, music: musicBus, voice: voiceBus } : null;
 }
 
 export function onUnlock(fn: () => void): void {
@@ -40,6 +41,9 @@ export function unlockAudio(): void {
       musicBus = ctx.createGain();
       musicBus.gain.value = musicMuted ? 0 : 0.42;
       musicBus.connect(master);
+      voiceBus = ctx.createGain();
+      voiceBus.gain.value = 1;
+      voiceBus.connect(master);
       unlockListeners.splice(0).forEach((fn) => fn());
     }
     if (ctx.state === "suspended") void ctx.resume();
