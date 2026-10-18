@@ -113,13 +113,16 @@ export function camoTexture(palette: number[], seed = 3): THREE.CanvasTexture {
 export const CAMO_TCK = [0x6b6b45, 0x4a4a32, 0x8a845a, 0x3a3326, 0x76704a];
 export const CAMO_GUARD = [0x4f6a3a, 0x324a2a, 0x6f8a4a, 0x2a2e22, 0x5a6a3a];
 
-/** Soviet panel facade: seams, windows (some lit), balconies. 4×4 windows per tile. */
-export function facadeTexture(base: number, seed: number, night: boolean): THREE.CanvasTexture {
-  return canvasTexture(256, 256, (g) => {
+/**
+ * Soviet panel facade: seams, windows (some lit), balconies. 4×4 windows per
+ * tile. The glow map holds only the lit windows, for emissive light at night.
+ */
+export function facadeTextures(base: number, seed: number, night: boolean): { map: THREE.CanvasTexture; glow: THREE.CanvasTexture } {
+  const lit: Array<[number, number, string]> = [];
+  const map = canvasTexture(256, 256, (g) => {
     const r = rand(seed);
     g.fillStyle = hex(base);
     g.fillRect(0, 0, 256, 256);
-    // panel noise
     for (let i = 0; i < 300; i++) {
       g.fillStyle = `rgba(0,0,0,${r() * 0.06})`;
       g.fillRect(r() * 256, r() * 256, 2 + r() * 6, 2 + r() * 6);
@@ -134,17 +137,18 @@ export function facadeTexture(base: number, seed: number, night: boolean): THREE
       for (let fx = 0; fx < 4; fx++) {
         const x = fx * 64 + 14;
         const y = fy * 64 + 16;
-        const lit = night ? r() < 0.35 : r() < 0.08;
-        g.fillStyle = lit ? (r() < 0.5 ? "#ffd27a" : "#ffe9a8") : night ? "#1a2030" : r() < 0.5 ? "#3b4a5a" : "#4d6070";
+        const on = night ? r() < 0.38 : r() < 0.08;
+        const warm = r() < 0.5 ? "#ffd27a" : r() < 0.6 ? "#ffe9a8" : "#a8d8ff";
+        g.fillStyle = on ? warm : night ? "#1a2030" : r() < 0.5 ? "#3b4a5a" : "#4d6070";
         g.fillRect(x, y, 36, 30);
+        if (on) lit.push([x, y, warm]);
         g.fillStyle = "rgba(255,255,255,.18)";
-        if (!lit && !night) g.fillRect(x + 3, y + 3, 10, 24);
+        if (!on && !night) g.fillRect(x + 3, y + 3, 10, 24);
         g.strokeStyle = "#e9e3d6";
         g.lineWidth = 3;
         g.strokeRect(x, y, 36, 30);
         g.beginPath(); g.moveTo(x + 18, y); g.lineTo(x + 18, y + 30); g.stroke();
         if (r() < 0.45) {
-          // glazed balcony, every family its own colour
           g.fillStyle = ["#c9c2b0", "#9fb0a8", "#b7a58a", "#d8d0c0", "#8a9aa8"][Math.floor(r() * 5)];
           g.fillRect(x - 6, y + 32, 48, 12);
           g.fillStyle = "rgba(0,0,0,.25)";
@@ -153,6 +157,20 @@ export function facadeTexture(base: number, seed: number, night: boolean): THREE
       }
     }
   });
+  const glow = canvasTexture(256, 256, (g) => {
+    g.fillStyle = "#000";
+    g.fillRect(0, 0, 256, 256);
+    for (const [x, y, c] of lit) {
+      g.fillStyle = c;
+      g.fillRect(x + 2, y + 2, 15, 26);
+      g.fillRect(x + 20, y + 2, 14, 26);
+    }
+  });
+  return { map, glow };
+}
+
+export function facadeTexture(base: number, seed: number, night: boolean): THREE.CanvasTexture {
+  return facadeTextures(base, seed, night).map;
 }
 
 export function roofTexture(seed: number): THREE.CanvasTexture {
@@ -479,6 +497,14 @@ export function makeVan(): THREE.Group {
   at(mesh(new THREE.BoxGeometry(2.12, 0.16, 4.62), 0x2b5a9a, 0), 0, 1.0, 0, g);
   const roof = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 1.2), mat(0xd8dad4));
   at(roof, 0, 2.34, -0.6, g);
+  // headlights and an orange beacon that blinks when the van stops
+  for (const s of [-0.7, 0.7]) {
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.06), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff2c0).multiplyScalar(3) }));
+    at(head, s, 0.95, 3.22, g);
+  }
+  const beacon = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.16, 0.24), new THREE.MeshBasicMaterial({ color: 0x553300 }));
+  beacon.name = "beacon";
+  at(beacon, 0, 2.42, 1.4, g);
   g.scale.setScalar(1.05);
   return g;
 }
@@ -552,7 +578,9 @@ export function makeLamp(): THREE.Group {
   const g = new THREE.Group();
   at(mesh(new THREE.CylinderGeometry(0.07, 0.1, 4.2, 6), 0x3a3d40, 0.015), 0, 2.1, 0, g);
   at(mesh(new THREE.BoxGeometry(0.2, 0.1, 0.9), 0x3a3d40, 0.012), 0, 4.2, 0.35, g);
-  const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.06, 0.4), new THREE.MeshBasicMaterial({ color: 0xffd98a }));
+  const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffd98a });
+  bulbMat.color.multiplyScalar(4);
+  const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.06, 0.4), bulbMat);
   bulb.name = "bulb";
   at(bulb, 0, 4.12, 0.55, g);
   return g;
@@ -603,7 +631,7 @@ export function makeDrone(): THREE.Group {
     prop.name = "prop";
     at(prop, x, 0.08, z, g);
   }
-  const led = new THREE.Mesh(new THREE.IcosahedronGeometry(0.06, 0), new THREE.MeshBasicMaterial({ color: 0xff2a2a }));
+  const led = new THREE.Mesh(new THREE.IcosahedronGeometry(0.08, 0), new THREE.MeshBasicMaterial({ color: 0xff2a2a }));
   led.name = "led";
   at(led, 0, -0.1, 0.22, g);
   return g;
@@ -617,7 +645,7 @@ export function makeBoat(): THREE.Group {
   bow.rotation.y = Math.PI / 4;
   at(bow, 0, 0.2, 2.2, g);
   at(mesh(new THREE.BoxGeometry(1.0, 0.8, 1.0), 0xd8d8d0, 0.025), 0, 0.8, -0.4, g);
-  const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.12, 0.3, 8), new THREE.MeshBasicMaterial({ color: 0xfff2c0 }));
+  const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.12, 0.3, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xfff2c0).multiplyScalar(4) }));
   lamp.rotation.x = Math.PI / 2;
   at(lamp, 0, 1.35, 0.1, g);
   return g;

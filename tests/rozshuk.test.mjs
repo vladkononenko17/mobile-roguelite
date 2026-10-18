@@ -277,3 +277,20 @@ describe('run', () => {
     assert.equal(s.levelId, '2');
   });
 });
+
+describe('voice lines', async () => {
+  const { LINES, lineFor } = await import('../rozshuk/src/lines.ts');
+  const { existsSync, readFileSync } = await import('node:fs');
+  it('every line has a recording and ids are unique', () => {
+    assert.equal(new Set(LINES.map((l) => l.id)).size, LINES.length);
+    for (const l of LINES) assert.ok(existsSync(`public/rozshuk/voice/${l.id}.mp3`), l.id);
+  });
+  it('every shout the outing emits has a recording', () => {
+    const src = readFileSync('rozshuk/src/outing.ts', 'utf8');
+    const arrays = [...src.matchAll(/const (?:SHOUT_\w+|BABKA_CALL) = \[([^\]]+)\]/g)].map((m) => m[1]);
+    const shouts = arrays.flatMap((a) => [...a.matchAll(/"([^"]+)"/g)].map((m) => m[1]));
+    assert.ok(shouts.length >= 17);
+    for (const t of shouts) assert.ok(lineFor(t), t);
+    for (const q of TALKS ? Object.values(TALKS) : []) assert.ok(lineFor(q.line), q.line);
+  });
+});

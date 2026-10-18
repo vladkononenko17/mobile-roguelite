@@ -16,7 +16,44 @@ export function getAudio(): { ctx: AudioContext; sfx: GainNode; music: GainNode 
   return ctx && sfxBus && musicBus ? { ctx, sfx: sfxBus, music: musicBus } : null;
 }
 
+const MUSIC_VOL = 0.55;
+let silentTag: HTMLAudioElement | null = null;
+
+/**
+ * iPhones mute WebAudio while the ring/silent switch is on silent. Declaring a
+ * "playback" audio session (Safari 17+) or looping a silent media element
+ * moves the page into the media category, which plays regardless.
+ */
+function iosPlayback(): void {
+  try {
+    const nav = navigator as Navigator & { audioSession?: { type: string } };
+    if (nav.audioSession) nav.audioSession.type = "playback";
+  } catch { /* not supported */ }
+  if (!silentTag) {
+    silentTag = document.createElement("audio");
+    silentTag.setAttribute("playsinline", "");
+    silentTag.loop = true;
+    silentTag.volume = 0.01;
+    // 0.1 s of silence, 8-bit mono WAV
+    const n = 800;
+    const bytes = new Uint8Array(44 + n);
+    const dv = new DataView(bytes.buffer);
+    const w = (o: number, t: string) => { for (let i = 0; i < t.length; i++) bytes[o + i] = t.charCodeAt(i); };
+    w(0, "RIFF"); dv.setUint32(4, 36 + n, true); w(8, "WAVEfmt "); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+    dv.setUint32(24, 8000, true); dv.setUint32(28, 8000, true); dv.setUint16(32, 1, true); dv.setUint16(34, 8, true); w(36, "data"); dv.setUint32(40, n, true);
+    bytes.fill(128, 44);
+    silentTag.src = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+  }
+  if (silentTag.paused) silentTag.play().catch(() => undefined);
+}
+
+// any touch can wake a context that the OS suspended (calls, app switching)
+for (const ev of ["pointerdown", "touchend", "keydown"]) {
+  window.addEventListener(ev, () => { if (ctx && ctx.state !== "running") void ctx.resume(); }, { passive: true });
+}
+
 export function unlockAudio(): void {
+  iosPlayback();
   try {
     if (!ctx) {
       const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -31,7 +68,7 @@ export function unlockAudio(): void {
       sfxBus.gain.value = sfxMuted ? 0 : 0.6;
       sfxBus.connect(master);
       musicBus = ctx.createGain();
-      musicBus.gain.value = musicMuted ? 0 : 0.38;
+      musicBus.gain.value = musicMuted ? 0 : MUSIC_VOL;
       musicBus.connect(master);
     }
     if (ctx.state === "suspended") void ctx.resume();
@@ -42,7 +79,7 @@ export function unlockAudio(): void {
 
 export function setMuted(v: boolean): void { sfxMuted = v; if (sfxBus) sfxBus.gain.value = v ? 0 : 0.6; }
 export function isMuted(): boolean { return sfxMuted; }
-export function setMusicMuted(v: boolean): void { musicMuted = v; if (musicBus) musicBus.gain.value = v ? 0 : 0.38; }
+export function setMusicMuted(v: boolean): void { musicMuted = v; if (musicBus) musicBus.gain.value = v ? 0 : MUSIC_VOL; }
 export function isMusicMuted(): boolean { return musicMuted; }
 
 export function tone(freq: number, start: number, dur: number, type: OscillatorType, vol: number, slideTo?: number, bus = sfxBus): void {

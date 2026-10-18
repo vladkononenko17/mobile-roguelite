@@ -315,3 +315,4 @@ h2 { font-size: clamp(38px, 11vw, 58px); transform: skewX(-6deg); }
   .action { min-height: 56px; }
   .action b { font-size: 20px; }
 }
+.gfx-toggle { width: min(100%, 380px); margin-top: 7px; background: var(--paper); color: var(--ink); }

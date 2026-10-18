@@ -1,7 +1,14 @@
 import "./rozshuk.css";
 import { Scene3D } from "./Scene3D";
 import { Music } from "./music";
-import { isMusicMuted, isMuted, play, setMusicMuted, setMuted, unlockAudio } from "./sfx";
+import { isMusicMuted, isMuted, play, setMusicMuted, setMuted, unlockAudio as unlockSfx } from "./sfx";
+import { voice } from "./voice";
+
+let voiceUnlocked = false;
+function unlockAudio(): void {
+  unlockSfx();
+  if (!voiceUnlocked) { voiceUnlocked = true; voice.unlock(); }
+}
 import {
   ACTIONS, ENDINGS, KNOCK_TEXT, PERKS, SPEAKERS, TRAITS, perkById,
   type ActionId, type Msg, type PerkId, type TraitId,
@@ -275,6 +282,7 @@ function knock(): Promise<void> {
     showScreen(null);
     hud("home");
     play("knock");
+    voice.say("Відкривайте, ТЦК! Ми знаємо, що ви вдома", "officer", 500);
     scene.setHomePose("hide");
     setTimeout(() => play("knock"), 1600);
     const m = { ...BASE_MODS, tier: Math.min(3, Math.ceil(level(run!).n / 5)), zone: has(run!, "lungs") ? 1.4 : 1 };
@@ -285,6 +293,7 @@ function knock(): Promise<void> {
         const ok = qq.result === "win";
         resolveKnock(run!, ok);
         toast(ok ? "Пішли. Здається, пронесло" : "Вони почули. Чекатимуть біля підʼїзду", !ok);
+        if (ok) voice.say("Пронесло…", "me");
         play(ok ? "lost" : "fail");
         scene.setHomePose("idle");
         resolve();
@@ -424,6 +433,7 @@ function frameOuting(dt: number): void {
   vig.style.opacity = chase ? "1" : String(Math.max(0, (a - 0.3) * 0.9));
   vig.classList.toggle("chase", chase);
   music.intensity = chase ? 1 : a;
+  scene.setDanger(chase ? 1 : Math.max(0, (a - 0.35) * 0.8));
   if (a > 0.55 && sim.phase === "explore") {
     heartT -= dt;
     if (heartT <= 0) { play("heart"); heartT = chase ? 0.45 : 0.75; }
@@ -475,23 +485,36 @@ function handleOutingEvents(ev: OutingEvent[]): void {
         stepT++;
         if (stepT % 1 === 0) play("step");
         break;
+      case "say":
+        voice.say(e.text, e.id === "babka" ? "babka" : e.id === "me" ? "me" : "officer");
+        break;
       case "spotted":
         play("spotted");
         setTimeout(() => play("whistle"), 250);
+        voice.say("Ой-йой…", "me", 1500);
         if (navigator.vibrate) navigator.vibrate(120);
         break;
       case "suspicious": play("huh"); break;
       case "heard": play("huh"); break;
-      case "lost": play("lost"); toast("Відірвався!"); break;
-      case "grab": play("grab"); if (navigator.vibrate) navigator.vibrate([60, 40, 160]); break;
-      case "qte": openQte(e.qte, "outing"); break;
+      case "lost": play("lost"); toast("Відірвався!"); voice.say("Фух… відірвався", "me", 1300); break;
+      case "grab": play("grab"); voice.say("Попався!", "officer"); if (navigator.vibrate) navigator.vibrate([60, 40, 160]); break;
+      case "qte":
+        openQte(e.qte, "outing");
+        if (e.ctx === "van") voice.say("В бус його!", "officer");
+        else if (e.ctx === "talk" || e.ctx === "booth") voice.say(e.qte.spec.prompt, "npc");
+        break;
       case "freed": {
         const t = { break: "Вирвався! Тікай!", talk: "Заговорив зуби. «Ну йди, але ми тебе запамʼятали»", docs: "Бронь спрацювала. «Вибачте, вільні»", van: "Вистрибнув з бусу!!!", lawyer: "Адвокат на звʼязку. Відпустили", dog: "«А, з собакою… Ну йди»" }[e.how];
         toast(t);
+        if (e.how === "talk") voice.say("Ну йди, але ми тебе запамʼятали", "officer");
+        else if (e.how === "docs") voice.say("Вибачте, вільні", "officer");
+        else if (e.how === "dog") voice.say("А, з собакою… Ну йди", "officer");
+        else if (e.how === "van" || e.how === "break") voice.say("Тікаю!!!", "me");
         play(e.how === "van" ? "van" : "win");
         break;
       }
       case "caught":
+        voice.say("Ні-ні-ні, я ж на удальонці!", "me");
         play("van");
         setTimeout(() => play("fail"), 700);
         void finishOuting();
@@ -509,7 +532,7 @@ function handleOutingEvents(ev: OutingEvent[]): void {
       case "droneSpot": play("spotted"); toast("Дрон тебе бачить! Прикордонники йдуть", true); break;
       case "curfew": play("curfew"); toast("КОМЕНДАНТСЬКА! Більше патрулів", true); break;
       case "exitOpen": play("ping"); toast(sim.level.map === "train" ? "Станція! До тамбура" : "Готово. Тепер — до виходу"); break;
-      case "vault": play(e.ok ? "vault" : "miss"); if (!e.ok) toast("Зірвався з паркану — гучно!", true); break;
+      case "vault": play(e.ok ? "vault" : "miss"); if (e.ok) voice.say("Опа!", "me"); if (!e.ok) toast("Зірвався з паркану — гучно!", true); break;
       case "riverFail": play("splash"); toast("Течія знесла назад! Ще одна спроба", true); break;
       case "won": play("win"); void finishOuting(); break;
       default: break;
@@ -534,6 +557,7 @@ async function finishOuting(): Promise<void> {
   hud("none");
   music.intensity = 0;
   $("#alert-vignette").style.opacity = "0";
+  scene.setDanger(0);
   saveRun(run.phase === "end" ? null : run);
   if (caught) { showEnd(); return; }
   showScreen("#result-screen");
@@ -855,7 +879,16 @@ function resume(): void {
   if (sim) { scene.paused = false; hud("out"); }
   else if (run) hud("home");
 }
+const GFX_NAMES = { low: "НИЗЬКА", medium: "СЕРЕДНЯ", high: "ВИСОКА" } as const;
+const GFX_NEXT = { low: "medium", medium: "high", high: "low" } as const;
+function syncGfx(): void {
+  $("#gfx-button").textContent = `ГРАФІКА: ${GFX_NAMES[scene.quality]}`;
+}
+
 function syncAudio(): void {
+  const v = $("#voice-button");
+  v.textContent = voice.available ? `ГОЛОСИ: ${voice.on ? "ВКЛ" : "ВИКЛ"}` : "ГОЛОСИ: НЕМАЄ УКР. ГОЛОСУ";
+  v.setAttribute("aria-pressed", String(voice.on && voice.available));
   const s = $("#sound-button");
   const m = $("#music-button");
   s.textContent = `ЗВУКИ: ${isMuted() ? "ВИКЛ" : "ВКЛ"}`;
@@ -909,6 +942,8 @@ $("#quit-button").addEventListener("click", () => {
 });
 $("#sound-button").addEventListener("click", () => { setMuted(!isMuted()); syncAudio(); play("click"); });
 $("#music-button").addEventListener("click", () => { setMusicMuted(!isMusicMuted()); syncAudio(); });
+$("#voice-button").addEventListener("click", () => { voice.on = !voice.on; syncAudio(); if (voice.on) voice.say("Голоси увімкнено", "me"); });
+$("#gfx-button").addEventListener("click", () => { scene.setQuality(GFX_NEXT[scene.quality]); syncGfx(); play("click"); });
 document.addEventListener("visibilitychange", () => { if (document.hidden && sim && sim.phase === "explore") togglePause(); });
 
 scene.onEvents = handleOutingEvents;
@@ -917,7 +952,10 @@ scene.onFrame = (dt) => {
   if (sim) frameOuting(dt);
 };
 
+voice.load();
 syncAudio();
+syncGfx();
+window.speechSynthesis?.addEventListener?.("voiceschanged", syncAudio);
 renderStart();
 scene.showMenu();
 music.mode = "home";

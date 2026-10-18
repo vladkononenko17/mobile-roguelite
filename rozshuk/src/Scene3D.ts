@@ -5,11 +5,12 @@ import { CELL, MAPS, blocksSight, floorOf, type MapDef } from "./maps";
 import type { OutingEvent, OutingSim, Patrol } from "./outing";
 import type { ActionId } from "./content";
 import {
-  C, CAMO_GUARD, CAMO_TCK, LOOKS, animateRig, at, camoTexture, canvasTexture, carpetTexture, facadeTexture, garageTexture,
+  C, CAMO_GUARD, CAMO_TCK, LOOKS, animateRig, at, camoTexture, canvasTexture, carpetTexture, garageTexture,
   makeBench, makeBoat, makeBush, makeCar, makeDesk, makeDog, makeDrone, makeFan, makeHouse, makeKennel, makeLamp, makePerson,
-  makePine, makePlant, makeRing, makeStall, makeTrashBins, makeTree, makeVan, mat, mesh, roofTexture, setRigOpacity, signTexture,
+  facadeTextures, makePine, makePlant, makeRing, makeStall, makeTrashBins, makeTree, makeVan, mat, mesh, roofTexture, setRigOpacity, signTexture,
   wallpaperTexture, type Rig,
 } from "./three/models";
+import { Post, defaultQuality, glowMat, lightPoolMaterial, type Mood, type Quality } from "./three/post";
 
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
@@ -90,16 +91,20 @@ export class Scene3D {
   private candle = new THREE.PointLight(0xff9a3a, 0, 5);
   private windowMat = new THREE.MeshBasicMaterial({ color: 0x9fc6e8 });
   private laptopScreen = new THREE.MeshBasicMaterial({ color: 0x6fb0ff });
+  private flame = glowMat(0xffa040, 5);
   private homeVan: THREE.Group | null = null;
+  private flameMesh: THREE.Mesh | null = null;
   private homeVanT = -1;
 
   private container: HTMLElement;
+  readonly post: Post;
+  /** Officer flashlights, lit only at night. */
+  private night = false;
 
   constructor(container: HTMLElement, fxLayer: HTMLElement) {
     this.container = container;
     this.fxLayer = fxLayer;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -111,6 +116,7 @@ export class Scene3D {
     sc.left = -22; sc.right = 22; sc.top = 22; sc.bottom = -22; sc.near = 1; sc.far = 80;
     this.sun.shadow.bias = -0.0008;
     this.scene.add(this.out, this.home);
+    this.post = new Post(this.renderer, this.scene, this.camera, defaultQuality());
     this.buildHome();
     this.resize();
     window.addEventListener("resize", () => this.resize());
@@ -124,7 +130,7 @@ export class Scene3D {
   resize(): void {
     const w = this.vw;
     const h = this.vh;
-    this.renderer.setSize(w, h);
+    this.post.setSize(w, h);
     this.camera.aspect = w / h;
     // narrow phones see less sideways; widen the lens a little
     this.camera.fov = w / h < 0.6 ? 52 : 45;
@@ -194,6 +200,10 @@ export class Scene3D {
     // candle for blackouts
     at(mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.16, 6), 0xf4ecd8, 0.008), 1.2, 0.9, -2.7, g);
     at(this.candle, 1.2, 1.15, -2.7, g);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.08, 6), this.flame);
+    flame.name = "flame";
+    at(flame, 1.2, 1.02, -2.7, g);
+    this.flameMesh = flame;
     const chair = new THREE.Group();
     at(mesh(new THREE.BoxGeometry(0.55, 0.08, 0.55), 0x3a3a44, 0.015), 0, 0.5, 0, chair);
     at(mesh(new THREE.BoxGeometry(0.55, 0.6, 0.08), 0x3a3a44, 0.015), 0, 0.85, 0.27, chair);
@@ -246,6 +256,8 @@ export class Scene3D {
 
   showHome(opts: { blackout: boolean; cat: boolean; night: boolean; hoodie: boolean; heat: number }): void {
     this.clearOuting();
+    this.post.setMood(opts.blackout ? "blackout" : "home");
+    this.post.danger = 0;
     this.mode = "home";
     this.home.visible = true;
     this.out.visible = false;
@@ -259,8 +271,9 @@ export class Scene3D {
     this.sun.target.position.set(0, 0, 0);
     this.homeLamp.intensity = opts.blackout ? 0 : 6;
     this.candle.intensity = opts.blackout ? 4 : 0;
+    if (this.flameMesh) this.flameMesh.visible = opts.blackout;
     this.windowMat.color.set(opts.blackout ? 0x101828 : opts.night ? 0x1a2440 : 0x9fc6e8);
-    this.laptopScreen.color.set(opts.blackout ? 0x223040 : 0x6fb0ff);
+    this.laptopScreen.color.set(opts.blackout ? 0x223040 : 0x6fb0ff).multiplyScalar(opts.blackout ? 1 : 1.8);
     this.homeCat!.visible = opts.cat;
     this.homeCat!.position.set(-3.2, 0.62, -0.2);
     this.homeCat!.rotation.y = 1.2;
@@ -341,7 +354,7 @@ export class Scene3D {
     if (this.homePose === "work") {
       hero.armL.rotation.x = -1.2 + Math.sin(t * 22) * 0.12;
       hero.armR.rotation.x = -1.2 + Math.cos(t * 19) * 0.12;
-      this.laptopScreen.color.setHSL(0.58, 0.6, 0.55 + Math.sin(t * 8) * 0.05);
+      this.laptopScreen.color.setHSL(0.58, 0.6, 0.55 + Math.sin(t * 8) * 0.05).multiplyScalar(1.8);
     }
     if (this.homePose === "eat") hero.armR.rotation.x = -2 + Math.sin(t * 5) * 0.4;
     if (this.homePose === "scroll") { hero.armR.rotation.x = -1.4; hero.head.rotation.x = 0.4; }
@@ -354,6 +367,7 @@ export class Scene3D {
       } else this.homeCat.position.set(-3.2, 0.62, -0.2);
     }
     this.candle.intensity = this.candle.intensity > 0 ? 3.4 + Math.sin(t * 13) * 0.4 + Math.sin(t * 7.3) * 0.3 : 0;
+    if (this.flameMesh?.visible) this.flameMesh.scale.set(1, 1 + Math.sin(t * 17) * 0.15, 1);
     if (this.homeVan && this.homeVanT >= 0) {
       this.homeVanT += dt;
       const k = (this.homeVanT % 14) / 3.5;
@@ -379,6 +393,7 @@ export class Scene3D {
     });
     this.out.clear();
     this.statics.clear();
+    this.poolMats.clear();
     this.out.add(this.statics);
     for (const l of this.lampLights) this.scene.remove(l);
     this.lampLights = [];
@@ -422,6 +437,9 @@ export class Scene3D {
     const look = map.look;
     this.camOffset.set(0, look === "train" ? 17 : look === "indoor" ? 21 : 31, look === "train" ? 8.5 : look === "indoor" ? 11 : 17);
     this.setAtmosphere(sim.level, map, this.camOffset.length());
+    this.night = !!sim.level.night;
+    const mood: Mood = look === "indoor" || look === "train" ? "indoor" : this.night ? "night" : sim.level.weather === "clear" ? "day" : sim.level.weather;
+    this.post.setMood(mood);
     this.buildGround(sim, map);
     this.buildCells(sim, map);
     this.buildOutskirts(sim, map);
@@ -568,9 +586,9 @@ export class Scene3D {
       return;
     }
     if (map.look !== "town") return;
-    const facade = facadeTexture(0xc8c4b8, 77, !!sim.level.night);
-    facade.repeat.set(1, 1);
-    const side = new THREE.MeshLambertMaterial({ map: facade });
+    const night = !!sim.level.night;
+    const { map: facade, glow } = facadeTextures(0xc8c4b8, 77, night);
+    const side = new THREE.MeshLambertMaterial({ map: facade, emissiveMap: night ? glow : null, emissive: night ? 0xffffff : 0x000000, emissiveIntensity: night ? 2.2 : 0 });
     const roof = new THREE.MeshLambertMaterial({ color: 0x4a4746 });
     const block = (x: number, z: number, w: number, d: number, h: number) => {
       const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [side, side, roof, roof, side, side]);
@@ -629,13 +647,21 @@ export class Scene3D {
         const height = floors * 3;
         const w = rc.w * CELL;
         const d = rc.h * CELL;
-        const ft = facadeTexture(palette[(rc.r + rc.c) % palette.length], seed++, night);
+        const { map: ft, glow } = facadeTextures(palette[(rc.r + rc.c) % palette.length], seed++, night);
         ft.repeat.set(w / 12, height / 12);
+        glow.repeat.copy(ft.repeat);
         const ftz = ft.clone();
         ftz.repeat.set(d / 12, height / 12);
         ftz.needsUpdate = true;
-        const side = new THREE.MeshLambertMaterial({ map: ft });
-        const end = new THREE.MeshLambertMaterial({ map: ftz });
+        const glz = glow.clone();
+        glz.repeat.copy(ftz.repeat);
+        glz.needsUpdate = true;
+        // lit windows glow at night (and bloom picks them up)
+        const lit = (map: THREE.Texture, glowMap: THREE.Texture) => new THREE.MeshLambertMaterial({
+          map, emissiveMap: night ? glowMap : null, emissive: night ? 0xffffff : 0x000000, emissiveIntensity: night ? 2.6 : 0,
+        });
+        const side = lit(ft, glow);
+        const end = lit(ftz, glz);
         const rt = roofTexture(seed++);
         rt.repeat.set(w / 6, d / 6);
         const roof = new THREE.MeshLambertMaterial({ map: rt });
@@ -734,7 +760,9 @@ export class Scene3D {
       for (let r = rc.r; r < rc.r + rc.h; r++) for (let c = rc.c; c < rc.c + rc.w; c++) {
         const s = signFor(r, c);
         if (!s) continue;
-        const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.65), new THREE.MeshBasicMaterial({ map: signTexture(s.label, "#f2b632", "#171318"), side: THREE.DoubleSide }));
+        const signMat = new THREE.MeshBasicMaterial({ map: signTexture(s.label, "#f2b632", "#171318"), side: THREE.DoubleSide });
+        if (night) signMat.color.setScalar(1.7);
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.65), signMat);
         const p = sim.center(r, c);
         const [dr, dc] = s.dir;
         sign.position.set(p.x - dc * (CELL / 2 + 0.06), look === "woods" ? 2.3 : 2.75, p.z - dr * (CELL / 2 + 0.06));
@@ -834,6 +862,7 @@ export class Scene3D {
           case "L":
             at(makeLamp(), p.x, 0, p.z, g);
             this.lampSpots.push(V(p.x, 4, p.z));
+            if (night) this.lightPool(p.x, p.z + 0.55, 4.5);
             break;
         }
         // street lamps along pavements next to roads
@@ -841,6 +870,7 @@ export class Scene3D {
           const lamp = makeLamp();
           at(lamp, p.x + 1.1, 0, p.z + 1.1, g);
           this.lampSpots.push(V(p.x + 1.1, 4, p.z + 1.1));
+          if (night) this.lightPool(p.x + 1.1, p.z + 1.65, 4.5);
         }
       }
     }
@@ -894,6 +924,17 @@ export class Scene3D {
     }
   }
 
+  private poolMats = new Map<number, THREE.MeshBasicMaterial>();
+  /** A soft additive pool of lamplight on the ground (night only). */
+  private lightPool(x: number, z: number, r: number, color = 0xffb860): void {
+    let m = this.poolMats.get(color);
+    if (!m) { m = lightPoolMaterial(color, 0.5); this.poolMats.set(color, m); }
+    const pool = new THREE.Mesh(new THREE.PlaneGeometry(r * 2, r * 2), m);
+    pool.rotation.x = -Math.PI / 2;
+    pool.renderOrder = 1;
+    at(pool, x, 0.04, z, this.statics);
+  }
+
   private buildDoor(sim: OutingSim, r: number, c: number, look: MapDef["look"]): void {
     const p = sim.center(r, c);
     const dirs: Array<[number, number]> = [[-1, 0], [1, 0], [0, -1], [0, 1]];
@@ -910,8 +951,9 @@ export class Scene3D {
     if (look === "town") {
       const canopy = mesh(new THREE.BoxGeometry(dc ? 1.4 : 2.2, 0.12, dr ? 1.4 : 2.2), 0x8a8580, 0.02);
       at(canopy, p.x + dc * (CELL / 2 - 0.7), 2.6, p.z + dr * (CELL / 2 - 0.7), this.statics);
-      const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.2), new THREE.MeshBasicMaterial({ color: 0xffe0a0 }));
+      const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.2), this.level?.night ? glowMat(0xffe0a0, 4) : mat(0xffe0a0));
       at(bulb, p.x + dc * (CELL / 2 - 0.25), 2.45, p.z + dr * (CELL / 2 - 0.25), this.statics);
+      if (this.level?.night) this.lightPool(p.x + dc * (CELL / 2 - 0.8), p.z + dr * (CELL / 2 - 0.8), 3.2, 0xffc878);
     }
   }
 
@@ -1025,8 +1067,23 @@ export class Scene3D {
           this.out.add(follower.root);
         }
         // a folder of summonses
-        const folder = mesh(new THREE.BoxGeometry(0.3, 0.04, 0.4), p.kind === "officer" ? 0x2a5a9a : 0x222222, 0.01);
-        rig.hand.add(folder);
+        if (this.level?.night) {
+          // a torch instead of the folder of summonses
+          const torch = mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.3, 6), 0x222222, 0.01);
+          torch.rotation.x = Math.PI / 2;
+          rig.hand.add(torch);
+          const lens = new THREE.Mesh(new THREE.CircleGeometry(0.06, 8), glowMat(0xfff4d0, 6));
+          at(lens, 0, 0, 0.16, rig.hand);
+          const pool = new THREE.Mesh(new THREE.PlaneGeometry(4, 4), lightPoolMaterial(0xfff0c8, 0.55));
+          pool.rotation.x = -Math.PI / 2;
+          pool.name = "torchPool";
+          pool.renderOrder = 1;
+          this.out.add(pool);
+          rig.root.userData.pool = pool;
+        } else {
+          const folder = mesh(new THREE.BoxGeometry(0.3, 0.04, 0.4), p.kind === "officer" ? 0x2a5a9a : 0x222222, 0.01);
+          rig.hand.add(folder);
+        }
       }
     }
     if (p.kind !== "drone") {
@@ -1183,8 +1240,13 @@ export class Scene3D {
       this.updateOuting(this.paused ? 0 : dt);
       this.onFrame?.(dt);
     } else this.onFrame?.(dt);
-    this.renderer.render(this.scene, this.camera);
+    this.post.render(dt);
   }
+
+  get quality(): Quality { return this.post.quality; }
+  setQuality(q: Quality): void { this.post.setQuality(q); this.resize(); }
+  /** 0..1 for the red edge in the colour grade. */
+  setDanger(v: number): void { this.post.danger = v; }
 
   private handleEvents(ev: OutingEvent[]): void {
     const sim = this.sim!;
@@ -1245,6 +1307,7 @@ export class Scene3D {
     const m = fan.material as THREE.MeshBasicMaterial;
     m.color.setHex(this.fanColor(p));
     const night = !!this.level?.night;
+    m.blending = night ? THREE.AdditiveBlending : THREE.NormalBlending;
     m.opacity = p.state === "stunned" || (p.kind === "van" && p.state === "parked") || p.ignoreT > 0 ? 0.05 : night ? 0.34 : 0.22 + p.suspicion * 0.15;
   }
 
@@ -1276,7 +1339,7 @@ export class Scene3D {
         v.obj.rotation.y = p.dir;
         v.obj.children.forEach((ch) => { if (ch.name === "prop") ch.rotation.y += dt * 40; });
         const led = v.obj.getObjectByName("led") as THREE.Mesh | undefined;
-        if (led) (led.material as THREE.MeshBasicMaterial).color.setHex(Math.sin(t * 8) > 0 ? 0xff2a2a : 0x330000);
+        if (led) (led.material as THREE.MeshBasicMaterial).color.setRGB(Math.sin(t * 8) > 0 ? 5 : 0.2, 0.1, 0.1);
         if (v.ring) {
           v.ring.position.set(p.x, 0.08, p.z);
           (v.ring.material as THREE.MeshBasicMaterial).opacity = 0.25 + p.suspicion * 0.5;
@@ -1285,7 +1348,14 @@ export class Scene3D {
       } else {
         v.obj.position.set(p.x, v.kind === "boat" ? 0.12 + Math.sin(t * 1.7) * 0.05 : 0, p.z);
         v.obj.rotation.y = p.dir;
+        if (v.kind === "van") {
+          const beacon = v.obj.getObjectByName("beacon") as THREE.Mesh | undefined;
+          const on = (p.state === "parked" || this.night) && Math.sin(t * 9) > 0;
+          if (beacon) (beacon.material as THREE.MeshBasicMaterial).color.setRGB(on ? 4 : 0.35, on ? 1.6 : 0.2, 0);
+        }
       }
+      const tp = v.rig?.root.userData.pool as THREE.Mesh | undefined;
+      if (tp) tp.position.set(p.x + Math.sin(p.dir) * 3.2, 0.05, p.z + Math.cos(p.dir) * 3.2);
       if (v.rig) {
         const speed = p.moving ? (p.state === "chase" ? 4.5 : p.state === "investigate" ? 2.6 : 1.7) : 0;
         const pose = p.state === "stunned" ? "stunned" : sim.phase === "qte" && sim.grabbedBy === p.id && grabbed ? "grab" : "walk";
