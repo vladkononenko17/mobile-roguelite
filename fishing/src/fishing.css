@@ -117,6 +117,9 @@ h2 { font-size: clamp(44px, 12.5vw, 64px); transform: skewX(-6deg); }
 .primary-button:active, .secondary-button:active, .upgrade-card:active { transform: translate(3px, 3px) skewX(-4deg); box-shadow: 2px 2px 0 var(--ink); }
 .hint { margin: 18px 0 0; color: #93a39a; font-size: 11px; line-height: 1.55; }
 .compact h2 { margin-bottom: 28px; }
+.audio-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; width: min(100%, 380px); margin-top: 14px; }
+.audio-toggle { min-height: 44px; padding: 6px 4px; border: 2px solid var(--ink); background: #2c3236; color: #9aa59f; font: 700 12px var(--display); letter-spacing: .06em; box-shadow: 3px 3px 0 var(--ink); }
+.audio-toggle[aria-pressed="true"] { background: var(--acid); color: var(--ink); }
 
 .upgrade-score { width: min(100%, 500px); margin: 16px 0 -12px; color: #c9d3c6; font: 700 12px var(--display); letter-spacing: .08em; }
 .upgrade-list { display: grid; width: min(100%, 500px); gap: 12px; margin-top: 30px; }

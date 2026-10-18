@@ -1,6 +1,7 @@
 import "./fishing.css";
 import { Scene3D } from "./Scene3D";
-import { isMuted, setMuted, unlockAudio } from "./sfx";
+import { isMusicMuted, isMuted, setMusicMuted, setMuted, unlockAudio } from "./sfx";
+import { voice } from "./voice";
 import { DAYS, PERKS, rankFor, type PerkId, type SimSnapshot, type Video } from "./sim";
 
 function el<T extends HTMLElement>(selector: string): T {
@@ -265,6 +266,7 @@ window.addEventListener("keyup", (event) => {
 
 function startRun(): void {
   unlockAudio();
+  voice.unlock();
   showPlay();
   scene.startRun();
 }
@@ -272,15 +274,24 @@ ui.startButton.addEventListener("click", startRun);
 el("#restart-button").addEventListener("click", startRun);
 el("#pause-button").addEventListener("click", () => scene.togglePause());
 el("#resume-button").addEventListener("click", () => scene.togglePause(true));
-const soundButton = el<HTMLButtonElement>("#sound-button");
-try { setMuted(localStorage.getItem("ne-klyuet-muted") === "1"); } catch { /* storage blocked */ }
-const syncSound = () => setText(soundButton, isMuted() ? "ЗВУК: ВЫКЛ" : "ЗВУК: ВКЛ");
-syncSound();
-soundButton.addEventListener("click", () => {
-  setMuted(!isMuted());
-  try { localStorage.setItem("ne-klyuet-muted", isMuted() ? "1" : "0"); } catch { /* storage blocked */ }
-  syncSound();
-});
+// Three independent switches, remembered per device.
+function audioToggle(id: string, key: string, label: string, get: () => boolean, set: (off: boolean) => void): void {
+  const button = el<HTMLButtonElement>(id);
+  try { set(localStorage.getItem(key) === "1"); } catch { /* storage blocked */ }
+  const sync = () => {
+    setText(button, `${label}: ${get() ? "ВЫКЛ" : "ВКЛ"}`);
+    button.setAttribute("aria-pressed", String(!get()));
+  };
+  sync();
+  button.addEventListener("click", () => {
+    set(!get());
+    try { localStorage.setItem(key, get() ? "1" : "0"); } catch { /* storage blocked */ }
+    sync();
+  });
+}
+audioToggle("#sound-button", "ne-klyuet-muted", "ЗВУКИ", isMuted, setMuted);
+audioToggle("#music-button", "ne-klyuet-music-off", "МУЗЫКА", isMusicMuted, setMusicMuted);
+audioToggle("#voice-button", "ne-klyuet-voice-off", "ГОЛОСА", () => !voice.isEnabled(), (off) => voice.setEnabled(!off));
 el("#quit-button").addEventListener("click", () => {
   ui.pause.classList.remove("active");
   scene.abandon();

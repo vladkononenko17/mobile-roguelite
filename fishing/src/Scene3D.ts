@@ -1,5 +1,7 @@
 import * as THREE from "three";
+import { Music } from "./music";
 import { play } from "./sfx";
+import { voice } from "./voice";
 import { DAYS, FishingSim, type Fish, type PerkId, type SimEvent, type SimSnapshot } from "./sim";
 import {
   C, FISH_LOOK, Limb, at, makeBobber, makeBucket, makeCan, makeCig, makeCooler, makeEnvironment, makeFish,
@@ -44,6 +46,8 @@ const HERO_POS = V(-0.95, 0, 0.2);
 const FRIEND_POS = V(1.05, 0, 0.1);
 const MY_BOBBER = V(-1.5, 0, -6.6);
 const FRIEND_BOBBER = V(1.9, 0, -8.2);
+
+const DAY_SPOKEN = ["Суббота", "Воскресенье", "Понедельник. Отгул"];
 
 const SKY_KEYS: Array<[number, number, number, number, number]> = [
   // progress, sky top, horizon, sun light colour, sun intensity
@@ -108,6 +112,10 @@ export class Scene3D {
   private melt: { t: number; from: THREE.Vector3 } | null = null;
   private brokenRod: THREE.Mesh[] = [];
   private tmp = new THREE.Vector3();
+  readonly music = new Music();
+  private prevRod = "waiting";
+  private ratchetClock = 0;
+  private rageWarned = false;
 
   mount(container: HTMLElement, fx: HTMLElement): void {
     this.fx = fx;
@@ -178,7 +186,10 @@ export class Scene3D {
     this.youTagUntil = this.t + 10;
     this.youTag.classList.remove("gone");
     this.toast(`${DAYS[0].name} · ДЕНЬ 1 ИЗ ${DAYS.length}`);
-    this.say("НУ ЧТО, КТО БОЛЬШЕ ПОЙМАЕТ?", 2600);
+    this.music.start();
+    this.music.setCalm(false);
+    voice.say("announcer", `День первый. ${DAY_SPOKEN[0]}.`, 3);
+    this.animate(0.01, () => undefined, () => this.say("НУ ЧТО, КТО БОЛЬШЕ ПОЙМАЕТ?", 2600), 1.6);
     this.emitHud();
   }
 
@@ -188,6 +199,8 @@ export class Scene3D {
     this.resetVisuals();
     this.mode = "playing";
     this.toast(`${DAYS[this.sim.day].name} · ДЕНЬ ${this.sim.day + 1} ИЗ ${DAYS.length}`);
+    this.music.setCalm(false);
+    voice.say("announcer", `День ${["первый", "второй", "третий"][this.sim.day]}. ${DAY_SPOKEN[this.sim.day]}.`, 3);
     this.say(this.sim.day === DAYS.length - 1 ? "СЕГОДНЯ Я СОМА ВОЗЬМУ, ЧУЮ" : "ВЧЕРА РАЗМИНКА БЫЛА", 2600);
     this.emitHud();
   }
@@ -204,10 +217,13 @@ export class Scene3D {
   togglePause(force?: boolean): void {
     if (this.mode === "playing" && force !== true) {
       this.mode = "paused";
+      voice.stop();
+      this.music.setCalm(true);
       this.uiEvents.emit("paused", true);
     } else if (this.mode === "paused") {
       this.mode = "playing";
       this.clock.getDelta();
+      this.music.setCalm(false);
       this.uiEvents.emit("paused", false);
     }
   }
@@ -252,6 +268,7 @@ export class Scene3D {
       events.forEach((e) => this.handle(e));
     }
     const snap = this.sim.snapshot();
+    this.audioTick(snap, dt);
     this.runAnims(dt);
     this.animateWorld(snap, dt);
     this.animatePeople(snap, dt);
@@ -676,7 +693,8 @@ export class Scene3D {
     setTimeout(() => el.remove(), 1150);
   }
 
-  private say(text: string, ms: number): void {
+  private say(text: string, ms: number, priority = 1): void {
+    voice.say("tolik", text, priority);
     this.bubble?.el.remove();
     const el = document.createElement("div");
     el.className = "fx-bubble";
@@ -700,34 +718,41 @@ export class Scene3D {
       case "bite":
         this.uiEvents.emit("bell");
         play("bell");
+        voice.line("announcer", "bite", 4);
         this.splash(this.myBobber.position, 6);
         break;
       case "early":
         this.toast("РАНО ДЁРНУЛ!");
         if (Math.random() < 0.4) this.say("НЕ ТОРОПИСЬ, ХЕ-ХЕ", 1500);
+        else voice.line("hero", "early", 2);
         break;
       case "missed":
         this.toast("ПРОЗЕВАЛ ПОКЛЁВКУ");
+        voice.line("hero", "missed", 2);
         this.floatText(this.headTop(), "+8", "#d63732");
         break;
       case "hooked":
         this.splash(this.myBobber.position, 10);
         play("plop");
+        voice.line("hero", "hooked", 2);
         break;
       case "catch":
         this.landFish(e.fish, this.myBobber.position.clone(), this.myBucket, "#b8d84a");
         this.toast(`${e.fish.species} · ${e.fish.weight.toFixed(2)} КГ`);
         play("catch");
-        if (e.fish.size === 1 && Math.random() < 0.6) this.say("МАЛЁК! ОТПУСТИ, ПУСТЬ ПОДРАСТЁТ", 1800);
+        voice.line("hero", "catch", 3);
+        if (e.fish.size === 1 && Math.random() < 0.6) this.animate(0.01, () => undefined, () => this.say("МАЛЁК! ОТПУСТИ, ПУСТЬ ПОДРАСТЁТ", 1800), 1.4);
         break;
       case "snap":
         this.toast("СОШЛА!");
         play("snap");
+        voice.line("hero", "snap", 3);
         this.splash(this.myBobber.position, 8);
         this.floatText(this.headTop(), "+10", "#d63732");
         break;
       case "friendCatch":
         this.friendRodPull = 1.4;
+        play("ratchet");
         this.animate(0.01, () => undefined, () => {
           this.landFish(e.fish, this.friendBobber.position.clone(), this.friendBucket, "#e7ddc6");
           this.say(e.fish.species === "СОМ" ? "СО-О-ОМ!!! ВИДАЛ?!" : TAUNTS[Math.floor(Math.random() * TAUNTS.length)], 1700);
@@ -738,9 +763,11 @@ export class Scene3D {
         break;
       case "friendDistracted":
         this.friendPose = e.reason === "bushes" ? "away" : e.reason;
+        if (e.reason === "bushes") { play("steps"); this.animate(0.01, () => undefined, () => play("rustle"), 1.0); }
         this.say(DISTRACT_LINES[e.reason][Math.floor(Math.random() * 2)], 1800);
         break;
       case "friendBack":
+        if (this.friendPose === "away") play("steps");
         this.friendPose = "rod";
         this.friendLookTarget = 0;
         break;
@@ -754,10 +781,11 @@ export class Scene3D {
         this.landFish(e.fish, this.friendBucket.getWorldPosition(new THREE.Vector3()).add(V(0, 0.3, 0)), this.myBucket, "#cbb9e6");
         this.toast(`СТЫРИЛ: ${e.fish.species} ${e.fish.weight.toFixed(2)} КГ`);
         play("plop");
+        voice.line("hero", "stolen", 2);
         break;
       case "caught":
         this.friendLookTarget = 1.3;
-        this.say("Э! ТЫ ЧЁ, МОЮ РЫБУ?!", 2000);
+        this.say("Э! ТЫ ЧЁ, МОЮ РЫБУ?!", 2000, 4);
         this.toast("СПАЛИЛСЯ");
         play("caught");
         this.shake(0.25, 0.06);
@@ -766,14 +794,20 @@ export class Scene3D {
       case "beerOpen":
         this.floatText(this.headTop(), "ПШШШ", "#e7ddc6", 16);
         play("beer");
+        voice.line("hero", "beer", 2);
         break;
       case "beerDone":
-        if (this.sim.drunk >= 2) this.floatText(this.headTop(), "ИК!", "#f2b632", 18);
+        if (this.sim.drunk >= 2) {
+          this.floatText(this.headTop(), "ИК!", "#f2b632", 18);
+          play("burp");
+          voice.line("hero", "hic", 1);
+        }
         if (this.sim.drunk === 4) this.toast("ЕЩЁ ОДНА — И СПАТЬ");
         break;
       case "smoke":
         this.floatText(this.headTop(), "ЧИРК", "#f2b632", 15);
         play("light");
+        voice.line("hero", "smoke", 1);
         break;
       case "video":
         play("swipe");
@@ -786,10 +820,12 @@ export class Scene3D {
       case "sleep":
         this.uiEvents.emit("sleep", true);
         this.toast("УСНУЛ…");
+        voice.line("hero", "sleep", 2);
         for (let i = 0; i < 9; i++) this.animate(0.01, () => undefined, () => this.floatText(this.headTop(), "Z", "#e7ddc6", 20), i * 0.75);
         break;
       case "wake":
         this.uiEvents.emit("sleep", false);
+        voice.line("hero", "wake", 3);
         this.toast(e.missedFish ? `ПОКА СПАЛ, ТОЛИК ПОЙМАЛ ${e.missedFish}` : "ПРОСНУЛСЯ. ГОЛОВА ГУДИТ");
         if (e.missedFish) this.say("С ДОБРЫМ УТРОМ! ГЛЯНЬ, СКОЛЬКО У МЕНЯ", 2200);
         break;
@@ -798,14 +834,19 @@ export class Scene3D {
         break;
       case "dayEnd":
         this.mode = "shop";
+        this.music.setCalm(true);
+        voice.say("announcer", "День окончен.", 3);
         this.uiEvents.emit("dayEnd", { day: e.day, offers: this.sim.offerPerks(), snapshot: this.sim.snapshot() });
         break;
       case "won":
         this.mode = "over";
+        this.music.setCalm(true);
+        voice.say("announcer", "Рыбалка окончена. Нервы выдержали.", 4);
         setTimeout(() => this.uiEvents.emit("result", this.result(true)), 400);
         break;
       case "lost":
         this.mode = "over";
+        this.music.setCalm(true);
         this.uiEvents.emit("result", this.result(false));
         break;
       case "denied":
@@ -813,6 +854,25 @@ export class Scene3D {
         break;
       default:
         break;
+    }
+  }
+
+  /** Continuous sounds that follow state rather than one-off events. */
+  private audioTick(s: SimSnapshot, dt: number): void {
+    this.music.setState(s.rage / 100, this.mode === "menu" ? 0.3 : s.dayProgress);
+    if (this.mode !== "playing") return;
+    if (s.rod === "reeling") {
+      this.ratchetClock -= dt;
+      if (this.ratchetClock <= 0) { this.ratchetClock = 0.3; play("ratchet"); }
+    }
+    if (this.prevRod === "recast" && s.rod === "waiting") play("cast");
+    this.prevRod = s.rod;
+    if (!this.rageWarned && s.rage >= 80 && s.phase === "playing") {
+      this.rageWarned = true;
+      voice.line("announcer", "rageWarning", 5);
+      play("heartbeat");
+    } else if (this.rageWarned && s.rage < 65) {
+      this.rageWarned = false;
     }
   }
 
@@ -841,6 +901,7 @@ export class Scene3D {
       model.rotation.set(Math.sin(this.t * 25) * 0.6, k * 3, Math.sin(this.t * 31) * 0.5);
     }, () => {
       this.scene.remove(model);
+      play("thunk");
       this.animate(0.16, (k) => bucket.scale.set(1 + Math.sin(k * Math.PI) * 0.12, 1 - Math.sin(k * Math.PI) * 0.12, 1 + Math.sin(k * Math.PI) * 0.12));
     });
   }
@@ -866,6 +927,8 @@ export class Scene3D {
     }
     this.floatText(hand.clone().add(V(0, 0.5, 0)), "ХРЯСЬ!", "#f2b632", 34);
     play("crack");
+    voice.line("hero", "meltdown", 9);
+    this.music.stop();
     this.shake(0.35, 0.12);
     // A running dive into the river; the stool stays behind.
     const body = this.hero.body;
