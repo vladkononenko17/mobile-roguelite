@@ -206,12 +206,13 @@ export interface QteMods {
 export const BASE_MODS: QteMods = { power: 1, zone: 1, time: 1, shorter: 0, tier: 1 };
 
 /**
- * Tuned for a thumb on glass: ~6–7 taps a second clears tier 3 in time,
- * ~5 a second is plenty on tier 1. `extra` adds taps and a little time.
+ * Tuned for a thumb on glass: ~6 taps a second clears tier 3 in time,
+ * ~4 a second is enough on tier 1. `extra` adds taps and a little time.
  */
 export function mashSpec(title: string, prompt: string, m: QteMods, extra = 0): QteSpec {
   const taps = Math.round((10 + m.tier * 3 + extra) / m.power);
-  return { kind: "mash", title, prompt, time: (5 + m.tier * 0.5) * m.time + extra * 0.8, taps, drain: 0.08 + m.tier * 0.04 };
+  // net fill at 6.5 taps/s: tier 1 ≈ 2.4 s, tier 3 ≈ 5 s, the van (extra 4) ≈ 7.5 s
+  return { kind: "mash", title, prompt, time: (5.2 + m.tier * 0.6) * m.time + extra * 0.8, taps, drain: 0.07 + m.tier * 0.035 };
 }
 
 export function timingSpec(title: string, prompt: string, m: QteMods, hits = 1, lives = 1): QteSpec {

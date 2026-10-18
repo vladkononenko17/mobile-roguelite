@@ -111,6 +111,7 @@ const STATUS_LABEL: Array<[(r: RunState) => boolean, string, string]> = [
   [(r) => r.doorWatch, "🚪 ЧЕКАЮТЬ БІЛЯ ПІДʼЇЗДУ", "bad"],
   [(r) => r.prices > 1, "📈 ЦІНИ +30%", "bad"],
   [(r) => !!r.flags.laptopDead && !r.flags.laptop, "💻 НОУТ МЕРТВИЙ", "bad"],
+  [(r) => (r.debt ?? 0) > 0, "💸 БОРГ АРКАДІЮ", "bad"],
   [(r) => r.intel, "📡 МАРШРУТИ ВІДОМІ", "good"],
   [(r) => r.pumped, "💪 РОЗІМ'ЯВСЯ", "good"],
 ];
@@ -353,7 +354,7 @@ function openBrief(): void {
   setText($("#brief-title"), lv.title);
   setText($("#brief-text"), lv.brief);
   $("#brief-objs").innerHTML = lv.objectives.map((o) => {
-    const price = o.cost ? (o.kind === "shop" ? Math.round(o.cost * run!.prices) : o.cost) : 0;
+    const price = o.cost ? (o.kind === "shop" ? Math.round(o.cost * run!.prices) : o.kind === "pay" ? o.cost + (run!.debt ?? 0) : o.cost) : 0;
     const short = price > run!.money;
     return `<li class="${o.optional ? "opt" : ""}"><em>${o.icon}</em>${o.label}${o.optional ? " · за бажанням" : ""}${price ? `<small style="${short ? "color:#d63732" : ""}">${money(price)}</small>` : ""}</li>`;
   }).join("") + (lv.survive ? `<li><em>⏱️</em>Протримайся ${lv.survive} с і вийди</li>` : "") + (!lv.objectives.length && !lv.survive ? `<li><em>🧭</em>Дійди до виходу</li>` : "");
@@ -577,7 +578,9 @@ async function finishOuting(): Promise<void> {
   const chat = $("#result-chat");
   chat.innerHTML = "";
   const outro = [...lv.outro];
-  if (r.unpaid.length) outro.push({ from: "me", text: "Грошей не вистачило. Це погано скінчиться…" });
+  if (r.unpaid.length) outro.push(run.path === "legal" && (run.debt ?? 0) > 0
+    ? { from: "arkadiy", text: `Не вистачає? Нічого, наступного разу занесете більше: борг ${fmt(run.debt)} ₴ додається до платежу.` }
+    : { from: "me", text: "Грошей не вистачило. Це погано скінчиться…" });
   if (r.perfect) outro.push({ from: "channel", text: "Сьогодні в районі тихо. Нікого не впакували 👀" });
   for (const m of outro) chat.appendChild(msgEl(m));
   setText($("#result-next"), run.phase === "fork" ? "ВИРІШУВАТИ →" : run.phase === "end" ? "ФІНАЛ →" : "ДАЛІ →");

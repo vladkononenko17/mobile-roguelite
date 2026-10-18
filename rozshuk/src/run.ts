@@ -54,6 +54,8 @@ export interface RunState {
   phase: RunPhase;
   perkOffer: PerkId[];
   ending: Ending | null;
+  /** Owed to Arkadiy, added to the next payment. */
+  debt: number;
   stats: RunStats;
   seenEvents: string[];
 }
@@ -82,7 +84,7 @@ export function newRun(trait: TraitId = "it", seed = Math.floor(Math.random() * 
     money: START_MONEY[trait], food: trait === "mamas" ? 7 : 3, satiety: 70, nerves: 20,
     heat: trait === "nephew" ? 50 : 25, perks: [], items: [], flags: {},
     ap: 3, apMax: 3, intel: false, pumped: false, doorWatch: false, prices: 1, blackout: false,
-    event: null, knock: false, breakdown: false, phase: "home", perkOffer: [], ending: null,
+    event: null, knock: false, breakdown: false, phase: "home", perkOffer: [], ending: null, debt: 0,
     stats: { spotted: 0, escapes: 0, worked: 0, earned: 0, perfect: 0, levels: 0 }, seenEvents: [],
   };
   beginLevel(s, true);
@@ -188,7 +190,7 @@ export function canWork(s: RunState): { ok: boolean; why?: string } {
 export function workIncome(s: RunState, quality: number): number {
   const lv = level(s);
   let base = 2000 + lv.n * 190;
-  if (s.flags.job) base *= 2.1;
+  if (s.flags.job) base *= 2.6;
   if (s.trait === "it") base *= 1.25;
   if (has(s, "laptop")) base *= 1.3;
   if (s.blackout && !has(s, "station")) base *= 0.7;
@@ -213,7 +215,7 @@ export function doAction(s: RunState, id: ActionId, quality = 1): ActionResult {
       s.money += pay;
       s.stats.worked++;
       s.stats.earned += pay;
-      addNerves(s, 7);
+      addNerves(s, 5);
       s.ap--;
       return { ok: true, text: `+${fmt(pay)} ₴` };
     }
@@ -266,7 +268,8 @@ export function outingContext(s: RunState, seed = Math.floor(roll(s) * 1e9)): Ou
   return {
     level: lv, seed, heat, perks: [...s.perks], items: [...s.items], flags: { ...s.flags }, trait: s.trait,
     intel: s.intel, money: s.money, nerves: s.nerves, satiety: s.satiety, pumped: s.pumped,
-    doorWatch: s.doorWatch, prices: s.prices,
+    doorWatch: s.doorWatch, prices: s.prices, debt: s.debt ?? 0,
+    owed: Object.keys(s.flags).filter((k) => k.startsWith("unpaid_") && s.flags[k]).map((k) => k.slice(7)),
   };
 }
 
@@ -283,12 +286,15 @@ export function endOuting(s: RunState, r: OutingResult): void {
   }
   s.money = Math.max(0, s.money + r.money);
   s.food = Math.max(0, s.food + r.food);
-  addNerves(s, r.nerves + (r.spotted ? 4 * r.spotted : -4));
+  addNerves(s, r.nerves + (r.spotted ? Math.min(16, 2 * r.spotted) : -6));
   // the search only grows: +1 a level, a clean outing cools it down
-  s.heat = clamp(s.heat + r.heat + (r.perfect ? -4 : 0) + 1, 0, 100);
+  // the trail cools between outings; one disastrous outing cannot max it out
+  s.heat = clamp(s.heat + Math.min(r.heat, 12) + (r.perfect ? -9 : -4), 0, 100);
+  s.debt = r.debt ?? 0;
   for (const it of r.items) if (!s.items.includes(it)) s.items.push(it);
   for (const f of r.flags) s.flags[f] = true;
   for (const u of r.unpaid) s.flags[`unpaid_${u}`] = true;
+  for (const p of r.settled ?? []) delete s.flags[`unpaid_${p}`];
   if (s.flags.laptop) s.flags.laptopDead = false;
   if (r.perfect) s.stats.perfect++;
   s.stats.levels++;
@@ -300,7 +306,9 @@ export function endOuting(s: RunState, r: OutingResult): void {
     return;
   }
   if (lv.n === 7) { s.phase = "fork"; return; }
-  offerPerks(s);
+  // a perk every other level (and at the fork): eight over a run, not fourteen
+  if (lv.n % 2 === 0) offerPerks(s);
+  else advance(s);
 }
 
 export function choosePath(s: RunState, path: "border" | "legal"): void {
@@ -323,9 +331,13 @@ export function choosePerk(s: RunState, id: PerkId | null): void {
   if (id && s.perkOffer.includes(id)) {
     s.perks.push(id);
     if (id === "stash") s.money += 12000;
-    if (id === "noodles") s.food += 6;
+    if (id === "noodles") s.food += 8;
   }
   s.perkOffer = [];
+  advance(s);
+}
+
+function advance(s: RunState): void {
   const next = nextLevelId(s.levelId, s.path);
   if (!next) { s.phase = "end"; s.ending = s.path === "legal" ? "legal" : "border"; return; }
   s.levelId = next;
