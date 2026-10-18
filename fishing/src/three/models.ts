@@ -726,7 +726,7 @@ export function makeEnvironment(theme: ThemeId = "dacha"): Environment {
       for (let i = 0; i < 16; i++) at(mesh(new THREE.BoxGeometry(0.1, 1.1, 0.1), 0x9a7a52, 0.012), -9 + i * 1.2, 0.55, WATER_EDGE_Z + 1, group).visible = Math.abs(-9 + i * 1.2) > 2.8;
       const kiosk = makeHouse(r, 0xe8602f, 0x7a3a2a, 2.4, 2, 2);
       at(kiosk, -6.5, 0, 3.4, group).rotation.y = 0.45;
-      at(signOnPosts("ПЛАТНИК «У АШОТА»\nВХОД 1500 ₽ · КАРП ПО 400", 2.6, 0.9, "#f2b632"), 4.8, 0, 2.6, group).rotation.y = -0.45;
+      at(signOnPosts("ПЛАТНИК «У АШОТА»\nВХОД 1500 ГРН · КАРП ПО 400", 2.6, 0.9, "#f2b632"), 4.8, 0, 2.6, group).rotation.y = -0.45;
       steam.push(new THREE.Vector3(-5, 1.2, 2.6));
       const grill = mesh(new THREE.BoxGeometry(0.9, 0.3, 0.35), 0x2c3036, 0.015);
       at(grill, -5, 0.8, 2.6, group);
@@ -754,7 +754,7 @@ export function makeEnvironment(theme: ThemeId = "dacha"): Environment {
       break;
     }
     case "reserve":
-      at(signOnPosts("ЗАПОВЕДНИК\nЛОВ РЫБЫ ЗАПРЕЩЁН\nШТРАФ 500 000 ₽", 2.4, 1.1, "#d63732", "#e7ddc6"), 4.8, 0, 2.4, group).rotation.y = -0.4;
+      at(signOnPosts("ЗАПОВЕДНИК\nЛОВ РЫБЫ ЗАПРЕЩЁН\nШТРАФ 500 000 ГРН", 2.4, 1.1, "#d63732", "#e7ddc6"), 4.8, 0, 2.4, group).rotation.y = -0.4;
       break;
     case "champ": {
       const banner = makeSign("ЧЕМПИОНАТ ОБЛАСТИ ПО ЛОВЛЕ РЫБЫ · ФИНАЛ", 14, 1.4, "#f2b632");

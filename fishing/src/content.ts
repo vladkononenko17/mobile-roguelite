@@ -72,7 +72,7 @@ export const STARTER_GEAR = { rod: "rod-bamboo", reel: "reel-sovok", bait: "bait
 export interface FishInfo {
   kg: [number, number];
   size: 1 | 2 | 3;
-  /** Rubles per kg at the market (or what the neighbour pays). */
+  /** Hryvnias per kg at the market (or what the neighbour pays). */
   price: number;
   look: "fish" | "long" | "cat" | "junk";
   color: number;
@@ -178,7 +178,7 @@ export const LEVELS: Level[] = [
     taunts: ["У ТВОЕЙ РЫБЫ ТРИ ГЛАЗА, А У ТЕБЯ НИ ОДНОЙ", "ДАЖЕ МУТАНТЫ ТЕБЯ ИГНОРЯТ", "СПИННИНГ — НЕ ВЕНИК, ИМ НЕ МАШУТ"],
   },
   {
-    id: 6, name: "ПЛАТНИК «У АШОТА»", place: "Платный пруд, 1500 ₽ за вход", theme: "paid",
+    id: 6, name: "ПЛАТНИК «У АШОТА»", place: "Платный пруд, 1500 грн за вход", theme: "paid",
     blurb: "Рыбы полно. Совести у Толика — нет.", length: 90, friendEvery: [6, 9], target: 5, rageMult: 1.18,
     hazards: [["ashot", 0.8], ["tolikCheat", 0.6]], extra: [["КАРП", 1.5]], intro: "Уровень шесть. Платник у Ашота.",
     tolikIntro: "ТУТ ЗА ДЕНЬГИ ВСЁ ЛОВИТСЯ. У ТЕБЯ ДЕНЕГ НЕТ",

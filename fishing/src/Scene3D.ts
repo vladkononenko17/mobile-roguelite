@@ -1202,8 +1202,8 @@ export class Scene3D {
         if (e.hazard === "mosquito") this.toast("КОМАРЫ НАЕЛИСЬ");
         break;
       case "fine":
-        this.toast(`ШТРАФ ${e.amount} ₽ · ${e.reason}`);
-        this.floatText(this.headTop().add(V(0, 0.3, 0)), `−${e.amount} ₽`, "#d63732", 26);
+        this.toast(`ШТРАФ ${e.amount} ГРН · ${e.reason}`);
+        this.floatText(this.headTop().add(V(0, 0.3, 0)), `−${e.amount} ГРН`, "#d63732", 26);
         play("caught");
         voice.line("hero", "fine", 4);
         this.later(1.6, () => this.say(TOLIK.fine, 1800));
