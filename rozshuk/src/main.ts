@@ -282,6 +282,7 @@ function knock(): Promise<void> {
     showScreen(null);
     hud("home");
     play("knock");
+    voice.say("Відкривайте, ТЦК! Ми знаємо, що ви вдома", "officer", 500);
     scene.setHomePose("hide");
     setTimeout(() => play("knock"), 1600);
     const m = { ...BASE_MODS, tier: Math.min(3, Math.ceil(level(run!).n / 5)), zone: has(run!, "lungs") ? 1.4 : 1 };
@@ -292,6 +293,7 @@ function knock(): Promise<void> {
         const ok = qq.result === "win";
         resolveKnock(run!, ok);
         toast(ok ? "Пішли. Здається, пронесло" : "Вони почули. Чекатимуть біля підʼїзду", !ok);
+        if (ok) voice.say("Пронесло…", "me");
         play(ok ? "lost" : "fail");
         scene.setHomePose("idle");
         resolve();
@@ -489,16 +491,25 @@ function handleOutingEvents(ev: OutingEvent[]): void {
       case "spotted":
         play("spotted");
         setTimeout(() => play("whistle"), 250);
+        voice.say("Ой-йой…", "me", 1500);
         if (navigator.vibrate) navigator.vibrate(120);
         break;
       case "suspicious": play("huh"); break;
       case "heard": play("huh"); break;
-      case "lost": play("lost"); toast("Відірвався!"); break;
-      case "grab": play("grab"); if (navigator.vibrate) navigator.vibrate([60, 40, 160]); break;
-      case "qte": openQte(e.qte, "outing"); break;
+      case "lost": play("lost"); toast("Відірвався!"); voice.say("Фух… відірвався", "me", 1300); break;
+      case "grab": play("grab"); voice.say("Попався!", "officer"); if (navigator.vibrate) navigator.vibrate([60, 40, 160]); break;
+      case "qte":
+        openQte(e.qte, "outing");
+        if (e.ctx === "van") voice.say("В бус його!", "officer");
+        else if (e.ctx === "talk" || e.ctx === "booth") voice.say(e.qte.spec.prompt, "npc");
+        break;
       case "freed": {
         const t = { break: "Вирвався! Тікай!", talk: "Заговорив зуби. «Ну йди, але ми тебе запамʼятали»", docs: "Бронь спрацювала. «Вибачте, вільні»", van: "Вистрибнув з бусу!!!", lawyer: "Адвокат на звʼязку. Відпустили", dog: "«А, з собакою… Ну йди»" }[e.how];
         toast(t);
+        if (e.how === "talk") voice.say("Ну йди, але ми тебе запамʼятали", "officer");
+        else if (e.how === "docs") voice.say("Вибачте, вільні", "officer");
+        else if (e.how === "dog") voice.say("А, з собакою… Ну йди", "officer");
+        else if (e.how === "van" || e.how === "break") voice.say("Тікаю!!!", "me");
         play(e.how === "van" ? "van" : "win");
         break;
       }
@@ -521,7 +532,7 @@ function handleOutingEvents(ev: OutingEvent[]): void {
       case "droneSpot": play("spotted"); toast("Дрон тебе бачить! Прикордонники йдуть", true); break;
       case "curfew": play("curfew"); toast("КОМЕНДАНТСЬКА! Більше патрулів", true); break;
       case "exitOpen": play("ping"); toast(sim.level.map === "train" ? "Станція! До тамбура" : "Готово. Тепер — до виходу"); break;
-      case "vault": play(e.ok ? "vault" : "miss"); if (!e.ok) toast("Зірвався з паркану — гучно!", true); break;
+      case "vault": play(e.ok ? "vault" : "miss"); if (e.ok) voice.say("Опа!", "me"); if (!e.ok) toast("Зірвався з паркану — гучно!", true); break;
       case "riverFail": play("splash"); toast("Течія знесла назад! Ще одна спроба", true); break;
       case "won": play("win"); void finishOuting(); break;
       default: break;
