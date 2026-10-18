@@ -77,6 +77,6 @@ npm run voices -- --list                          # lines and character count
 VOICE_TOLIK=<id> npm run voices -- --force        # re-record with your own voice picks
 ```
 
-The game plays a recording when one exists and falls back to device speech otherwise. The API key is only used by the script and never ships with the game. For playtesting in the browser console: `__fishing.sim.rage = 95`.
+The shipped recordings (`public/fishing/voice/`, 60 lines, ~1.3 MB, trimmed and loudness-normalised) were made with ElevenLabs `eleven_v4` and inline direction tags: Tolik — *Alex, Calm Russian Analyst*; the hero — *Mikhail*; the announcer — *Nester Surovy*. The game plays a recording when one exists and falls back to device speech otherwise. The API key is only used by the script and never ships with the game. For playtesting in the browser console: `__fishing.sim.rage = 95`.
 
 Desktop keys: Space strike · 1 beer · 2 smoke · 3 TikTok/next · X close phone · hold 4 steal · P pause.
