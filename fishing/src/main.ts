@@ -99,7 +99,7 @@ const TIPS: Record<number, string> = {
   5: "Спиннинг по мутантам", 6: "Карп на фидер", 7: "Только мормышка", 8: "Щука на спиннинг",
   9: "Без пива при надзоре", 10: "Лучшее, что есть",
 };
-const fmtMoney = (n: number) => `${Math.round(n).toLocaleString("ru-RU")} ₽`;
+const fmtMoney = (n: number) => `${Math.round(n).toLocaleString("ru-RU")} ГРН`;
 const fmtKg = (n: number) => String(Math.round(n * (n >= 10 ? 10 : 100)) / (n >= 10 ? 10 : 100)).replace(".", ",");
 
 function setText(target: HTMLElement, value: string): void {
@@ -217,7 +217,7 @@ function updateHud(s: SimSnapshot): void {
   ui.dayFill.style.transform = `scaleX(${s.dayProgress})`;
   const drunk = s.drunk > 0 ? `ПРОМИЛЛЕ ${"▮".repeat(s.drunk)}${"▯".repeat(Math.max(0, 5 - s.drunk))}` : "";
   const smoke = s.smoking > 0 ? "  · КУРИШЬ" : "";
-  const fines = s.fines > 0 ? `  · ШТРАФЫ −${s.fines} ₽` : "";
+  const fines = s.fines > 0 ? `  · ШТРАФЫ −${s.fines} ГРН` : "";
   setText(ui.drunkRow, drunk + smoke + fines);
   let hz = s.hazard ? HAZARD_ICON[s.hazard] ?? "" : "";
   if (s.hazard && s.hazardLeft > 0.5) hz += ` ${Math.ceil(s.hazardLeft)}с`;
