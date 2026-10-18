@@ -87,6 +87,9 @@ export class Scene3D {
   private fx!: HTMLElement;
   private alertEl!: HTMLElement;
   private questionEl!: HTMLElement;
+  private youTag!: HTMLElement;
+  private tolikTag!: HTMLElement;
+  private youTagUntil = 0;
   private bubble: { el: HTMLElement; until: number } | null = null;
   private clock = new THREE.Clock();
   private t = 0;
@@ -155,6 +158,8 @@ export class Scene3D {
 
     this.alertEl = this.fxEl("fx-alert", "!");
     this.questionEl = this.fxEl("fx-q", "?");
+    this.youTag = this.nameTag("ВЫ", "you");
+    this.tolikTag = this.nameTag("ТОЛИК", "tolik");
 
     this.resize();
     window.addEventListener("resize", () => this.resize());
@@ -169,6 +174,9 @@ export class Scene3D {
     this.sim = new FishingSim(Date.now() & 0xffffffff);
     this.resetVisuals();
     this.mode = "playing";
+    // The "ВЫ" marker helps on the first look at the scene, then gets out of the way.
+    this.youTagUntil = this.t + 10;
+    this.youTag.classList.remove("gone");
     this.toast(`${DAYS[0].name} · ДЕНЬ 1 ИЗ ${DAYS.length}`);
     this.say("НУ ЧТО, КТО БОЛЬШЕ ПОЙМАЕТ?", 2600);
     this.emitHud();
@@ -607,6 +615,16 @@ export class Scene3D {
     return el;
   }
 
+  /** Call of Duty–style overhead nameplate: rank pip, name, chevron. */
+  private nameTag(name: string, side: "you" | "tolik"): HTMLElement {
+    const el = document.createElement("div");
+    el.className = `fx-tag fx-tag-${side}`;
+    el.innerHTML = `<div class="fx-tag-inner"><span class="fx-tag-name"><i></i>${name}</span><b></b></div>`;
+    el.hidden = true;
+    this.fx.appendChild(el);
+    return el;
+  }
+
   private project(world: THREE.Vector3): { x: number; y: number } {
     const p = world.clone().project(this.camera);
     const rect = this.renderer.domElement.getBoundingClientRect();
@@ -624,7 +642,14 @@ export class Scene3D {
     if (showAlert) this.place(this.alertEl, this.myBobber.position.clone().add(V(0, 0.55, 0)));
     const showQ = s.gaze === "suspicious" && this.friendAway === 0 && this.mode === "playing";
     this.questionEl.hidden = !showQ;
-    if (showQ) this.place(this.questionEl, this.friend.head.getWorldPosition(new THREE.Vector3()).add(V(0, 0.5, 0)));
+    const inGame = this.mode !== "menu";
+    const youVisible = inGame && this.hero.body.visible && this.t < this.youTagUntil;
+    this.youTag.hidden = !inGame || !this.hero.body.visible;
+    this.youTag.classList.toggle("gone", !youVisible);
+    if (!this.youTag.hidden) this.place(this.youTag, this.hero.head.getWorldPosition(new THREE.Vector3()).add(V(0, 0.42, 0)));
+    this.tolikTag.hidden = !inGame || this.friendAway > 0.3;
+    if (!this.tolikTag.hidden) this.place(this.tolikTag, this.friend.head.getWorldPosition(new THREE.Vector3()).add(V(0, 0.46, 0)));
+    if (showQ) this.place(this.questionEl, this.friend.head.getWorldPosition(new THREE.Vector3()).add(V(0.38, 0.25, 0)));
     if (this.bubble) {
       if (performance.now() > this.bubble.until) {
         this.bubble.el.classList.add("out");
@@ -632,7 +657,7 @@ export class Scene3D {
         setTimeout(() => el.remove(), 200);
         this.bubble = null;
       } else {
-        const anchor = this.friendAway > 0.5 ? this.env.bush.getWorldPosition(new THREE.Vector3()).add(V(0, 1.4, 0)) : this.friend.head.getWorldPosition(new THREE.Vector3()).add(V(-0.2, 0.55, 0));
+        const anchor = this.friendAway > 0.5 ? this.env.bush.getWorldPosition(new THREE.Vector3()).add(V(0, 1.4, 0)) : this.friend.head.getWorldPosition(new THREE.Vector3()).add(V(-0.2, 0.8, 0));
         this.place(this.bubble.el, anchor);
       }
     }
