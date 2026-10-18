@@ -7,10 +7,11 @@ export default defineConfig({
     target: "es2020",
     sourcemap: false,
     rollupOptions: {
-      // Two games share one Pages site: the roguelite at / and «Не клюёт» at /fishing/.
+      // Three games share one Pages site: the roguelite at /, «Не клюёт» at /fishing/, «Розшук» at /rozshuk/.
       input: {
         main: fileURLToPath(new URL("./index.html", import.meta.url)),
         fishing: fileURLToPath(new URL("./fishing/index.html", import.meta.url)),
+        rozshuk: fileURLToPath(new URL("./rozshuk/index.html", import.meta.url)),
       },
       output: { manualChunks: { phaser: ["phaser"], three: ["three"] } },
     },

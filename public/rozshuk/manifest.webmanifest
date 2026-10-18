@@ -1,0 +1,12 @@
+{
+  "name": "Розшук",
+  "short_name": "Розшук",
+  "description": "Роглайт-сурвайвал: протримайся місяць у розшуку. Ліс чи офіційно?",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#171318",
+  "theme_color": "#2b5a9a",
+  "orientation": "portrait-primary",
+  "icons": [{ "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
