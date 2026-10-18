@@ -501,7 +501,7 @@ function makeBoat(): THREE.Group {
   const light = mesh(new THREE.BoxGeometry(0.25, 0.15, 0.3), 0x3a7bff, 0.01, false);
   light.name = "siren";
   at(light, -0.4, 1.2, 0, g);
-  at(makeSign("РЫБНАДЗОР", 1.6, 0.35, "#e7ddc6", "#3e6ea0"), 0.2, 0.3, 0.67, g);
+  at(makeSign("РИБПАТРУЛЬ", 1.6, 0.35, "#e7ddc6", "#3e6ea0"), 0.2, 0.3, 0.67, g);
   at(makePerson(0x2e3b2a, rng(5)), 0.9, 0.35, 0, g);
   g.visible = false;
   return g;
@@ -677,7 +677,7 @@ export function makeEnvironment(theme: ThemeId = "dacha"): Environment {
     case "garages": {
       const colors = [0x7a5a3a, 0x5a6a7a, 0x8a4a3a, 0x6a6a5a, 0x4a5a4a];
       for (let i = 0; i < 12; i++) at(makeGarage(colors[i % colors.length]), -26 + i * 3.4, 0.3, far + 1, group);
-      at(signOnPosts("ГСК «МОТОР»\nПОСТОРОННИМ ВЪЕЗД ЗАПРЕЩЁН", 2.2, 0.9), -4.6, 0, 2.6, group).rotation.y = 0.35;
+      at(signOnPosts("ГК «МОТОР»\nСТОРОННІМ В'ЇЗД ЗАБОРОНЕНО", 2.2, 0.9), -4.6, 0, 2.6, group).rotation.y = 0.35;
       for (let i = 0; i < 3; i++) {
         const tyre = mesh(new THREE.TorusGeometry(0.35, 0.14, 5, 8), 0x1f1f1f, 0.015);
         tyre.rotation.x = Math.PI / 2;
@@ -692,7 +692,7 @@ export function makeEnvironment(theme: ThemeId = "dacha"): Environment {
       break;
     }
     case "quarry":
-      at(signOnPosts("КУПАНИЕ ЗАПРЕЩЕНО\nВСЁ ЗАПРЕЩЕНО", 2, 0.8), 4.8, 0, 2.4, group).rotation.y = -0.4;
+      at(signOnPosts("КУПАТИСЯ ЗАБОРОНЕНО\nВСЕ ЗАБОРОНЕНО", 2, 0.8), 4.8, 0, 2.4, group).rotation.y = -0.4;
       break;
     case "night": {
       const tent = mesh(new THREE.ConeGeometry(1.4, 1.6, 4), 0x3e6ea0, 0.03);
@@ -719,14 +719,14 @@ export function makeEnvironment(theme: ThemeId = "dacha"): Environment {
       const tower = mesh(new THREE.CylinderGeometry(5, 7, 14, 10, 1, true), 0x9aa3a6, 0.1, false);
       at(tower, 18, 7, far - 10, group);
       steam.push(new THREE.Vector3(18, 14, far - 10));
-      at(signOnPosts("ГРЭС-2\nКУПАТЬСЯ НЕЛЬЗЯ\nЛОВИТЬ МОЖНО", 2, 1.1), 4.8, 0, 2.4, group).rotation.y = -0.4;
+      at(signOnPosts("ГРЕС-2\nКУПАТИСЯ НЕ МОЖНА\nЛОВИТИ МОЖНА", 2, 1.1), 4.8, 0, 2.4, group).rotation.y = -0.4;
       break;
     }
     case "paid": {
       for (let i = 0; i < 16; i++) at(mesh(new THREE.BoxGeometry(0.1, 1.1, 0.1), 0x9a7a52, 0.012), -9 + i * 1.2, 0.55, WATER_EDGE_Z + 1, group).visible = Math.abs(-9 + i * 1.2) > 2.8;
       const kiosk = makeHouse(r, 0xe8602f, 0x7a3a2a, 2.4, 2, 2);
       at(kiosk, -6.5, 0, 3.4, group).rotation.y = 0.45;
-      at(signOnPosts("ПЛАТНИК «У АШОТА»\nВХОД 1500 ГРН · КАРП ПО 400", 2.6, 0.9, "#f2b632"), 4.8, 0, 2.6, group).rotation.y = -0.45;
+      at(signOnPosts("ПЛАТНИК «У АШОТА»\nВХІД 1500 ГРН · КОРОП ПО 400", 2.6, 0.9, "#f2b632"), 4.8, 0, 2.6, group).rotation.y = -0.45;
       steam.push(new THREE.Vector3(-5, 1.2, 2.6));
       const grill = mesh(new THREE.BoxGeometry(0.9, 0.3, 0.35), 0x2c3036, 0.015);
       at(grill, -5, 0.8, 2.6, group);
@@ -750,14 +750,14 @@ export function makeEnvironment(theme: ThemeId = "dacha"): Environment {
       const tyre = mesh(new THREE.TorusGeometry(0.4, 0.15, 5, 8), 0x1f1f1f, 0.015);
       tyre.rotation.x = Math.PI / 2.3;
       at(tyre, -4.2, 0.05, -2.6, group);
-      at(signOnPosts("ОСТОРОЖНО\nТОПЬ", 1.2, 0.6), 4.6, 0, 2.2, group).rotation.y = -0.4;
+      at(signOnPosts("ОБЕРЕЖНО\nТРЯСОВИНА", 1.2, 0.6), 4.6, 0, 2.2, group).rotation.y = -0.4;
       break;
     }
     case "reserve":
-      at(signOnPosts("ЗАПОВЕДНИК\nЛОВ РЫБЫ ЗАПРЕЩЁН\nШТРАФ 500 000 ГРН", 2.4, 1.1, "#d63732", "#e7ddc6"), 4.8, 0, 2.4, group).rotation.y = -0.4;
+      at(signOnPosts("ЗАПОВІДНИК\nЛОВ РИБИ ЗАБОРОНЕНО\nШТРАФ 500 000 ГРН", 2.4, 1.1, "#d63732", "#e7ddc6"), 4.8, 0, 2.4, group).rotation.y = -0.4;
       break;
     case "champ": {
-      const banner = makeSign("ЧЕМПИОНАТ ОБЛАСТИ ПО ЛОВЛЕ РЫБЫ · ФИНАЛ", 14, 1.4, "#f2b632");
+      const banner = makeSign("ЧЕМПІОНАТ ОБЛАСТІ З РИБАЛЬСЬКОГО СПОРТУ · ФІНАЛ", 14, 1.4, "#f2b632");
       at(banner, 0, 4.6, -24, group);
       const tribune = mesh(new THREE.BoxGeometry(9, 1.2, 3), 0x3e6ea0, 0.04);
       at(tribune, -7.5, 0.6, 5.5, group).rotation.y = 0.3;

@@ -77,11 +77,11 @@ export interface Video {
 
 export const VIDEOS: Video[] = [
   { emoji: "🐈", caption: "кот уронил ёлку и делает вид, что так и было", rage: -9, tint: "#f2b632" },
-  { emoji: "👵", caption: "бабуля танцует под техно на рынке", rage: -8, tint: "#e8602f" },
+  { emoji: "👵", caption: "бабуля танцует под техно на Привозе", rage: -8, tint: "#e8602f" },
   { emoji: "🦆", caption: "утка гоняет гопника по парку", rage: -10, tint: "#b8d84a" },
   { emoji: "🚗", caption: "сосед паркуется 14 минут и сдаётся", rage: -7, tint: "#9a6bd1" },
   { emoji: "🐐", caption: "коза залезла на дерево и не хочет обратно", rage: -9, tint: "#b8d84a" },
-  { emoji: "🕺", caption: "дядя Валера на свадьбе, 3 часа ночи", rage: -11, tint: "#e8602f" },
+  { emoji: "🕺", caption: "дядя Валера на свадьбе в Жмеринке, 3 часа ночи", rage: -11, tint: "#e8602f" },
   { emoji: "🤡", caption: "мужик пытается пройти по льду с пивом. спойлер: нет", rage: -12, tint: "#54b7c6" },
   { emoji: "🐟", caption: "блогер вытащил сома на 40 кг с первого заброса", rage: 9, tint: "#d63732" },
   { emoji: "💸", caption: "как я заработал миллион за неделю (не кликбейт)", rage: 6, tint: "#d63732" },

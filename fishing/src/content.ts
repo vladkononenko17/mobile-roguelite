@@ -47,23 +47,23 @@ export interface GearItem {
 export const GEAR: GearItem[] = [
   // ---- rods: a rod is a fishing method
   { id: "rod-bamboo", slot: "rod", method: "float", name: "БАМБУК ДЕДА", blurb: "Поплавочная. Пахнет гаражом и сорок седьмым годом.", price: 0, unlock: 1, stats: {}, icon: "🎋" },
-  { id: "rod-tele", slot: "rod", method: "float", name: "ТЕЛЕСКОП ИЗ ФИКС-ПРАЙСА", blurb: "Поплавочная. Окно подсечки +25%. Складывается сама, в самый неподходящий момент.", price: 600, unlock: 2, stats: { window: 1.25 }, icon: "🎣" },
+  { id: "rod-tele", slot: "rod", method: "float", name: "ТЕЛЕСКОП ИЗ «АВРОРЫ»", blurb: "Поплавочная. Окно подсечки +25%. Складывается сама, в самый неподходящий момент.", price: 600, unlock: 2, stats: { window: 1.25 }, icon: "🎣" },
   { id: "rod-feeder", slot: "rod", method: "feeder", name: "ФИДЕР «КАРП-УБИЙЦА 3000»", blurb: "Донная ловля с кормушкой. Крупный лещ и карп. Подкармливай — иначе не клюёт.", price: 2500, unlock: 3, stats: { size: 1 }, icon: "🪝" },
   { id: "rod-spin", slot: "rod", method: "spin", name: "СПИННИНГ «ЩУКОДАВ»", blurb: "Активная ловля: крути, дёргай, вываживай хищника. Ленивым не подходит.", price: 4200, unlock: 5, stats: { size: 1 }, icon: "🐊" },
   { id: "rod-oligarch", slot: "rod", method: "float", name: "КАРБОН «ОЛИГАРХ»", blurb: "Поплавочная мечта. Окно +45%, рыба крупнее. Жена не должна узнать цену.", price: 9000, unlock: 6, stats: { window: 1.45, size: 1.5, zone: 1.15 }, icon: "💎" },
   { id: "rod-ice", slot: "rod", method: "ice", name: "ЗИМНЯЯ «МОРОЗКО»", blurb: "Мормышка для льда. Играй мормышкой — рыба любит ритм.", price: 0, unlock: 7, stats: {}, icon: "🧊" },
   { id: "rod-feeder-pro", slot: "rod", method: "feeder", name: "ФИДЕР «ПЕНСИЯ ПРОПАЛА»", blurb: "Фидер +60% к силе и крупной рыбе. Куплен вместо зимней резины.", price: 12000, unlock: 8, stats: { size: 2.5, power: 1.3 }, icon: "🦈" },
   // ---- reels
-  { id: "reel-sovok", slot: "reel", name: "НЕВСКАЯ (СОВОК)", blurb: "Скрипит, как совесть Толика. Зато вечная.", price: 0, unlock: 1, stats: {}, icon: "⚙️" },
-  { id: "reel-ali", slot: "reel", name: "ШИМАНО С АЛИЭКСПРЕССА", blurb: "Зелёная зона +25%, сила +10%. На коробке иероглифы и «SHIMANA».", price: 900, unlock: 2, stats: { zone: 1.25, power: 1.1 }, icon: "🧧" },
-  { id: "reel-tlt", slot: "reel", name: "БАЙТКАСТЕР «ТОЛЬЯТТИ»", blurb: "Проводка +40%, сила +25%. Собран в гараже, работает на мате.", price: 3500, unlock: 4, stats: { retrieve: 1.4, power: 1.25, zone: 1.1 }, icon: "🚗" },
+  { id: "reel-sovok", slot: "reel", name: "«ДНІПРО» (СОВОК)", blurb: "Скрипит, как совесть Толика. Зато вечная.", price: 0, unlock: 1, stats: {}, icon: "⚙️" },
+  { id: "reel-ali", slot: "reel", name: "ШИМАНО С ОЛХ", blurb: "Зелёная зона +25%, сила +10%. На коробке иероглифы и «SHIMANA». Продавец уже не в сети.", price: 900, unlock: 2, stats: { zone: 1.25, power: 1.1 }, icon: "🧧" },
+  { id: "reel-tlt", slot: "reel", name: "БАЙТКАСТЕР «ЗАПОРОЖЕЦ»", blurb: "Проводка +40%, сила +25%. Собран из запчастей ЗАЗа, работает на мате.", price: 3500, unlock: 4, stats: { retrieve: 1.4, power: 1.25, zone: 1.1 }, icon: "🚗" },
   { id: "reel-alimony", slot: "reel", name: "«МЕЧТА АЛИМЕНТЩИКА»", blurb: "Зона +50%, сила +50%. Стоит как три месяца алиментов.", price: 8500, unlock: 7, stats: { zone: 1.5, power: 1.5, retrieve: 1.25 }, icon: "💸" },
   // ---- baits & lures
   { id: "bait-bread", slot: "bait", name: "ХЛЕБНЫЙ МЯКИШ", blurb: "Вчерашний батон. Рыба тоже не в восторге.", price: 0, unlock: 1, stats: {}, icon: "🍞" },
-  { id: "bait-maggot", slot: "bait", name: "ОПАРЫШ ИЗ ТУАЛЕТА НА ТРАССЕ", blurb: "Клёв +25%. Не спрашивай, где взяли.", price: 300, unlock: 2, methods: ["float", "feeder", "ice"], stats: { bite: 1.25, fake: 0.15 }, icon: "🪱" },
+  { id: "bait-maggot", slot: "bait", name: "ОПАРЫШ ИЗ ТУАЛЕТА НА ТРАССЕ М-05", blurb: "Клёв +25%. Не спрашивай, где взяли.", price: 300, unlock: 2, methods: ["float", "feeder", "ice"], stats: { bite: 1.25, fake: 0.15 }, icon: "🪱" },
   { id: "bait-corn", slot: "bait", name: "КУКУРУЗА ИЗ БАНКИ", blurb: "Для фидера: крупный карп +, клёв +15%. Половину съел сам.", price: 700, unlock: 3, methods: ["feeder", "float"], stats: { bite: 1.15, size: 1 }, icon: "🌽" },
-  { id: "bait-blood", slot: "bait", name: "МОТЫЛЬ БАБЫ НИНЫ", blurb: "Клёв +40%, пустых поклёвок меньше. Баба Нина знает, что делает.", price: 1300, unlock: 4, methods: ["float", "feeder", "ice"], stats: { bite: 1.4, fake: 0.35 }, icon: "🧶" },
-  { id: "lure-vasya", slot: "bait", name: "ВОБЛЕР «КИСЛОТНЫЙ ВАСЯ»", blurb: "Для спиннинга: поклёвки +50%. Светится в темноте и в анализах.", price: 2000, unlock: 5, methods: ["spin"], stats: { bite: 1.5 }, icon: "🧪" },
+  { id: "bait-blood", slot: "bait", name: "МОТЫЛЬ БАБЫ ГАЛИ", blurb: "Клёв +40%, пустых поклёвок меньше. Баба Галя с базара знает, что делает.", price: 1300, unlock: 4, methods: ["float", "feeder", "ice"], stats: { bite: 1.4, fake: 0.35 }, icon: "🧶" },
+  { id: "lure-vasya", slot: "bait", name: "ВОБЛЕР «КИСЛОТНЫЙ МЫКОЛА»", blurb: "Для спиннинга: поклёвки +50%. Светится в темноте и в анализах.", price: 2000, unlock: 5, methods: ["spin"], stats: { bite: 1.5 }, icon: "🧪" },
   { id: "lure-spoon", slot: "bait", name: "БЛЕСНА ИЗ ЛОЖКИ ТЁЩИ", blurb: "Спиннинг: крупная щука +, поклёвки +30%. Тёща ищет ложку.", price: 3800, unlock: 6, methods: ["spin"], stats: { bite: 1.3, size: 2 }, icon: "🥄" },
 ];
 
@@ -98,7 +98,7 @@ export const FISH: Record<string, FishInfo> = {
   // junk
   "ГАЛОША": { kg: [0.3, 0.3], size: 1, price: 0, look: "junk", color: 0x2a2a2a, junk: true },
   "ПАКЕТ-МАЙКА": { kg: [0.01, 0.01], size: 1, price: 0, look: "junk", color: 0xe7ddc6, junk: true },
-  "ПУСТАЯ «БАЛТИКА»": { kg: [0.2, 0.2], size: 1, price: 0, look: "junk", color: 0x3f7a4a, junk: true },
+  "ПУСТОЕ «ЧЕРНІГІВСЬКЕ»": { kg: [0.2, 0.2], size: 1, price: 0, look: "junk", color: 0x3f7a4a, junk: true },
   "ПОКРЫШКА": { kg: [6, 6], size: 3, price: 0, look: "junk", color: 0x1f1f1f, junk: true },
 };
 
@@ -142,35 +142,35 @@ export interface Level {
 
 export const LEVELS: Level[] = [
   {
-    id: 1, name: "ПРУД У ДАЧИ", place: "Дача тёщи, СНТ «Рассвет»", theme: "dacha",
+    id: 1, name: "ПРУД У ДАЧИ", place: "Дача тёщи, кооператив «Світанок»", theme: "dacha",
     blurb: "Тёща считает, что ты копаешь картошку.", length: 70, friendEvery: [9, 13], target: 1, rageMult: 1,
     hazards: [["mosquito", 0.4]], extra: [["ГАЛОША", 0.4]], intro: "Уровень один. Пруд у дачи.",
     tolikIntro: "НУ ЧТО, КТО БОЛЬШЕ ПОЙМАЕТ?",
     taunts: ["ТУТ МЕСТО ЗНАТЬ НАДО", "У ТЕБЯ ДАЖЕ ЛЯГУШКА НЕ КЛЮНЕТ", "ТЁЩА ЛОВИТ ЛУЧШЕ ТЕБЯ"],
   },
   {
-    id: 2, name: "РЕЧКА ЗА ГАРАЖАМИ", place: "ГСК «Мотор», за 14-м боксом", theme: "garages",
+    id: 2, name: "РЕЧКА ЗА ГАРАЖАМИ", place: "ГК «Мотор», за 14-м боксом", theme: "garages",
     blurb: "Тут пахнет бензином, рыбой и проблемами.", length: 75, friendEvery: [8, 12], target: 1.5, rageMult: 1.05,
-    hazards: [["gopniki", 0.6], ["wife", 0.5]], extra: [["ПУСТАЯ «БАЛТИКА»", 0.8], ["ПАКЕТ-МАЙКА", 0.6]], intro: "Уровень два. Речка за гаражами.",
+    hazards: [["gopniki", 0.6], ["wife", 0.5]], extra: [["ПУСТОЕ «ЧЕРНІГІВСЬКЕ»", 0.8], ["ПАКЕТ-МАЙКА", 0.6]], intro: "Уровень два. Речка за гаражами.",
     tolikIntro: "ТУТ ВОДА ЧИСТАЯ. ПОЧТИ",
     taunts: ["ТЫ БУТЫЛКИ ЛОВИШЬ ИЛИ РЫБУ?", "ДАЖЕ ГАРАЖНЫЕ ЛОВЯТ БОЛЬШЕ", "МОЖЕТ, ТЕБЕ ЛУЧШЕ МАШИНУ ЧИНИТЬ?"],
   },
   {
-    id: 3, name: "КАРЬЕР «ГОЛУБАЯ ЛАГУНА»", place: "Песчаный карьер, 40 км по трассе", theme: "quarry",
+    id: 3, name: "КАРЬЕР «ГОЛУБАЯ ЛАГУНА»", place: "Песчаный карьер, 40 км по житомирской трассе", theme: "quarry",
     blurb: "Мажоры на гидроциклах, а ты с фидером.", length: 80, friendEvery: [7.5, 11], target: 2.5, rageMult: 1.1,
     hazards: [["jetski", 0.7], ["wife", 0.5]], extra: [["КАРП", 0.6]], intro: "Уровень три. Карьер. Голубая лагуна.",
     tolikIntro: "ФИДЕР ВЗЯЛ? НУ ТЫ ОЛИГАРХ",
     taunts: ["ФИДЕР КУПИЛ, А РУКИ НЕ КУПИЛ", "ГИДРОЦИКЛ ПОЙМАЛ БОЛЬШЕ ТЕБЯ", "КАРП ТЕБЯ ЗА ЛОХА ДЕРЖИТ"],
   },
   {
-    id: 4, name: "НОЧЬ У КОСТРА", place: "Остров на Волге, без связи", theme: "night",
+    id: 4, name: "НОЧЬ У КОСТРА", place: "Остров на Днепре, без связи", theme: "night",
     blurb: "Комары размером с воробья и соседи с гитарой.", length: 85, friendEvery: [7, 10], target: 3, rageMult: 1.12,
     hazards: [["mosquito", 1.3], ["neighbors", 0.7]], extra: [["СОМ", 0.25]], intro: "Уровень четыре. Ночь у костра.",
     tolikIntro: "НОЧЬЮ ОНА ДУРНАЯ, САМА ЛЕЗЕТ",
     taunts: ["ДАЖЕ В ТЕМНОТЕ ВИДНО, ЧТО ТЫ ЛОХ", "КОМАРЫ ПОЙМАЛИ БОЛЬШЕ, ЧЕМ ТЫ", "ПОДКИНЬ ДРОВ, ХОТЬ КАКАЯ-ТО ПОЛЬЗА"],
   },
   {
-    id: 5, name: "СБРОС ГРЭС", place: "Тёплый канал у электростанции", theme: "plant",
+    id: 5, name: "СБРОС ГРЭС", place: "Тёплый канал у ГРЭС, вода +28", theme: "plant",
     blurb: "Вода +28 круглый год. Рыба светится.", length: 85, friendEvery: [6.5, 10], target: 4, rageMult: 1.15,
     hazards: [["dump", 0.7], ["drone", 0.5]], extra: [["ОКУНЬ-МУТАНТ", 2], ["ТРЁХГЛАЗЫЙ КАРАСЬ", 1.5]],
     friendExtra: [["ОКУНЬ-МУТАНТ", 1]], intro: "Уровень пять. Сброс ГРЭС.",
@@ -185,7 +185,7 @@ export const LEVELS: Level[] = [
     taunts: ["ДАЖЕ ЗА ДЕНЬГИ НЕ КЛЮЁТ? ДИАГНОЗ", "АШОТ ГОВОРИТ, ТЫ ЕГО РЫБУ ПУГАЕШЬ", "ЗАПЛАТИЛ ПОЛТОРЫ ТЫЩИ, ЧТОБЫ ПОСИДЕТЬ"],
   },
   {
-    id: 7, name: "ЗИМНИК НА ВОДОХРАНИЛИЩЕ", place: "Лёд 12 сантиметров. Наверное", theme: "ice",
+    id: 7, name: "ЗИМНИК НА ВОДОХРАНИЛИЩЕ", place: "Киевское море. Лёд 12 см. Наверное", theme: "ice",
     blurb: "Минус двадцать. Пиво греет. Лёд трещит.", length: 90, friendEvery: [6, 9], target: 3, rageMult: 1.2,
     hazards: [["iceCrack", 0.6], ["mosquito", 0]], extra: [], forceMethod: "ice", cold: true, intro: "Уровень семь. Зимник.",
     tolikIntro: "НЕ ПРЫГАЙ ТОЛЬКО. ХОТЯ ПРЫГАЙ",
@@ -199,8 +199,8 @@ export const LEVELS: Level[] = [
     taunts: ["РОТАН — ЭТО ТВОЙ ПОТОЛОК", "ПИЯВКИ ТЕБЯ ЛЮБЯТ, А РЫБА НЕТ", "ТЫ ЛОВИШЬ, КАК БУДТО ТЕБЯ ЗАСТАВЛЯЮТ"],
   },
   {
-    id: 9, name: "ЗАПОВЕДНИК", place: "Табличка «ЛОВ ЗАПРЕЩЁН» прострелена", theme: "reserve",
-    blurb: "Рыба непуганая. Рыбнадзор — пуганый, злой.", length: 95, friendEvery: [5, 8], target: 7, rageMult: 1.3,
+    id: 9, name: "ЗАПОВЕДНИК", place: "Нацпарк. Табличка «ЛОВ ЗАБОРОНЕНО» прострелена", theme: "reserve",
+    blurb: "Рыба непуганая. Рыбпатруль — пуганый, злой.", length: 95, friendEvery: [5, 8], target: 7, rageMult: 1.3,
     hazards: [["nadzor", 1.1], ["drone", 0.5]], extra: [["СУДАК", 1], ["ЩУКА", 1]], intro: "Уровень девять. Заповедник.",
     tolikIntro: "ЕСЛИ ЧТО — ТЫ МЕНЯ НЕ ЗНАЕШЬ",
     taunts: ["РЫБНАДЗОР ЛОВИТ ЛУЧШЕ ТЕБЯ. ТЕБЯ ЛОВИТ", "ТУТ РЫБА САМА В ЛОДКУ ПРЫГАЕТ. КРОМЕ ТВОЕЙ", "ПОСАДЯТ ЗА БРАКОНЬЕРСТВО, А У ТЕБЯ НОЛЬ"],
@@ -226,13 +226,13 @@ export const HAZARD_TEXT: Record<Hazard, { toast: string; tolik?: string }> = {
   mosquito: { toast: "🦟 КОМАРЫ ЖРУТ! КУРЕВО ИХ ОТГОНЯЕТ" },
   gopniki: { toast: "🧢 ПАЦАНЫ С РАЙОНА ОТЖАЛИ ПИВО", tolik: "ЗДАРОВА, МУЖИКИ! ЭТО ЕГО, НЕ МОЁ" },
   jetski: { toast: "🚤 МАЖОР НА ГИДРОЦИКЛЕ РАСПУГАЛ ВСЮ РЫБУ" },
-  neighbors: { toast: "🎸 СОСЕДИ ОРУТ «ГРУППУ КРОВИ». ТРЕТИЙ РАЗ", tolik: "О, МОЯ ЛЮБИМАЯ! КРОВЬ НА РУКАВЕ!" },
+  neighbors: { toast: "🎸 СОСЕДИ ТРЕТИЙ ЧАС ОРУТ ПОД ГИТАРУ", tolik: "О, МОЯ ЛЮБИМАЯ! КРОВЬ НА РУКАВЕ!" },
   dump: { toast: "🏭 СБРОС ВОДЫ! РЫБА УШЛА НА ГЛУБИНУ" },
   ashot: { toast: "👮 АШОТ: «СО СВОИМ ПИВОМ НЕЛЬЗЯ, ДОРОГОЙ! ШТРАФ 300»" },
   tolikCheat: { toast: "💸 ТОЛИК КУПИЛ У АШОТА ДВУХ КАРПОВ И ВЫДАЁТ ЗА СВОИХ", tolik: "ЧЕСТНО ПОЙМАЛ! АШОТ, ПОДТВЕРДИ" },
   iceCrack: { toast: "⚠️ ЛЁД ТРЕЩИТ… ТЫ ТЯЖЕЛЕЕШЬ ОТ ПИВА" },
   leech: { toast: "🩸 ПИЯВКА НА НОГЕ. ТРЕТЬЯ ЗА ЧАС" },
-  nadzor: { toast: "🚨 РЫБНАДЗОР НА ЛОДКЕ! НЕ ПЕЙ И НЕ ТЫРЬ", tolik: "КОМАНДИР, ЭТО ВСЁ ОН!" },
+  nadzor: { toast: "🚨 РИБПАТРУЛЬ НА ЛОДКЕ! НЕ ПЕЙ И НЕ ТЫРЬ", tolik: "КОМАНДИР, ЭТО ВСЁ ОН!" },
   crowd: { toast: "📣 ТОЛПА СКАНДИРУЕТ: «ТО-ЛИК! ТО-ЛИК!»" },
   drone: { toast: "🛸 БЛОГЕР ЗАПУСТИЛ ДРОН. РЫБА НЕРВНИЧАЕТ, ТЫ ТОЖЕ" },
 };
