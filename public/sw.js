@@ -17,7 +17,8 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || url.origin !== self.location.origin || !url.href.startsWith(self.registration.scope)) return;
   if (event.request.mode === "navigate") {
-    event.respondWith(fetch(event.request).catch(() => caches.match(new URL("index.html", self.registration.scope).href)));
+    // Each game falls back to its own cached shell when offline.
+    event.respondWith(fetch(event.request).catch(async () => (await caches.match(event.request)) || caches.match(new URL("index.html", self.registration.scope).href)));
     return;
   }
   // Hashed build assets are precached; never cache unknown responses or return HTML as JavaScript.

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#3f8f95" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Не клюёт</title>
+    <link rel="manifest" href="%BASE_URL%fishing/manifest.webmanifest" />
+    <link rel="icon" href="%BASE_URL%fishing/icon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <main id="game-shell" aria-label="Игра «Не клюёт»">
+      <div id="game"></div>
+      <div id="fx" aria-hidden="true"></div>
+      <div class="paper-grain" aria-hidden="true"></div>
+      <div id="rage-vignette" aria-hidden="true"></div>
+      <div id="sleep-shade" aria-hidden="true"></div>
+
+      <section id="hud" class="hidden" aria-label="Состояние">
+        <div class="hud-row">
+          <div class="rage-block">
+            <span class="hud-tag">ЗЛОСТЬ</span>
+            <div class="ink-bar"><div id="rage-bar" class="rage-fill"></div></div>
+            <b id="rage-text">18</b>
+          </div>
+          <button id="pause-button" class="icon-button" aria-label="Пауза">Ⅱ</button>
+        </div>
+        <div class="mission-strip">
+          <span id="day-text">СУББОТА</span>
+          <b id="clock-text">05:00</b>
+          <span id="score-text">ТЫ 0 · 0 ТОЛИК</span>
+        </div>
+        <div class="day-bar"><div id="day-fill"></div></div>
+        <div id="drunk-row" class="drunk-row"></div>
+      </section>
+
+      <section id="start-screen" class="screen active">
+        <div class="sticker">РЫБАЛКА · 18+</div>
+        <p class="eyebrow">ТРИ ДНЯ НА РЕКЕ</p>
+        <h1>НЕ<br /><span>КЛЮЁТ</span></h1>
+        <p class="lead">У Толика клюёт всегда. У тебя — никогда.<br />Досиди до понедельника и не нырни в реку.</p>
+        <div class="weapon-card">
+          <span class="weapon-icon">😤</span>
+          <div><b>ШКАЛА ЗЛОСТИ</b><small>Каждая рыба Толика бесит. 100% — ломаешь удочку и ныряешь.</small></div>
+        </div>
+        <div class="coping-grid" aria-label="Как успокоиться">
+          <div><b>🍺</b><span>Пиво<br /><small>много, но пьянеешь</small></span></div>
+          <div><b>🚬</b><span>Сигарета<br /><small>медленно, пачка конечна</small></span></div>
+          <div><b>📱</b><span>Тикток<br /><small>можно прозевать клёв</small></span></div>
+          <div><b>🫳</b><span>Стырить<br /><small>пока Толик не смотрит</small></span></div>
+        </div>
+        <button id="start-button" class="primary-button" disabled>ЗАКИДЫВАЕМ</button>
+        <p class="hint">Поплавок нырнул — жми ПОДСЕЧЬ. Потом останови стрелку в зелёной зоне.<br />Держи СТЫРИТЬ, пока Толик отвернулся.</p>
+      </section>
+
+      <section id="shop-screen" class="screen">
+        <p id="shop-eyebrow" class="eyebrow">ВЕЧЕР · ДЕНЬ 1 ПОЗАДИ</p>
+        <h2>ЗАЕЗД<br />В СЕЛЬМАГ</h2>
+        <p id="shop-score" class="upgrade-score"></p>
+        <div id="shop-list" class="upgrade-list"></div>
+      </section>
+
+      <section id="pause-screen" class="screen compact">
+        <p class="eyebrow">ПЕРЕКУР</p>
+        <h2>ПАУЗА</h2>
+        <button id="resume-button" class="primary-button">ДАЛЬШЕ РЫБАЧИТЬ</button>
+        <div class="audio-row" role="group" aria-label="Звук">
+          <button id="sound-button" class="audio-toggle">ЗВУКИ: ВКЛ</button>
+          <button id="music-button" class="audio-toggle">МУЗЫКА: ВКЛ</button>
+          <button id="voice-button" class="audio-toggle">ГОЛОСА: ВКЛ</button>
+        </div>
+        <button id="quit-button" class="secondary-button">СМОТАТЬ УДОЧКИ</button>
+      </section>
+
+      <section id="result-screen" class="screen">
+        <p id="result-eyebrow" class="eyebrow">РЫБАЛКА ОКОНЧЕНА</p>
+        <h2 id="result-title">ДОСИДЕЛ</h2>
+        <p id="result-rank" class="rank-line"></p>
+        <div class="results">
+          <div><strong id="result-mine">0</strong><span>ТВОЙ УЛОВ, КГ</span></div>
+          <div><strong id="result-friend">0</strong><span>У ТОЛИКА, КГ</span></div>
+          <div><strong id="result-stolen">0</strong><span>СТЫРЕНО</span></div>
+        </div>
+        <p id="result-note" class="hint"></p>
+        <button id="restart-button" class="primary-button">ЕЩЁ РАЗОК</button>
+      </section>
+
+      <div id="phone" class="hidden" aria-label="Тикток">
+        <div class="phone-frame">
+          <div class="phone-top"><span>📶 ТикТок</span><b id="battery-text">100%</b></div>
+          <div id="bell" class="bell">🔔 ДЗЫНЬ!</div>
+          <div id="video" class="video">
+            <div id="video-emoji" class="video-emoji">🐈</div>
+            <p id="video-caption">кот</p>
+            <span id="video-rage" class="video-rage">−8</span>
+          </div>
+          <div class="phone-actions">
+            <button id="swipe-button" class="phone-btn">ЛИСТАТЬ ↑</button>
+            <button id="close-phone" class="phone-btn dark">УБРАТЬ</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="controls" class="hidden">
+        <div id="reel" class="reel hidden" aria-hidden="true">
+          <div id="reel-zone" class="reel-zone"></div>
+          <div id="reel-marker" class="reel-marker"></div>
+        </div>
+        <div class="action-row">
+          <button id="beer-button" class="action-button"><b>🍺</b><span id="beer-count">×3</span></button>
+          <button id="smoke-button" class="action-button"><b>🚬</b><span id="cig-count">×6</span></button>
+          <button id="phone-button" class="action-button"><b>📱</b><span id="phone-count">100%</span></button>
+          <button id="steal-button" class="action-button steal"><b>🫳</b><span>СТЫРИТЬ</span><i id="steal-fill"></i></button>
+        </div>
+        <button id="hook-button" class="hook-button">ПОДСЕЧЬ</button>
+      </div>
+      <div id="toast" role="status" aria-live="polite"></div>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
