@@ -12,7 +12,7 @@ export default defineConfig({
         main: fileURLToPath(new URL("./index.html", import.meta.url)),
         fishing: fileURLToPath(new URL("./fishing/index.html", import.meta.url)),
       },
-      output: { manualChunks: { phaser: ["phaser"] } },
+      output: { manualChunks: { phaser: ["phaser"], three: ["three"] } },
     },
   },
 });

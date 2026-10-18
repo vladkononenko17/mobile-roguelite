@@ -56,7 +56,7 @@ The current art is an original code-drawn comic wasteland treatment used to vali
 
 ## «Не клюёт» (fishing)
 
-A second vertical slice on the same stack (Phaser 3 + TypeScript + Vite, DOM HUD in the same comic-ink style). Served at `/mobile-roguelite/fishing/`.
+A second vertical slice in the same repo and toolchain (TypeScript + Vite, DOM HUD in the same comic-ink style). The world is real-time 3D rendered with Three.js, since Phaser is 2D-only. Served at `/mobile-roguelite/fishing/`.
 
 You fish next to your friend Tolik. He keeps landing fish, you don't, and every one of his catches fills your **rage** bar. At 100 you snap the rod over your knee and jump into the river. Survive three days (Sat → Mon) without a meltdown.
 
@@ -67,6 +67,6 @@ You fish next to your friend Tolik. He keeps landing fish, you don't, and every 
 - **Steal:** hold **СТЫРИТЬ** while Tolik is distracted (phone, stretching, in the bushes). If he turns round mid-steal you get caught.
 - Between days pick one of three shop perks; rage halves overnight; Tolik gets luckier each day.
 
-Rules live in `fishing/src/sim.ts` (pure, no Phaser) and are covered by `tests/fishing.test.mjs`, including a bot balance check. Art is original low-poly faceted vector drawing in `fishing/src/art.ts`; sound is synthesized in `fishing/src/sfx.ts`, so there are no third-party assets to license. For playtesting in the browser console: `__fishing.sim.rage = 95`.
+Rules live in `fishing/src/sim.ts` (pure, no Phaser) and are covered by `tests/fishing.test.mjs`, including a bot balance check. 3D models are original low-poly geometry built in code with flat shading and an ink outline (`fishing/src/three/models.ts`, scene in `fishing/src/Scene3D.ts`); sound is synthesized in `fishing/src/sfx.ts`, so there are no third-party assets to license. For playtesting in the browser console: `__fishing.sim.rage = 95`.
 
 Desktop keys: Space strike · 1 beer · 2 smoke · 3 TikTok/next · X close phone · hold 4 steal · P pause.

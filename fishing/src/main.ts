@@ -1,6 +1,5 @@
-import Phaser from "phaser";
 import "./fishing.css";
-import { FishingScene } from "./FishingScene";
+import { Scene3D } from "./Scene3D";
 import { isMuted, setMuted, unlockAudio } from "./sfx";
 import { DAYS, PERKS, rankFor, type PerkId, type SimSnapshot, type Video } from "./sim";
 
@@ -10,9 +9,9 @@ function el<T extends HTMLElement>(selector: string): T {
   return found;
 }
 
-const scene = new FishingScene();
+const scene = new Scene3D();
 // Handy for playtesting from the console: __fishing.sim.rage = 95
-(window as unknown as { __fishing: FishingScene }).__fishing = scene;
+(window as unknown as { __fishing: Scene3D }).__fishing = scene;
 const ui = {
   hud: el("#hud"),
   rageBlock: el(".rage-block"),
@@ -47,7 +46,6 @@ const ui = {
   videoRage: el("#video-rage"),
   start: el("#start-screen"),
   startButton: el<HTMLButtonElement>("#start-button"),
-  splash: el<HTMLImageElement>("#hero-splash"),
   shop: el("#shop-screen"),
   shopEyebrow: el("#shop-eyebrow"),
   shopScore: el("#shop-score"),
@@ -313,25 +311,18 @@ scene.uiEvents.on("meltdown", () => {
 });
 scene.uiEvents.once("ready", () => {
   ui.startButton.disabled = false;
-  try { ui.splash.src = scene.heroPortrait(); } catch { /* cosmetic only */ }
 });
 
 async function boot(): Promise<void> {
-  // Phaser text needs the Cyrillic display face before its first draw.
+  // Floating labels use the Cyrillic display face; give it a moment to load.
   try {
-    await Promise.race([
-      Promise.all([document.fonts.load('700 16px "Oswald"', "АБВ"), document.fonts.load('700 16px "Oswald"', "ABC")]),
-      new Promise((resolve) => setTimeout(resolve, 2500)),
-    ]);
+    await Promise.race([document.fonts.load('700 16px "Oswald"', "АБВ"), new Promise((resolve) => setTimeout(resolve, 1500))]);
   } catch { /* fall back to system fonts */ }
-  new Phaser.Game({
-    type: Phaser.AUTO,
-    parent: "game",
-    backgroundColor: "#2a3a32",
-    render: { antialias: true, powerPreference: "high-performance" },
-    scale: { mode: Phaser.Scale.RESIZE, autoCenter: Phaser.Scale.CENTER_BOTH },
-    scene: [scene],
-  });
+  try {
+    scene.mount(el("#game"), el("#fx"));
+  } catch {
+    toast("НУЖЕН БРАУЗЕР С WEBGL");
+  }
 }
 boot();
 
