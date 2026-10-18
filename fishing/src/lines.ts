@@ -1,8 +1,9 @@
 /**
  * Every spoken line in the game, in one place. The voice generator script
  * reads this file to pre-record lines (e.g. with ElevenLabs) and the game
- * finds each recording by the same key. Pure data: no DOM, no imports.
+ * finds each recording by the same key. Pure data: no DOM.
  */
+import { BASE_TAUNTS, HAZARD_TEXT, LEVELS } from "./content.ts";
 export type Speaker = "hero" | "tolik" | "announcer";
 
 export const TAUNTS = [
@@ -26,12 +27,20 @@ export const TOLIK = {
   caught: "Э! ТЫ ЧЁ, МОЮ РЫБУ?!",
   wake: "С ДОБРЫМ УТРОМ! ГЛЯНЬ, СКОЛЬКО У МЕНЯ",
   splash: "…ВОТ ЭТО ПОЙМАЛ",
+  king: "ЦАРЬ-СОМ!!! НА КОЛЕНИ, СМЕРТНЫЙ!",
+  junk: "О! ГАЛОШУ ПОЙМАЛ? В ПАРУ К ПЕРВОЙ",
+  fell: "…НУ, ЛЁД ПРОВЕРИЛ. ТОНКИЙ",
+  fine: "ПЛАТИ, БРАКОНЬЕР! ХЕ-ХЕ",
 };
 
 export const ANNOUNCER = {
   days: ["День первый. Суббота.", "День второй. Воскресенье.", "День третий. Понедельник. Отгул."],
   dayEnd: "День окончен.",
   won: "Рыбалка окончена. Нервы выдержали.",
+  levelWon: "Уровень пройден. Толик в бешенстве.",
+  levelLost: "Провал. Толик доволен.",
+  champion: "Чемпион области! Толик плачет в панаму.",
+  fell: "Человек под лёд!",
 };
 
 export const LINES = {
@@ -49,11 +58,18 @@ export const LINES = {
   wake: ["А? Что? Я не сплю!"],
   meltdown: ["Да пошло оно всё!!!"],
   rageWarning: ["Внимание! Злость на критическом уровне!", "Опасность! Нервы на пределе!"],
+  junk: ["Это что за хрень?!", "Ну хоть не пустой…"],
+  escaped: ["Ушла!", "Да твою ж налево!"],
+  snag: ["Зацеп. Опять коряга.", "Да чтоб тебя, зацеп!"],
+  fine: ["За что?!", "Командир, это не моё!"],
+  call: ["Да, дорогая. Копаю. Картошку."],
+  fell: ["А-а-а! Холодно!"],
 };
 
 /** Which actor says each LINES group. */
 export const LINE_SPEAKER: Record<keyof typeof LINES, Speaker> = {
   bite: "announcer", rageWarning: "announcer",
+  junk: "hero", escaped: "hero", snag: "hero", fine: "hero", call: "hero", fell: "hero",
   hooked: "hero", catch: "hero", snap: "hero", missed: "hero", early: "hero", beer: "hero", hic: "hero",
   smoke: "hero", stolen: "hero", sleep: "hero", wake: "hero", meltdown: "hero",
 };
@@ -80,8 +96,14 @@ export function allLines(): Array<{ speaker: Speaker; text: string; key: string 
   TAUNTS.forEach((text) => out.push({ speaker: "tolik", text }));
   Object.values(DISTRACT_LINES).flat().forEach((text) => out.push({ speaker: "tolik", text }));
   Object.values(TOLIK).forEach((text) => out.push({ speaker: "tolik", text }));
+  BASE_TAUNTS.forEach((text) => out.push({ speaker: "tolik", text }));
+  LEVELS.forEach((l) => {
+    out.push({ speaker: "announcer", text: l.intro }, { speaker: "tolik", text: l.tolikIntro });
+    l.taunts.forEach((text) => out.push({ speaker: "tolik", text }));
+  });
+  Object.values(HAZARD_TEXT).forEach((h) => { if (h.tolik) out.push({ speaker: "tolik", text: h.tolik }); });
   ANNOUNCER.days.forEach((text) => out.push({ speaker: "announcer", text }));
-  out.push({ speaker: "announcer", text: ANNOUNCER.dayEnd }, { speaker: "announcer", text: ANNOUNCER.won });
+  (["dayEnd", "won", "levelWon", "levelLost", "champion", "fell"] as const).forEach((k) => out.push({ speaker: "announcer", text: ANNOUNCER[k] }));
   (Object.keys(LINES) as Array<keyof typeof LINES>).forEach((group) =>
     LINES[group].forEach((text) => out.push({ speaker: LINE_SPEAKER[group], text })));
   const seen = new Set<string>();

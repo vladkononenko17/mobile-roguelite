@@ -332,7 +332,7 @@ export function makeFish(color: number, kind: "fish" | "long" | "cat"): THREE.Gr
   return g;
 }
 
-export const FISH_LOOK: Record<string, { kind: "fish" | "long" | "cat"; color: number }> = {
+export const FISH_LOOK: Record<string, { kind: "fish" | "long" | "cat" | "junk"; color: number }> = {
   "ЁРШ": { kind: "fish", color: 0xa58d5c },
   "ПЛОТВА": { kind: "fish", color: 0xd7dde0 },
   "ОКУНЬ": { kind: "fish", color: 0x9cbc4a },
@@ -377,13 +377,179 @@ export interface Environment {
   bush: THREE.Group;
   sun: THREE.Mesh;
   clouds: THREE.Group[];
+  /** Ice levels: the water is a frozen sheet with holes. */
+  frozen: boolean;
+  /** Lights that flicker (campfire) — the scene animates their intensity. */
+  flicker: THREE.PointLight[];
+  /** Hazard props the scene moves around: boat, jetski, drone. */
+  boat: THREE.Group;
+  jetski: THREE.Group;
+  drone: THREE.Group;
+  crowd: THREE.Group[];
+  steam: THREE.Vector3[];
 }
 
 export const WATER_EDGE_Z = -2.2;
 
-export function makeEnvironment(): Environment {
-  const r = rng(20261018);
+export type ThemeId = "dacha" | "garages" | "quarry" | "night" | "plant" | "paid" | "ice" | "swamp" | "reserve" | "champ";
+
+interface Palette {
+  water: number;
+  grass: number;
+  dirt: number;
+  mud: number;
+  shore: number;
+  hills: number[];
+  pines: number[];
+  snow?: boolean;
+  trees: number;
+  reeds: boolean;
+}
+
+const PALETTES: Record<ThemeId, Palette> = {
+  dacha: { water: 0x3f8f95, grass: 0x6f8f3e, dirt: 0x8c6d47, mud: 0x4f5a30, shore: 0x4a6b3a, hills: [0x7f9c6a, 0x739160, 0x8aa875], pines: [0x2f5a3c, 0x376643], trees: 46, reeds: true },
+  garages: { water: 0x4d6b62, grass: 0x6b7a40, dirt: 0x6d5f4f, mud: 0x3f3a2c, shore: 0x55594a, hills: [0x77806a, 0x6a735e], pines: [0x2f4a3c, 0x3a5040], trees: 14, reeds: true },
+  quarry: { water: 0x2fb3c2, grass: 0x8f9a4e, dirt: 0xd8b878, mud: 0xc9a565, shore: 0xd9bd80, hills: [0xe0c58a, 0xd4b273, 0xc9a465], pines: [0x2f5a3c], trees: 12, reeds: false },
+  night: { water: 0x1d4a5c, grass: 0x3e5a2c, dirt: 0x5c4a35, mud: 0x2f3a20, shore: 0x2b3f25, hills: [0x2e4436, 0x283d30], pines: [0x1c3326, 0x22402c], trees: 40, reeds: true },
+  plant: { water: 0x5fae6c, grass: 0x6b7a3a, dirt: 0x7a6a50, mud: 0x4a5530, shore: 0x5c6650, hills: [0x8a8f78, 0x7a8068], pines: [0x3a5038], trees: 10, reeds: true },
+  paid: { water: 0x4f9a8a, grass: 0x7aa045, dirt: 0x9a7a52, mud: 0x5a6a35, shore: 0x5f8040, hills: [0x86a86e, 0x7c9a62], pines: [0x2f5a3c, 0x376643], trees: 24, reeds: false },
+  ice: { water: 0xdfeef5, grass: 0xf2f6f8, dirt: 0xe4ecf0, mud: 0xd5e2ea, shore: 0xeef4f7, hills: [0xdfe8ee, 0xd2dde5], pines: [0x2a4a3a, 0x30503f], snow: true, trees: 40, reeds: false },
+  swamp: { water: 0x4a5a30, grass: 0x55602e, dirt: 0x4f4632, mud: 0x3a3a22, shore: 0x3d4a28, hills: [0x5a6448, 0x4f5a40], pines: [0x2a3d28], trees: 8, reeds: true },
+  reserve: { water: 0x2f7f8a, grass: 0x5f8a38, dirt: 0x7a6440, mud: 0x45552c, shore: 0x3f6232, hills: [0x5f8a58, 0x557e4e], pines: [0x1f4a30, 0x2a5838], trees: 70, reeds: true },
+  champ: { water: 0x3a92a8, grass: 0x7aa045, dirt: 0xd9c08a, mud: 0xc9ad74, shore: 0xd9c08a, hills: [0x8aa878, 0x7f9c6a], pines: [0x2f5a3c], trees: 16, reeds: false },
+};
+
+/** Text on a sign, drawn into a canvas texture. */
+export function makeSign(text: string, w: number, h: number, bg = "#e7ddc6", fg = "#171318"): THREE.Mesh {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = Math.round(512 * (h / w));
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "#171318";
+  ctx.lineWidth = 18;
+  ctx.strokeRect(9, 9, canvas.width - 18, canvas.height - 18);
+  ctx.fillStyle = fg;
+  const lines = text.split("\n");
+  const size = Math.min(canvas.height / (lines.length + 0.6), 96);
+  ctx.font = `700 ${size}px Oswald, "Arial Narrow", sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  lines.forEach((line, i) => ctx.fillText(line, canvas.width / 2, canvas.height / 2 + (i - (lines.length - 1) / 2) * size * 1.05, canvas.width - 40));
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex }));
+  return sign;
+}
+
+function signOnPosts(text: string, w: number, h: number, bg?: string, fg?: string): THREE.Group {
+  const g = new THREE.Group();
+  const board = makeSign(text, w, h, bg, fg);
+  at(board, 0, 1.1 + h / 2, 0.03, g);
+  const back = mesh(new THREE.BoxGeometry(w + 0.08, h + 0.08, 0.05), C.wood, 0.02, false);
+  at(back, 0, 1.1 + h / 2, 0, g);
+  for (const s of [-1, 1]) at(mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.2 + h, 5), C.wood, 0.015), s * (w / 2 - 0.1), (1.2 + h) / 2, -0.04, g);
+  return g;
+}
+
+function makeHouse(r: () => number, color: number, roof: number, w = 3, d = 3, hgt = 2.2): THREE.Group {
+  const g = new THREE.Group();
+  at(mesh(new THREE.BoxGeometry(w, hgt, d), color, 0.04), 0, hgt / 2, 0, g);
+  const roofGeo = new THREE.CylinderGeometry(0.01, w * 0.78, 1.3, 4, 1);
+  const rf = mesh(roofGeo, roof, 0.04);
+  rf.rotation.y = Math.PI / 4;
+  rf.scale.z = d / w;
+  at(rf, 0, hgt + 0.65, 0, g);
+  at(mesh(new THREE.BoxGeometry(0.6, 1.2, 0.05), 0x5a3a24, 0.015), w * 0.15, 0.6, d / 2 + 0.03, g);
+  at(mesh(new THREE.BoxGeometry(0.6, 0.5, 0.05), 0x9fd0e0, 0.015), -w * 0.25, hgt * 0.6, d / 2 + 0.03, g);
+  void r;
+  return g;
+}
+
+function makeGarage(color: number): THREE.Group {
+  const g = new THREE.Group();
+  at(mesh(new THREE.BoxGeometry(3, 2.4, 5), color, 0.05), 0, 1.2, 0, g);
+  at(mesh(new THREE.BoxGeometry(2.4, 2, 0.08), 0x6a5a48, 0.02), 0, 1.05, 2.52, g);
+  at(mesh(new THREE.BoxGeometry(3.2, 0.15, 5.2), 0x3a3a3a, 0.02), 0, 2.45, 0, g);
+  return g;
+}
+
+function makeChimney(h: number, stripes = true): THREE.Group {
+  const g = new THREE.Group();
+  const n = stripes ? 6 : 1;
+  for (let i = 0; i < n; i++) {
+    const seg = mesh(new THREE.CylinderGeometry(1.1 - i * 0.08, 1.2 - i * 0.08, h / n, 8), stripes ? (i % 2 ? 0xd63732 : 0xe7ddc6) : 0x9aa3a6, 0.08, false);
+    at(seg, 0, h / n * (i + 0.5), 0, g);
+  }
+  return g;
+}
+
+export function makePerson(color: number, r: () => number): THREE.Group {
+  const g = new THREE.Group();
+  at(mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.9, 6), color, 0.02), 0, 0.45, 0, g);
+  at(mesh(new THREE.IcosahedronGeometry(0.17, 0), C.skin, 0.015), 0, 1.05, 0, g);
+  if (r() < 0.5) at(mesh(new THREE.CylinderGeometry(0.18, 0.2, 0.1, 6), [0xd63732, 0xf2b632, 0x54b7c6][Math.floor(r() * 3)], 0.01), 0, 1.2, 0, g);
+  return g;
+}
+
+function makeBoat(): THREE.Group {
+  const g = new THREE.Group();
+  const hull = mesh(new THREE.BoxGeometry(3.2, 0.6, 1.3), 0xe7ddc6, 0.04);
+  at(hull, 0, 0.1, 0, g);
+  at(mesh(new THREE.BoxGeometry(1, 0.7, 0.9), 0x3e6ea0, 0.03), -0.4, 0.75, 0, g);
+  const light = mesh(new THREE.BoxGeometry(0.25, 0.15, 0.3), 0x3a7bff, 0.01, false);
+  light.name = "siren";
+  at(light, -0.4, 1.2, 0, g);
+  at(makeSign("РЫБНАДЗОР", 1.6, 0.35, "#e7ddc6", "#3e6ea0"), 0.2, 0.3, 0.67, g);
+  at(makePerson(0x2e3b2a, rng(5)), 0.9, 0.35, 0, g);
+  g.visible = false;
+  return g;
+}
+
+function makeJetski(): THREE.Group {
+  const g = new THREE.Group();
+  const body = mesh(new THREE.ConeGeometry(0.45, 2, 5), 0xd63732, 0.03);
+  body.rotation.z = Math.PI / 2;
+  at(body, 0, 0.25, 0, g);
+  at(makePerson(0xf2b632, rng(9)), 0.2, 0.2, 0, g);
+  g.visible = false;
+  return g;
+}
+
+function makeDrone(): THREE.Group {
+  const g = new THREE.Group();
+  at(mesh(new THREE.BoxGeometry(0.4, 0.12, 0.4), 0x22252b, 0.015), 0, 0, 0, g);
+  for (const [x, z] of [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]]) {
+    const rotor = mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.02, 8), 0x9aa3a6, 0.008);
+    rotor.name = "rotor";
+    at(rotor, x, 0.08, z, g);
+  }
+  const led = new THREE.Mesh(new THREE.IcosahedronGeometry(0.04, 0), new THREE.MeshBasicMaterial({ color: 0xff3a2a }));
+  at(led, 0, -0.06, 0.2, g);
+  g.visible = false;
+  return g;
+}
+
+function makeDeadTree(r: () => number): THREE.Group {
+  const g = new THREE.Group();
+  const h = 3 + r() * 3;
+  at(mesh(new THREE.CylinderGeometry(0.08, 0.2, h, 5), 0x4a3f30, 0.03, false), 0, h / 2, 0, g).rotation.z = (r() - 0.5) * 0.3;
+  for (let i = 0; i < 3; i++) {
+    const br = mesh(new THREE.CylinderGeometry(0.03, 0.07, 1.2, 4), 0x4a3f30, 0.02, false);
+    br.rotation.z = (r() - 0.5) * 2.2;
+    at(br, (r() - 0.5) * 0.5, h * (0.5 + i * 0.15), 0, g);
+  }
+  return g;
+}
+
+export function makeEnvironment(theme: ThemeId = "dacha"): Environment {
+  const r = rng(20261018 + theme.length * 7919);
+  const P = PALETTES[theme];
   const group = new THREE.Group();
+  const flicker: THREE.PointLight[] = [];
+  const crowd: THREE.Group[] = [];
+  const steam: THREE.Vector3[] = [];
 
   // Sky dome with vertex-colour gradient (recoloured over the day).
   const skyGeo = new THREE.SphereGeometry(120, 16, 10);
@@ -392,52 +558,67 @@ export function makeEnvironment(): Environment {
   const sky = new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false }));
   group.add(sky);
 
-  const sun = new THREE.Mesh(new THREE.IcosahedronGeometry(3.2, 0), new THREE.MeshBasicMaterial({ color: 0xffd76a, fog: false }));
+  const sun = new THREE.Mesh(new THREE.IcosahedronGeometry(3.2, 0), new THREE.MeshBasicMaterial({ color: theme === "night" ? 0xe7ecf5 : 0xffd76a, fog: false }));
   outline(sun, 0.25);
   group.add(sun);
 
   const clouds: THREE.Group[] = [];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < (theme === "night" ? 1 : 4); i++) {
     const cloud = new THREE.Group();
     for (let j = 0; j < 4; j++) {
-      const puff = mesh(new THREE.IcosahedronGeometry(1.4 + r() * 1.2, 0), 0xf4f1e6, 0.12, false);
+      const puff = mesh(new THREE.IcosahedronGeometry(1.4 + r() * 1.2, 0), theme === "plant" ? 0xb8b39a : 0xf4f1e6, 0.12, false);
       puff.scale.y = 0.55;
       at(puff, j * 1.8 - 2.7, r() * 0.6, r() * 0.8, cloud);
     }
     at(cloud, -30 + i * 20, 16 + r() * 7, -70 - r() * 10, group);
     clouds.push(cloud);
   }
+  if (theme === "night") {
+    // Stars.
+    const starGeo = new THREE.BufferGeometry();
+    const sp: number[] = [];
+    for (let i = 0; i < 260; i++) {
+      const a = r() * Math.PI * 2;
+      const e = 0.12 + r() * 1.2;
+      sp.push(Math.cos(a) * Math.cos(e) * 110, Math.sin(e) * 110, -Math.abs(Math.sin(a) * Math.cos(e) * 110));
+    }
+    starGeo.setAttribute("position", new THREE.Float32BufferAttribute(sp, 3));
+    group.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.6, fog: false })));
+  }
 
-  // River: a faceted plane whose vertices bob every frame.
+  // Water: a faceted plane whose vertices bob every frame (or a frozen sheet).
+  const frozen = theme === "ice";
   const waterGeo = new THREE.PlaneGeometry(90, 70, 36, 26).toNonIndexed();
   waterGeo.rotateX(-Math.PI / 2);
-  waterGeo.translate(0, 0, WATER_EDGE_Z - 35);
+  waterGeo.translate(0, 0, (frozen ? WATER_EDGE_Z + 2 : WATER_EDGE_Z) - 35);
   const pos = waterGeo.attributes.position as THREE.BufferAttribute;
-  for (let i = 0; i < pos.count; i++) pos.setY(i, -0.08);
-  const water = new THREE.Mesh(waterGeo, new THREE.MeshStandardMaterial({ color: C.water, flatShading: true, roughness: 0.7, metalness: 0 }));
+  for (let i = 0; i < pos.count; i++) pos.setY(i, frozen ? -0.02 + r() * 0.03 : -0.08);
+  const waterMat = new THREE.MeshStandardMaterial({ color: P.water, flatShading: true, roughness: frozen ? 0.35 : 0.7, metalness: 0 });
+  if (theme === "plant") { waterMat.emissive = new THREE.Color(0x2fd05a); waterMat.emissiveIntensity = 0.25; }
+  const water = new THREE.Mesh(waterGeo, waterMat);
   water.receiveShadow = true;
   group.add(water);
   const waterBase = new Float32Array(pos.array as Float32Array);
+  if (frozen) waterGeo.computeVertexNormals();
 
   // Near bank: jittered low-poly ground that slopes into the water.
-  // Extends under the river as a riverbed so the shoreline never shows a gap.
   const groundGeo = new THREE.PlaneGeometry(40, 20, 30, 22);
   groundGeo.rotateX(-Math.PI / 2);
   groundGeo.translate(0, 0, WATER_EDGE_Z + 6);
   const gp = groundGeo.attributes.position as THREE.BufferAttribute;
   const colors: number[] = [];
-  const cGrass = new THREE.Color(C.grass);
-  const cDirt = new THREE.Color(C.dirt);
-  const cMud = new THREE.Color(0x4f5a30);
+  const cGrass = new THREE.Color(P.grass);
+  const cDirt = new THREE.Color(P.dirt);
+  const cMud = new THREE.Color(P.mud);
   for (let i = 0; i < gp.count; i++) {
     const x = gp.getX(i);
     const z = gp.getZ(i);
     const edge = z - WATER_EDGE_Z;
-    let y = edge < 0 ? -0.5 + edge * 0.05 : edge < 0.9 ? -0.3 + edge * 0.33 : (r() - 0.5) * 0.08;
+    let y = frozen ? (edge < 0 ? -0.2 : (r() - 0.5) * 0.06) : edge < 0 ? -0.5 + edge * 0.05 : edge < 0.9 ? -0.3 + edge * 0.33 : (r() - 0.5) * 0.08;
     if (Math.abs(x) > 3) y += (Math.abs(x) - 3) * 0.06 + r() * 0.1;
     gp.setY(i, y);
     const dirt = Math.max(0, 1 - Math.hypot(x / 2.6, (z - 0.2) / 1.4));
-    const c = edge < 0.9 ? cMud : cGrass.clone().lerp(cDirt, Math.min(1, dirt * 1.6)).multiplyScalar(0.92 + r() * 0.14);
+    const c = edge < 0.9 && !frozen ? cMud : cGrass.clone().lerp(cDirt, Math.min(1, dirt * 1.6)).multiplyScalar(0.92 + r() * 0.14);
     colors.push(c.r, c.g, c.b);
   }
   groundGeo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
@@ -445,37 +626,170 @@ export function makeEnvironment(): Environment {
   ground.receiveShadow = true;
   group.add(ground);
 
-  // Far bank: hills, a dark strip of shore, and a pine forest.
+  // Far bank: hills, a strip of shore, and trees.
   const far = -34;
-  const shore = mesh(new THREE.BoxGeometry(120, 0.6, 6), 0x4a6b3a, 0, false);
-  at(shore, 0, 0, far - 2, group);
-  for (let i = 0; i < 7; i++) {
-    const hill = mesh(new THREE.ConeGeometry(14 + r() * 10, 8 + r() * 9, 5), [0x7f9c6a, 0x739160, 0x8aa875][i % 3], 0, false);
-    at(hill, -48 + i * 16 + r() * 6, 3, far - 18 - r() * 12, group).rotation.y = r() * 3;
+  at(mesh(new THREE.BoxGeometry(120, 0.6, 6), P.shore, 0, false), 0, 0, far - 2, group);
+  const hillCount = theme === "quarry" ? 9 : 7;
+  for (let i = 0; i < hillCount; i++) {
+    const hill = theme === "quarry"
+      ? mesh(new THREE.CylinderGeometry(8 + r() * 6, 12 + r() * 6, 10 + r() * 8, 6), P.hills[i % P.hills.length], 0.15, false)
+      : mesh(new THREE.ConeGeometry(14 + r() * 10, 8 + r() * 9, 5), P.hills[i % P.hills.length], 0, false);
+    at(hill, -48 + i * (96 / hillCount) + r() * 6, theme === "quarry" ? 4 : 3, far - (theme === "quarry" ? 8 : 18) - r() * 12, group).rotation.y = r() * 3;
   }
-  for (let i = 0; i < 46; i++) {
-    const pine = makePine(r, 2.5 + r() * 3.2);
-    at(pine, -40 + r() * 80, 0.2, far - 1 - r() * 7, group);
+  const treeMaker = theme === "swamp" ? () => makeDeadTree(r) : () => makePine(r, 2.5 + r() * 3.2);
+  for (let i = 0; i < P.trees; i++) {
+    const t = treeMaker();
+    if (P.snow) t.children.slice(1).forEach((c) => { ((c as THREE.Mesh).material as THREE.MeshLambertMaterial) = mat(0xeef4f7); });
+    at(t, -40 + r() * 80, 0.2, far - 1 - r() * 7, group);
   }
   // Near-bank trees framing the shot, and the bush Tolik disappears into.
   for (const [x, z, h] of [[-5.2, 1.5, 4.8], [5.8, 2.2, 5.4], [-7.5, -0.5, 6.2], [7.8, 0.5, 6]] as const) {
-    at(makePine(r, h), x, 0.1, z, group);
+    const t = theme === "swamp" ? makeDeadTree(r) : makePine(r, h);
+    if (P.snow) t.children.slice(1).forEach((c) => { ((c as THREE.Mesh).material as THREE.MeshLambertMaterial) = mat(0xeef4f7); });
+    at(t, x, 0.1, z, group);
   }
   const bush = new THREE.Group();
   for (let i = 0; i < 5; i++) {
-    const blob = mesh(new THREE.IcosahedronGeometry(0.5 + r() * 0.3, 0), i % 2 ? 0x3f6a33 : 0x4f7d3b, 0.03);
+    const blob = mesh(new THREE.IcosahedronGeometry(0.5 + r() * 0.3, 0), P.snow ? (i % 2 ? 0xdfe8ee : 0xeef4f7) : i % 2 ? 0x3f6a33 : 0x4f7d3b, 0.03);
     at(blob, (r() - 0.5) * 1.2, 0.4 + r() * 0.4, (r() - 0.5) * 0.8, bush);
   }
   at(bush, 3.6, 0, 0.6, group);
-  // Reeds along the water edge.
-  for (let i = 0; i < 26; i++) {
-    const x = -9 + r() * 18;
-    if (Math.abs(x) < 2.6) continue;
-    const reed = mesh(new THREE.ConeGeometry(0.04, 0.9 + r() * 0.7, 3), 0x6f8a3a, 0, false);
-    at(reed, x, 0.2, WATER_EDGE_Z + 0.2 + r() * 0.5, group).rotation.z = (r() - 0.5) * 0.3;
-    if (r() < 0.35) at(mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.18, 5), 0x6b4a2e, 0.012, false), x, 0.95, reed.position.z, group);
+  if (P.reeds) {
+    for (let i = 0; i < 26; i++) {
+      const x = -9 + r() * 18;
+      if (Math.abs(x) < 2.6) continue;
+      const reed = mesh(new THREE.ConeGeometry(0.04, 0.9 + r() * 0.7, 3), theme === "swamp" ? 0x6a6a30 : 0x6f8a3a, 0, false);
+      at(reed, x, 0.2, WATER_EDGE_Z + 0.2 + r() * 0.5, group).rotation.z = (r() - 0.5) * 0.3;
+      if (r() < 0.35) at(mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.18, 5), 0x6b4a2e, 0.012, false), x, 0.95, reed.position.z, group);
+    }
   }
-  return { group, water, waterBase, sky, skyColors, bush, sun, clouds };
+
+  // ---- theme props
+  switch (theme) {
+    case "dacha": {
+      at(makeHouse(r, 0xd9c08a, 0xa83a2a), -7.5, 0, 4.5, group).rotation.y = 0.5;
+      for (let i = 0; i < 9; i++) at(mesh(new THREE.BoxGeometry(0.12, 1, 0.05), 0x9a7a52, 0.012), -9 + i * 0.4, 0.5, 2.8, group);
+      const gh = mesh(new THREE.CylinderGeometry(1, 1, 3, 6, 1, true, 0, Math.PI), 0xcfe6e0, 0.02);
+      gh.rotation.z = Math.PI / 2;
+      at(gh, 7, 0, 4.5, group);
+      break;
+    }
+    case "garages": {
+      const colors = [0x7a5a3a, 0x5a6a7a, 0x8a4a3a, 0x6a6a5a, 0x4a5a4a];
+      for (let i = 0; i < 12; i++) at(makeGarage(colors[i % colors.length]), -26 + i * 3.4, 0.3, far + 1, group);
+      at(signOnPosts("ГСК «МОТОР»\nПОСТОРОННИМ ВЪЕЗД ЗАПРЕЩЁН", 2.2, 0.9), -4.6, 0, 2.6, group).rotation.y = 0.35;
+      for (let i = 0; i < 3; i++) {
+        const tyre = mesh(new THREE.TorusGeometry(0.35, 0.14, 5, 8), 0x1f1f1f, 0.015);
+        tyre.rotation.x = Math.PI / 2;
+        at(tyre, 4.5 + i * 0.2, 0.14 + i * 0.26, 1.8, group);
+      }
+      const barrel = mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.8, 8), 0x7a3a2a, 0.02);
+      at(barrel, -3.6, 0.4, 1.4, group);
+      const fire = new THREE.PointLight(0xff8a3a, 1.5, 5);
+      at(fire, -3.6, 1.1, 1.4, group);
+      flicker.push(fire);
+      steam.push(new THREE.Vector3(-3.6, 1, 1.4));
+      break;
+    }
+    case "quarry":
+      at(signOnPosts("КУПАНИЕ ЗАПРЕЩЕНО\nВСЁ ЗАПРЕЩЕНО", 2, 0.8), 4.8, 0, 2.4, group).rotation.y = -0.4;
+      break;
+    case "night": {
+      const tent = mesh(new THREE.ConeGeometry(1.4, 1.6, 4), 0x3e6ea0, 0.03);
+      at(tent, -5.6, 0.8, 2.6, group).rotation.y = 0.8;
+      for (let i = 0; i < 5; i++) {
+        const log = mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.8, 5), 0x5a3a24, 0.015);
+        log.rotation.set(Math.PI / 2.4, (i / 5) * Math.PI * 2, 0);
+        at(log, -2.9, 0.18, 1.5, group);
+      }
+      const flame = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.7, 5), new THREE.MeshBasicMaterial({ color: 0xffa83a }));
+      flame.name = "flame";
+      at(flame, -2.9, 0.5, 1.5, group);
+      const fire = new THREE.PointLight(0xff9a4a, 3, 9);
+      at(fire, -2.9, 1, 1.5, group);
+      flicker.push(fire);
+      steam.push(new THREE.Vector3(-2.9, 0.9, 1.5));
+      break;
+    }
+    case "plant": {
+      for (let i = 0; i < 3; i++) {
+        at(makeChimney(22 + i * 4), -18 + i * 9, 0, far - 8, group);
+        steam.push(new THREE.Vector3(-18 + i * 9, 24 + i * 4, far - 8));
+      }
+      const tower = mesh(new THREE.CylinderGeometry(5, 7, 14, 10, 1, true), 0x9aa3a6, 0.1, false);
+      at(tower, 18, 7, far - 10, group);
+      steam.push(new THREE.Vector3(18, 14, far - 10));
+      at(signOnPosts("ГРЭС-2\nКУПАТЬСЯ НЕЛЬЗЯ\nЛОВИТЬ МОЖНО", 2, 1.1), 4.8, 0, 2.4, group).rotation.y = -0.4;
+      break;
+    }
+    case "paid": {
+      for (let i = 0; i < 16; i++) at(mesh(new THREE.BoxGeometry(0.1, 1.1, 0.1), 0x9a7a52, 0.012), -9 + i * 1.2, 0.55, WATER_EDGE_Z + 1, group).visible = Math.abs(-9 + i * 1.2) > 2.8;
+      const kiosk = makeHouse(r, 0xe8602f, 0x7a3a2a, 2.4, 2, 2);
+      at(kiosk, -6.5, 0, 3.4, group).rotation.y = 0.45;
+      at(signOnPosts("ПЛАТНИК «У АШОТА»\nВХОД 1500 ₽ · КАРП ПО 400", 2.6, 0.9, "#f2b632"), 4.8, 0, 2.6, group).rotation.y = -0.45;
+      steam.push(new THREE.Vector3(-5, 1.2, 2.6));
+      const grill = mesh(new THREE.BoxGeometry(0.9, 0.3, 0.35), 0x2c3036, 0.015);
+      at(grill, -5, 0.8, 2.6, group);
+      break;
+    }
+    case "ice": {
+      for (let i = 0; i < 12; i++) {
+        const hole = new THREE.Mesh(new THREE.CircleGeometry(0.16 + r() * 0.08, 8), mat(0x1d3540));
+        hole.rotation.x = -Math.PI / 2;
+        at(hole, -12 + r() * 24, 0.01, -2 - r() * 20, group);
+      }
+      for (let i = 0; i < 4; i++) at(makePerson(0x3a4a5a, r), -14 + r() * 28, 0, -8 - r() * 14, group);
+      break;
+    }
+    case "swamp": {
+      for (let i = 0; i < 14; i++) {
+        const pad = new THREE.Mesh(new THREE.CircleGeometry(0.3 + r() * 0.3, 6), mat(0x4f7d3b));
+        pad.rotation.x = -Math.PI / 2;
+        at(pad, -8 + r() * 16, -0.02, -3 - r() * 9, group);
+      }
+      const tyre = mesh(new THREE.TorusGeometry(0.4, 0.15, 5, 8), 0x1f1f1f, 0.015);
+      tyre.rotation.x = Math.PI / 2.3;
+      at(tyre, -4.2, 0.05, -2.6, group);
+      at(signOnPosts("ОСТОРОЖНО\nТОПЬ", 1.2, 0.6), 4.6, 0, 2.2, group).rotation.y = -0.4;
+      break;
+    }
+    case "reserve":
+      at(signOnPosts("ЗАПОВЕДНИК\nЛОВ РЫБЫ ЗАПРЕЩЁН\nШТРАФ 500 000 ₽", 2.4, 1.1, "#d63732", "#e7ddc6"), 4.8, 0, 2.4, group).rotation.y = -0.4;
+      break;
+    case "champ": {
+      const banner = makeSign("ЧЕМПИОНАТ ОБЛАСТИ ПО ЛОВЛЕ РЫБЫ · ФИНАЛ", 14, 1.4, "#f2b632");
+      at(banner, 0, 4.6, -24, group);
+      const tribune = mesh(new THREE.BoxGeometry(9, 1.2, 3), 0x3e6ea0, 0.04);
+      at(tribune, -7.5, 0.6, 5.5, group).rotation.y = 0.3;
+      for (let i = 0; i < 16; i++) {
+        const p = makePerson([0xd63732, 0xf2b632, 0x54b7c6, 0xe7ddc6, 0x9a6bd1][i % 5], r);
+        at(p, -11 + (i % 8) * 1.05 + r() * 0.2, 1.2 + Math.floor(i / 8) * 0.4, 4.5 + Math.floor(i / 8) * 1 - (i % 8) * 0.3, group);
+        crowd.push(p);
+      }
+      for (let i = 0; i < 6; i++) {
+        const p = makePerson([0x2c3036, 0xd63732, 0x54b7c6][i % 3], r);
+        at(p, 5 + i * 0.9, 0, 3.4 + (i % 2) * 0.6, group);
+        crowd.push(p);
+      }
+      const cam = new THREE.Group();
+      at(mesh(new THREE.BoxGeometry(0.5, 0.35, 0.7), 0x22252b, 0.02), 0, 1.5, 0, cam);
+      for (const a of [0, 2.1, 4.2]) {
+        const leg = mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.5, 4), 0x22252b, 0.008);
+        leg.rotation.set(0.25 * Math.cos(a), 0, 0.25 * Math.sin(a));
+        at(leg, 0, 0.75, 0, cam);
+      }
+      at(cam, 4.2, 0, 1.8, group).rotation.y = -0.6;
+      break;
+    }
+  }
+
+  const boat = makeBoat();
+  group.add(boat);
+  const jetski = makeJetski();
+  group.add(jetski);
+  const drone = makeDrone();
+  group.add(drone);
+  return { group, water, waterBase, sky, skyColors, bush, sun, clouds, frozen, flicker, boat, jetski, drone, crowd, steam };
 }
 
 /** Paint the sky dome as a vertical gradient between two colours. */
@@ -488,4 +802,60 @@ export function paintSky(env: Environment, top: THREE.Color, horizon: THREE.Colo
     env.skyColors.setXYZ(i, c.r, c.g, c.b);
   }
   env.skyColors.needsUpdate = true;
+}
+
+/** Anything that comes out of the water: fish (by species colour/shape) or junk. */
+export function makeCatch(species: string, look: "fish" | "long" | "cat" | "junk", color: number): THREE.Group {
+  if (look !== "junk") return makeFish(color, look);
+  const g = new THREE.Group();
+  if (species === "ГАЛОША") {
+    at(mesh(new THREE.BoxGeometry(0.34, 0.12, 0.14), 0x2a2a2a, 0.012, false), 0, 0, 0, g);
+    at(mesh(new THREE.BoxGeometry(0.12, 0.16, 0.14), 0x2a2a2a, 0.012, false), -0.12, 0.1, 0, g);
+  } else if (species === "ПАКЕТ-МАЙКА") {
+    const bag = mesh(new THREE.IcosahedronGeometry(0.2, 0), 0xe7ddc6, 0.012, false);
+    bag.scale.set(1, 1.3, 0.4);
+    g.add(bag);
+  } else if (species === "ПОКРЫШКА") {
+    g.add(mesh(new THREE.TorusGeometry(0.35, 0.14, 5, 8), 0x1f1f1f, 0.015, false));
+  } else {
+    const bottle = mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.32, 6), 0x3f7a4a, 0.01, false);
+    bottle.rotation.z = Math.PI / 2;
+    g.add(bottle);
+    const neck = mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.12, 6), 0x3f7a4a, 0.008, false);
+    neck.rotation.z = Math.PI / 2;
+    at(neck, 0.22, 0, 0, g);
+  }
+  return g;
+}
+
+/** Spinning lure: a little acid-yellow wobbler. */
+export function makeLure(): THREE.Group {
+  const g = new THREE.Group();
+  const body = mesh(new THREE.IcosahedronGeometry(0.07, 0), 0xc9f04a, 0.01, false);
+  body.scale.set(1.8, 0.8, 0.7);
+  g.add(body);
+  at(mesh(new THREE.ConeGeometry(0.03, 0.06, 3), 0xd63732, 0.006, false), 0.13, 0, 0, g).rotation.z = -Math.PI / 2;
+  return g;
+}
+
+/** Feeder rod pod: a forked stand the rod rests on. */
+export function makeRodPod(): THREE.Group {
+  const g = new THREE.Group();
+  for (const [x, h] of [[0, 0.55], [0.0, 0.85]] as const) {
+    const leg = mesh(new THREE.CylinderGeometry(0.02, 0.02, h, 4), 0x2c3036, 0.008);
+    at(leg, x, h / 2, 0, g);
+  }
+  return g;
+}
+
+/** Ice hole with a ring of slush. */
+export function makeIceHole(): THREE.Group {
+  const g = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.18, 0.3, 8), mat(0xc9dbe6));
+  ring.rotation.x = -Math.PI / 2;
+  at(ring, 0, 0.012, 0, g);
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(0.19, 8), mat(0x16303a));
+  hole.rotation.x = -Math.PI / 2;
+  at(hole, 0, 0.01, 0, g);
+  return g;
 }

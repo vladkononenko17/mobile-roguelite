@@ -28,19 +28,21 @@
           <button id="pause-button" class="icon-button" aria-label="Пауза">Ⅱ</button>
         </div>
         <div class="mission-strip">
-          <span id="day-text">СУББОТА</span>
+          <span id="day-text">УР. 1</span>
           <b id="clock-text">05:00</b>
-          <span id="score-text">ТЫ 0 · 0 ТОЛИК</span>
+          <span id="norm-text">0/1 КГ</span>
+          <span id="score-text">ТОЛИК 0</span>
         </div>
         <div class="day-bar"><div id="day-fill"></div></div>
         <div id="drunk-row" class="drunk-row"></div>
+        <div id="hazard-row" class="hazard-row"></div>
       </section>
 
       <section id="start-screen" class="screen active">
         <div class="sticker">РЫБАЛКА · 18+</div>
-        <p class="eyebrow">ТРИ ДНЯ НА РЕКЕ</p>
+        <p class="eyebrow">10 ВОДОЁМОВ · 1 ТОЛИК</p>
         <h1>НЕ<br /><span>КЛЮЁТ</span></h1>
-        <p class="lead">У Толика клюёт всегда. У тебя — никогда.<br />Досиди до понедельника и не нырни в реку.</p>
+        <p class="lead">У Толика клюёт всегда. У тебя — никогда.<br />Выполни норму улова на каждом водоёме и не нырни.</p>
         <div class="weapon-card">
           <span class="weapon-icon">😤</span>
           <div><b>ШКАЛА ЗЛОСТИ</b><small>Каждая рыба Толика бесит. 100% — ломаешь удочку и ныряешь.</small></div>
@@ -51,15 +53,37 @@
           <div><b>📱</b><span>Тикток<br /><small>можно прозевать клёв</small></span></div>
           <div><b>🫳</b><span>Стырить<br /><small>пока Толик не смотрит</small></span></div>
         </div>
-        <button id="start-button" class="primary-button" disabled>ЗАКИДЫВАЕМ</button>
-        <p class="hint">Поплавок нырнул — жми ПОДСЕЧЬ. Потом останови стрелку в зелёной зоне.<br />Держи СТЫРИТЬ, пока Толик отвернулся.</p>
+        <button id="start-button" class="primary-button" disabled>ПОЕХАЛИ</button>
+        <p class="hint">Поплавок, фидер, спиннинг, мормышка — у каждой снасти своя механика.<br />Рыба = деньги, деньги = снасти получше. Толику всё равно везёт.</p>
       </section>
 
-      <section id="shop-screen" class="screen">
-        <p id="shop-eyebrow" class="eyebrow">ВЕЧЕР · ДЕНЬ 1 ПОЗАДИ</p>
-        <h2>ЗАЕЗД<br />В СЕЛЬМАГ</h2>
-        <p id="shop-score" class="upgrade-score"></p>
-        <div id="shop-list" class="upgrade-list"></div>
+      <section id="map-screen" class="screen map">
+        <div class="map-head">
+          <div>
+            <p class="eyebrow">КУДА ЕДЕМ</p>
+            <h2>КАРТА<br />ВОДОЁМОВ</h2>
+          </div>
+          <div class="wallet"><b id="map-money">0 ₽</b><span id="map-stars">★ 0/30</span></div>
+        </div>
+        <button id="map-gear" class="tackle-strip"></button>
+        <div id="level-list" class="level-list"></div>
+      </section>
+
+      <section id="gear-screen" class="screen map">
+        <div class="map-head">
+          <div>
+            <p class="eyebrow">РЫБОЛОВНЫЙ «У ПАЛЫЧА»</p>
+            <h2>СНАСТИ</h2>
+          </div>
+          <div class="wallet"><b id="gear-money">0 ₽</b><span>НАЛИЧКОЙ</span></div>
+        </div>
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-slot="rod">УДОЧКИ</button>
+          <button class="tab" data-slot="reel">КАТУШКИ</button>
+          <button class="tab" data-slot="bait">НАЖИВКА</button>
+        </div>
+        <div id="gear-list" class="gear-list"></div>
+        <button id="gear-back" class="secondary-button">НА КАРТУ</button>
       </section>
 
       <section id="pause-screen" class="screen compact">
@@ -77,14 +101,21 @@
       <section id="result-screen" class="screen">
         <p id="result-eyebrow" class="eyebrow">РЫБАЛКА ОКОНЧЕНА</p>
         <h2 id="result-title">ДОСИДЕЛ</h2>
-        <p id="result-rank" class="rank-line"></p>
+        <p id="result-rank" class="stars-line"></p>
         <div class="results">
           <div><strong id="result-mine">0</strong><span>ТВОЙ УЛОВ, КГ</span></div>
+          <div><strong id="result-target">0</strong><span>НОРМА, КГ</span></div>
           <div><strong id="result-friend">0</strong><span>У ТОЛИКА, КГ</span></div>
-          <div><strong id="result-stolen">0</strong><span>СТЫРЕНО</span></div>
         </div>
+        <div id="result-money" class="money-line"></div>
+        <p id="result-unlock" class="unlock-line"></p>
         <p id="result-note" class="hint"></p>
-        <button id="restart-button" class="primary-button">ЕЩЁ РАЗОК</button>
+        <button id="next-button" class="primary-button">СЛЕДУЮЩИЙ ВОДОЁМ</button>
+        <button id="restart-button" class="primary-button alt">ЕЩЁ РАЗОК</button>
+        <div class="result-row">
+          <button id="result-map" class="secondary-button">КАРТА</button>
+          <button id="result-gear" class="secondary-button">СНАСТИ</button>
+        </div>
       </section>
 
       <div id="phone" class="hidden" aria-label="Тикток">
@@ -107,6 +138,15 @@
         <div id="reel" class="reel hidden" aria-hidden="true">
           <div id="reel-zone" class="reel-zone"></div>
           <div id="reel-marker" class="reel-marker"></div>
+        </div>
+        <div id="meter" class="meter hidden" aria-hidden="true">
+          <span id="meter-label" class="meter-label"></span>
+          <div class="reel">
+            <div id="meter-fill" class="meter-fill"></div>
+            <div id="meter-zone" class="reel-zone"></div>
+            <div id="meter-marker" class="reel-marker"></div>
+          </div>
+          <div class="meter-progress"><i id="meter-progress"></i></div>
         </div>
         <div class="action-row">
           <button id="beer-button" class="action-button"><b>🍺</b><span id="beer-count">×3</span></button>
