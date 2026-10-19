@@ -1,0 +1,12 @@
+{
+  "name": "Чотири стіни",
+  "short_name": "Чотири стіни",
+  "description": "Роглайт про чотири роки в квартирі. 2023–2026. Протримайся — і не зламайся.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#131217",
+  "theme_color": "#1a1a20",
+  "orientation": "portrait-primary",
+  "icons": [{ "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#1a1a20" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Чотири стіни</title>
+    <link rel="manifest" href="%BASE_URL%stiny/manifest.webmanifest" />
+    <link rel="icon" href="%BASE_URL%stiny/icon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <main id="shell" aria-label="Гра «Чотири стіни»">
+      <div class="grain" aria-hidden="true"></div>
+      <div id="thoughts" aria-live="off"></div>
+      <div id="red-edge" aria-hidden="true"></div>
+
+      <!-- ===== day HUD ===== -->
+      <section id="hud" class="hidden" aria-label="Стан">
+        <div class="hud-top">
+          <div class="date-chip"><b id="h-season">ЗИМА 2023</b><span id="h-clock">08:00</span></div>
+          <div class="days-chip"><b id="h-days">290</b><small>днів без вулиці</small></div>
+          <button id="pause-btn" class="icon-btn" aria-label="Меню">Ⅱ</button>
+        </div>
+        <div class="psyche" aria-label="Психіка">
+          <span class="psyche-label">ПСИХІКА</span>
+          <div class="psyche-bar"><i id="h-psyche"></i><s id="h-ceiling"></s></div>
+          <b id="h-psyche-n">70</b>
+        </div>
+        <div class="mini-stats">
+          <div class="ms" title="Енергія"><em>⚡</em><div class="bar"><i id="h-energy"></i></div></div>
+          <div class="ms" title="Ситість"><em>🍲</em><div class="bar"><i id="h-satiety"></i></div></div>
+          <div class="ms num" title="Запаси їжі"><em>🥫</em><b id="h-food">3</b></div>
+          <div class="ms num" title="Гроші"><b id="h-money">0 ₴</b></div>
+        </div>
+        <div id="chips" class="chips"></div>
+      </section>
+
+      <section id="busy" class="hidden" aria-live="polite">
+        <div class="busy-card"><span id="busy-icon">💻</span><div><b id="busy-label">Працюєш</b><div class="bar"><i id="busy-bar"></i></div></div><button id="busy-stop" class="ghost-btn">Перервати</button></div>
+      </section>
+
+      <section id="act-panel" class="hidden" aria-label="Дії">
+        <p id="act-place" class="eyebrow">НОУТБУК</p>
+        <div id="act-list" class="act-list"></div>
+      </section>
+
+      <div id="controls" class="hidden">
+        <div id="stick-zone"><div id="stick-base" class="hidden"><div id="stick-knob"></div></div><p id="stick-hint">ТЯГНИ, ЩОБ ХОДИТИ</p></div>
+        <button id="phone-btn" class="phone-btn" aria-label="Телефон">📱<i id="phone-badge" class="hidden">!</i><small id="phone-batt">85%</small></button>
+      </div>
+
+      <!-- ===== overlays ===== -->
+      <section id="window-caption" class="hidden">
+        <p id="window-text"></p>
+        <button id="window-back" class="primary-btn">ВІДІЙТИ ВІД ВІКНА</button>
+      </section>
+
+      <section id="note" class="hidden" role="dialog">
+        <div class="note-card"><p id="note-title" class="eyebrow"></p><p id="note-text"></p><div id="note-choices" class="choices"></div></div>
+      </section>
+
+      <section id="mini" class="hidden" role="dialog" aria-live="assertive">
+        <div class="mini-card">
+          <p id="mini-title" class="eyebrow"></p>
+          <h3 id="mini-prompt"></h3>
+          <div id="mini-body"></div>
+        </div>
+      </section>
+
+      <section id="ballistic" class="hidden" aria-live="assertive">
+        <b>БАЛІСТИКА</b>
+        <span>ДО КОРИДОРУ! МІЖ ДВОХ СТІН</span>
+        <i id="ballistic-n">8</i>
+        <div id="ballistic-arrow">➜</div>
+      </section>
+
+      <section id="peep" class="hidden" role="dialog">
+        <div class="peep-eye"><svg id="peep-svg" viewBox="0 0 200 200" aria-hidden="true"></svg></div>
+        <p id="peep-text"></p>
+        <div id="peep-choices" class="choices"></div>
+      </section>
+
+      <!-- ===== screens ===== -->
+      <section id="start-screen" class="screen active">
+        <p class="eyebrow">РОГЛАЙТ · 2023–2026 · 18+</p>
+        <h1>ЧОТИРИ<br /><span>СТІНИ</span></h1>
+        <p class="lead">Ти не виходив з дому чотири роки. Тут не треба перемагати. Тут треба протриматись — і не зламатись.</p>
+        <div id="trait-list" class="trait-list" role="group" aria-label="Хто ти був"></div>
+        <button id="continue-btn" class="primary-btn hidden">ПРОДОВЖИТИ</button>
+        <button id="new-btn" class="primary-btn">ПОЧАТИ</button>
+        <p id="meta-line" class="hint"></p>
+        <p class="hint small">Гра про психологічний стан людини, яка ховається від мобілізації. Не про те, правильно це чи ні.</p>
+      </section>
+
+      <section id="season-screen" class="screen">
+        <p id="season-eyebrow" class="eyebrow">СЕЗОН 1 / 16</p>
+        <h2 id="season-title">ЗИМА 2023</h2>
+        <h3 id="season-sub"></h3>
+        <p id="season-text" class="lead"></p>
+        <ul id="season-facts" class="facts"></ul>
+        <button id="season-go" class="primary-btn">ПРОКИНУТИСЬ</button>
+      </section>
+
+      <section id="phone-screen" class="screen phone">
+        <div class="phone-head"><b>📱 ТЕЛЕФОН</b><span id="phone-time"></span><button id="phone-close" class="icon-btn" aria-label="Закрити">✕</button></div>
+        <div id="phone-acts" class="phone-acts"></div>
+        <div id="phone-msgs" class="msgs"></div>
+      </section>
+
+      <section id="summary-screen" class="screen">
+        <p id="sum-eyebrow" class="eyebrow">СЕЗОН МИНУВ</p>
+        <h2 id="sum-title"></h2>
+        <div id="sum-deltas" class="deltas"></div>
+        <ul id="sum-lines" class="sum-lines"></ul>
+        <div id="sum-news" class="msgs mini"></div>
+        <button id="sum-next" class="primary-btn">ДАЛІ</button>
+      </section>
+
+      <section id="perk-screen" class="screen">
+        <p class="eyebrow">ЩО ДОПОМОГЛО ПЕРЕЖИТИ СЕЗОН</p>
+        <h2>ОБЕРИ ОДНЕ</h2>
+        <div id="perk-list" class="perk-list"></div>
+        <button id="perk-skip" class="ghost-btn">НІЧОГО НЕ ДОПОМОГЛО</button>
+      </section>
+
+      <section id="end-screen" class="screen">
+        <div id="end-sticker" class="sticker">КІНЕЦЬ</div>
+        <h2 id="end-title"></h2>
+        <p id="end-text" class="lead"></p>
+        <svg id="end-graph" viewBox="0 0 320 110" aria-label="Психіка по сезонах"></svg>
+        <div id="end-stats" class="deltas"></div>
+        <p id="end-unlock" class="hint"></p>
+        <button id="end-btn" class="primary-btn">ЩЕ РАЗ</button>
+      </section>
+
+      <section id="pause-screen" class="screen compact">
+        <p class="eyebrow">ПАУЗА</p>
+        <h2>СТІНИ ЗАЧЕКАЮТЬ</h2>
+        <button id="resume-btn" class="primary-btn">ДАЛІ</button>
+        <div class="toggles">
+          <button id="sound-btn" class="toggle">ЗВУКИ: ВКЛ</button>
+          <button id="music-btn" class="toggle">МУЗИКА: ВКЛ</button>
+          <button id="gfx-btn" class="toggle">ГРАФІКА: СЕРЕДНЯ</button>
+        </div>
+        <button id="quit-btn" class="ghost-btn">В МЕНЮ</button>
+        <p class="hint">Прогрес зберігається на пристрої. Якщо тобі в реальному житті так само важко — поговори з кимось. Лінія психологічної підтримки: 7333 (Lifeline Ukraine).</p>
+      </section>
+
+      <div id="toast" role="status" aria-live="polite"></div>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
