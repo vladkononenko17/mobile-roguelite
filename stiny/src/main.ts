@@ -6,7 +6,7 @@ import {
   type ActionId, type PlaceId, type TraitId,
 } from "./content.ts";
 import {
-  actionsAt, beginAction, busHere, choosePerk, clockText, despair, endDay, fmt, has, hasWater, interruptAction, isLight, isNight,
+  actionsAt, beginAction, busHere, choosePerk, startDay, clockText, despair, endDay, fmt, has, hasWater, interruptAction, isLight, isNight,
   maxPsyche, newRun, peep, resolveBallistic, resolveDelivery, resolveKnock, resolveMom, resolveNeighbor, resolveSlam, tick, unlockedTraits,
   yearIndex, type ActionResult, type DayEvent, type Msg, type Outcome, type RunState, type SeasonReport,
 } from "./sim.ts";
@@ -640,6 +640,7 @@ function dressScene(): void {
 
 function hud(on: boolean): void {
   $("#hud").classList.toggle("hidden", !on);
+  $("#test-btn").classList.toggle("hidden", !on || !testMode());
   $("#controls").classList.toggle("hidden", !on);
   if (!on) { $("#act-panel").classList.add("hidden"); $("#busy").classList.add("hidden"); }
 }
@@ -991,5 +992,63 @@ function showStart(): void {
   scene.setPose("stare");
   showScreen("#start-screen");
 }
+
+// ================================================================ test menu (#test)
+
+function testMode(): boolean { return location.hash === "#test"; }
+window.addEventListener("hashchange", () => { $("#test-btn").classList.toggle("hidden", mode !== "day" || !testMode()); });
+
+function closeTest(): void { $("#test-panel").classList.add("hidden"); paused = false; }
+
+$("#test-btn").addEventListener("click", () => {
+  if (handling || ballisticOn || mode !== "day") return;
+  unlock();
+  A.play("click");
+  $("#test-panel").classList.remove("hidden");
+  paused = true;
+});
+$("#test-close").addEventListener("click", closeTest);
+$("#test-panel").addEventListener("click", (e) => {
+  const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-t]");
+  if (!b || !run?.day) return;
+  const r = run;
+  const d = r.day!;
+  const soon = d.clock + 0.5;
+  const t = b.dataset.t!;
+  closeTest();
+  const plan = (p: Parameters<typeof d.plan.push>[0]) => { d.plan.push(p); d.plan.sort((a, c) => a.at - c.at); };
+  switch (t) {
+    case "ballistic": plan({ at: soon, kind: "alert", ballistic: true }); break;
+    case "alert": plan({ at: soon, kind: "alert", ballistic: false }); break;
+    case "knock": plan({ at: soon, kind: "knock", who: "tck" }); break;
+    case "phantom": pending.push({ kind: "knock", who: "phantom" }); break;
+    case "fake": plan({ at: soon, kind: "delivery", fake: true }); break;
+    case "courier": plan({ at: soon, kind: "delivery", fake: false }); break;
+    case "mom": plan({ at: soon, kind: "mom" }); break;
+    case "neighbor": plan({ at: soon, kind: "neighbor" }); break;
+    case "drill": plan({ at: soon, kind: "drill" }); break;
+    case "bus": d.bus = [soon, Math.min(24 * 60, soon + 240)]; d.knowsBus = true; break;
+    case "blackout": d.blackouts.push([soon, soon + 240]); break;
+    case "water": d.waterOff.push([soon, soon + 240]); break;
+    case "psyche-": r.psyche = Math.max(1, r.psyche - 20); break;
+    case "psyche+": r.psyche = Math.min(100, r.psyche + 20); break;
+    case "evening": if (d.clock < 20 * 60) d.clock = 20 * 60; break;
+    case "food": r.food += 5; r.money += 20000; break;
+    case "next": stopBusy(); void nightfall(); return;
+    default:
+      if (t.startsWith("y")) {
+        stopBusy();
+        r.season = (Number(t.slice(1)) - 2023) * 4;
+        r.daysInside = 290 + r.season * 91;
+        r.ending = null;
+        startDay(r);
+        saveRun(r);
+        startSeason();
+        return;
+      }
+  }
+  toast(b.textContent ?? "", "ТЕСТ");
+  persist();
+});
 
 showStart();

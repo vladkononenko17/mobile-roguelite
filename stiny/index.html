@@ -148,6 +148,44 @@
         <p class="hint">Прогрес зберігається на пристрої. Якщо тобі в реальному житті так само важко — поговори з кимось. Лінія психологічної підтримки: 7333 (Lifeline Ukraine).</p>
       </section>
 
+      <!-- ===== test menu: open the game with #test at the end of the address ===== -->
+      <button id="test-btn" class="test-btn hidden" aria-label="Тестове меню">🧪</button>
+      <section id="test-panel" class="hidden" aria-label="Тестове меню">
+        <div class="test-card">
+          <div class="test-head"><b>ТЕСТ</b><button id="test-close" class="icon-btn" aria-label="Закрити">✕</button></div>
+          <p class="test-label">ПОДІЇ</p>
+          <div class="test-grid">
+            <button data-t="ballistic">🚀 Балістика</button>
+            <button data-t="alert">🛩️ Тривога, шахеди</button>
+            <button data-t="knock">🚪 Стук ТЦК</button>
+            <button data-t="phantom">👂 Уявний стук</button>
+            <button data-t="fake">📦 Фейковий кур'єр</button>
+            <button data-t="courier">🛵 Справжній кур'єр</button>
+            <button data-t="mom">📞 Мама дзвонить</button>
+            <button data-t="neighbor">👵 Сусідка</button>
+            <button data-t="bus">🚐 Бус у дворі</button>
+            <button data-t="blackout">🕯️ Блекаут</button>
+            <button data-t="water">🚱 Без води</button>
+            <button data-t="drill">🔩 Дриль</button>
+          </div>
+          <p class="test-label">СТАН</p>
+          <div class="test-grid">
+            <button data-t="psyche-">🧠 Психіка −20</button>
+            <button data-t="psyche+">🧠 Психіка +20</button>
+            <button data-t="evening">🌙 Вечір (20:00)</button>
+            <button data-t="food">🥫 +5 їжі, +20 000 ₴</button>
+          </div>
+          <p class="test-label">ЧАС</p>
+          <div class="test-grid">
+            <button data-t="next">⏭️ Наступний сезон</button>
+            <button data-t="y2023">2023</button>
+            <button data-t="y2024">2024</button>
+            <button data-t="y2025">2025</button>
+            <button data-t="y2026">2026</button>
+          </div>
+        </div>
+      </section>
+
       <div id="toast" role="status" aria-live="polite"></div>
     </main>
     <script type="module" src="./src/main.ts"></script>
