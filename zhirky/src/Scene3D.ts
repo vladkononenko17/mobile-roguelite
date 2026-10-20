@@ -314,6 +314,10 @@ export class Scene3D {
     const fogColor = this.storm ? 0xd8e2ec : night ? 0x18203a : dusk ? 0xe0c8c8 : 0xdfeaf2;
     this.scene.fog = new THREE.Fog(fogColor, this.storm ? 12 : far * 0.35, far);
     this.camera.far = far + 20;
+    // the sky dome sits inside the far plane; without this it keeps the last slope's far plane
+    // and a longer slope after a shorter one clips the dome to black
+    this.camera.updateProjectionMatrix();
+    this.scene.background = new THREE.Color(fogColor);
     this.sky.set(this.def.time, far);
     CURVE.value = 0.0016;
     this.spray.clear();
@@ -323,11 +327,12 @@ export class Scene3D {
     this.introHold = true;
     this.hemi.color.set(night ? 0x6a7aa8 : dusk ? 0xf0e0e8 : 0xe6f0ff);
     this.hemi.groundColor.set(night ? 0x202838 : 0x9aa8c0);
-    this.hemi.intensity = night ? 1.0 : dusk ? 1.0 : 1.3;
+    this.hemi.intensity = night ? 0.75 : dusk ? 1.0 : 1.3;
     this.sun.color.set(night ? 0x8aa0d8 : dusk ? 0xffc8a0 : 0xfff4e0);
     this.sun.intensity = night ? 0.6 : dusk ? 1.3 : this.storm ? 1.2 : 2.2;
-    this.lamp.intensity = night ? 30 : 0;
+    this.lamp.intensity = night ? 12 : 0;
     const mood: Mood = night ? "night" : "snow";
+    this.post.bloomScale = night ? 0.4 : 0.8;
     this.post.setMood(mood, true);
     for (let i = 0; i < NT; i++) {
       const tile = this.buildTile(st, this.def.id, i, night);
@@ -472,7 +477,7 @@ export class Scene3D {
         if (i % 2 === 0) { const gar = makeGarland(road + 3.4, i); at(gar, 0, 0, 20, g); }
         const gen = makeGenerator();
         put(gen, i % 2 ? 1 : -1, 2.6, 18, 0.4);
-        const pool = new THREE.Mesh(new THREE.PlaneGeometry(9, 9), lightPoolMaterial(0xffc070, 0.4));
+        const pool = new THREE.Mesh(new THREE.PlaneGeometry(9, 9), lightPoolMaterial(0xffc070, 0.18));
         pool.rotation.x = -Math.PI / 2;
         pool.userData.noBatch = true;
         pool.renderOrder = 1;
@@ -579,7 +584,7 @@ export class Scene3D {
       const house = makeGrandmaHouse();
       house.rotation.y = Math.PI;
       at(house, 0, 0, z + 14, g);
-      const pool = new THREE.Mesh(new THREE.PlaneGeometry(14, 10), lightPoolMaterial(0xffc070, 0.5));
+      const pool = new THREE.Mesh(new THREE.PlaneGeometry(14, 10), lightPoolMaterial(0xffc070, 0.3));
       pool.rotation.x = -Math.PI / 2;
       at(pool, 0, 0.05, z + 8, g);
     }
@@ -678,7 +683,7 @@ export class Scene3D {
   private at(st: Stage, up = 0, ahead = 0): THREE.Vector3 { return this.v.set(wx(st.x), st.y + up, st.dist + ahead); }
 
   onEvent(e: Ev, st: Stage): void {
-    const snow = [0xffffff, 0xeef4fa, 0xd8e6f2];
+    const snow = this.def.time === "night" ? [0x8a96b4, 0x7a86a4, 0x9aa6c4] : [0xffffff, 0xeef4fa, 0xd8e6f2];
     if (e.kind === "crash" || e.kind === "bounce") {
       this.shake = e.kind === "crash" ? 0.5 : 0.3;
       this.post.flash = e.kind === "crash" ? 0.3 : 0.15;
@@ -691,8 +696,8 @@ export class Scene3D {
     }
     if (e.kind === "bump") { this.shake = Math.max(this.shake, 0.12); this.spray.emit(6, this.at(st, 0.4, 0.4), { color: snow, speed: 3, up: 1.5, size: 0.3, life: 0.4 }); }
     if (e.kind === "saved") { this.shake = Math.max(this.shake, 0.3); this.glow.emit(24, this.at(st, 1, 0.8), { color: [0xffd27a, 0xffffff, 0xff8a4a], speed: 6, up: 4, size: 0.35, life: 0.6, grav: -8 }); }
-    if (e.kind === "candy") this.glow.emit(3, this.at(st, 1.0, 0.4), { color: [0xfff2a0, 0xffffff], speed: 2.5, up: 2.5, size: 0.2, life: 0.35, grav: -4 });
-    if (e.kind === "power" || e.kind === "kid") this.glow.emit(26, this.at(st, 1, 0.5), { color: [0xfff2a0, 0x54b7c6, 0xffffff], speed: 5, up: 3, size: 0.3, life: 0.7, grav: -3 });
+    if (e.kind === "candy" && this.def.time !== "night") this.glow.emit(3, this.at(st, 1.0, 0.4), { color: [0xfff2a0, 0xffffff], speed: 2.5, up: 2.5, size: 0.2, life: 0.35, grav: -4 });
+    if (e.kind === "power" || e.kind === "kid") this.glow.emit(14, this.at(st, 1, 1.2), { color: [0xfff2a0, 0x54b7c6, 0xffffff], speed: 4, up: 2.5, size: 0.16, life: 0.55, grav: -3 });
     if (e.kind === "land") this.spray.emit(14, this.at(st, 0.05, 0), { color: snow, speed: 3, up: 1, size: 0.45, grow: 2, life: 0.6, grav: -2 });
     if (e.kind === "ramp") { this.fovKick = 6; this.spray.emit(20, this.at(st, 0.4, -0.2), { color: snow, speed: 2.5, up: 2, size: 0.4, grow: 2, life: 0.6, grav: -3, fwd: -3 }); }
     if (e.kind === "trick") { this.glow.emit(30, this.at(st, 1.4, 0.4), { color: [0xf2b632, 0xffffff, 0xd63732], speed: 6, up: 5, size: 0.3, life: 0.8, grav: -6 }); this.fovKick = 5; }
@@ -708,7 +713,7 @@ export class Scene3D {
       if (st.y < 0.05 && st.speed > 3 && !st.waiting) {
         const turn = Math.abs(this.hero?.lean ?? 0);
         const n = st.zone === "ice" ? 0 : 1 + Math.floor(turn * 3);
-        if (n) this.spray.emit(n, this.at(st, 0.1, -0.5), { color: st.zone === "slush" ? [0xa8aca4, 0xc8ccc4] : [0xffffff, 0xeef4fa], speed: 1 + turn * 2, up: 0.8, size: 0.32, grow: 2.2, life: 0.55, fwd: -2, grav: -2 });
+        if (n) this.spray.emit(n, this.at(st, 0.1, -0.5), { color: st.zone === "slush" ? [0xa8aca4, 0xc8ccc4] : this.def.time === "night" ? [0x8a96b4, 0x9aa6c4] : [0xffffff, 0xeef4fa], speed: 1 + turn * 2, up: 0.8, size: 0.32, grow: 2.2, life: 0.55, fwd: -2, grav: -2 });
         if (st.zone === "ice") this.glow.emit(1, this.at(st, 0.05, -0.3), { color: 0xcfefff, speed: 0.6, up: 0.2, size: 0.18, life: 0.3, fwd: -6, grav: 0 });
       }
       if (st.power === "petard") this.glow.emit(3, this.at(st, 0.5, -0.9), { color: [0xff8a2a, 0xffd27a, 0xffffff], speed: 1, up: 0.6, size: 0.4, life: 0.35, fwd: -9, grav: 0 });
@@ -794,7 +799,7 @@ export class Scene3D {
     while (this.crew.length > st.kids.length) {
       const r = this.crew.pop()!;
       this.fallen.push({ r, vx: (Math.random() - 0.5) * 4, vy: 3 + Math.random() * 2, vz: st.speed * 0.5, spin: (Math.random() - 0.5) * 14, t: 0 });
-      this.spray.emit(10, r.root.position, { color: [0xffffff, 0xeef4fa], speed: 3, up: 2, size: 0.4, grow: 2, life: 0.7, grav: -5 });
+      this.spray.emit(10, r.root.position, { color: this.def.time === "night" ? [0x8a96b4, 0x9aa6c4] : [0xffffff, 0xeef4fa], speed: 3, up: 2, size: 0.4, grow: 2, life: 0.7, grav: -5 });
     }
     while (this.crew.length < st.kids.length) this.addKid(st.kids[this.crew.length].look);
     const pose = st.done ? "cheer" : undefined;

@@ -149,6 +149,8 @@ export class Post {
   private despairNow = 0;
   /** Explosion flash, decays by itself. */
   flash = 0;
+  /** Multiplies the mood's bloom strength (1 = as graded); a game can tame a bright scene. */
+  bloomScale = 1;
 
   constructor(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, quality: Quality) {
     this.renderer = renderer;
@@ -225,7 +227,7 @@ export class Post {
     u.vignette.value += (g.vignette - u.vignette.value) * k;
     u.grain.value += (g.grain - u.grain.value) * k;
     if (this.bloom) {
-      this.bloom.strength += (g.bloom[0] - this.bloom.strength) * k;
+      this.bloom.strength += (g.bloom[0] * this.bloomScale - this.bloom.strength) * k;
       this.bloom.threshold += (g.bloom[1] - this.bloom.threshold) * k;
     }
   }

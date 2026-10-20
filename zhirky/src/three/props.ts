@@ -32,7 +32,7 @@ const WOOD = 0x7a5232;
 export function trackTexture(kind: "snow" | "cobble" | "ice" | "night"): THREE.CanvasTexture {
   return canvasTexture(256, 256, (g) => {
     const r = rand(kind.length * 41 + 3);
-    const base = { snow: "#eef3f7", cobble: "#e6ebef", ice: "#bfe0ef", night: "#c8d2e6" }[kind];
+    const base = { snow: "#eef3f7", cobble: "#e6ebef", ice: "#bfe0ef", night: "#a8b4cc" }[kind];
     g.fillStyle = base;
     g.fillRect(0, 0, 256, 256);
     // soft blue shadows in the snow
@@ -258,7 +258,7 @@ export function makeGenerator(): THREE.Group {
   at(mesh(new THREE.BoxGeometry(0.5, 0.3, 0.02), 0x2a2a2a, 0), 0, 0.45, 0.385, g);
   const pipe = mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4, 6), 0x4a4a4a, 0.008);
   at(pipe, 0.42, 1.0, -0.2, g);
-  const bulb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 0), glowMat(0xffd27a, 3));
+  const bulb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 0), glowMat(0xffd27a, 1.6));
   bulb.userData.noAO = true;
   at(bulb, -0.3, 1.0, 0.2, g);
   at(mesh(new THREE.BoxGeometry(0.4, 0.06, 0.4), SNOW, 0), 0.2, 0.9, 0.1, g);
@@ -590,7 +590,7 @@ export function makeGarland(span: number, seed: number): THREE.Group {
     const u = i / n;
     const x = -span / 2 + u * span;
     const y = 4 - Math.sin(u * Math.PI) * 1.1;
-    const b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 0), glowMat(BULBS[(i + seed) % BULBS.length], 4));
+    const b = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 0), glowMat(BULBS[(i + seed) % BULBS.length], 1.6));
     b.userData.noAO = true;
     at(b, x, y, 0, g);
     if (i < n) {
