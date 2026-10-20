@@ -1,0 +1,12 @@
+«З гірки!» — сторонні ресурси / third-party assets
+
+Sound effects and the finish-line flag are the Kenney (www.kenney.nl) CC0 files
+that «Тікай!» already ships in public/tikai/ (sfx/*.mp3, models/plat/flag.glb),
+loaded from there — see public/tikai/CREDITS.txt. CC0 1.0: public domain, no
+attribution required.
+
+Everything else (riders and their animation, the sleds, ночви, tube and plywood,
+snowmen, drifts, ramps, ice, fishermen, sheep, generators, garlands, panel
+blocks, the houses of the узвіз, the church, колиби, mountains, candies,
+textures, sky, snow, particles, sounds of the runners and the bells) is
+generated in code, as in the other games of this repo.

@@ -14,5 +14,5 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["src", "fishing/src", "rozshuk/src", "stiny/src", "tikai/src", "stavka/src"]
+  "include": ["src", "fishing/src", "rozshuk/src", "stiny/src", "tikai/src", "stavka/src", "zhirky/src"]
 }

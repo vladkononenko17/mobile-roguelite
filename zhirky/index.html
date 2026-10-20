@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#151a26" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>З гірки!</title>
+    <link rel="manifest" href="%BASE_URL%zhirky/manifest.webmanifest" />
+    <link rel="icon" href="%BASE_URL%zhirky/icon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <main id="shell" aria-label="Гра «З гірки!»">
+      <div class="grain" aria-hidden="true"></div>
+      <div id="frost-edge" aria-hidden="true"></div>
+      <div id="speed-lines" aria-hidden="true"></div>
+
+      <!-- ===== HUD ===== -->
+      <section id="hud" class="hidden" aria-label="Стан">
+        <div class="hud-top">
+          <button id="pause-btn" class="icon-btn" aria-label="Пауза">Ⅱ</button>
+          <div class="stage-chip">
+            <b id="h-stage">ДВІР</b>
+            <div class="progress"><i id="h-progress"></i><em id="h-sled">🛷</em></div>
+          </div>
+          <div class="coin-chip"><span>🍬</span><b id="h-coins">0</b></div>
+        </div>
+        <div class="hud-row">
+          <div id="h-crew" class="crew-chip"><small>ВАТАГА</small><b id="h-crew-n">×0</b></div>
+          <div id="h-hearts" class="hearts" aria-label="Серця"></div>
+          <div id="h-zone" class="zone-chip hidden"></div>
+        </div>
+        <div id="h-power" class="power hidden"><em id="h-power-icon"></em><b id="h-power-name"></b><div class="bar"><i id="h-power-t"></i></div></div>
+      </section>
+
+      <div id="pop" aria-hidden="true"></div>
+      <div id="swipe-hint" class="hidden" aria-hidden="true"></div>
+
+      <!-- ===== the push-off: раз, два — ГОП! ===== -->
+      <section id="launch" class="hidden" aria-label="Розгін">
+        <p class="eyebrow">ВАТАГА ШТОВХАЄ — ТИСНИ В ТАКТ</p>
+        <div class="beats"><i id="beat-0">РАЗ</i><i id="beat-1">ДВА</i><i id="beat-2">ГОП!</i></div>
+        <button id="push-btn" class="push-btn">ШТОВХАЙ!<small>тисни на кожен такт</small></button>
+        <p id="launch-note" class="hint"></p>
+      </section>
+
+      <!-- ===== screens ===== -->
+      <section id="start-screen" class="screen active">
+        <p class="eyebrow">САНКОВИЙ РАНЕР-РОГАЛИК</p>
+        <h1>З ГІРКИ<span>!</span></h1>
+        <p class="lead">Збирай ватагу дітей у паровозик і мчи з гірок через зимову Україну — встигни до бабусі на кутю.</p>
+        <p class="eyebrow small-gap">ХТО ЇДЕ</p>
+        <div id="hero-list" class="trait-list" role="group" aria-label="Хто їде"></div>
+        <p class="eyebrow">НА ЧОМУ</p>
+        <div id="ride-list" class="trait-list" role="group" aria-label="На чому"></div>
+        <p id="pick-text" class="trait-text"></p>
+        <div class="heat-row">
+          <span class="eyebrow">МОРОЗ</span>
+          <div id="frost-list" class="heat-list" role="group" aria-label="Складність"></div>
+        </div>
+        <p id="frost-text" class="hint"></p>
+        <button id="continue-btn" class="primary-btn hidden">ПРОДОВЖИТИ</button>
+        <button id="new-btn" class="primary-btn">З ГІРКИ!</button>
+        <button id="store-btn" class="ghost-btn">КОМОРА</button>
+        <p id="meta-line" class="hint"></p>
+      </section>
+
+      <section id="store-screen" class="screen">
+        <p class="eyebrow">ЩО ЛЕЖИТЬ У КОМОРІ</p>
+        <h2>Комора</h2>
+        <p id="store-bank" class="goal candy"></p>
+        <div id="store-list" class="store-list"></div>
+        <p class="hint">Цукерки з кожного забігу йдуть у комору — навіть якщо до бабусі не доїхав. Героїв і санки купуєш у меню.</p>
+        <button id="store-back" class="primary-btn">НАЗАД</button>
+      </section>
+
+      <section id="map-screen" class="screen">
+        <p id="map-eyebrow" class="eyebrow">МАРШРУТ</p>
+        <h2>Куди далі?</h2>
+        <div id="map-stats" class="deltas small"></div>
+        <div id="map" class="map" role="group" aria-label="Маршрут"></div>
+        <p id="map-hint" class="hint"></p>
+      </section>
+
+      <section id="stage-screen" class="screen">
+        <p id="stage-eyebrow" class="eyebrow">СПУСК 1 / 6</p>
+        <h2 id="stage-title">ДВІР</h2>
+        <h3 id="stage-sub"></h3>
+        <p id="stage-intro" class="lead"></p>
+        <p id="stage-mod" class="mod-note hidden"></p>
+        <p id="stage-goal" class="goal"></p>
+        <div id="stage-controls" class="controls-card">
+          <div><b>← →</b>свайп — смуга</div>
+          <div><b>↑</b>стрибок · у повітрі — сальто</div>
+          <div><b>↓</b>лягти на санки</div>
+          <div><b>Ватага</b>повертає пізніше за тебе</div>
+        </div>
+        <button id="stage-go" class="primary-btn">ГОП!</button>
+      </section>
+
+      <section id="perk-screen" class="screen">
+        <div class="sticker">ДОЇХАВ</div>
+        <h2 id="perk-title">СПУСК ПРОЙДЕНО</h2>
+        <div id="perk-stats" class="deltas"></div>
+        <p class="eyebrow">ТРИ РУКАВИЦІ — ОБЕРИ ОДНУ</p>
+        <div id="perk-list" class="perk-list"></div>
+        <button id="perk-skip" class="ghost-btn">НІЧОГО НЕ ТРЕБА</button>
+      </section>
+
+      <section id="fair-screen" class="screen">
+        <div class="sticker">ЯРМАРОК</div>
+        <h2>Ярмарок</h2>
+        <p class="lead">Вертеп, глінтвейн для дорослих і рукавиці на будь-який смак. Платиш цукерками із забігу.</p>
+        <p id="fair-coins" class="goal candy"></p>
+        <div id="fair-list" class="perk-list"></div>
+        <button id="fair-leave" class="primary-btn">ДАЛІ З ГІРКИ</button>
+      </section>
+
+      <section id="end-screen" class="screen">
+        <div id="end-sticker" class="sticker">ВДОМА</div>
+        <h2 id="end-title"></h2>
+        <p id="end-text" class="lead"></p>
+        <div id="end-route" class="route"></div>
+        <div id="end-stats" class="deltas"></div>
+        <p id="end-unlock" class="hint"></p>
+        <button id="end-btn" class="primary-btn">ЩЕ РАЗ З ГІРКИ!</button>
+        <button id="end-menu" class="ghost-btn">В МЕНЮ</button>
+      </section>
+
+      <section id="pause-screen" class="screen compact">
+        <p class="eyebrow">ПАУЗА</p>
+        <h2>ЗІГРІЙ РУКИ</h2>
+        <button id="resume-btn" class="primary-btn">ДАЛІ</button>
+        <div class="toggles">
+          <button id="sound-btn" class="toggle">ЗВУКИ: ВКЛ</button>
+          <button id="music-btn" class="toggle">МУЗИКА: ВКЛ</button>
+          <button id="voice-btn" class="toggle">ГОЛОСИ: ВКЛ</button>
+          <button id="gfx-btn" class="toggle">ГРАФІКА: СЕРЕДНЯ</button>
+        </div>
+        <button id="quit-btn" class="ghost-btn">ЗДАТИСЯ</button>
+        <p class="hint">Прогрес між спусками зберігається на пристрої.</p>
+      </section>
+
+      <!-- ===== test menu: open the game with #test at the end of the address ===== -->
+      <button id="test-btn" class="test-btn hidden" aria-label="Тестове меню">🧪</button>
+      <section id="test-panel" class="hidden" aria-label="Тестове меню">
+        <div class="test-card">
+          <div class="test-head"><b>ТЕСТ</b><button id="test-close" class="icon-btn" aria-label="Закрити">✕</button></div>
+          <p class="test-label">СПУСК</p>
+          <div class="test-grid" id="test-stages"></div>
+          <p class="test-label">ПРЕДМЕТИ</p>
+          <div class="test-grid">
+            <button data-t="sack">🎁 Мішок</button>
+            <button data-t="petard">🧨 Петарда</button>
+            <button data-t="star">⭐ +2 дитини</button>
+            <button data-t="thermos">🫖 +1 серце</button>
+          </div>
+          <p class="test-label">СТАН</p>
+          <div class="test-grid">
+            <button data-t="kids">🧒 Повна ватага</button>
+            <button data-t="finish">🏁 Кінець спуску</button>
+            <button data-t="money">🍬 +10 000</button>
+            <button data-t="god">🛡️ Безсмертя</button>
+          </div>
+        </div>
+      </section>
+
+      <div id="toast" role="status" aria-live="polite"></div>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

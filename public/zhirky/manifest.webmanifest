@@ -1,0 +1,12 @@
+{
+  "name": "З гірки!",
+  "short_name": "З гірки!",
+  "description": "Санковий раннер-рогалик: збирай ватагу дітей у паровозик і мчи з гірок — від двору до бабусиної хати, встигни на кутю.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#151a26",
+  "theme_color": "#151a26",
+  "orientation": "portrait-primary",
+  "icons": [{ "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
