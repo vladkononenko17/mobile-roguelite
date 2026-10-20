@@ -2,10 +2,11 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import {
-  C, CAMO_GUARD, CAMO_TCK, LOOKS, animateRig, at, camoTexture, facadeTextures, garageTexture, makeBench, makeBush, makeCar, makeDog,
-  makeDrone, makeHouse, makeKennel, makeLamp, makePerson, makePine, makeStall, makeTrashBins, makeTree, makeVan, mat, mesh, outline, roofTexture,
-  type Rig,
+  CAMO_GUARD, CAMO_TCK, at, camoTexture, canvasTexture, facadeTextures, garageTexture, makeBench, makeBush, makeCar, makeDog,
+  makeDrone, makeHouse, makeKennel, makeLamp, makePine, makeStall, makeTrashBins, makeTree, makeVan, mat, mesh, outline, roofTexture,
 } from "../../rozshuk/src/three/models.ts";
+import { CURVE, Particles, Sky, installCurve, toonify } from "./three/fx.ts";
+import { STYLES, animateRunner, makeRunner, type Pose, type Runner } from "./three/runner.ts";
 import { Post, defaultQuality, glowMat, lightPoolMaterial, type Mood, type Quality } from "../../stiny/src/three/post.ts";
 import {
   groundTexture, makeBillboard, makeBoom, makeBranch, makeCart, makeConcrete, makeCones, makeCrates, makeGeese, makeGuardRail, makeHay, makeHedgehogs, makeKiosk,
@@ -24,6 +25,9 @@ import { roadHalf, type Ev, type Obj, type RunState, type Stage } from "./sim.ts
  * material and leap-frogged forward as you run. Things on the road are cloned
  * from per-kind templates and pooled.
  */
+
+// bend the world before any material compiles
+installCurve();
 
 const TILE = 40;
 const NT = 9;
@@ -44,7 +48,7 @@ function inkAll(root: THREE.Object3D): void {
   for (const m of list) outline(m, 0.012);
 }
 
-interface Live { obj: THREE.Object3D; key: string; seen: number; rig?: Rig; t0: number }
+interface Live { obj: THREE.Object3D; key: string; seen: number; rig?: Runner; t0: number }
 
 const GOAL_SIGN: Record<string, string> = {
   yard: "ПІДЗЕМНИЙ ПЕРЕХІД", market: "ПАРКОВКА", road: "ЗАЇЗД У СЕЛО", village: "ПОЛЕ · ТРАКТОР", checkpoints: "ЛІСОВА ДОРОГА", forest: "РІЧКА",
@@ -71,10 +75,16 @@ export class Scene3D {
   private sun = new THREE.DirectionalLight(0xfff1d6, 2.2);
   private torch = new THREE.PointLight(0xffe2b0, 0, 24, 1.4);
   private head = new THREE.SpotLight(0xfff2c8, 0, 60, 0.55, 0.5, 1.2);
-  private hero: Rig | null = null;
+  private hero: Runner | null = null;
   private heroExtras: { scooter: THREE.Object3D; hood: THREE.Object3D; aura: THREE.Object3D } | null = null;
   private vehicle: THREE.Group | null = null;
-  private chasers: Rig[] = [];
+  private chasers: Runner[] = [];
+  readonly sky = new Sky();
+  private dust = Object.assign(new Particles(500, false), { opacity: 0.55 });
+  private glow = new Particles(400, true);
+  private dustT = 0;
+  /** 1 → 0 over the camera swoop at the start of a stage. */
+  private intro = 0;
   private chaseCars: THREE.Group[] = [];
   private chaseVan: THREE.Group | null = null;
   private torches: THREE.Mesh[] = [];
@@ -86,8 +96,8 @@ export class Scene3D {
   private lean = 0;
   private lastX = 0;
   private heroLook = traitById("it").look;
-  private kenney: { trucks: THREE.Object3D[]; moto: THREE.Object3D | null; forest: THREE.Object3D | null; coin: THREE.Object3D | null; cloud: THREE.Object3D | null; flag: THREE.Object3D | null } =
-    { trucks: [], moto: null, forest: null, coin: null, cloud: null, flag: null };
+  private kenney: { trucks: THREE.Object3D[]; moto: THREE.Object3D | null; forest: THREE.Object3D | null; flag: THREE.Object3D | null } =
+    { trucks: [], moto: null, forest: null, flag: null };
   private camoTck = camoTexture(CAMO_TCK, 5);
   private camoGuard = camoTexture(CAMO_GUARD, 9);
   /** Babusias that are on the phone now. */
@@ -99,7 +109,7 @@ export class Scene3D {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.prepend(this.renderer.domElement);
-    this.scene.add(this.world, this.hemi, this.sun, this.sun.target, this.torch, this.head, this.head.target);
+    this.scene.add(this.sky.group, this.world, this.hemi, this.sun, this.sun.target, this.torch, this.head, this.head.target, this.dust.points, this.glow.points);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(1024, 1024);
     const sc = this.sun.shadow.camera;
@@ -128,6 +138,8 @@ export class Scene3D {
     this.camera.fov = w / h < 0.7 ? 68 : 58;
     this.camera.updateProjectionMatrix();
     this.post.setSize(w, h);
+    this.dust.setScale(h, this.camera.fov);
+    this.glow.setScale(h, this.camera.fov);
   }
 
   // ================================================================ assets
@@ -156,33 +168,27 @@ export class Scene3D {
         return null;
       }
     };
-    const [green, purple, red, yellow, moto, forest, coin, cloud, flag] = await Promise.all([
+    const [green, purple, red, yellow, moto, forest, flag] = await Promise.all([
       get("racing/vehicle-truck-green.glb"), get("racing/vehicle-truck-purple.glb"), get("racing/vehicle-truck-red.glb"), get("racing/vehicle-truck-yellow.glb"),
-      get("racing/vehicle-motorcycle.glb"), get("racing/decoration-forest.glb"), get("plat/coin.glb"), get("plat/cloud.glb"), get("plat/flag.glb"),
+      get("racing/vehicle-motorcycle.glb"), get("racing/decoration-forest.glb"), get("plat/flag.glb"),
     ]);
     for (const t of [green, purple, red, yellow]) if (t) {
       inkAll(t);
+      // fit the model to the 4.2 m the simulation uses for a car
+      const box = new THREE.Box3().setFromObject(t);
+      const size = box.getSize(new THREE.Vector3());
+      const k = 4.3 / Math.max(size.z, size.x, 0.1);
+      t.scale.setScalar(k);
+      t.position.y = -box.min.y * k;
+      if (size.x > size.z) t.rotation.y = Math.PI / 2;
       const g = new THREE.Group();
-      t.scale.setScalar(2.6);
       g.add(t);
+      toonify(g);
       this.kenney.trucks.push(g);
     }
     this.kenney.moto = moto;
+    if (forest) toonify(forest);
     this.kenney.forest = forest;
-    if (coin) {
-      coin.traverse((o) => { o.castShadow = false; });
-      inkAll(coin);
-      coin.scale.setScalar(1.6);
-      const g = new THREE.Group();
-      coin.position.y = -0.33;
-      g.add(coin);
-      this.kenney.coin = g;
-    }
-    if (cloud) {
-      const white = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x9aa8b8, flatShading: true });
-      cloud.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.material = white; m.castShadow = false; } });
-    }
-    this.kenney.cloud = cloud;
     this.kenney.flag = flag;
   }
 
@@ -208,15 +214,22 @@ export class Scene3D {
     const night = this.def.time === "night";
     const dusk = this.def.time === "dusk";
     // sky, fog and light
-    const sky = night ? 0x0e1424 : dusk ? 0xd08860 : this.def.theme === "road" ? 0xa8cce0 : 0x9fc4d8;
-    this.scene.background = new THREE.Color(sky);
-    const far = st.mode === "car" ? (night ? 230 : 320) : night ? 120 : 175;
-    this.scene.fog = new THREE.Fog(sky, far * 0.3, far);
+    const far = st.mode === "car" ? (night ? 230 : 300) : night ? 130 : 170;
+    const fogColor = night ? 0x1a2440 : dusk ? 0xe8a07a : 0xcfe4ee;
+    this.scene.background = null;
+    this.scene.fog = new THREE.Fog(fogColor, far * 0.35, far);
     this.camera.far = far + 20;
+    this.sky.set(this.def.time, far);
+    // the world bends away: harder on foot, gentler by car where you need to see further
+    CURVE.value = st.mode === "car" ? 0.00042 : 0.0013;
+    this.dust.clear();
+    this.glow.clear();
+    this.intro = 1;
+    this.introHold = true;
     this.camera.updateProjectionMatrix();
     this.hemi.color.set(night ? 0x6a7aa8 : dusk ? 0xffc8a0 : 0xdfefff);
     this.hemi.groundColor.set(night ? 0x141018 : 0x5a4a30);
-    this.hemi.intensity = night ? 0.95 : dusk ? 0.9 : 1.2;
+    this.hemi.intensity = night ? (st.mode === "car" ? 1.5 : 1.1) : dusk ? 0.95 : 1.25;
     this.sun.color.set(night ? 0x8aa0d8 : dusk ? 0xffa060 : 0xfff1d6);
     this.sun.intensity = night ? 0.8 : dusk ? 1.6 : 2.3;
     this.torch.intensity = night && st.mode === "foot" ? 28 : dusk && st.mode === "foot" ? 8 : 0;
@@ -226,6 +239,7 @@ export class Scene3D {
     // the road
     for (let i = 0; i < NT; i++) {
       const tile = this.buildTile(st, this.def.theme, i, night);
+      toonify(tile);
       this.bake(tile);
       tile.position.z = i * TILE - TILE;
       this.world.add(tile);
@@ -236,37 +250,39 @@ export class Scene3D {
     // you
     if (st.mode === "car") {
       this.vehicle = this.def.theme === "checkpoints" ? makeTractor() : makeLada();
+      toonify(this.vehicle);
       this.world.add(this.vehicle);
     } else {
       this.makeHero();
     }
     this.makeChasers(this.def.chaser, st);
-    this.camPos.set(0, 6, -14);
-    this.camLook.set(0, 1, 10);
+    this.camPos.set(1.6, 1.7, 4.2);
+    this.camLook.set(0, 1.1, -2);
   }
 
   private makeHero(): void {
     const l = this.heroLook;
-    const rig = makePerson({ top: l.top, pants: l.pants, hat: l.hat, hatColor: l.hatColor, bag: l.bag, glasses: l.glasses, shoes: 0xe8e4da });
+    const rig = makeRunner({ top: l.top, pants: l.pants, hat: l.hat, hatColor: l.hatColor, bag: l.bag, glasses: l.glasses, shoes: 0xd63732, sole: 0xf2f0ea, face: "hero", hair: 0x4a3020 });
     this.hero = rig;
     this.world.add(rig.root);
     const scooter = new THREE.Group();
-    at(mesh(new THREE.BoxGeometry(0.22, 0.06, 1.0), 0x2a2a2a, 0.012), 0, 0.12, 0, scooter);
-    at(mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.1, 5), 0x8a8f94, 0.008), 0, 0.65, 0.42, scooter);
-    at(mesh(new THREE.BoxGeometry(0.5, 0.05, 0.05), 0x2a2a2a, 0.008), 0, 1.2, 0.42, scooter);
-    for (const z of [-0.4, 0.42]) { const w = mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.06, 8), 0x161616, 0.008); w.rotation.z = Math.PI / 2; at(w, 0, 0.1, z, scooter); }
+    at(mesh(new THREE.BoxGeometry(0.24, 0.07, 1.05), 0x2a2a2a, 0.012), 0, 0.12, 0, scooter);
+    at(mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.15, 6), 0x54b7c6, 0.008), 0, 0.68, 0.44, scooter);
+    at(mesh(new THREE.BoxGeometry(0.55, 0.06, 0.06), 0x2a2a2a, 0.008), 0, 1.25, 0.44, scooter);
+    for (const z of [-0.42, 0.44]) { const w = mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.07, 10), 0x161616, 0.008); w.rotation.z = Math.PI / 2; at(w, 0, 0.11, z, scooter); }
     scooter.visible = false;
     rig.root.add(scooter);
-    const hood = mesh(new THREE.SphereGeometry(0.32, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.62), 0x1b1b20, 0.02);
-    hood.rotation.x = -0.25;
-    hood.position.set(0, 0.02, -0.03);
+    const hood = mesh(new THREE.SphereGeometry(0.33, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.62), 0x1b1b20, 0.02);
+    hood.rotation.x = -0.3;
+    hood.position.set(0, 0.22, -0.04);
     hood.visible = false;
     rig.head.add(hood);
-    const aura = new THREE.Mesh(new THREE.SphereGeometry(0.9, 10, 8), new THREE.MeshBasicMaterial({ color: 0x8aff5a, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false }));
-    aura.position.y = 0.9;
+    const aura = new THREE.Mesh(new THREE.SphereGeometry(0.95, 12, 8), new THREE.MeshBasicMaterial({ color: 0x8aff5a, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false }));
+    aura.position.y = 1.0;
     aura.visible = false;
     aura.userData.noAO = true;
     rig.root.add(aura);
+    toonify(rig.root);
     this.heroExtras = { scooter, hood, aura };
   }
 
@@ -280,8 +296,8 @@ export class Scene3D {
       return;
     }
     for (let i = 0; i < 2; i++) {
-      const look = chaser === "guard" ? LOOKS.guard(this.camoGuard) : LOOKS.officer(this.camoTck);
-      const rig = makePerson(look);
+      const rig = makeRunner(chaser === "guard" ? STYLES.guard(this.camoGuard) : STYLES.officer(this.camoTck));
+      toonify(rig.root);
       this.chasers.push(rig);
       this.world.add(rig.root);
       if (chaser === "guard" || this.def.time !== "day") {
@@ -299,6 +315,7 @@ export class Scene3D {
     }
     if (chaser === "tck") {
       this.chaseVan = makeVan();
+      toonify(this.chaseVan);
       this.world.add(this.chaseVan);
     }
   }
@@ -374,8 +391,8 @@ export class Scene3D {
       for (const s of [-1, 1]) {
         for (let z = 2; z < TILE; z += 3.4) put(makeStall(i * 31 + z * 3 + s), s, 2.2, z, s > 0 ? Math.PI / 2 : -Math.PI / 2);
         for (let z = 6; z < TILE; z += 14 + r() * 8) {
-          const p = makePerson(LOOKS.shopper([0xd63732, 0x54b7c6, 0x9a6bd1, 0xf2b632, 0x3a8a4a][Math.floor(r() * 5)]));
-          animateRig(p, 0, 0, "idle");
+          const p = makeRunner(STYLES.shopper([0xd63732, 0x54b7c6, 0x9a6bd1, 0xf2b632, 0x3a8a4a][Math.floor(r() * 5)], [0x3a2a20, 0x8a6a3a, 0x1a1a1a, 0xb8b0a0][Math.floor(r() * 4)]));
+          animateRunner(p, "idle", 0, 1);
           put(p.root, s, 4.2, z, s > 0 ? -Math.PI / 2 : Math.PI / 2);
         }
         if (i % 3 === 0) put(makeKiosk(i + (s > 0 ? 3 : 0)), s, 6.5, 22, s > 0 ? Math.PI / 2 : -Math.PI / 2);
@@ -559,10 +576,10 @@ export class Scene3D {
       case "cones": return makeCones(W);
       case "boom": return makeBoom(W, 1.15);
       case "coin": {
-        if (this.kenney.coin) { const c = this.kenney.coin.clone(); if (st.mode === "car") c.scale.setScalar(1.5); return c; }
-        const c = mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.08, 12), C.yellow, 0.015);
-        c.rotation.x = Math.PI / 2;
-        const g = new THREE.Group(); g.add(c); return g;
+        const g = new THREE.Group();
+        g.add(this.coinMesh());
+        if (st.mode === "car") g.scale.setScalar(1.6);
+        return g;
       }
       case "sign": return makeSignBoard("БЛОКПОСТ · СТОП", "#d63732", "#ffffff");
       case "shelter": return new THREE.Group();
@@ -579,13 +596,38 @@ export class Scene3D {
     }
   }
 
+  private coinGeo: THREE.CylinderGeometry | null = null;
+  private coinMats: THREE.Material[] | null = null;
+  /** A golden hryvnia: rim plus two faces with the ₴ sign. */
+  private coinMesh(): THREE.Mesh {
+    if (!this.coinGeo || !this.coinMats) {
+      this.coinGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.09, 22);
+      this.coinGeo.rotateX(Math.PI / 2);
+      const face = canvasTexture(128, 128, (g) => {
+        const gr = g.createRadialGradient(50, 44, 6, 64, 64, 64);
+        gr.addColorStop(0, "#fff2a0"); gr.addColorStop(0.55, "#f2b632"); gr.addColorStop(1, "#c07a10");
+        g.fillStyle = gr; g.beginPath(); g.arc(64, 64, 64, 0, Math.PI * 2); g.fill();
+        g.lineWidth = 7; g.strokeStyle = "#a8650c"; g.beginPath(); g.arc(64, 64, 52, 0, Math.PI * 2); g.stroke();
+        g.fillStyle = "#8a4e08"; g.font = "bold 74px Oswald, 'Arial Narrow', sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("₴", 64, 70);
+      }, false);
+      const faceMat = new THREE.MeshBasicMaterial({ map: face });
+      faceMat.color.multiplyScalar(1.25);
+      const rim = new THREE.MeshBasicMaterial({ color: 0xd8941a });
+      this.coinMats = [rim, faceMat, faceMat];
+    }
+    const m = new THREE.Mesh(this.coinGeo, this.coinMats);
+    m.castShadow = false;
+    m.userData.noAO = true;
+    return m;
+  }
+
   private take(kind: string, v: number, st: Stage): THREE.Object3D {
     const key = `${kind}:${v}`;
     const pool = this.pools.get(key);
     const reuse = pool?.pop();
     if (reuse) { reuse.visible = true; return reuse; }
     let tpl = this.templates.get(key);
-    if (!tpl) { tpl = this.build(kind, v, st); this.templates.set(key, tpl); }
+    if (!tpl) { tpl = this.build(kind, v, st); toonify(tpl); this.templates.set(key, tpl); }
     return tpl.clone(true);
   }
 
@@ -600,10 +642,10 @@ export class Scene3D {
 
   private spawn(o: Obj, st: Stage): Live {
     if (o.kind === "courier" || o.kind === "babka" || o.kind === "soldier") {
-      let rig: Rig;
+      let rig: Runner;
       const root = new THREE.Group();
       if (o.kind === "courier") {
-        rig = makePerson({ top: 0xf2b632, pants: 0x2b2b30, hat: "cap", hatColor: 0xf2b632, bag: 0xf2b632 });
+        rig = makeRunner(STYLES.courier());
         rig.root.rotation.y = Math.PI;
         root.add(rig.root);
         const deck = mesh(new THREE.BoxGeometry(0.22, 0.06, 1.0), 0x2a2a2a, 0.012);
@@ -611,19 +653,20 @@ export class Scene3D {
         const bag = mesh(new THREE.BoxGeometry(0.6, 0.6, 0.5), 0xf2b632, 0.02);
         at(bag, 0, 1.25, 0.35, root);
       } else if (o.kind === "babka") {
-        rig = makePerson(LOOKS.babka());
+        rig = makeRunner(STYLES.babka());
         const bench = makeBench();
         bench.rotation.y = o.side > 0 ? -Math.PI / 2 : Math.PI / 2;
         root.add(bench);
         rig.root.rotation.y = bench.rotation.y;
         rig.root.position.set(o.side > 0 ? 0.1 : -0.1, 0, 0);
-        animateRig(rig, 0, 0, "sit");
+        animateRunner(rig, "sit", 0, 1);
         root.add(rig.root);
       } else {
-        rig = makePerson(LOOKS.guard(this.camoGuard));
+        rig = makeRunner(STYLES.soldier(this.camoGuard));
         rig.root.rotation.y = Math.PI;
         root.add(rig.root);
       }
+      toonify(root);
       this.world.add(root);
       return { obj: root, key: o.kind, seen: this.frame, rig, t0: this.time };
     }
@@ -639,20 +682,70 @@ export class Scene3D {
 
   // ================================================================ per frame
 
+  private v = new THREE.Vector3();
+  /** World position of the hero, `up` metres above the ground, `ahead` metres forward. */
+  private at(st: Stage, up = 0, ahead = 0): THREE.Vector3 { return this.v.set(wx(st.x), st.y + up, st.dist + ahead); }
+
   onEvent(e: Ev, st: Stage): void {
-    if (e.kind === "crash") { this.shake = st.mode === "car" ? 0.6 : 0.45; this.post.flash = 0.35; }
-    if (e.kind === "stumble") this.shake = Math.max(this.shake, 0.22);
-    if (e.kind === "bump") this.shake = Math.max(this.shake, 0.12);
-    if (e.kind === "saved") this.shake = Math.max(this.shake, 0.3);
-    if (e.kind === "nitro") this.fovKick = 10;
+    const car = st.mode === "car";
+    const dustCol = this.dustColor();
+    if (e.kind === "crash") {
+      this.shake = car ? 0.6 : 0.45;
+      this.post.flash = 0.35;
+      this.glow.emit(18, this.at(st, car ? 1 : 1.2, car ? 2.2 : 0.6), { color: [0xfff2a0, 0xffb040, 0xffffff], speed: 7, up: 5, size: 0.35, life: 0.5, grav: -14 });
+      this.dust.emit(16, this.at(st, 0.3, car ? 2 : 0.5), { color: dustCol, speed: 3, up: 1.5, size: 0.9, grow: 2.2, life: 0.9, grav: 0.5 });
+    }
+    if (e.kind === "stumble") {
+      this.shake = Math.max(this.shake, 0.22);
+      this.dust.emit(10, this.at(st, 0.1, 0.3), { color: dustCol, speed: 2, up: 1, size: 0.7, grow: 2, life: 0.7, grav: 0.4 });
+    }
+    if (e.kind === "bump") { this.shake = Math.max(this.shake, 0.12); this.glow.emit(6, this.at(st, 0.8, 0.4), { color: 0xfff2a0, speed: 5, up: 3, size: 0.25, life: 0.3 }); }
+    if (e.kind === "saved") { this.shake = Math.max(this.shake, 0.3); this.glow.emit(24, this.at(st, 1, 0.8), { color: [0x8ad84a, 0xffffff, 0x54b7c6], speed: 6, up: 4, size: 0.35, life: 0.6, grav: -8 }); }
+    if (e.kind === "nitro") { this.fovKick = 10; this.glow.emit(20, this.at(st, 0.5, -2.4), { color: [0x5ab8ff, 0xffffff], speed: 3, up: 1, size: 0.6, life: 0.4, fwd: -8, grav: 0 }); }
+    if (e.kind === "coin") this.glow.emit(3, this.at(st, car ? 1.2 : 1.1, car ? 1.5 : 0.4), { color: [0xfff2a0, 0xf2b632], speed: 2.5, up: 2.5, size: 0.22, life: 0.35, grav: -4 });
+    if (e.kind === "power") this.glow.emit(30, this.at(st, 1, 0.5), { color: [0xfff2a0, 0x54b7c6, 0xffffff], speed: 5, up: 3, size: 0.3, life: 0.7, grav: -3 });
+    if (e.kind === "land") this.dust.emit(8, this.at(st, 0.05, 0), { color: dustCol, speed: 2.4, up: 0.6, size: 0.5, grow: 1.8, life: 0.5, grav: 0.3 });
+    if (e.kind === "near") this.glow.emit(5, this.at(st, 0.8, 0), { color: 0xffffff, speed: 4, up: 1, size: 0.2, life: 0.3, grav: 0 });
+    if (e.kind === "caught") { this.shake = 0.4; this.dust.emit(20, this.at(st, 0.2, 0), { color: dustCol, speed: 3, up: 1.2, size: 0.8, grow: 2, life: 0.8, grav: 0.3 }); }
     if (e.kind === "babka") {
       for (const o of st.objs) if (o.kind === "babka" && o.hit && Math.abs(o.z - st.dist) < 6) this.calling.add(o.id);
+    }
+  }
+
+  private dustColor(): number[] {
+    const t = this.def.theme;
+    return t === "village" || t === "forest" ? [0x9a7a54, 0x7a6448, 0xb89a70] : t === "road" || t === "checkpoints" ? [0x9a9a9a, 0xbababa, 0x7a7a7a] : [0xc8c0b0, 0xa8a090, 0xe0d8c8];
+  }
+
+  /** Dust from the feet, exhaust and nitro flames from the car, a drift of smoke when it is broken. */
+  private emitAmbient(st: Stage, dt: number): void {
+    this.dustT -= dt;
+    if (this.dustT > 0) return;
+    this.dustT = 0.05;
+    if (st.mode === "foot") {
+      if (st.y < 0.05 && st.speed > 3 && st.stun <= 0) {
+        const n = st.slide > 0 ? 3 : Math.random() < 0.5 ? 1 : 0;
+        if (n) this.dust.emit(n, this.at(st, 0.05, -0.2), { color: this.dustColor(), speed: 0.8, up: 0.5, size: st.slide > 0 ? 0.6 : 0.4, grow: 2, life: 0.55, fwd: -1, grav: 0.2 });
+      }
+      if (st.power === "energy") this.glow.emit(2, this.at(st, 1, 0), { color: [0x8ad84a, 0xd8ff8a], speed: 1, up: 0.5, size: 0.3, life: 0.35, fwd: -6, grav: 0 });
+      if (st.power === "scooter") this.glow.emit(1, this.at(st, 0.15, -0.5), { color: 0x54b7c6, speed: 0.4, up: 0.1, size: 0.2, life: 0.3, fwd: -4, grav: 0 });
+    } else {
+      for (const side of [-1, 1]) {
+        const p = this.at(st, 0.4, -2.3);
+        p.x += side * 0.5;
+        if (st.nitroT > 0) this.glow.emit(2, p, { color: [0x5ab8ff, 0xb8e0ff, 0xffffff], speed: 0.6, up: 0.2, size: 0.55, life: 0.25, fwd: -10, grav: 0 });
+        else if (Math.random() < 0.3) this.dust.emit(1, p, { color: [0x8a8a8a, 0xa0a0a0], speed: 0.4, up: 0.4, size: 0.35, grow: 2.5, life: 0.6, fwd: -4, grav: 0.4 });
+      }
+      if (st.health <= 1) this.dust.emit(1, this.at(st, 1.3, 1.6), { color: [0x2a2a2a, 0x4a4a4a], speed: 0.5, up: 2, size: 0.6, grow: 3, life: 1.2, fwd: -6, grav: 0.5 });
     }
   }
 
   update(st: Stage, run: RunState, dt: number): void {
     this.time += dt;
     this.frame++;
+    this.emitAmbient(st, dt);
+    this.dust.update(dt);
+    this.glow.update(dt);
     const z = st.dist;
     // leap-frog scenery tiles
     for (let i = 0; i < this.tiles.length; i++) {
@@ -697,37 +790,23 @@ export class Scene3D {
     const rig = this.hero;
     if (!rig || !this.heroExtras) return;
     rig.root.position.set(hx, st.y, st.dist);
-    rig.root.rotation.z = this.lean * 0.18;
-    rig.root.rotation.y = -this.lean * 0.25;
+    rig.root.rotation.z = this.lean * 0.22;
+    rig.root.rotation.y = -this.lean * 0.3;
+    // blink while invulnerable after a crash
+    rig.root.visible = st.invuln <= 0 || Math.floor(this.time * 14) % 2 === 0;
     const ex = this.heroExtras;
     ex.scooter.visible = st.power === "scooter";
     ex.hood.visible = st.power === "hood";
     ex.aura.visible = st.power === "energy";
     if (ex.aura.visible) ex.aura.scale.setScalar(1 + Math.sin(this.time * 18) * 0.06);
-    if (st.stun > 0) {
-      animateRig(rig, 0, dt, "stunned");
-    } else if (st.power === "scooter") {
-      animateRig(rig, 0, dt, "idle");
-      rig.body.rotation.x = 0.15;
-      rig.armL.rotation.x = rig.armR.rotation.x = -1.2;
-      rig.body.position.y = 0.12;
-    } else {
-      animateRig(rig, st.speed, dt * (st.power === "energy" ? 1.4 : 1), "walk");
-      rig.armR.rotation.x *= 1.3;
-      rig.armL.rotation.x *= 1.3;
-    }
-    if (st.y > 0.01 && st.power !== "scooter") {
-      rig.legL.rotation.x = -1.1;
-      rig.legR.rotation.x = 0.5;
-      rig.armL.rotation.x = -2.4;
-      rig.armR.rotation.x = 0.8;
-    }
-    if (st.slide > 0 && st.y <= 0.01) {
-      rig.body.rotation.x = -1.15;
-      rig.body.position.y = -0.38;
-      rig.legL.rotation.x = rig.legR.rotation.x = -1.45;
-      rig.armL.rotation.x = rig.armR.rotation.x = -0.4;
-    }
+    let pose: Pose = "run";
+    if (st.caught) pose = "stun";
+    else if (st.stun > 0) pose = "stun";
+    else if (st.y > 0.05) pose = "jump";
+    else if (st.slide > 0) pose = "slide";
+    else if (st.power === "scooter") pose = "scoot";
+    else if (st.speed < 0.5) pose = "idle";
+    animateRunner(rig, pose, st.speed * (st.power === "energy" ? 1.3 : 1), dt);
     void run;
   }
 
@@ -762,10 +841,9 @@ export class Scene3D {
       const pool = this.torches[i];
       if (pool) { pool.position.set(rig.root.position.x + Math.sin(this.time * 1.7 + i) * 0.8, 0.04, zz + 4.5); pool.visible = rig.root.visible; }
       const v = st.stun > 0 ? 9 : st.speed;
-      animateRig(rig, caught ? 0 : v, dt, caught || st.gap < 2.5 ? "grab" : "walk");
-      if (!caught && st.gap >= 2.5 && i === 0 && Math.sin(this.time * 2) > 0.6) {
-        rig.armR.rotation.x = -2.3;
-      }
+      animateRunner(rig, caught ? "grab" : st.gap < 2.5 ? "grab" : "run", caught ? 2 : v, dt);
+      // the one in front waves the other arm: «Стояти!»
+      if (!caught && st.gap >= 2.5 && i === 0 && Math.sin(this.time * 2) > 0.5) { rig.shoulder[1].rotation.x = -2.8; rig.elbow[1].rotation.x = -0.2; }
     });
     if (this.chaseVan) {
       const van = this.chaseVan;
@@ -797,16 +875,13 @@ export class Scene3D {
           obj.rotation.y = this.time * 3 + o.z * 0.3;
           break;
         case "babka":
-          if (l.rig) {
-            animateRig(l.rig, 0, dt, "sit");
-            if (this.calling.has(o.id)) { l.rig.armR.rotation.x = -2.3; l.rig.armR.rotation.z = 0.4; }
-          }
+          if (l.rig) animateRunner(l.rig, this.calling.has(o.id) ? "call" : "sit", 0, dt);
           break;
         case "soldier":
-          if (l.rig) { animateRig(l.rig, 0, dt, "idle"); l.rig.armR.rotation.x = -2.6 + Math.sin(this.time * 6) * 0.3; }
+          if (l.rig) animateRunner(l.rig, "stop", 0, dt);
           break;
         case "courier":
-          if (l.rig) animateRig(l.rig, 0, dt, "idle");
+          if (l.rig) animateRunner(l.rig, "scoot", 0, dt);
           break;
         case "dog": {
           obj.position.y = Math.abs(Math.sin(age * 12)) * 0.12;
@@ -858,6 +933,11 @@ export class Scene3D {
     }
   }
 
+  /** The stage screen shows the hero from the front; starting the run swoops the camera behind. */
+  private introHold = true;
+  startRun(): void { this.introHold = false; this.intro = 1; }
+  holdIntro(): void { this.introHold = true; this.intro = 1; }
+
   private updateCamera(st: Stage, dt: number): void {
     const car = st.mode === "car";
     const hx = wx(st.x);
@@ -865,13 +945,29 @@ export class Scene3D {
     this.fovKick *= Math.exp(-dt * 2);
     const baseFov = this.camera.aspect < 0.7 ? 68 : 58;
     const fov = baseFov + kick;
-    if (Math.abs(this.camera.fov - fov) > 0.05) { this.camera.fov += (fov - this.camera.fov) * Math.min(1, dt * 4); this.camera.updateProjectionMatrix(); }
-    const tp = new THREE.Vector3(hx * 0.7, car ? 5.4 : 3.4 + st.y * 0.35, st.dist - (car ? 11 : 6.8));
-    const tl = new THREE.Vector3(hx * 0.55, car ? 1.0 : 1.2, st.dist + (car ? 18 : 9));
-    this.camPos.lerp(tp, Math.min(1, dt * 8));
-    this.camPos.z = tp.z;
-    this.camLook.lerp(tl, Math.min(1, dt * 8));
-    this.camLook.z = tl.z;
+    if (Math.abs(this.camera.fov - fov) > 0.05) { this.camera.fov += (fov - this.camera.fov) * Math.min(1, dt * 4); this.camera.updateProjectionMatrix(); this.dust.setScale(window.innerHeight, this.camera.fov); this.glow.setScale(window.innerHeight, this.camera.fov); }
+    // behind and above, looking down the road
+    const tp = new THREE.Vector3(hx * 0.7, car ? 5.4 : 3.3 + st.y * 0.35, st.dist - (car ? 11 : 6.6));
+    const tl = new THREE.Vector3(hx * 0.55, car ? 1.0 : 1.3, st.dist + (car ? 18 : 9));
+    if (!this.introHold && this.intro > 0) this.intro = Math.max(0, this.intro - dt / 1.3);
+    const e = this.intro * this.intro * (3 - 2 * this.intro);
+    if (e > 0) {
+      // in front of the hero, low, looking back at him and the chase
+      // framed so the hero sits in the top half, above the menu
+      const fp = new THREE.Vector3(hx + (car ? 3.2 : 1.4), car ? 2.4 : 1.5, st.dist + (car ? 9.5 : 4.6));
+      const fl = new THREE.Vector3(hx + (car ? 0.8 : 0.3), car ? -2.6 : -1.1, st.dist - (car ? 2 : 1));
+      tp.lerp(fp, e);
+      tl.lerp(fl, e);
+    }
+    if (st.caught) {
+      tp.set(hx + (car ? 4 : 2.4), car ? 3 : 2.1, st.dist + (car ? 5 : 3));
+      tl.set(hx, 1, st.dist - 0.8);
+    }
+    const follow = Math.min(1, dt * (st.caught || e > 0 ? 4 : 8));
+    this.camPos.lerp(tp, follow);
+    if (!st.caught && e === 0) this.camPos.z = tp.z;
+    this.camLook.lerp(tl, follow);
+    if (!st.caught && e === 0) this.camLook.z = tl.z;
     this.camera.position.copy(this.camPos);
     if (this.shake > 0) {
       this.shake = Math.max(0, this.shake - dt);
@@ -880,6 +976,9 @@ export class Scene3D {
       this.camera.position.y += (Math.random() - 0.5) * s;
     }
     this.camera.lookAt(this.camLook);
+    // lean into lane changes
+    this.camera.rotateZ(this.lean * (car ? 0.035 : 0.05));
+    this.sky.update(this.camera, dt);
   }
 
   render(dt: number): void {

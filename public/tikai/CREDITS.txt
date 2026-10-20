@@ -7,8 +7,9 @@ required. Taken from:
       vehicle-truck-*.glb, vehicle-motorcycle.glb, decoration-forest.glb,
       impact, skid, engine
   - Starter Kit 3D Platformer https://github.com/KenneyNL/Starter-Kit-3D-Platformer
-      coin.glb, cloud.glb, flag.glb, coin, jump, land, fall, break
+      flag.glb, coin, jump, land, fall, break
 Sounds were converted from Ogg Vorbis to MP3 (mono, 64 kbps) for iOS Safari.
 
-Everything else (characters, buildings, roads, blockposts, textures, music,
-sirens) is generated in code, as in the other games of this repo.
+Everything else (characters and their animation, buildings, roads, blockposts,
+textures, the hryvnia coins, sky and clouds, particles, music, sirens) is
+generated in code, as in the other games of this repo.

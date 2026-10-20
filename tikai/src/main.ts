@@ -84,10 +84,11 @@ function renderMenu(): void {
     const owned = meta.owned.includes(t.id);
     const b = document.createElement("button");
     b.className = `trait${t.id === selTrait ? " on" : ""}${owned ? "" : " locked"}`;
-    b.innerHTML = `<b><em>${t.icon}</em>${esc(t.name)}</b><small>${esc(t.text)}</small>${owned ? "" : `<span class="price">${money(t.price)}</span>`}`;
+    b.innerHTML = `<b><em>${t.icon}</em>${esc(t.name)}</b>${owned ? "" : `<span class="price">${money(t.price)}</span>`}`;
     b.addEventListener("click", () => {
       wakeAudio();
       if (owned) { selTrait = t.id; renderMenu(); return; }
+      setText($("#trait-text"), `${t.name}: ${t.text}`);
       if (meta.bank < t.price) { toast(`Треба ${money(t.price)}, у заначці ${money(meta.bank)}.`, "НЕ ВИСТАЧАЄ", "bad"); return; }
       if (b.dataset.confirm) {
         meta.bank -= t.price;
@@ -104,6 +105,8 @@ function renderMenu(): void {
     });
     list.append(b);
   }
+  const sel = TRAITS.find((t) => t.id === selTrait)!;
+  setText($("#trait-text"), sel.text);
   const heat = $("#heat-list");
   heat.innerHTML = "";
   for (let h = 0; h <= MAX_HEAT; h++) {
@@ -156,6 +159,7 @@ function stageIntro(): void {
 function beginStage(): void {
   if (!st || !run) return;
   wakeAudio();
+  scene.startRun();
   mode = "run";
   paused = false;
   showScreen(null);
@@ -247,6 +251,10 @@ function onCaught(): void {
   voice.say(pickOne(NEAR_LINES[def.chaser]), "officer");
   $("#caught").classList.remove("hidden");
   $("#hud").classList.add("hidden");
+  $("#swipe-hint").classList.add("hidden");
+  $("#bp-hint").classList.add("hidden");
+  $("#toast").classList.remove("show");
+  hintT = 0;
   const can = canBreakFree(run);
   $("#mash-btn").classList.toggle("hidden", !can);
   $(".bar.mash").classList.toggle("hidden", !can);
@@ -590,6 +598,8 @@ if (testMode) {
       if (!run) run = newRun((Math.random() * 1e9) | 0, selTrait, selHeat);
       run.stage = i;
       run.ending = null;
+      paused = false;
+      mode = "intro";
       $("#caught").classList.add("hidden");
       stageIntro();
     });
