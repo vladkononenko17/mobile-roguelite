@@ -5,7 +5,7 @@
  * «Розшук» buses.
  */
 import { getAudio, noise, play as synth, tone } from "../../rozshuk/src/sfx.ts";
-import { Music } from "../../rozshuk/src/music.ts";
+import { Music } from "./music.ts";
 
 export { isMusicMuted, isMuted, setMusicMuted, setMuted, unlockAudio } from "../../rozshuk/src/sfx.ts";
 export { preload, sample } from "../../tikai/src/audio.ts";

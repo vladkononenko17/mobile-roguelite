@@ -3,6 +3,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { at, canvasTexture, mat, mesh, signTexture } from "../../../rozshuk/src/three/models.ts";
 import { glowMat } from "../../../stiny/src/three/post.ts";
 import { makeRunner, animateRunner, type Runner, type Style } from "../../../tikai/src/three/runner.ts";
+import { addWoolScarf, makeSledder, type SledderLook } from "./sledder.ts";
 
 /**
  * Low-poly winter props for «З гірки!»: snow surfaces, the things on the
@@ -453,31 +454,25 @@ export function kidLook(look: number): KidLook {
   };
 }
 
-export function riderStyle(coat: number, pants: number, hat: number, old = false): Style {
-  if (old) return { top: coat, pants, hat: "scarf", hatColor: hat, shoes: 0x2a2220, sole: 0x2a2220, face: "old", skirt: true, build: 1.1 };
-  return { top: coat, pants, hat: "beanie", hatColor: hat, shoes: 0x2a2a2e, sole: 0x2a2a2e, face: "hero", hair: 0x5a3a20 };
-}
-
-/** A scarf whose ends fly behind you. */
-export function addScarf(rig: Runner, color: number): THREE.Group {
-  const neck = mesh(new THREE.TorusGeometry(0.14, 0.06, 5, 10), color, 0.01);
-  neck.rotation.x = Math.PI / 2;
-  at(neck, 0, -0.04, 0, rig.head);
-  const tail = new THREE.Group();
-  tail.name = "scarfTail";
-  at(tail, 0.06, -0.02, -0.14, rig.head);
-  at(mesh(new THREE.BoxGeometry(0.1, 0.04, 0.42), color, 0.008), 0, 0, -0.2, tail);
-  return tail;
+/** How a kid of the ватага looks: coat, hat, scarf and mittens from the same few cheerful colours. */
+export function kidSledLook(look: number): SledderLook {
+  const l = kidLook(look);
+  const k = Math.floor(look * 997);
+  return {
+    coat: l.coat, pants: l.pants, hat: l.hat, scarf: l.scarf, mitten: KID_COATS[(k * 5 + 1) % KID_COATS.length],
+    hair: [0x6a4228, 0x2a1e18, 0xc89a50, 0x8a4a22][(k >> 1) % 4], skin: [0xf0c09a, 0xe8b08a, 0xd89a78][(k >> 3) % 3],
+    face: (k >> 2) % 3 === 0 ? "cheeky" : "kid", seed: look,
+  };
 }
 
 /** A kid waving by the slope, a little sled beside: ride past and they hitch on. */
 export function makeWaitingKid(look: number): { group: THREE.Group; rig: Runner } {
   const l = kidLook(look);
   const g = new THREE.Group();
-  const rig = makeRunner(riderStyle(l.coat, l.pants, l.hat));
+  const rig = makeSledder(kidSledLook(look));
   rig.root.scale.setScalar(0.66);
   rig.root.rotation.y = Math.PI;
-  addScarf(rig, l.scarf);
+  addWoolScarf(rig, l.scarf);
   g.add(rig.root);
   const sled = makeRide("kid", l.sled);
   at(sled, 0.55, 0, 0.1, g);

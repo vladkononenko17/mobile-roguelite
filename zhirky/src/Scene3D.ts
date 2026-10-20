@@ -2,16 +2,17 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import {
-  at, facadeTextures, makeBench, makeCar, makeDog, makeHouse, makeLamp, makePine, makeStall, mat, mesh, roofTexture,
+  at, facadeTextures, makeBench, makeCar, makeHouse, makeLamp, makePine, makeStall, mat, mesh, roofTexture,
 } from "../../rozshuk/src/three/models.ts";
 import { CURVE, Particles, Sky, installCurve, toonify } from "../../tikai/src/three/fx.ts";
-import { makeRunner, type Runner } from "../../tikai/src/three/runner.ts";
+import type { Runner } from "../../tikai/src/three/runner.ts";
+import { addWoolScarf, makeShaggyDog, makeSledder, type SledderLook } from "./three/sledder.ts";
 import { makeBoom, makeBranch, makeHay, makeLaundry, makeLog, makePowerup } from "../../tikai/src/three/props.ts";
 import { Post, defaultQuality, lightPoolMaterial, type Mood, type Quality } from "../../stiny/src/three/post.ts";
 import {
-  CANDY_COLORS, SNOW, addScarf, kidLook, makeBlockFacade, makeCable, makeCandy, makeChurch, makeCobbles, makeDrift, makeFinishArch, makeFisher,
+  CANDY_COLORS, SNOW, kidLook, kidSledLook, makeBlockFacade, makeCable, makeCandy, makeChurch, makeCobbles, makeDrift, makeFinishArch, makeFisher,
   makeGarland, makeGenerator, makeGrandmaHouse, makeHole, makeIce, makeKoliba, makeMountain, makeOldHouse, makePicketFence, makeRamp, makeRide,
-  makeRock, makeSheep, makeSlush, makeSnowBench, makeSnowHay, makeSnowman, makeTourist, makeWaitingKid, makeWinterTree, riderStyle, snowCap,
+  makeRock, makeSheep, makeSlush, makeSnowBench, makeSnowHay, makeSnowman, makeTourist, makeWaitingKid, makeWinterTree, snowCap,
   snowGroundTexture, trackTexture, type RideKind,
 } from "./three/props.ts";
 import { HEROES, OBSTACLES, PICKUPS, THEMES, heroById, type PickId, type Theme, type ThemeDef } from "./content.ts";
@@ -345,7 +346,7 @@ export class Scene3D {
     this.camLook.set(0, 0.6, -3);
   }
 
-  private makeRider(style: ReturnType<typeof riderStyle>, ride: RideKind, rideColor: number, scarfColor: number, scale = 1): Rider {
+  private makeRider(look: SledderLook, ride: RideKind, rideColor: number, scarfColor: number, scale = 1): Rider {
     const root = new THREE.Group();
     const body = new THREE.Group();
     root.add(body);
@@ -353,9 +354,9 @@ export class Scene3D {
     // the ride does not bend: one mesh per material
     this.bake(sled);
     body.add(sled);
-    const rig = makeRunner(style);
+    const rig = makeSledder(look);
     if (ride === "kid") slim(rig.root);
-    const scarf = addScarf(rig, scarfColor);
+    const scarf = addWoolScarf(rig, scarfColor);
     if (ride === "kid") freezeLimbs(rig, true, "ride");
     mergeJoints(rig.root);
     // sit back on the sled; the tube and the tub sit you a little lower or higher
@@ -370,13 +371,15 @@ export class Scene3D {
   private makeHero(run: RunState): Rider {
     const h = heroById(run.hero);
     const l = h.look;
-    const style = l.dog ? riderStyle(HEROES[0].look.coat, HEROES[0].look.pants, HEROES[0].look.hat) : riderStyle(l.coat, l.pants, l.hat, l.old);
-    const r = this.makeRider(style, run.ride, 0xd63732, l.scarf);
+    const base = l.dog ? HEROES[0].look : l;
+    const look: SledderLook = {
+      coat: base.coat, pants: base.pants, hat: base.hat, scarf: base.scarf, old: base.old,
+      face: base.old ? "old" : h.id === "ostap" ? "cheeky" : "hero", hair: h.id === "ostap" ? 0x2a1e18 : 0x8a4a22, seed: h.id === "ostap" ? 0.3 : 0.8,
+    };
+    const r = this.makeRider(look, run.ride, 0xd63732, base.scarf);
     if (l.dog) {
       // Бровко pulls; a kid from the yard rides
-      const dog = makeDog();
-      const harness = mesh(new THREE.BoxGeometry(0.44, 0.08, 0.5), 0xd63732, 0.01);
-      at(harness, 0, 0.62, 0, dog);
+      const dog = makeShaggyDog();
       at(dog, 0, 0, 2.0, r.root);
       const rope = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 1.3), mat(0xe7ddc6));
       at(rope, 0, 0.45, 1.2, r.root);
@@ -388,7 +391,7 @@ export class Scene3D {
 
   private addKid(look: number): void {
     const l = kidLook(look);
-    const r = this.makeRider(riderStyle(l.coat, l.pants, l.hat), "kid", l.sled, l.scarf, 1);
+    const r = this.makeRider(kidSledLook(look), "kid", l.sled, l.scarf, 1);
     // the kids at the back are behind the camera: their shadows would not be seen either
     if (this.crew.length >= 4) r.root.traverse((o) => { o.castShadow = false; });
     this.crew.push(r);
@@ -778,7 +781,9 @@ export class Scene3D {
     r.root.visible = st.invuln <= 0 || Math.floor(this.time * 14) % 2 === 0;
     poseRider(r, this.riderPose(st), dt, this.time);
     if (r.dog) {
-      r.dog.position.y = Math.abs(Math.sin(this.time * 14)) * 0.12;
+      r.dog.position.y = Math.abs(Math.sin(this.time * 14)) * 0.1;
+      let k = 0;
+      r.dog.traverse((c) => { if (c.name === "leg") c.rotation.x = Math.sin(this.time * 14 + (k++ % 2) * Math.PI) * 0.6; });
       const tail = r.dog.getObjectByName("tail");
       if (tail) tail.rotation.y = Math.sin(this.time * 20) * 0.6;
     }

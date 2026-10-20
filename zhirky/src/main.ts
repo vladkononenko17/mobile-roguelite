@@ -44,7 +44,7 @@ let rampHinted = false;
 let kidLineT = 0;
 const queue: Input[] = [];
 const testMode = location.hash.includes("test");
-Object.assign(window as unknown as Record<string, unknown>, { __zhirky: { scene, get run() { return run; }, get stage() { return st; }, meta } });
+Object.assign(window as unknown as Record<string, unknown>, { __zhirky: { scene, music: A.music, get run() { return run; }, get stage() { return st; }, meta } });
 
 // ================================================================ small UI helpers
 
