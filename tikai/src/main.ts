@@ -546,10 +546,10 @@ function frame(now: number): void {
       if (hintT > 0) hintT -= dt;
     } else if (mode === "caught") {
       tickCaught(dt);
-    } else if (mode === "menu" || mode === "intro") {
-      // the backdrop: jog on the spot, the chase just behind
+    } else if (mode === "menu") {
+      // the backdrop (a throwaway demo stage): jog on the spot, the chase just behind
       demoT += dt;
-      st.speed = mode === "menu" ? 3.2 : 0;
+      st.speed = 3.2;
       st.gap = 7 + Math.sin(demoT * 0.7) * 1.5;
     }
     scene.update(st, run ?? newRun(1), dt);

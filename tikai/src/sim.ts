@@ -184,6 +184,8 @@ export interface Stage {
   walls: { lane: number; z: number }[];
   cleanT: number;
   bumpT: number;
+  /** Seconds of grace after a crash or breaking free: obstacles do not hit. */
+  invuln: number;
 }
 
 export const FOOT = { lanes: 3, laneW: 2.2, half: 0.35, width: 0.6, side: 15 };
@@ -227,7 +229,7 @@ export function startStage(run: RunState): Stage {
     power: null, powerT: 0, powerMax: 0, shield: false, lucky: has(run, "lucky"),
     health: 0, maxHealth: 0, nitro: 0, nitroT: 0, honkT: 0,
     objs: [], nextZ: car ? 110 : 34, nextBp: def.blockposts > 0 ? 340 : Infinity, bpCount: 0, nextPower: car ? 380 : 150, seq: 1,
-    rng: (run.seed * 7919 + run.stage * 104729 + run.history.length * 31) | 0, coins: 0, caught: false, done: false, escaped: 0, walls: [], cleanT: 0, bumpT: 0,
+    rng: (run.seed * 7919 + run.stage * 104729 + run.history.length * 31) | 0, coins: 0, caught: false, done: false, escaped: 0, walls: [], cleanT: 0, bumpT: 0, invuln: 0,
   };
   st.x = laneX(st, st.lane);
   if (car) {
@@ -424,7 +426,10 @@ function carRow(st: Stage, run: RunState, z: number): void {
       // the slow lane is on the right
       const laneK = lane / (st.lanes - 1);
       const vz = d.moving[1] - (d.moving[1] - d.moving[0]) * (0.3 * rnd(st) + 0.7 * laneK);
-      const o = addObj(st, "obst", kind, lane, meetZ(st, run, z, vz), { vz });
+      const zs = meetZ(st, run, z, vz);
+      const x = laneX(st, lane);
+      if (st.objs.some((p) => p.cat === "obst" && Math.abs(p.x - x) < st.laneW * 0.7 && Math.abs(p.z - zs) < (p.len + d.len) / 2 + 6)) { blocked.delete(lane); continue; }
+      const o = addObj(st, "obst", kind, lane, zs, { vz });
       if (kind === "traffic" && rnd(st) < 0.18 + 0.04 * run.heat) o.blink = -1;
     } else {
       addObj(st, "obst", kind, lane, z);
@@ -596,6 +601,7 @@ function crash(st: Stage, evs: Ev[], what: string): void {
     return;
   }
   evs.push({ kind: "crash", what });
+  st.invuln = st.mode === "car" ? 0.9 : 0.6;
   if (st.mode === "foot") {
     st.speed = 0;
     st.stun = 0.4;
@@ -617,6 +623,7 @@ function tick(st: Stage, run: RunState, dt: number, evs: Ev[]): void {
   if (st.stumbleT > 0) st.stumbleT -= dt;
   if (st.honkT > 0) st.honkT -= dt;
   if (st.bumpT > 0) st.bumpT -= dt;
+  if (st.invuln > 0) st.invuln -= dt;
   if (st.nitroT > 0) st.nitroT -= dt;
   if (st.power) {
     st.powerT -= dt;
@@ -658,6 +665,7 @@ function tick(st: Stage, run: RunState, dt: number, evs: Ev[]): void {
   // the world moves
   for (const o of st.objs) {
     const pz = o.z;
+    if (o.vz > 0 && o.cat === "obst") follow(st, o, dt);
     if (o.vz > 0 && st.walls.length) {
       // queue up in front of a closed lane of a blockpost
       for (const w of st.walls) {
@@ -721,6 +729,19 @@ function tick(st: Stage, run: RunState, dt: number, evs: Ev[]): void {
   }
 }
 
+/** Traffic keeps its distance: a faster car slows down behind a slower one instead of driving through it. */
+function follow(st: Stage, o: Obj, dt: number): void {
+  let ahead: Obj | null = null;
+  for (const p of st.objs) {
+    if (p === o || p.cat !== "obst" || p.z <= o.z || Math.abs(p.x - o.x) > st.laneW * 0.7) continue;
+    if (!ahead || p.z < ahead.z) ahead = p;
+  }
+  if (!ahead) return;
+  const room = ahead.z - o.z - (ahead.len + o.len) / 2;
+  if (room < 14 && o.vz > ahead.vz) o.vz = Math.max(ahead.vz, o.vz - 20 * dt);
+  if (room < 1.5) { o.vz = Math.min(o.vz, ahead.vz); o.z = Math.min(o.z, ahead.z - (ahead.len + o.len) / 2 - 1.5); }
+}
+
 function collide(st: Stage, run: RunState, o: Obj, objPrevZ: number, prevDist: number, evs: Ev[]): void {
   const L = st.mode === "car" ? CAR : FOOT;
   const relPrev = objPrevZ - prevDist;
@@ -764,6 +785,7 @@ function collide(st: Stage, run: RunState, o: Obj, objPrevZ: number, prevDist: n
     return;
   }
   if (lat > reach - 0.15) return;
+  if (st.invuln > 0) return;
   const d = OBSTACLES[o.kind as ObstId];
   // what clears it
   if (d.clear === "jump" && st.y > 0.3) return;
@@ -812,6 +834,7 @@ export function breakFree(st: Stage, run: RunState): void {
   st.stun = 0;
   st.speed = targetSpeed(st, run) * 0.6;
   st.stumbleT = 0;
+  st.invuln = 1.6;
   if (st.mode === "car") st.health = Math.max(st.health, 1);
   // clear what is right in front so you do not crash straight away
   for (const o of st.objs) if (o.cat === "obst" && o.z - st.dist < (st.mode === "car" ? 50 : 12) && o.z > st.dist - 5) o.hit = true;

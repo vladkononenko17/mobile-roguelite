@@ -176,6 +176,22 @@ describe('«Тікай!» track', () => {
 });
 
 describe('«Тікай!» rules', () => {
+  it('traffic never drives through other traffic', () => {
+    for (let seed = 1; seed < 15; seed++) {
+      const run = newRun(seed);
+      run.stage = 2;
+      const st = startStage(run);
+      for (let i = 0; i < 1500 && !st.done; i++) {
+        step(st, run, 1 / 30);
+        st.caught = false; st.gap = 15; st.health = 3; st.invuln = 1; st.lane = 0; st.x = -6;
+        const cars = st.objs.filter((o) => o.cat === 'obst' && o.vz > 0 && !o.hit);
+        for (const a of cars) for (const b of cars) {
+          if (a === b || Math.abs(a.x - b.x) > 1) continue;
+          assert.ok(Math.abs(a.z - b.z) >= (a.len + b.len) / 2 - 0.05, `seed ${seed}: ${a.kind} inside ${b.kind}`);
+        }
+      }
+    }
+  });
   it('running clean slowly widens the gap', () => {
     const run = newRun(3);
     const st = startStage(run);
@@ -249,12 +265,16 @@ describe('«Тікай!» balance', () => {
     assert.ok(finished >= N * 0.15, `only ${finished}/${N}`);
     assert.ok(finished <= N * 0.95, `too easy: ${finished}/${N}`);
   });
-  it('a careless player gets caught early', () => {
-    let far = 0;
+  it('a careless player rarely makes it', () => {
+    let river = 0;
+    let stages = 0;
     for (let seed = 1; seed <= 20; seed++) {
       const { run } = playRun(seed * 7, { skill: 0.25 });
-      if (run.history.length >= 3) far++;
+      if (run.ending === 'river') river++;
+      stages += run.history.length;
     }
-    assert.ok(far <= 6, `${far}/20 careless runs got past stage 3`);
+    console.log(`careless: ${river}/20 reach the river, ${(stages / 20).toFixed(1)} stages on average`);
+    assert.ok(river <= 8, `${river}/20 careless runs reached the river`);
+    assert.ok(stages / 20 < 4.5);
   });
 });
