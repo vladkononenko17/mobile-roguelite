@@ -1,0 +1,12 @@
+{
+  "name": "Тікай!",
+  "short_name": "Тікай!",
+  "description": "Роглайт-ранер: двір, ринок, об'їзна, село, блокпости, ліс. Позаду ТЦК і поліція, попереду — річка.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#16141a",
+  "theme_color": "#16141a",
+  "orientation": "portrait-primary",
+  "icons": [{ "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

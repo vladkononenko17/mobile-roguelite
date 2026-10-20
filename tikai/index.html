@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#16141a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Тікай!</title>
+    <link rel="manifest" href="%BASE_URL%tikai/manifest.webmanifest" />
+    <link rel="icon" href="%BASE_URL%tikai/icon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <main id="shell" aria-label="Гра «Тікай!»">
+      <div class="grain" aria-hidden="true"></div>
+      <div id="red-edge" aria-hidden="true"></div>
+      <div id="speed-lines" aria-hidden="true"></div>
+
+      <!-- ===== HUD ===== -->
+      <section id="hud" class="hidden" aria-label="Стан">
+        <div class="hud-top">
+          <div class="stage-chip">
+            <b id="h-stage">ДВІР</b>
+            <div class="progress"><i id="h-progress"></i><em id="h-runner">🏃</em></div>
+          </div>
+          <div class="coin-chip"><b id="h-coins">0</b><span>₴</span></div>
+          <button id="pause-btn" class="icon-btn" aria-label="Пауза">Ⅱ</button>
+        </div>
+        <div class="chase">
+          <span id="h-chaser" class="chase-label">ТЦК</span>
+          <div class="chase-bar"><i id="h-gap"></i></div>
+          <span id="h-escapes" class="chips-mini" title="Шанси вирватися"></span>
+        </div>
+        <div id="h-car" class="car-row hidden">
+          <span id="h-health" title="Цілість машини"></span>
+          <span id="h-nitro" title="Нітро"></span>
+        </div>
+        <div id="h-power" class="power hidden"><em id="h-power-icon"></em><b id="h-power-name"></b><div class="bar"><i id="h-power-t"></i></div></div>
+      </section>
+
+      <div id="bp-hint" class="hidden" aria-live="polite"></div>
+      <div id="swipe-hint" class="hidden" aria-hidden="true"></div>
+
+      <!-- ===== caught: break free ===== -->
+      <section id="caught" class="hidden" role="dialog" aria-live="assertive">
+        <div class="sticker big">СХОПИЛИ!</div>
+        <p id="caught-line" class="shout"></p>
+        <button id="mash-btn" class="mash-btn">ВИРВАТИСЯ!<small>тисни швидко</small></button>
+        <div class="bar mash"><i id="mash-fill"></i></div>
+        <p id="caught-left" class="hint"></p>
+      </section>
+
+      <!-- ===== screens ===== -->
+      <section id="start-screen" class="screen active">
+        <p class="eyebrow">РОГЛАЙТ-РАНЕР · 18+</p>
+        <h1>ТІКАЙ<span>!</span></h1>
+        <p class="lead">Двір, ринок, об'їзна, село, блокпости, ліс. Позаду — ТЦК, поліція і прикордонники. Попереду — річка.</p>
+        <p class="eyebrow small-gap">ХТО ТИ</p>
+        <div id="trait-list" class="trait-list" role="group" aria-label="Хто ти"></div>
+        <div class="heat-row">
+          <span class="eyebrow">РОЗШУК</span>
+          <div id="heat-list" class="heat-list" role="group" aria-label="Складність"></div>
+        </div>
+        <p id="heat-text" class="hint"></p>
+        <button id="continue-btn" class="primary-btn hidden">ПРОДОВЖИТИ</button>
+        <button id="new-btn" class="primary-btn">ТІКАТИ</button>
+        <p id="meta-line" class="hint"></p>
+        <p class="hint small">Гра-сатира про втечу. Свайпи: ← → смуга, ↑ стрибок, ↓ підкат. У машині ↑ — нітро, ↓ — сигнал.</p>
+      </section>
+
+      <section id="stage-screen" class="screen">
+        <p id="stage-eyebrow" class="eyebrow">ЕТАП 1 / 6</p>
+        <h2 id="stage-title">ДВІР</h2>
+        <h3 id="stage-sub"></h3>
+        <p id="stage-intro" class="lead"></p>
+        <p id="stage-goal" class="goal"></p>
+        <div id="stage-controls" class="controls-card"></div>
+        <button id="stage-go" class="primary-btn">ТІКАТИ!</button>
+      </section>
+
+      <section id="perk-screen" class="screen">
+        <div class="sticker">ВІДІРВАВСЯ</div>
+        <h2 id="perk-title">ЕТАП ПРОЙДЕНО</h2>
+        <div id="perk-stats" class="deltas"></div>
+        <p class="eyebrow">ЩО ПРИХОПИТИ В ДОРОГУ</p>
+        <div id="perk-list" class="perk-list"></div>
+        <button id="perk-skip" class="ghost-btn">НІЧОГО, БІЖУ ДАЛІ</button>
+      </section>
+
+      <section id="end-screen" class="screen">
+        <div id="end-sticker" class="sticker">СПІЙМАЛИ</div>
+        <h2 id="end-title"></h2>
+        <p id="end-text" class="lead"></p>
+        <div id="end-route" class="route"></div>
+        <div id="end-stats" class="deltas"></div>
+        <p id="end-unlock" class="hint"></p>
+        <button id="end-btn" class="primary-btn">ЩЕ РАЗ</button>
+        <button id="end-menu" class="ghost-btn">В МЕНЮ</button>
+      </section>
+
+      <section id="pause-screen" class="screen compact">
+        <p class="eyebrow">ПАУЗА</p>
+        <h2>ПЕРЕВЕДИ ПОДИХ</h2>
+        <button id="resume-btn" class="primary-btn">ДАЛІ</button>
+        <div class="toggles">
+          <button id="sound-btn" class="toggle">ЗВУКИ: ВКЛ</button>
+          <button id="music-btn" class="toggle">МУЗИКА: ВКЛ</button>
+          <button id="voice-btn" class="toggle">ГОЛОСИ: ВКЛ</button>
+          <button id="gfx-btn" class="toggle">ГРАФІКА: СЕРЕДНЯ</button>
+        </div>
+        <button id="quit-btn" class="ghost-btn">ЗДАТИСЯ</button>
+        <p class="hint">Прогрес між етапами зберігається на пристрої.</p>
+      </section>
+
+      <!-- ===== test menu: open the game with #test at the end of the address ===== -->
+      <button id="test-btn" class="test-btn hidden" aria-label="Тестове меню">🧪</button>
+      <section id="test-panel" class="hidden" aria-label="Тестове меню">
+        <div class="test-card">
+          <div class="test-head"><b>ТЕСТ</b><button id="test-close" class="icon-btn" aria-label="Закрити">✕</button></div>
+          <p class="test-label">ЕТАП</p>
+          <div class="test-grid" id="test-stages"></div>
+          <p class="test-label">ПРЕДМЕТИ</p>
+          <div class="test-grid">
+            <button data-t="scooter">🛴 Самокат</button>
+            <button data-t="hood">🧥 Капюшон</button>
+            <button data-t="magnet">🫙 Монобанка</button>
+            <button data-t="energy">⚡ Енергетик</button>
+            <button data-t="nitro">🛢️ +Нітро</button>
+            <button data-t="repair">🔧 Ремонт</button>
+          </div>
+          <p class="test-label">СТАН</p>
+          <div class="test-grid">
+            <button data-t="gap0">🫣 Майже наздогнали</button>
+            <button data-t="gapmax">😮‍💨 Повний відрив</button>
+            <button data-t="finish">🏁 Кінець етапу</button>
+            <button data-t="money">💰 +10 000 ₴</button>
+            <button data-t="god">🛡️ Безсмертя</button>
+          </div>
+        </div>
+      </section>
+
+      <div id="toast" role="status" aria-live="polite"></div>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

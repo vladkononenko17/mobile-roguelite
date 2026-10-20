@@ -1,0 +1,14 @@
+«Тікай!» — сторонні ресурси / third-party assets
+
+3D models (models/) and sound effects (sfx/) are by Kenney (www.kenney.nl),
+released under Creative Commons Zero (CC0 1.0) — public domain, no attribution
+required. Taken from:
+  - Starter Kit Racing      https://github.com/KenneyNL/Starter-Kit-Racing
+      vehicle-truck-*.glb, vehicle-motorcycle.glb, decoration-forest.glb,
+      impact, skid, engine
+  - Starter Kit 3D Platformer https://github.com/KenneyNL/Starter-Kit-3D-Platformer
+      coin.glb, cloud.glb, flag.glb, coin, jump, land, fall, break
+Sounds were converted from Ogg Vorbis to MP3 (mono, 64 kbps) for iOS Safari.
+
+Everything else (characters, buildings, roads, blockposts, textures, music,
+sirens) is generated in code, as in the other games of this repo.
