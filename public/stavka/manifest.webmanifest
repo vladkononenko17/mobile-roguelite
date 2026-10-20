@@ -1,0 +1,12 @@
+{
+  "name": "Ставка",
+  "short_name": "Ставка",
+  "description": "Стратегія-роглайт: ти — Президент України. Рішення вдень, ППО вночі, удари у відповідь. 16 тижнів.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#070b12",
+  "theme_color": "#070b12",
+  "orientation": "portrait-primary",
+  "icons": [{ "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

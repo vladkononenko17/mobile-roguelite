@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#070b12" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Ставка</title>
+    <link rel="manifest" href="%BASE_URL%stavka/manifest.webmanifest" />
+    <link rel="icon" href="%BASE_URL%stavka/icon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <main id="shell" aria-label="Гра «Ставка»">
+      <div id="labels" aria-hidden="true"></div>
+      <div id="flash" aria-hidden="true"></div>
+
+      <!-- ===== top bar, every phase ===== -->
+      <header id="topbar" class="hidden">
+        <div class="tb-row">
+          <div class="chip phase-chip"><small id="tb-week">ТИЖДЕНЬ 1/16</small><b id="tb-phase">ДЕНЬ</b></div>
+          <div id="tb-alert" class="alert-chip hidden" role="status"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/></svg><b>ТРИВОГА</b></div>
+          <div id="tb-right" class="chip right-chip"><small id="tb-right-label">ГОДИНИ</small><b id="tb-right-value"></b></div>
+          <button id="pause-btn" class="icon-btn" aria-label="Пауза"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg></button>
+        </div>
+        <div class="stats">
+          <div class="stat" title="Бюджет"><small>Бюджет</small><b id="st-budget"></b></div>
+          <div class="stat" title="Енергосистема"><small>Енергія</small><b id="st-power"></b><i class="bar"><i id="st-power-bar"></i></i></div>
+          <div class="stat" title="Мораль"><small>Мораль</small><b id="st-morale"></b><i class="bar"><i id="st-morale-bar"></i></i></div>
+          <div class="stat" title="Лінія фронту"><small>Фронт</small><b id="st-front"></b></div>
+          <div class="stat" title="Ескалація"><small>Ескалація</small><b id="st-esc"></b><i class="bar"><i id="st-esc-bar"></i></i></div>
+        </div>
+      </header>
+
+      <!-- ===== day ===== -->
+      <section id="day" class="sheet hidden" aria-label="Кабінет">
+        <button id="sheet-toggle" class="sheet-handle" aria-label="Згорнути або розгорнути"><i></i></button>
+        <nav class="tabs" role="tablist">
+          <button class="tab active" data-tab="decide" role="tab">Рішення<em id="tab-decide-n"></em></button>
+          <button class="tab" data-tab="build" role="tab">Тил</button>
+          <button class="tab" data-tab="ad" role="tab">ППО</button>
+          <button class="tab" data-tab="allies" role="tab">Союзники</button>
+        </nav>
+        <div class="sheet-body">
+          <div id="tab-decide" class="tab-page active"></div>
+          <div id="tab-build" class="tab-page"></div>
+          <div id="tab-ad" class="tab-page"></div>
+          <div id="tab-allies" class="tab-page"></div>
+        </div>
+        <button id="end-day" class="primary-btn">ЗАВЕРШИТИ ДЕНЬ → НІЧ</button>
+      </section>
+      <div id="move-hint" class="hint-chip hidden"></div>
+
+      <!-- ===== night ===== -->
+      <section id="night" class="hidden" aria-label="Ніч">
+        <div class="night-bottom">
+          <div class="threat-row">
+            <div><b id="n-shahed" class="c-shahed">0</b><small>Shahed</small></div>
+            <div><b id="n-cruise" class="c-cruise">0</b><small>Крилаті</small></div>
+            <div><b id="n-ball" class="c-ball">0</b><small>Балістика</small></div>
+            <div><b id="n-down" class="c-down">0</b><small>Збито</small></div>
+          </div>
+          <div class="night-tools">
+            <div class="ammo"><small>Перехоплювачі</small><b id="n-int"></b></div>
+            <div class="ammo"><small>Patriot / SAMP</small><b id="n-pat"></b></div>
+            <div class="ammo"><small>IRIS-T / NASAMS</small><b id="n-sam"></b></div>
+          </div>
+          <div class="night-btns">
+            <button id="slow-btn" class="tool-btn"><b>СПОВІЛЬНИТИ</b><small id="slow-n"></small></button>
+            <button id="fast-btn" class="tool-btn"><b>×2</b><small>швидше</small></button>
+          </div>
+          <p class="hint">Тисни на ціль у небі — полетить найкращий засіб, що дістає. Мобільні групи і Gepard б'ють самі.</p>
+        </div>
+      </section>
+
+      <!-- ===== strike planning ===== -->
+      <section id="strike" class="sheet hidden" aria-label="Удар">
+        <button id="strike-toggle" class="sheet-handle" aria-label="Згорнути або розгорнути"><i></i></button>
+        <div class="sheet-body">
+          <p class="eyebrow">ЦІЛЬ <span class="muted">— торкнись на карті або обери</span></p>
+          <div id="target-list" class="target-list"></div>
+          <div id="target-info" class="target-info"></div>
+          <p class="eyebrow">ЗАСІБ</p>
+          <div id="weapon-list" class="weapon-list"></div>
+          <div class="steppers">
+            <div class="stepper"><small>Кількість</small><button data-step="count" data-d="-1" aria-label="Менше">−</button><b id="s-count">0</b><button data-step="count" data-d="1" aria-label="Більше">+</button></div>
+            <div class="stepper"><small>Приманки</small><button data-step="decoys" data-d="-1" aria-label="Менше">−</button><b id="s-decoys">0</b><button data-step="decoys" data-d="1" aria-label="Більше">+</button></div>
+          </div>
+          <div class="route-row">
+            <button id="route-add" class="ghost-btn small">+ ТОЧКА МАРШРУТУ</button>
+            <button id="route-clear" class="ghost-btn small">СКИНУТИ</button>
+          </div>
+          <div id="risk" class="risk"></div>
+        </div>
+        <div class="strike-btns">
+          <button id="strike-skip" class="ghost-btn">БЕЗ УДАРУ</button>
+          <button id="strike-go" class="primary-btn red">ЗАПУСК</button>
+        </div>
+      </section>
+
+      <!-- ===== strike flight ===== -->
+      <section id="flight" class="hidden" aria-label="Політ">
+        <div class="flight-panel">
+          <div class="flight-row"><div><small>До цілі</small><b id="f-eta">—</b></div><div class="right"><small>Летять</small><b id="f-alive">—</b></div></div>
+          <div class="bar wide"><i id="f-progress"></i></div>
+          <div class="flight-row small"><span id="f-from"></span><span id="f-target"></span></div>
+          <div class="night-btns"><button id="f-cam" class="tool-btn"><b>КАМЕРА</b><small id="f-cam-l">рій</small></button><button id="f-fast" class="tool-btn"><b>×2</b><small>швидше</small></button></div>
+        </div>
+      </section>
+
+      <!-- ===== screens ===== -->
+      <section id="start-screen" class="screen active">
+        <p class="eyebrow">СТРАТЕГІЯ-РОГЛАЙТ · 16 ТИЖНІВ</p>
+        <h1>СТАВКА</h1>
+        <p class="lead">Ти — Президент. Вдень — рішення, виробництво і союзники. Вночі — небо над країною. Потім — удар у відповідь.</p>
+        <p class="eyebrow">РАДНИК</p>
+        <div id="advisor-list" class="card-list" role="group" aria-label="Радник"></div>
+        <div class="heat-row">
+          <span class="eyebrow">ЕСКАЛАЦІЯ</span>
+          <div id="diff-list" class="heat-list" role="group" aria-label="Складність"></div>
+        </div>
+        <p id="diff-text" class="hint"></p>
+        <button id="continue-btn" class="primary-btn hidden">ПРОДОВЖИТИ</button>
+        <button id="new-btn" class="primary-btn">НОВА КАДЕНЦІЯ</button>
+        <p id="meta-line" class="hint"></p>
+      </section>
+
+      <section id="intro-screen" class="screen compact">
+        <p id="intro-eyebrow" class="eyebrow"></p>
+        <h2 id="intro-title"></h2>
+        <p id="intro-text" class="lead"></p>
+        <div id="intro-lines" class="lines"></div>
+        <button id="intro-go" class="primary-btn"></button>
+      </section>
+
+      <section id="report-screen" class="screen">
+        <p id="report-eyebrow" class="eyebrow"></p>
+        <h2>ЗВІТ СТАВКИ</h2>
+        <div id="report-deltas" class="deltas"></div>
+        <div id="report-lines" class="lines"></div>
+        <p class="eyebrow">РІШЕННЯ НА НАСТУПНИЙ ТИЖДЕНЬ</p>
+        <div id="perk-list" class="card-list"></div>
+        <button id="perk-skip" class="ghost-btn">БЕЗ ЗМІН</button>
+      </section>
+
+      <section id="end-screen" class="screen">
+        <div id="end-sticker" class="sticker">КІНЕЦЬ КАДЕНЦІЇ</div>
+        <h2 id="end-title"></h2>
+        <p id="end-text" class="lead"></p>
+        <div id="end-stats" class="deltas"></div>
+        <p id="end-unlock" class="hint"></p>
+        <button id="end-btn" class="primary-btn">ЩЕ РАЗ</button>
+        <button id="end-menu" class="ghost-btn">В МЕНЮ</button>
+      </section>
+
+      <section id="pause-screen" class="screen compact">
+        <p class="eyebrow">ПАУЗА</p>
+        <h2>ХВИЛИНА ТИШІ</h2>
+        <button id="resume-btn" class="primary-btn">ДАЛІ</button>
+        <div class="toggles">
+          <button id="sound-btn" class="toggle">ЗВУК: ВКЛ</button>
+          <button id="gfx-btn" class="toggle">ГРАФІКА: СЕРЕДНЯ</button>
+        </div>
+        <button id="quit-btn" class="ghost-btn">В МЕНЮ</button>
+        <p class="hint">Прогрес зберігається на пристрої на початку кожної фази.</p>
+      </section>
+
+      <!-- ===== test menu: open the game with #test at the end of the address ===== -->
+      <button id="test-btn" class="test-btn hidden" aria-label="Тестове меню">ТЕСТ</button>
+      <section id="test-panel" class="hidden" aria-label="Тестове меню">
+        <div class="test-card">
+          <div class="test-head"><b>ТЕСТ</b><button id="test-close" class="icon-btn" aria-label="Закрити">✕</button></div>
+          <p class="test-label">ТИЖДЕНЬ</p>
+          <div class="test-grid" id="test-weeks"></div>
+          <p class="test-label">СТАН</p>
+          <div class="test-grid">
+            <button data-t="money">+$5 млрд</button>
+            <button data-t="stock">Повний склад</button>
+            <button data-t="hours">+4 години</button>
+            <button data-t="zones">Відкрити ППО</button>
+            <button data-t="trust">Довіра 90</button>
+            <button data-t="perks">Усі перки</button>
+            <button data-t="god">Безкінечні ракети</button>
+            <button data-t="night">Одразу ніч</button>
+            <button data-t="endnight">Кінець ночі</button>
+            <button data-t="lose">Програти</button>
+          </div>
+        </div>
+      </section>
+
+      <div id="toast" role="status" aria-live="polite"></div>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

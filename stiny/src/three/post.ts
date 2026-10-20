@@ -103,6 +103,8 @@ class SolidAOPass extends GTAOPass {
   overrideVisibility(): void {
     super.overrideVisibility();
     this.scene.traverse((o) => {
+      // glow sprites never occlude anything
+      if ((o as THREE.Sprite).isSprite && o.visible) { o.visible = false; return; }
       const m = o as THREE.Mesh;
       if (!m.isMesh || !m.visible) return;
       const mat = m.material as THREE.Material | THREE.Material[];
