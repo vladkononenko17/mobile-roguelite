@@ -8,7 +8,7 @@ import { hdri, setAnisotropy } from "./assets";
 import { buildHouse, HOUSE } from "./world/house";
 import { buildYard, placeProps, POOL, HAY } from "./world/yard";
 import { addCleanZone } from "./world/grime";
-import { detector, pushMower, spray, washerLance } from "./tools";
+import { blenderTool, detector, spray } from "./tools";
 
 /**
  * «Хата з краю» — prototype runtime. For now it builds the whole plot and
@@ -63,8 +63,9 @@ const SHOTS: Record<string, Shot> = {
     mowed: (x, z) => (x < -6.6 && z > 7 && z < 22.5 ? 1 : 0),
     stripe: (x) => Math.floor(x / lane) % 2 === 0,
     setup: async () => {
-      const m = await pushMower();
-      m.position.set(0.05, -1.62, -1.25);
+      const m = await blenderTool("mower");
+      // handle bar sits just below the eye; the deck runs ahead on the grass
+      m.position.set(0.0, -1.62, 0.15);
       m.rotation.y = Math.PI;
       camera.add(m);
       addCleanZone({ x: -7.2, y: 0.4, z: 5.0 }, { x: -3.8, y: 1.7, z: 5.6 }, 0.0, 0.2);
@@ -80,12 +81,13 @@ const SHOTS: Record<string, Shot> = {
       addCleanZone({ x: 6.8, y: 1.75, z: 2.6 }, { x: 7.5, y: 2.4, z: 4.95 }, 0.3, 0.18);
       addCleanZone({ x: 6.8, y: 0.45, z: -0.2 }, { x: 7.5, y: 1.2, z: 1.0 }, 0.9, 0.22);
       addCleanZone({ x: 9.6, y: -0.2, z: 1.2 }, { x: 12.6, y: 0.2, z: 3.8 }, 0.8, 0.25);
-      const { group, nozzleWorld } = await washerLance();
-      group.position.set(0.2, -0.32, -0.45);
-      group.rotation.set(-0.08, 0.32, 0);
-      camera.add(group);
+      const gun = await blenderTool("washer");
+      gun.position.set(0.16, -0.3, -0.12);
+      gun.rotation.set(-0.06, 0.3, 0);
+      camera.add(gun);
       camera.updateMatrixWorld(true);
-      scene.add(spray(nozzleWorld(), new THREE.Vector3(7.12, 1.0, 0.55)));
+      const tip = gun.getObjectByName("washer_tip")!.getWorldPosition(new THREE.Vector3());
+      scene.add(spray(tip, new THREE.Vector3(7.12, 1.0, 0.55)));
     },
   },
   backyard: {
@@ -139,7 +141,7 @@ async function boot(): Promise<void> {
   scene.background = background;
   scene.backgroundIntensity = 0.85;
   scene.environmentIntensity = 0.85;
-  scene.fog = new THREE.Fog(0xc8d8e0, 70, 230);
+  scene.fog = new THREE.Fog(0xc6d4da, 45, 160);
 
   const sunDir = new THREE.Vector3(...(S.sun ?? [-0.55, 0.62, 0.55])).normalize();
   const sun = new THREE.DirectionalLight(0xfff0d8, 3.4);
@@ -163,7 +165,10 @@ async function boot(): Promise<void> {
   await S.setup?.();
   const [house, yard] = await Promise.all([
     buildHouse(),
-    buildYard({ mowed: S.mowed ?? (() => 0), stripe: S.stripe, grassDensity: density }),
+    buildYard({
+      mowed: S.mowed ?? (() => 0), stripe: S.stripe, grassDensity: density,
+      focus: S.pos[1] < 3 ? { x: S.pos[0], z: S.pos[2], r: Number(params.get("ring") ?? 11), density: Number(params.get("ringd") ?? 700) } : undefined,
+    }),
   ]);
   scene.add(house.group, yard.group);
   await placeProps(scene);

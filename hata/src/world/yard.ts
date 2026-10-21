@@ -50,13 +50,14 @@ export interface YardOptions {
   mowed: (x: number, z: number) => number;
   stripe?: (x: number, z: number) => boolean;
   grassDensity: number;
+  focus?: { x: number; z: number; r: number; density: number };
 }
 
 export async function buildYard(o: YardOptions): Promise<YardParts> {
   const g = new THREE.Group();
   g.name = "yard";
   const [soil, pavers, overgrown, asphalt, coping, poolTiles, deck, fence, bark, sidewalk, leafLitter] = await Promise.all([
-    pbrMaterial("leafy_grass", { scale: 0.5 }),
+    pbrMaterial("grass_ground", { scale: 1 / 2.5 }),
     pbrMaterial("patterned_concrete_pavers", { scale: 1 / 1.8 }),
     pbrMaterial("overgrown_concrete_pavers", { scale: 0.5 }),
     pbrMaterial("asphalt_02", { scale: 1 / 3 }),
@@ -76,21 +77,19 @@ export async function buildYard(o: YardOptions): Promise<YardParts> {
   applyGrime(asphalt, { amount: 0.25, color: 0x222222 });
 
   // Ground: a big sheet with the pool cut out. Lawn texture under the blades.
+  // Shape coordinates are (x, -z): rotateX(-π/2) maps shape y → world -z and keeps faces pointing up.
   const groundShape = new THREE.Shape();
-  groundShape.moveTo(-70, -70); groundShape.lineTo(70, -70); groundShape.lineTo(70, 70); groundShape.lineTo(-70, 70); groundShape.closePath();
+  groundShape.moveTo(-200, -200); groundShape.lineTo(200, -200); groundShape.lineTo(200, 200); groundShape.lineTo(-200, 200); groundShape.closePath();
   const hole = new THREE.Path();
-  hole.moveTo(POOL.x0, POOL.z0); hole.lineTo(POOL.x0, POOL.z1); hole.lineTo(POOL.x1, POOL.z1); hole.lineTo(POOL.x1, POOL.z0); hole.closePath();
+  hole.moveTo(POOL.x0, -POOL.z1); hole.lineTo(POOL.x1, -POOL.z1); hole.lineTo(POOL.x1, -POOL.z0); hole.lineTo(POOL.x0, -POOL.z0); hole.closePath();
   groundShape.holes.push(hole);
   const groundGeo = new THREE.ShapeGeometry(groundShape);
-  groundGeo.rotateX(Math.PI / 2); // shape (x, y) → world (x, 0, y); faces end up pointing down, so normals are reset below
+  groundGeo.rotateX(-Math.PI / 2);
   const ground = new THREE.Mesh(groundGeo, soil);
   ground.receiveShadow = true;
   ground.position.y = -0.005;
   bakeWorldUV(ground);
-  const nrm = ground.geometry.getAttribute("normal") as THREE.BufferAttribute;
-  for (let i = 0; i < nrm.count; i++) nrm.setXYZ(i, 0, 1, 0);
   g.add(ground);
-  soil.side = THREE.DoubleSide;
 
   // Street, curb, sidewalk, driveway, path.
   box(g, 140, 0.04, 8, 0, -0.01, 28, asphalt, { cast: false });
@@ -106,7 +105,7 @@ export async function buildYard(o: YardOptions): Promise<YardParts> {
     const x = c.getContext("2d")!;
     for (let i = 0; i < 9; i++) {
       const gr = x.createRadialGradient(64 + (Math.random() - 0.5) * 50, 64 + (Math.random() - 0.5) * 50, 2, 64, 64, 30 + Math.random() * 30);
-      gr.addColorStop(0, "rgba(10,8,6,0.55)");
+      gr.addColorStop(0, "rgba(10,8,6,0.28)");
       gr.addColorStop(1, "rgba(10,8,6,0)");
       x.fillStyle = gr;
       x.fillRect(0, 0, 128, 128);
@@ -210,6 +209,7 @@ export async function buildYard(o: YardOptions): Promise<YardParts> {
     isLawn,
     mowed: o.mowed,
     stripe: o.stripe,
+    focus: o.focus,
     bounds: [LOT.x0, LOT.x1, LOT.z0, LOT.z1],
     density: o.grassDensity,
   });

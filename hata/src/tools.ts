@@ -1,5 +1,24 @@
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { instance, pbrMaterial } from "./assets";
+
+/** Tools modelled in Blender (hata/blender/tools.py → public/hata/models/tools.glb). */
+let toolsGltf: Promise<THREE.Object3D> | null = null;
+export async function blenderTool(name: "washer" | "mower" | "blower" | "glove_grip"): Promise<THREE.Object3D> {
+  toolsGltf ??= new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}hata/models/tools.glb`).then((g) => g.scene);
+  const root = (await toolsGltf).getObjectByName(name);
+  if (!root) throw new Error(`tool ${name} missing in tools.glb`);
+  const o = root.clone(true);
+  o.position.set(0, 0, 0);
+  o.traverse((c) => {
+    const m = c as THREE.Mesh;
+    if (m.isMesh) {
+      m.castShadow = false;
+      m.receiveShadow = true;
+    }
+  });
+  return o;
+}
 
 /**
  * First-person tools held in front of the camera: the pressure washer lance

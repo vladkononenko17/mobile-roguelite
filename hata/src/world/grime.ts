@@ -24,6 +24,9 @@ export interface GrimeOptions {
   splash?: number;
   /** Treat as floor dust: footprints-ish patches, lighter grey-brown. */
   dust?: number;
+  /** Repaint the albedo: keep the texture's light/dark detail, replace its hue. */
+  paint?: THREE.ColorRepresentation;
+  paintStrength?: number;
 }
 
 const MAX_ZONES = 8;
@@ -60,6 +63,8 @@ export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions): TH
     gScale: { value: 1 / (o.scale ?? 1.2) },
     gSplash: { value: o.splash ?? 0 },
     gDust: { value: o.dust ?? 0 },
+    gPaint: { value: new THREE.Color(o.paint ?? 0xffffff) },
+    gPaintK: { value: o.paint === undefined ? 0 : (o.paintStrength ?? 1) },
   };
   mat.userData.grime = u;
   mat.onBeforeCompile = (sh) => {
@@ -86,7 +91,7 @@ export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions): TH
         `#include <common>
         varying vec3 vGW; varying vec3 vGN;
         uniform float gAmount, gStreaks, gMoss, gScale, gSplash, gDust;
-        uniform vec3 gColor;
+        uniform vec3 gColor; uniform vec3 gPaint; uniform float gPaintK;
         uniform vec4 gZoneMin[${MAX_ZONES}]; uniform vec4 gZoneMax[${MAX_ZONES}]; uniform int gZoneCount;
         ${NOISE}`,
       )
@@ -123,7 +128,7 @@ export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions): TH
         gc = mix(gc, vec3(0.42, 0.38, 0.33) * (0.8 + 0.4 * n2), gDust * up);
         diffuseColor.rgb = mix(diffuseColor.rgb, gc, g * 0.88);
         // moss on faces that look at the sky
-        float moss = gMoss * up * smoothstep(0.45, 0.75, gfbm(gp * gScale * 1.6 + 7.0)) * (1.0 - zoneClean);
+        float moss = gMoss * up * smoothstep(0.48, 0.78, gfbm(gp * gScale * 1.6 + 7.0)) * (0.35 + 0.65 * smoothstep(0.25, 0.75, gn(gp * 11.0))) * (1.0 - zoneClean);
         vec3 mossC = mix(vec3(0.16, 0.22, 0.07), vec3(0.32, 0.4, 0.12), n2);
         diffuseColor.rgb = mix(diffuseColor.rgb, mossC, clamp(moss, 0.0, 1.0));
         diffuseColor.rgb *= 1.0 - wet * 0.22;

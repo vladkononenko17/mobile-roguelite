@@ -18,6 +18,8 @@ export interface LawnOptions {
   stripe?: (x: number, z: number) => boolean;
   bounds: [number, number, number, number]; // x0, x1, z0, z1
   density: number; // blades per m²
+  /** Extra density in a disc around the player (the game moves this ring with the camera). */
+  focus?: { x: number; z: number; r: number; density: number };
   seed?: number;
   tall?: [number, number];
   cut?: [number, number];
@@ -49,7 +51,9 @@ export function buildLawn(o: LawnOptions): THREE.InstancedMesh {
   const r = rng(o.seed ?? 7);
   const [x0, x1, z0, z1] = o.bounds;
   const area = (x1 - x0) * (z1 - z0);
-  const n = Math.floor(area * o.density);
+  const nBase = Math.floor(area * o.density);
+  const nFocus = o.focus ? Math.floor(Math.PI * o.focus.r * o.focus.r * o.focus.density) : 0;
+  const n = nBase + nFocus;
   const tall = o.tall ?? [0.22, 0.5];
   const cut = o.cut ?? [0.05, 0.08];
 
@@ -84,10 +88,10 @@ export function buildLawn(o: LawnOptions): THREE.InstancedMesh {
       .replace(
         "#include <map_fragment>",
         `#include <map_fragment>
-        vec3 root = vec3(0.05, 0.09, 0.025);
-        vec3 tip = mix(vec3(0.33, 0.47, 0.13), vec3(0.47, 0.55, 0.18), vVar.x);
-        tip = mix(tip, vec3(0.62, 0.55, 0.30), vVar.y);  // dry blades
-        tip *= 0.85 + 0.3 * vVar.z;
+        vec3 root = vec3(0.015, 0.03, 0.006);
+        vec3 tip = mix(vec3(0.10, 0.20, 0.03), vec3(0.20, 0.30, 0.06), vVar.x);
+        tip = mix(tip, vec3(0.40, 0.33, 0.13), vVar.y);  // dry blades
+        tip *= 0.8 + 0.4 * vVar.z;
         diffuseColor.rgb = mix(root, tip, smoothstep(0.0, 0.9, vH));`,
       );
   };
@@ -100,7 +104,14 @@ export function buildLawn(o: LawnOptions): THREE.InstancedMesh {
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), e = new THREE.Euler();
   let k = 0;
   for (let i = 0; i < n; i++) {
-    const x = x0 + r() * (x1 - x0), z = z0 + r() * (z1 - z0);
+    let x: number, z: number;
+    if (i < nBase || !o.focus) {
+      x = x0 + r() * (x1 - x0); z = z0 + r() * (z1 - z0);
+    } else {
+      // denser near the centre of the ring, thinning out to its edge
+      const a = r() * Math.PI * 2, d = o.focus.r * Math.pow(r(), 0.75);
+      x = o.focus.x + Math.cos(a) * d; z = o.focus.z + Math.sin(a) * d;
+    }
     if (!o.isLawn(x, z)) continue;
     const mw = o.mowed(x, z);
     // clumping: taller near clump centres
@@ -108,7 +119,7 @@ export function buildLawn(o: LawnOptions): THREE.InstancedMesh {
     const hTall = tall[0] + (tall[1] - tall[0]) * (0.4 * r() + 0.6 * clump);
     const hCut = cut[0] + (cut[1] - cut[0]) * r();
     const h = hTall + (hCut - hTall) * mw;
-    const w = 0.012 + r() * 0.012;
+    const w = 0.018 + r() * 0.02;
     e.set((r() - 0.5) * 0.5, r() * Math.PI * 2, (r() - 0.5) * 0.5);
     q.setFromEuler(e);
     p.set(x, 0, z);

@@ -41,7 +41,7 @@ export async function buildHouse(): Promise<HouseParts> {
   const top = F + H;
 
   const [siding, plaster, plasterBed, tilesBath, foundation, roof, ceil, fLiving, fKitchen, fBed, fBath, fHall] = await Promise.all([
-    pbrMaterial("weathered_plank_siding", { scale: 1 / 1.57, color: 0xf2ece2 }),
+    pbrMaterial("weathered_plank_siding", { scale: 1 / 1.57 }),
     pbrMaterial("painted_plaster_wall", { scale: 0.5, color: 0xf3eadb }),
     pbrMaterial("beige_wall_001", { scale: 1 / 3 }),
     pbrMaterial("square_tiles_03", { scale: 0.5 }),
@@ -54,12 +54,12 @@ export async function buildHouse(): Promise<HouseParts> {
     pbrMaterial("dirty_tiles", { scale: 1 / 2.26 }),
     pbrMaterial("wood_floor_worn", { scale: 0.5 }),
   ]);
-  applyGrime(siding, { amount: 0.95, streaks: 0.9, splash: 0.8, color: 0x463726, scale: 1.4 });
+  applyGrime(siding, { paint: 0xdcd6c6, amount: 0.95, streaks: 0.9, splash: 0.8, color: 0x463726, scale: 1.4 });
   applyGrime(plaster, { amount: 0.35, color: 0x5a4a38, scale: 0.9 });
   applyGrime(plasterBed, { amount: 0.3, color: 0x5a4a38 });
   applyGrime(tilesBath, { amount: 0.5, color: 0x50463a, scale: 0.5 });
   applyGrime(foundation, { amount: 0.8, splash: 1, moss: 0.4, color: 0x3a3226 });
-  applyGrime(roof, { amount: 0.75, moss: 1.1, color: 0x2d281f, scale: 1.6 });
+  applyGrime(roof, { paint: 0x8e4a34, paintStrength: 0.6, amount: 0.55, moss: 0.55, color: 0x2d281f, scale: 0.7, streaks: 0.4 });
   applyGrime(ceil, { amount: 0.25, color: 0x6a5c48 });
   for (const f of [fLiving, fKitchen, fBed, fHall]) applyGrime(f, { amount: 0.75, dust: 1, color: 0x4f4232, scale: 0.8 });
   applyGrime(fBath, { amount: 0.6, color: 0x4a4030, scale: 0.5 });
