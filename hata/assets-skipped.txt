@@ -1,0 +1,2 @@
+public/hata/ph/models/fir_tree_01/fir_tree_01.bin
+public/hata/ph/models/jacaranda_tree/jacaranda_tree.bin
