@@ -58,16 +58,19 @@ interface Shot {
 const lane = 0.55;
 const SHOTS: Record<string, Shot> = {
   mow: {
-    pos: [-5.9, 1.62, 18.6],
-    look: [-3.2, 0.6, 10.5],
+    pos: [-6.3, 1.55, 19.2],
+    look: [-4.6, 0.0, 15.6],
+    fov: 55,
     mowed: (x, z) => (x < -6.6 && z > 7 && z < 22.5 ? 1 : 0),
     stripe: (x) => Math.floor(x / lane) % 2 === 0,
     setup: async () => {
+      // The mower stands on the lawn, handle half a metre in front of the player.
       const m = await blenderTool("mower");
-      // handle bar sits just below the eye; the deck runs ahead on the grass
-      m.position.set(0.0, -1.62, 0.15);
-      m.rotation.y = Math.PI;
-      camera.add(m);
+      const [px, , pz] = S.pos, [lx, , lz] = S.look;
+      const d = new THREE.Vector3(lx - px, 0, lz - pz).normalize();
+      m.position.set(px + d.x * 1.55, 0, pz + d.z * 1.55);
+      m.rotation.y = Math.atan2(-d.x, -d.z) + Math.PI;
+      scene.add(m);
       addCleanZone({ x: -7.2, y: 0.4, z: 5.0 }, { x: -3.8, y: 1.7, z: 5.6 }, 0.0, 0.2);
     },
   },
