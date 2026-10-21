@@ -18,7 +18,7 @@ import { blenderTool, detector, spray } from "./tools";
 
 declare global {
   interface Window {
-    __hata: { ready: boolean; renderer?: THREE.WebGLRenderer; frames: number };
+    __hata: { ready: boolean; renderer?: THREE.WebGLRenderer; frames: number; error?: string; capture?: () => string };
   }
 }
 window.__hata = { ready: false, frames: 0 };
@@ -28,7 +28,8 @@ const shot = params.get("shot") ?? "mow";
 const density = Number(params.get("grass") ?? 160);
 
 const view = document.getElementById("view")!;
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+const still = params.has("still");
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance", preserveDrawingBuffer: still });
 renderer.setPixelRatio(Math.min(devicePixelRatio, Number(params.get("dpr") ?? 2)));
 renderer.setSize(view.clientWidth, view.clientHeight);
 renderer.shadowMap.enabled = true;
@@ -227,6 +228,16 @@ async function boot(): Promise<void> {
     yard.tick(t);
     composer.render();
     window.__hata.frames++;
+    if (still) {
+      // offline capture: one warm-up frame (shader compile, shadow map), then stop
+      if (window.__hata.frames >= 2) {
+        window.__hata.capture = () => renderer.domElement.toDataURL("image/png");
+        window.__hata.ready = true;
+        return;
+      }
+      setTimeout(frame, 0);
+      return;
+    }
     if (window.__hata.frames === 3) window.__hata.ready = true;
     requestAnimationFrame(frame);
   };
@@ -241,6 +252,7 @@ async function boot(): Promise<void> {
 
 boot().catch((e) => {
   console.error(e);
+  window.__hata.error = String(e?.stack ?? e);
   document.body.insertAdjacentHTML("beforeend", `<pre style="color:#f88;position:fixed;top:0;left:0">${String(e?.stack ?? e)}</pre>`);
 });
 
