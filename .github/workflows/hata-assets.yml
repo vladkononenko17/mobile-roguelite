@@ -28,12 +28,19 @@ jobs:
           python-version: "3.12"
       - name: Download
         run: python scripts/hata-fetch-assets.py
+      - name: Report sizes
+        run: |
+          du -sh public/hata/ph/* || true
+          find public/hata -type f -size +40M -printf '%s %p\n' | while read s f; do echo "::warning::big file $f $((s/1048576)) MB"; done
+          echo "::notice::total $(du -sh public/hata | cut -f1)"
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          # GitHub refuses files over 100 MB: skip them and say so.
+          find public/hata -type f -size +95M -printf '%p\n' | while read f; do echo "::warning::skipped (too big for git) $f"; rm -f "$f"; echo "$f" >> hata/assets-skipped.txt; done
           mkdir -p public/hata && git add -A hata public/hata
           git diff --cached --quiet && exit 0
-          git commit -m "hata: fetch CC0 assets from Poly Haven"
-          git pull --rebase origin "${GITHUB_REF_NAME}"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git commit -q -m "hata: fetch CC0 assets from Poly Haven"
+          git pull -q --rebase origin "${GITHUB_REF_NAME}" > /tmp/git.log 2>&1 || { echo "::error::pull: $(tail -c 600 /tmp/git.log | tr '\n' ' ')"; exit 1; }
+          git push -q origin "HEAD:${GITHUB_REF_NAME}" > /tmp/git.log 2>&1 || { echo "::error::push: $(tail -c 600 /tmp/git.log | tr '\n' ' ')"; exit 1; }
