@@ -1,0 +1,39 @@
+name: Fetch CC0 assets for «Хата з краю»
+
+# Poly Haven is not reachable from the dev sandbox, so assets are pulled here
+# and committed back to this branch. Only runs on the asset branch.
+on:
+  push:
+    branches: [hata-assets]
+    paths:
+      - hata/assets-wanted.json
+      - scripts/hata-fetch-assets.py
+      - .github/workflows/hata-assets.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hata-assets
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download
+        run: python scripts/hata-fetch-assets.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add hata/assets-index.json hata/assets-fetch.log public/hata
+          git diff --cached --quiet && exit 0
+          git commit -m "hata: fetch CC0 assets from Poly Haven"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
