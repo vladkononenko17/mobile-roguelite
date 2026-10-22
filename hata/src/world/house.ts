@@ -83,12 +83,12 @@ export async function buildHouse(W: WorldIndex, style: HouseStyle, restore: Rest
 
   // Dirt recipes. Facades: a thick grey-brown film with black streaks from
   // the gutters and mud splashed up from the ground; the glass is almost opaque.
-  const sidingG: GrimeOptions = { paint: style.siding, film: 0.42, amount: 1, streaks: 1.2, splash: 1.3, color: 0x5a4a30, color2: 0x3c4426, scale: 0.9 };
+  const sidingG: GrimeOptions = { paint: style.siding, film: 0.85, amount: 1, streaks: 1.2, splash: 1.3, color: 0x6e5c3c, color2: 0x4e5634, scale: 0.9 };
   const foundG: GrimeOptions = { film: 0.6, amount: 1, splash: 1.3, moss: 0.6, color: 0x2e281e, color2: 0x1e2416 };
-  const floorG: GrimeOptions = { film: 0.45, amount: 1, dust: 1, color: 0x3c3022, color2: 0x4a4436, scale: 0.55 };
-  const roofG: GrimeOptions = { paint: style.roof, paintStrength: 0.85, film: 0.5, amount: 1, moss: 1.3, color: 0x221e17, color2: 0x1d2414, scale: 0.6, streaks: 0.5 };
-  const glassG: GrimeOptions = { glass: true, film: 0.75, amount: 1, color: 0x6a5c44, color2: 0x4a4434, scale: 0.3, streaks: 0.6 };
-  const tileG: GrimeOptions = { film: 0.55, amount: 1, color: 0x6a5a30, color2: 0x3a4a3a, scale: 0.35, streaks: 0.8 };
+  const floorG: GrimeOptions = { film: 0.75, amount: 1, dust: 1, color: 0x5a4630, color2: 0x4a4436, scale: 0.55 };
+  const roofG: GrimeOptions = { paint: style.roof, paintStrength: 0.85, film: 0.75, amount: 1, moss: 1.3, color: 0x221e17, color2: 0x1d2414, scale: 0.6, streaks: 0.5 };
+  const glassG: GrimeOptions = { glass: true, film: 0.9, amount: 1, color: 0x6a5c44, color2: 0x4a4434, scale: 0.3, streaks: 0.6 };
+  const tileG: GrimeOptions = { film: 0.8, amount: 1, color: 0x6a5a30, color2: 0x3a4a3a, scale: 0.35, streaks: 0.8 };
 
   const plain = (m: THREE.MeshStandardMaterial, o: GrimeOptions): THREE.MeshStandardMaterial => applyGrime(m.clone(), o);
   const plaster = plain(plasterB, { amount: 0.4, film: 0.1, color: 0x5a4a38, scale: 0.9 });

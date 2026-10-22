@@ -114,7 +114,7 @@ export class DishStation {
     }
     let did = 0;
     if (hit) {
-      did = d.surface.brush(hit, Math.max(0.035, d.r * 0.32), rate * dt * (pointer.down ? 1 : 0.55));
+      did = d.surface.brush(hit, Math.max(0.045, d.r * 0.36), rate * dt * (pointer.down ? 1.2 : 0.9));
       this.sponge.visible = true;
       this.sponge.position.copy(hit).add(new THREE.Vector3(0, 0.015, 0));
       this.sponge.rotation.y = this.t * 2;

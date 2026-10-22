@@ -83,8 +83,8 @@ export async function buildYard(W: WorldIndex, style: HouseStyle, restore: Resto
     pbrMaterial("concrete_floor_02", { scale: 0.5, color: 0xd9d4ca }),
     pbrMaterial("forest_leaves_02", { scale: 1 / 3 }),
   ]);
-  const pavingG: GrimeOptions = { film: 0.6, amount: 1, moss: 0.9, color: 0x1e1a14, color2: 0x23281a, scale: 0.8, dust: 0.4 };
-  const deckG: GrimeOptions = { film: 0.65, amount: 1, moss: 1.0, color: 0x1c1712, color2: 0x24301a, scale: 0.7 };
+  const pavingG: GrimeOptions = { film: 0.8, amount: 1, moss: 0.9, color: 0x1e1a14, color2: 0x23281a, scale: 0.8, dust: 0.4 };
+  const deckG: GrimeOptions = { film: 0.85, amount: 1, moss: 1.0, color: 0x1c1712, color2: 0x24301a, scale: 0.7 };
   applyGrime(asphalt, { amount: 0.25, color: 0x222222 });
   const fencePlain = applyGrime(fenceB.clone(), { film: 0.4, amount: 1, streaks: 0.6, splash: 1.0, color: 0x2a2418, color2: 0x253018 });
 

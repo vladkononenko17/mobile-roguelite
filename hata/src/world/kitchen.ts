@@ -51,7 +51,7 @@ export async function buildKitchen(g: THREE.Group, W: WorldIndex, restore: Resto
     pbrMaterial("granite_tile", { scale: 1.2, color: 0xe8e4dc }),
     pbrMaterial("white_bricks", { scale: 1.6 }),
   ]);
-  const grease: GrimeOptions = { film: 0.55, amount: 1, color: 0x6a4818, color2: 0x3a2a14, scale: 0.18, streaks: 0.7 };
+  const grease: GrimeOptions = { film: 0.5, amount: 0.9, color: 0x6a5a38, color2: 0x4a3e26, scale: 0.18, streaks: 0.7 };
   const crumbs: GrimeOptions = { film: 0.5, amount: 1, color: 0x5a3a18, color2: 0x7a5a28, scale: 0.12, dust: 0.6 };
   const wood = applyGrime(woodB.clone(), { amount: 0.5, film: 0.25, color: 0x3a2a14 });
   const steel = new THREE.MeshStandardMaterial({ color: 0xc8ccd0, metalness: 1, roughness: 0.25 });
@@ -59,7 +59,12 @@ export async function buildKitchen(g: THREE.Group, W: WorldIndex, restore: Resto
   const add = (m: THREE.Mesh, block = true) => { if (block) W.blockMesh(m); W.solids.push(m); return m; };
 
   // ── Base cabinets: along the front wall (x 1.15..6.89) and the right wall (z 3.2..4.29).
-  const cabFront = add(box(g, WALL_X - 1.15, 0.86, 0.58, (1.15 + WALL_X) / 2, F + 0.43, WALL_Z - 0.29, wood));
+  // the base run is split so the sink bowl has room under the counter
+  const sxa = SINK.x - 0.35, sxb = SINK.x + 0.35;
+  const cabFront = add(box(g, sxa - 1.15, 0.86, 0.58, (1.15 + sxa) / 2, F + 0.43, WALL_Z - 0.29, wood));
+  add(box(g, WALL_X - sxb, 0.86, 0.58, (sxb + WALL_X) / 2, F + 0.43, WALL_Z - 0.29, wood));
+  add(box(g, sxb - sxa, 0.6, 0.58, SINK.x, F + 0.3, WALL_Z - 0.29, wood));
+  box(g, sxb - sxa, 0.26, 0.02, SINK.x, F + 0.73, WALL_Z - 0.57, wood);
   const cabSide = add(box(g, 0.58, 0.86, 4.29 - 3.2, WALL_X - 0.29, F + 0.43, (3.2 + 4.29) / 2, wood));
   void cabFront; void cabSide;
   const handle = (x: number, y: number, z: number, alongX: boolean) => {

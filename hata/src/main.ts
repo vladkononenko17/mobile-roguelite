@@ -224,7 +224,7 @@ async function boot(): Promise<void> {
   sun.shadow.normalBias = 0.03;
   scene.add(sun, sun.target, hemi);
   for (const [x, z] of [[-3.5, 2.5], [4, 2.5], [-3.5, -2.5], [1.5, -2.5], [5, -2.5]]) {
-    const l = new THREE.PointLight(0xffe2bd, 2.6, 7.5, 1.6);
+    const l = new THREE.PointLight(0xffe6c8, 3.0, 8.5, 1.4);
     l.position.set(x, HOUSE.floorY + 2.3, z);
     scene.add(l);
   }
@@ -324,10 +324,17 @@ const VMS: Record<string, VM> = {
   blower: { node: "blower", pos: [0.24, -0.32, -0.3], rot: [0.12, 0.08, 0] },
   net: { node: "net", pos: [0.24, -0.34, -0.15], rot: [0.0, 0.15, 0] },
   mop: { node: "mop", pos: [0.22, -0.34, -0.2], rot: [0.0, 0.15, 0] },
-  squeegee: { node: "squeegee", pos: [0.16, -0.24, -0.42], rot: [0.35, 0.05, 0] },
+  squeegee: { node: "squeegee", pos: [0.2, -0.2, -0.36], rot: [0.3, 0.05, 0] },
   scraper: { node: "scraper", pos: [0.18, -0.24, -0.4], rot: [0.35, 0.1, 0] },
   roller: { node: "roller", pos: [0.16, -0.24, -0.4], rot: [0.35, 0.1, 0] },
   detector: { node: "detector", pos: [0.24, -0.52, -0.28], rot: [0.05, 0.12, 0] },
+};
+/** Long-handled tools stand in the world: the head on the ground ahead, the grip in your hands. */
+const POLE_TOOLS: Record<string, { drop: number; side: number; ahead: number; tilt: number }> = {
+  rake: { drop: 0.34, side: 0.2, ahead: 0.32, tilt: 0 },
+  mop: { drop: 0.34, side: 0.2, ahead: 0.32, tilt: 0 },
+  net: { drop: 0.42, side: 0.22, ahead: 0.3, tilt: 0.35 },
+  detector: { drop: 0.6, side: 0.24, ahead: 0.25, tilt: 0 },
 };
 function setupViewmodels(): void {
   for (const [k, v] of Object.entries(VMS)) {
@@ -335,9 +342,15 @@ function setupViewmodels(): void {
     if (!src) continue;
     const o = src.clone(true);
     o.visible = false;
-    vmRoot.add(o);
+    if (POLE_TOOLS[k]) {
+      o.traverse((m) => { if ((m as THREE.Mesh).isMesh) m.castShadow = true; });
+      scene.add(o);
+    } else {
+      vmRoot.add(o);
+    }
     vms[k] = o;
   }
+  if (vms.squeegee) vms.squeegee.scale.setScalar(0.62);
   if (toolsGltf.mower) {
     mower = toolsGltf.mower.clone(true);
     mower.traverse((m) => { if ((m as THREE.Mesh).isMesh) m.castShadow = true; });
@@ -535,6 +548,11 @@ function aim(): void {
   const hits = ray.intersectObjects(W.solids, false);
   aimHit = hits.find((h) => h.object.visible !== false || (h.object as THREE.Mesh).material) ?? null;
   aimSurface = (aimHit?.object.userData.surface as CleanSurface | undefined) ?? null;
+  // a wall's inner face belongs to the room, not to the facade on its other side
+  if (aimSurface && aimHit?.face) {
+    const n = aimHit.face.normal.clone().transformDirection(aimHit.object.matrixWorld);
+    if (Math.abs(n.dot(aimSurface.normal)) < 0.5 || (aimSurface.kind !== "glass" && n.dot(aimSurface.normal) < 0)) aimSurface = null;
+  }
   // interactables: closest one along the view ray, not behind a wall
   aimInter = null;
   let bestT = Infinity;
@@ -667,7 +685,8 @@ function work(dt: number, held: boolean, pressed: boolean, stats: ReturnType<typ
     const inRange = aimHit.distance <= Math.max(T.levels[0].range, stats.range) + 0.01;
     const right = T.works.includes(s.kind);
     target = { name: s.name, pct: s.share(), value: s.value };
-    if (!right && !s.done) {
+    const surfaceTool = tool === "washer" || tool === "mop" || tool === "squeegee" || tool === "hands" || tool === "paint";
+    if (!right && !s.done && surfaceTool) {
       want = needTool(s.kind);
       target.need = save.tools[want] ? `Потрібно: ${TOOLS[want].short}` : `Потрібно: ${TOOLS[want].name} (у гаражі)`;
       if (save.tools[want]) { label = `Взяти: ${TOOLS[want].short}`; style = "dim"; if (pressed) { tool = want; audio.shot("click"); } }
@@ -852,6 +871,18 @@ function toolEffects(using: boolean, dt: number, stats: ReturnType<typeof toolSt
     if (!o.visible) continue;
     const c = VMS[k];
     const bob = Math.sin(t * 7) * 0.006 * player.moving;
+    const pole = POLE_TOOLS[k];
+    if (pole) {
+      const sw = using ? Math.sin(useAnim) * (k === "detector" ? 0.35 : 0.12) : Math.sin(t * 1.3) * 0.03;
+      const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+      o.position.set(player.pos.x, player.feet + player.eye - pole.drop + bob, player.pos.z)
+        .addScaledVector(player.forward, pole.ahead + (k === "mop" && using ? Math.sin(useAnim) * 0.12 : 0))
+        .addScaledVector(right, pole.side);
+      o.rotation.set(0, 0, 0);
+      o.rotateY(player.yaw + sw);
+      o.rotateX(THREE.MathUtils.clamp(player.pitch * pole.tilt, -0.3, 0.25));
+      continue;
+    }
     const scrub = using && ["rag", "mop", "squeegee", "roller", "scraper", "rake"].includes(k) ? Math.sin(useAnim) * 0.035 : 0;
     const kick = using && k === "washer" ? Math.sin(t * 60) * 0.0015 : 0;
     o.position.set(c.pos[0] + swayX + scrub, c.pos[1] + swayY + bob + kick + (k === "rake" ? Math.abs(scrub) : 0), c.pos[2] + (k === "mop" ? scrub : 0));
@@ -956,7 +987,7 @@ Object.assign(window.__hata, {
     player.applyCamera(camera);
     camera.updateMatrixWorld();
   },
-  overall, houseValue, rows: () => rows.map((r) => ({ key: r.key, name: r.name, value: r.value, pct: r.share() })),
+  vms, overall, houseValue, rows: () => rows.map((r) => ({ key: r.key, name: r.name, value: r.value, pct: r.share() })),
   dishes: () => station, enterDishes, exitDishes,
   capture: () => { render(); return renderer.domElement.toDataURL("image/jpeg", 0.88); },
   highlight: (on: boolean) => { highlight = on; grimeGlobals.highlight.value = on ? 1 : 0; },

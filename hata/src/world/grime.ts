@@ -146,7 +146,7 @@ export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions, mas
         float g = 0.0, moss = 0.0;
         if (gPeel > 0.5) {
           // old paint on bare wood: cracked, curling flakes that show the wood
-          float crack = smoothstep(0.52, 0.58, gn(gp * vec3(9.0, 3.0, 9.0) + n2 * 1.5));
+          float crack = smoothstep(0.5, 0.56, gn(gp * vec3(26.0, 8.0, 26.0) + n2 * 2.5)) * (0.5 + 0.5 * smoothstep(0.4, 0.6, n1));
           float flake = left * (1.0 - crack * 0.85);
           vec3 oldC = gOldPaint * (0.75 + 0.35 * n2);
           diffuseColor.rgb = mix(diffuseColor.rgb * 0.9, oldC, flake);
@@ -163,15 +163,15 @@ export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions, mas
           // muddy prints and spills on floors
           g += gDust * up * smoothstep(0.62, 0.7, gn(gp * 2.2 + 31.0)) * 0.8;
           g = clamp(g * gAmount, 0.0, 1.0) * left;
-          moss = gMoss * up * smoothstep(0.4, 0.7, gfbm(gp * gScale * 1.6 + 7.0)) * (0.45 + 0.55 * smoothstep(0.25, 0.75, n3)) * left;
+          moss = gMoss * up * smoothstep(0.38, 0.85, gfbm(gp * gScale * 1.1 + 7.0)) * (0.35 + 0.65 * smoothstep(0.2, 0.8, n3)) * left;
         }
-        vec3 gc = mix(gColor, gColor2, smoothstep(0.3, 0.7, n2)) * (0.6 + 0.8 * n3);
-        gc = mix(gc, vec3(0.36, 0.33, 0.29) * (0.8 + 0.4 * n2), gDust * up * 0.6);
+        vec3 gc = mix(gColor, gColor2, smoothstep(0.3, 0.7, n2)) * (0.55 + 0.5 * n3) * (1.15 - 0.45 * smoothstep(0.45, 0.75, n1));
+        gc = mix(gc, vec3(0.27, 0.22, 0.16) * (0.75 + 0.5 * n2), gDust * up * 0.35);
         diffuseColor.rgb = mix(diffuseColor.rgb, gc, g * 0.94);
-        vec3 mossC = mix(vec3(0.13, 0.19, 0.05), vec3(0.3, 0.38, 0.1), n2);
+        vec3 mossC = mix(vec3(0.09, 0.12, 0.04), vec3(0.2, 0.25, 0.08), n2) * (0.7 + 0.5 * n3);
         diffuseColor.rgb = mix(diffuseColor.rgb, mossC, clamp(moss, 0.0, 1.0));
         float wetK = mk.g;
-        diffuseColor.rgb *= 1.0 - wetK * 0.25;
+        diffuseColor.rgb *= 1.0 - wetK * 0.06;
         if (gGlass > 0.5) diffuseColor.a = mix(diffuseColor.a, 0.92, clamp(g * 1.2, 0.0, 1.0));
         float grimeK = clamp(g + moss, 0.0, 1.0);`,
       )

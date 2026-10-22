@@ -35,7 +35,7 @@ export interface ToolDef {
 export const TOOLS: Record<ToolId, ToolDef> = {
   hands: {
     id: "hands", name: "Руки і ганчірка", short: "Руки", works: ["pick", "fix", "dish", "wipe"],
-    levels: [{ name: "Руки і ганчірка", price: 0, radius: 0.14, rate: 2.0, range: 2.0, blurb: "Підняти сміття, протерти, помити посуд, полатати дах." }],
+    levels: [{ name: "Руки і ганчірка", price: 0, radius: 0.14, rate: 2.0, range: 2.4, blurb: "Підняти сміття, протерти, помити посуд, полатати дах." }],
   },
   washer: {
     id: "washer", name: "Мийка високого тиску", short: "Мийка", works: ["wash"],
@@ -66,29 +66,29 @@ export const TOOLS: Record<ToolId, ToolDef> = {
   net: {
     id: "net", name: "Сачок для басейну", short: "Сачок", works: ["pool"],
     levels: [
-      { name: "Сачок", price: 0, radius: 0.35, rate: 10, range: 3.0, blurb: "Виловлює листя з води." },
-      { name: "Телескопічний сачок", price: 900, radius: 0.55, rate: 22, range: 5.0, blurb: "Дістає до середини басейну." },
+      { name: "Сачок", price: 0, radius: 0.4, rate: 12, range: 4.2, blurb: "Виловлює листя з води." },
+      { name: "Телескопічний сачок", price: 900, radius: 0.6, rate: 24, range: 6.5, blurb: "Дістає до середини басейну." },
     ],
   },
   mop: {
     id: "mop", name: "Швабра", short: "Швабра", works: ["mop"],
     levels: [
-      { name: "Швабра з відром", price: 0, radius: 0.28, rate: 1.7, range: 2.3, blurb: "Класика." },
-      { name: "Пароочисник", price: 2200, radius: 0.36, rate: 3.0, range: 2.5, blurb: "Пара бере навіть жир." },
-      { name: "Миюча машина", price: 7000, radius: 0.55, rate: 4.6, range: 2.8, blurb: "Їздить сама, ти тільки направляєш." },
+      { name: "Швабра з відром", price: 0, radius: 0.28, rate: 1.7, range: 3.0, blurb: "Класика." },
+      { name: "Пароочисник", price: 2200, radius: 0.36, rate: 3.0, range: 3.1, blurb: "Пара бере навіть жир." },
+      { name: "Миюча машина", price: 7000, radius: 0.55, rate: 4.6, range: 3.3, blurb: "Їздить сама, ти тільки направляєш." },
     ],
   },
   squeegee: {
     id: "squeegee", name: "Склоочисник", short: "Вікна", works: ["glass"],
     levels: [
-      { name: "Склоочисник", price: 0, radius: 0.14, rate: 2.2, range: 2.0, blurb: "Гума і відро мильної води." },
+      { name: "Склоочисник", price: 0, radius: 0.14, rate: 2.2, range: 2.4, blurb: "Гума і відро мильної води." },
       { name: "Телескопічний склоочисник", price: 700, radius: 0.2, rate: 3.4, range: 4.0, blurb: "Не треба лізти на підвіконня." },
     ],
   },
   paint: {
     id: "paint", name: "Фарбування", short: "Фарба", works: ["paint"],
     levels: [
-      { name: "Шпатель і пензель", price: 600, radius: 0.13, rate: 1.4, range: 2.2, blurb: "Зішкребти стару фарбу, потім фарбувати." },
+      { name: "Шпатель і пензель", price: 600, radius: 0.13, rate: 1.4, range: 2.4, blurb: "Зішкребти стару фарбу, потім фарбувати." },
       { name: "Шліфмашинка і валик", price: 2600, radius: 0.2, rate: 2.4, range: 2.4, blurb: "Удвічі швидше." },
       { name: "Фарбопульт", price: 8000, radius: 0.34, rate: 3.8, range: 3.5, blurb: "Хмара фарби, рівний шар." },
     ],
