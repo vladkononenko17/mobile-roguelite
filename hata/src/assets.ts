@@ -16,6 +16,28 @@ const texCache = new Map<string, Promise<THREE.Texture>>();
 const modelCache = new Map<string, Promise<GLTF>>();
 
 let maxAniso = 4;
+
+/** Thrown when an asset could not be fetched after a few tries; carries the URL. */
+export class AssetError extends Error {
+  constructor(readonly url: string) {
+    super(`Не вдалося завантажити ${url.replace(/^.*\/hata\//, "")}`);
+  }
+}
+
+/** Mobile networks drop requests now and then (and a fresh deploy can 404 for a minute): try again. */
+async function retry<T>(url: string, load: () => Promise<T>, tries = 4): Promise<T> {
+  for (let i = 0; ; i++) {
+    try {
+      return await load();
+    } catch (e) {
+      if (i >= tries - 1) {
+        console.error("asset failed", url, e);
+        throw new AssetError(url);
+      }
+      await new Promise((r) => setTimeout(r, 700 * (i + 1)));
+    }
+  }
+}
 export function setAnisotropy(n: number): void {
   maxAniso = n;
 }
@@ -24,7 +46,7 @@ function loadTex(url: string, srgb: boolean): Promise<THREE.Texture> {
   const key = `${url}|${srgb}`;
   let p = texCache.get(key);
   if (!p) {
-    p = texLoader.loadAsync(url).then((t) => {
+    p = retry(url, () => texLoader.loadAsync(url)).then((t) => {
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
       t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
       t.anisotropy = maxAniso;
@@ -100,7 +122,8 @@ export async function pbrMaterial(id: string, opt: MatOptions = {}): Promise<THR
 export function model(id: string): Promise<GLTF> {
   let p = modelCache.get(id);
   if (!p) {
-    p = gltfLoader.loadAsync(`${BASE}models/${id}/${id}_1k.gltf`);
+    const url = `${BASE}models/${id}/${id}_1k.gltf`;
+    p = retry(url, () => gltfLoader.loadAsync(url));
     modelCache.set(id, p);
   }
   return p;
@@ -123,7 +146,8 @@ export async function instance(id: string): Promise<THREE.Object3D> {
 export async function hdri(renderer: THREE.WebGLRenderer, id: string): Promise<{ env: THREE.Texture; background: THREE.Texture }> {
   const loader = new RGBELoader();
   const ext = id.includes("puresky") ? "hdr" : "hdr";
-  const tex = await loader.loadAsync(`${BASE}hdris/${id}.${ext}`);
+  const url = `${BASE}hdris/${id}.${ext}`;
+  const tex = await retry(url, () => loader.loadAsync(url));
   tex.mapping = THREE.EquirectangularReflectionMapping;
   const pmrem = new THREE.PMREMGenerator(renderer);
   const env = pmrem.fromEquirectangular(tex).texture;
