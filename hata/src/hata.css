@@ -64,6 +64,8 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 
 #action { position: absolute; right: calc(16px + var(--sr)); bottom: calc(16px + var(--sb)); width: 72px; height: 72px; border-radius: 50%; background: var(--mint); color: var(--mint-ink); font-weight: 900; font-size: 12px; line-height: 1.1; box-shadow: 0 0 0 4px rgba(63,214,159,0.28); display: flex; align-items: center; justify-content: center; text-align: center; padding: 8px; box-sizing: border-box; }
 #action.gold { background: var(--gold); color: var(--gold-ink); box-shadow: 0 0 0 4px rgba(255,201,60,0.3); }
+#action.on { background: #ff7a45; color: #2a0f00; box-shadow: 0 0 0 4px rgba(255,122,69,0.35); animation: sprayPulse 0.9s ease-in-out infinite; }
+@keyframes sprayPulse { 50% { box-shadow: 0 0 0 8px rgba(255,122,69,0.2); } }
 #action.dim { background: rgba(255,255,255,0.2); color: #fff; box-shadow: none; }
 #action.pressed { transform: scale(0.94); }
 #mode { position: absolute; right: calc(14px + var(--sr)); bottom: calc(100px + var(--sb)); padding: 4px 10px; font-size: 11px; }
