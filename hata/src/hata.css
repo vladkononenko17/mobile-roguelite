@@ -120,6 +120,11 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 #ov-title { background: none; -webkit-backdrop-filter: none; backdrop-filter: none; justify-content: flex-start; }
 #ov-title .side { width: min(400px, 56vw); height: 100%; display: flex; flex-direction: column; gap: 10px; background: linear-gradient(90deg, rgba(14,22,19,0.9) 60%, rgba(14,22,19,0)); margin: calc(-12px - var(--st)) 0 calc(-12px - var(--sb)) calc(-16px - var(--sl)); padding: calc(14px + var(--st)) 40px calc(14px + var(--sb)) calc(28px + var(--sl)); box-sizing: border-box; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 #ov-title .side > * { flex-shrink: 0; }
+#ov-title .btn { min-height: 44px; }
+#ov-title.is-loading { justify-content: center; background: radial-gradient(ellipse at 50% 115%, #7a4128 0%, #3a2a24 35%, #141a17 75%); }
+#ov-title.is-loading .side { background: none; margin: 0; width: min(440px, 90vw); height: auto; padding: 0; align-items: center; text-align: center; overflow: visible; }
+#ov-title.is-loading #t-play, #ov-title.is-loading .btns, #ov-title.is-loading .tip { display: none; }
+#ov-title.is-loading .loading { width: 100%; }
 #ov-title .side > :first-child { margin-top: auto; }
 #ov-title .side > :last-child { margin-bottom: auto; }
 #ov-title h1 { margin: 0; font-size: 50px; font-weight: 900; line-height: 0.92; letter-spacing: -0.02em; }

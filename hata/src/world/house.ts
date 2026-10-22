@@ -240,6 +240,7 @@ export async function buildHouse(W: WorldIndex, style: HouseStyle, restore: Rest
       solid(box(g, 0.16, h + 0.08, 0.08, fixed, F + h / 2, c - w / 2 - 0.04, trim), box(g, 0.16, h + 0.08, 0.08, fixed, F + h / 2, c + w / 2 + 0.04, trim), box(g, 0.16, 0.08, w + 0.16, fixed, F + h + 0.04, c, trim));
     }
     const pivot = new THREE.Group();
+    pivot.userData.dynamic = true; // doors swing open with the stages
     if (axis === "x") pivot.position.set(c - w / 2, F, fixed);
     else pivot.position.set(fixed, F, c - w / 2);
     pivot.rotation.y = open;

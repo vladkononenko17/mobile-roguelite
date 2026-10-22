@@ -253,3 +253,65 @@ export function flowerBeds(seed = 5): THREE.Group {
   }
   return g;
 }
+
+/**
+ * What you see over the fence: a dark tree line, a far town on one side and
+ * hazy mountains behind it all. Unlit, vertex-coloured rings: three draws.
+ */
+export function horizon(): THREE.Group {
+  const g = new THREE.Group();
+  const r = rng(91);
+  const noise = (a: number, f: number[]): number => f.reduce((acc, k, i) => acc + Math.sin(a * k + i * 1.7 + r() * 0) * (1 / (i + 1)), 0);
+  const ring = (radius: number, n: number, height: (a: number) => number, base: number, bottom: THREE.Color, top: THREE.Color, fog: boolean): THREE.Mesh => {
+    const pos: number[] = [], col: number[] = [], idx: number[] = [];
+    for (let i = 0; i <= n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const x = Math.cos(a) * radius, z = Math.sin(a) * radius, h = height(a);
+      pos.push(x, base, z, x, h, z);
+      col.push(bottom.r, bottom.g, bottom.b, top.r, top.g, top.b);
+      if (i < n) { const k = i * 2; idx.push(k, k + 2, k + 1, k + 1, k + 2, k + 3); }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    geo.setIndex(idx);
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, fog }));
+    m.frustumCulled = false;
+    return m;
+  };
+  // mountains, far and hazy
+  g.add(ring(158, 160, (a) => 10 + 9 * noise(a, [3, 7, 13, 29]) + 14 * Math.max(0, Math.sin(a * 2 + 1)), -3,
+    new THREE.Color(0.86, 0.62, 0.5), new THREE.Color(0.5, 0.42, 0.55), false));
+  // the far town: blocks of different heights in one sector
+  const town: THREE.BoxGeometry[] = [];
+  for (let i = 0; i < 46; i++) {
+    const a = 1.35 + (r() - 0.5) * 0.9, d = 128 + r() * 18;
+    const w = 4 + r() * 7, h = 6 + Math.pow(r(), 2) * 34;
+    const b = new THREE.BoxGeometry(w, h, w);
+    b.translate(Math.cos(a) * d, h / 2 - 1, Math.sin(a) * d);
+    town.push(b);
+  }
+  const townGeo = mergeBoxes(town);
+  const townMesh = new THREE.Mesh(townGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.48, 0.4, 0.48), fog: false }));
+  townMesh.frustumCulled = false;
+  g.add(townMesh);
+  // the tree line all around, closer, in the warm haze
+  g.add(ring(78, 220, (a) => 5 + 2.2 * noise(a, [11, 23, 47, 97]) + 1.5 * Math.abs(Math.sin(a * 61)), -1,
+    new THREE.Color(0.05, 0.08, 0.03), new THREE.Color(0.1, 0.16, 0.05), true));
+  return g;
+}
+
+function mergeBoxes(geos: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  const pos: number[] = [], idx: number[] = [];
+  let off = 0;
+  for (const g of geos) {
+    const p = g.getAttribute("position").array as Float32Array;
+    for (const v of p) pos.push(v);
+    for (const i of g.index!.array) idx.push(i + off);
+    off += p.length / 3;
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  out.setIndex(idx);
+  return out;
+}

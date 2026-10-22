@@ -311,6 +311,8 @@ export class Hud {
         <button class="btn primary" id="t-play" ${o.loading ? "disabled" : ""}>${o.day > 1 || o.houses ? "Продовжити" : "Почати роботу"}</button>
         <div class="btns"><button class="btn" id="t-set">Налаштування</button><button class="btn" id="t-new">Нова бригада</button></div>
       </div>`);
+    // while loading: a centred splash with the progress bar only
+    el.classList.toggle("is-loading", o.loading);
     el.querySelector("#t-play")!.addEventListener("click", onPlay);
     el.querySelector("#t-new")!.addEventListener("click", onNew);
     el.querySelector("#t-set")!.addEventListener("click", onSettings);
@@ -321,6 +323,7 @@ export class Hud {
     if (!l) return;
     if (done) {
       l.innerHTML = "";
+      document.getElementById("ov-title")?.classList.remove("is-loading");
       (document.getElementById("t-play") as HTMLButtonElement | null)?.removeAttribute("disabled");
       return;
     }

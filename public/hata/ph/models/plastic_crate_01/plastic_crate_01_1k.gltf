@@ -1,37 +1,122 @@
 {
   "asset": {
-    "generator": "Khronos glTF Blender I/O v5.1.20",
+    "generator": "glTF-Transform v4.5.1",
     "version": "2.0"
   },
-  "scene": 0,
-  "scenes": [
+  "accessors": [
     {
-      "name": "Scene",
-      "nodes": [
-        0
-      ]
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 31050,
+      "bufferView": 0,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 13927,
+      "max": [
+        0.14900031685829163,
+        0.2641673982143402,
+        0.20400206744670868
+      ],
+      "min": [
+        -0.14900030195713043,
+        2.3841863594498136e-8,
+        -0.20400206744670868
+      ],
+      "bufferView": 1,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 13927,
+      "bufferView": 1,
+      "byteOffset": 12
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 13927,
+      "bufferView": 1,
+      "byteOffset": 24
     }
   ],
-  "nodes": [
+  "bufferViews": [
     {
-      "mesh": 0,
-      "name": "plastic_crate_01"
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 62100,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 62100,
+      "byteLength": 445664,
+      "byteStride": 32,
+      "target": 34962
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "textures": [
+    {
+      "source": 1,
+      "sampler": 0
+    },
+    {
+      "source": 0,
+      "sampler": 0
+    },
+    {
+      "source": 2,
+      "sampler": 0
+    }
+  ],
+  "images": [
+    {
+      "name": "plastic_crate_01_nor_gl",
+      "mimeType": "image/jpeg",
+      "uri": "textures/plastic_crate_01_nor_gl_1k.jpg"
+    },
+    {
+      "name": "plastic_crate_01_diff",
+      "mimeType": "image/jpeg",
+      "uri": "textures/plastic_crate_01_diff_1k.jpg"
+    },
+    {
+      "name": "plastic_crate_01_metal-plastic_crate_01_rough",
+      "mimeType": "image/jpeg",
+      "uri": "textures/plastic_crate_01_arm_1k.jpg"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "plastic_crate_01.bin",
+      "byteLength": 507764
     }
   ],
   "materials": [
     {
-      "doubleSided": true,
       "name": "plastic_crate_01",
-      "normalTexture": {
-        "index": 0
-      },
+      "doubleSided": true,
       "pbrMetallicRoughness": {
         "baseColorTexture": {
-          "index": 1
+          "index": 0
         },
         "metallicRoughnessTexture": {
           "index": 2
         }
+      },
+      "normalTexture": {
+        "index": 1
       }
     }
   ],
@@ -41,119 +126,30 @@
       "primitives": [
         {
           "attributes": {
-            "POSITION": 0,
-            "NORMAL": 1,
-            "TEXCOORD_0": 2
+            "POSITION": 1,
+            "NORMAL": 2,
+            "TEXCOORD_0": 3
           },
-          "indices": 3,
-          "material": 0
+          "mode": 4,
+          "material": 0,
+          "indices": 0
         }
       ]
     }
   ],
-  "textures": [
+  "nodes": [
     {
-      "sampler": 0,
-      "source": 0
-    },
-    {
-      "sampler": 0,
-      "source": 1
-    },
-    {
-      "sampler": 0,
-      "source": 2
+      "name": "plastic_crate_01",
+      "mesh": 0
     }
   ],
-  "images": [
+  "scenes": [
     {
-      "mimeType": "image/jpeg",
-      "name": "plastic_crate_01_nor_gl",
-      "uri": "textures/plastic_crate_01_nor_gl_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "plastic_crate_01_diff",
-      "uri": "textures/plastic_crate_01_diff_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "plastic_crate_01_metal-plastic_crate_01_rough",
-      "uri": "textures/plastic_crate_01_arm_1k.jpg"
+      "name": "Scene",
+      "nodes": [
+        0
+      ]
     }
   ],
-  "accessors": [
-    {
-      "bufferView": 0,
-      "componentType": 5126,
-      "count": 21250,
-      "max": [
-        0.14900031685829163,
-        0.2641694247722626,
-        0.20400206744670868
-      ],
-      "min": [
-        -0.14900031685829163,
-        0,
-        -0.20400206744670868
-      ],
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 1,
-      "componentType": 5126,
-      "count": 21250,
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 2,
-      "componentType": 5126,
-      "count": 21250,
-      "type": "VEC2"
-    },
-    {
-      "bufferView": 3,
-      "componentType": 5123,
-      "count": 54960,
-      "type": "SCALAR"
-    }
-  ],
-  "bufferViews": [
-    {
-      "buffer": 0,
-      "byteLength": 255000,
-      "byteOffset": 0,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 255000,
-      "byteOffset": 255000,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 170000,
-      "byteOffset": 510000,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 109920,
-      "byteOffset": 680000,
-      "target": 34963
-    }
-  ],
-  "samplers": [
-    {
-      "magFilter": 9729,
-      "minFilter": 9987
-    }
-  ],
-  "buffers": [
-    {
-      "byteLength": 789920,
-      "uri": "plastic_crate_01.bin"
-    }
-  ]
+  "scene": 0
 }

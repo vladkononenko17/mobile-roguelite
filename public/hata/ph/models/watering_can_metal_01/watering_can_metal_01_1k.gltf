@@ -1,52 +1,133 @@
 {
   "asset": {
-    "generator": "Khronos glTF Blender I/O v3.3.32",
+    "generator": "glTF-Transform v4.5.1",
     "version": "2.0"
   },
-  "extensionsUsed": [
-    "KHR_materials_specular",
-    "KHR_materials_ior"
-  ],
-  "scene": 0,
-  "scenes": [
+  "accessors": [
     {
-      "name": "Scene",
-      "nodes": [
-        0
-      ]
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 10506,
+      "bufferView": 0,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 2862,
+      "max": [
+        0.09569977968931198,
+        0.19577406346797943,
+        0.2776298224925995
+      ],
+      "min": [
+        -0.09525048732757568,
+        -0.0009340970427729189,
+        -0.17454952001571655
+      ],
+      "bufferView": 1,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 2862,
+      "bufferView": 1,
+      "byteOffset": 12
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 2862,
+      "bufferView": 1,
+      "byteOffset": 24
     }
   ],
-  "nodes": [
+  "bufferViews": [
     {
-      "mesh": 0,
-      "name": "watering_can_metal_01"
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 21012,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 21012,
+      "byteLength": 91584,
+      "byteStride": 32,
+      "target": 34962
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "textures": [
+    {
+      "source": 1,
+      "sampler": 0
+    },
+    {
+      "source": 0,
+      "sampler": 0
+    },
+    {
+      "source": 2,
+      "sampler": 0
+    }
+  ],
+  "images": [
+    {
+      "name": "watering_can_metal_01_nor_gl",
+      "mimeType": "image/jpeg",
+      "uri": "textures/watering_can_metal_01_nor_gl_1k.jpg"
+    },
+    {
+      "name": "watering_can_metal_01_diff",
+      "mimeType": "image/jpeg",
+      "uri": "textures/watering_can_metal_01_diff_1k.jpg"
+    },
+    {
+      "name": "watering_can_metal_01_metal-watering_can_metal_01_rough",
+      "mimeType": "image/jpeg",
+      "uri": "textures/watering_can_metal_01_arm_1k.jpg"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "watering_can_metal_01.bin",
+      "byteLength": 112596
     }
   ],
   "materials": [
     {
+      "name": "watering_can_metal_01",
       "doubleSided": true,
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 0
+        },
+        "metallicRoughnessTexture": {
+          "index": 2
+        }
+      },
+      "normalTexture": {
+        "index": 1
+      },
       "extensions": {
+        "KHR_materials_ior": {
+          "ior": 1.4500000476837158
+        },
         "KHR_materials_specular": {
           "specularColorFactor": [
             0,
             0,
             0
           ]
-        },
-        "KHR_materials_ior": {
-          "ior": 1.4500000476837158
-        }
-      },
-      "name": "watering_can_metal_01",
-      "normalTexture": {
-        "index": 0
-      },
-      "pbrMetallicRoughness": {
-        "baseColorTexture": {
-          "index": 1
-        },
-        "metallicRoughnessTexture": {
-          "index": 2
         }
       }
     }
@@ -57,119 +138,34 @@
       "primitives": [
         {
           "attributes": {
-            "POSITION": 0,
-            "NORMAL": 1,
-            "TEXCOORD_0": 2
+            "POSITION": 1,
+            "NORMAL": 2,
+            "TEXCOORD_0": 3
           },
-          "indices": 3,
-          "material": 0
+          "mode": 4,
+          "material": 0,
+          "indices": 0
         }
       ]
     }
   ],
-  "textures": [
+  "nodes": [
     {
-      "sampler": 0,
-      "source": 0
-    },
-    {
-      "sampler": 0,
-      "source": 1
-    },
-    {
-      "sampler": 0,
-      "source": 2
+      "name": "watering_can_metal_01",
+      "mesh": 0
     }
   ],
-  "images": [
+  "scenes": [
     {
-      "mimeType": "image/jpeg",
-      "name": "watering_can_metal_01_nor_gl",
-      "uri": "textures/watering_can_metal_01_nor_gl_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "watering_can_metal_01_diff",
-      "uri": "textures/watering_can_metal_01_diff_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "watering_can_metal_01_metal-watering_can_metal_01_rough",
-      "uri": "textures/watering_can_metal_01_arm_1k.jpg"
+      "name": "Scene",
+      "nodes": [
+        0
+      ]
     }
   ],
-  "accessors": [
-    {
-      "bufferView": 0,
-      "componentType": 5126,
-      "count": 7741,
-      "max": [
-        0.09573400020599365,
-        0.19577406346797943,
-        0.2776298224925995
-      ],
-      "min": [
-        -0.09528457373380661,
-        -0.0010444645304232836,
-        -0.17470625042915344
-      ],
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 1,
-      "componentType": 5126,
-      "count": 7741,
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 2,
-      "componentType": 5126,
-      "count": 7741,
-      "type": "VEC2"
-    },
-    {
-      "bufferView": 3,
-      "componentType": 5123,
-      "count": 35511,
-      "type": "SCALAR"
-    }
-  ],
-  "bufferViews": [
-    {
-      "buffer": 0,
-      "byteLength": 92892,
-      "byteOffset": 0,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 92892,
-      "byteOffset": 92892,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 61928,
-      "byteOffset": 185784,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 71022,
-      "byteOffset": 247712,
-      "target": 34963
-    }
-  ],
-  "samplers": [
-    {
-      "magFilter": 9729,
-      "minFilter": 9987
-    }
-  ],
-  "buffers": [
-    {
-      "byteLength": 318736,
-      "uri": "watering_can_metal_01.bin"
-    }
+  "scene": 0,
+  "extensionsUsed": [
+    "KHR_materials_ior",
+    "KHR_materials_specular"
   ]
 }

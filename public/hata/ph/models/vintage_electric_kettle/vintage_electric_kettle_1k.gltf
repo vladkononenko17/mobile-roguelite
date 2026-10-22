@@ -1,168 +1,58 @@
 {
   "asset": {
-    "generator": "Khronos glTF Blender I/O v5.1.20",
+    "generator": "glTF-Transform v4.5.1",
     "version": "2.0"
   },
-  "scene": 0,
-  "scenes": [
-    {
-      "name": "Scene",
-      "nodes": [
-        0
-      ]
-    }
-  ],
-  "nodes": [
-    {
-      "mesh": 0,
-      "name": "vintage_electric_kettle"
-    }
-  ],
-  "materials": [
-    {
-      "doubleSided": true,
-      "name": "vintage_electric_kettle",
-      "normalTexture": {
-        "index": 0
-      },
-      "pbrMetallicRoughness": {
-        "baseColorTexture": {
-          "index": 1
-        },
-        "metallicRoughnessTexture": {
-          "index": 2
-        }
-      }
-    },
-    {
-      "alphaMode": "BLEND",
-      "doubleSided": true,
-      "name": "vintage_electric_kettle_glass",
-      "normalTexture": {
-        "index": 3
-      },
-      "pbrMetallicRoughness": {
-        "baseColorTexture": {
-          "index": 4
-        },
-        "metallicRoughnessTexture": {
-          "index": 5
-        }
-      }
-    }
-  ],
-  "meshes": [
-    {
-      "name": "Circle.012",
-      "primitives": [
-        {
-          "attributes": {
-            "POSITION": 0,
-            "NORMAL": 1,
-            "TEXCOORD_0": 2
-          },
-          "indices": 3,
-          "material": 0
-        },
-        {
-          "attributes": {
-            "POSITION": 4,
-            "NORMAL": 5,
-            "TEXCOORD_0": 6
-          },
-          "indices": 7,
-          "material": 1
-        }
-      ]
-    }
-  ],
-  "textures": [
-    {
-      "sampler": 0,
-      "source": 0
-    },
-    {
-      "sampler": 0,
-      "source": 1
-    },
-    {
-      "sampler": 0,
-      "source": 2
-    },
-    {
-      "sampler": 0,
-      "source": 0
-    },
-    {
-      "sampler": 0,
-      "source": 3
-    },
-    {
-      "sampler": 0,
-      "source": 2
-    }
-  ],
-  "images": [
-    {
-      "mimeType": "image/jpeg",
-      "name": "vintage_electric_kettle_nor_gl",
-      "uri": "textures/vintage_electric_kettle_nor_gl_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "vintage_electric_kettle_diff",
-      "uri": "textures/vintage_electric_kettle_diff_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "vintage_electric_kettle_metal-vintage_electric_kettle_rough",
-      "uri": "textures/vintage_electric_kettle_arm_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "vintage_electric_kettle_diff-vintage_electric_kettle_alpha",
-      "uri": "textures/vintage_electric_kettle_diff_1k.jpg"
-    }
-  ],
   "accessors": [
     {
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 10365,
       "bufferView": 0,
+      "byteOffset": 0
+    },
+    {
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 306,
+      "bufferView": 0,
+      "byteOffset": 20732
+    },
+    {
+      "type": "VEC3",
       "componentType": 5126,
-      "count": 10130,
+      "count": 2901,
       "max": [
-        0.15594080090522766,
-        0.3047400116920471,
-        0.12427651882171631
+        0.1558903008699417,
+        0.3043797016143799,
+        0.12391021102666855
       ],
       "min": [
         -0.1649499237537384,
         0,
-        -0.12427651882171631
+        -0.12388885021209717
       ],
-      "type": "VEC3"
-    },
-    {
       "bufferView": 1,
-      "componentType": 5126,
-      "count": 10130,
-      "type": "VEC3"
+      "byteOffset": 0
     },
     {
-      "bufferView": 2,
+      "type": "VEC3",
       "componentType": 5126,
-      "count": 10130,
-      "type": "VEC2"
+      "count": 2901,
+      "bufferView": 1,
+      "byteOffset": 12
     },
     {
-      "bufferView": 3,
-      "componentType": 5123,
-      "count": 43950,
-      "type": "SCALAR"
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 2901,
+      "bufferView": 1,
+      "byteOffset": 24
     },
     {
-      "bufferView": 4,
+      "type": "VEC3",
       "componentType": 5126,
-      "count": 107,
+      "count": 64,
       "max": [
         0.02403569221496582,
         0.15681399405002594,
@@ -173,87 +63,173 @@
         0.1082400530576706,
         0.08353707939386368
       ],
-      "type": "VEC3"
+      "bufferView": 2,
+      "byteOffset": 0
     },
     {
-      "bufferView": 5,
+      "type": "VEC3",
       "componentType": 5126,
-      "count": 107,
-      "type": "VEC3"
+      "count": 64,
+      "bufferView": 2,
+      "byteOffset": 12
     },
     {
-      "bufferView": 6,
+      "type": "VEC2",
       "componentType": 5126,
-      "count": 107,
-      "type": "VEC2"
-    },
-    {
-      "bufferView": 7,
-      "componentType": 5123,
-      "count": 564,
-      "type": "SCALAR"
+      "count": 64,
+      "bufferView": 2,
+      "byteOffset": 24
     }
   ],
   "bufferViews": [
     {
       "buffer": 0,
-      "byteLength": 121560,
       "byteOffset": 0,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 121560,
-      "byteOffset": 121560,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 81040,
-      "byteOffset": 243120,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 87900,
-      "byteOffset": 324160,
+      "byteLength": 21344,
       "target": 34963
     },
     {
       "buffer": 0,
-      "byteLength": 1284,
-      "byteOffset": 412060,
+      "byteOffset": 21344,
+      "byteLength": 92832,
+      "byteStride": 32,
       "target": 34962
     },
     {
       "buffer": 0,
-      "byteLength": 1284,
-      "byteOffset": 413344,
+      "byteOffset": 114176,
+      "byteLength": 2048,
+      "byteStride": 32,
       "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 856,
-      "byteOffset": 414628,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 1128,
-      "byteOffset": 415484,
-      "target": 34963
     }
   ],
   "samplers": [
     {
       "magFilter": 9729,
-      "minFilter": 9987
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "textures": [
+    {
+      "source": 1,
+      "sampler": 0
+    },
+    {
+      "source": 0,
+      "sampler": 0
+    },
+    {
+      "source": 2,
+      "sampler": 0
+    },
+    {
+      "source": 3,
+      "sampler": 0
+    }
+  ],
+  "images": [
+    {
+      "name": "vintage_electric_kettle_nor_gl",
+      "mimeType": "image/jpeg",
+      "uri": "textures/vintage_electric_kettle_nor_gl_1k.jpg"
+    },
+    {
+      "name": "vintage_electric_kettle_diff",
+      "mimeType": "image/jpeg",
+      "uri": "textures/vintage_electric_kettle_diff_1k.jpg"
+    },
+    {
+      "name": "vintage_electric_kettle_metal-vintage_electric_kettle_rough",
+      "mimeType": "image/jpeg",
+      "uri": "textures/vintage_electric_kettle_arm_1k.jpg"
+    },
+    {
+      "name": "vintage_electric_kettle_diff-vintage_electric_kettle_alpha",
+      "mimeType": "image/jpeg",
+      "uri": "textures/vintage_electric_kettle_diff_1k.jpg"
     }
   ],
   "buffers": [
     {
-      "byteLength": 416612,
-      "uri": "vintage_electric_kettle.bin"
+      "uri": "vintage_electric_kettle.bin",
+      "byteLength": 116224
     }
-  ]
+  ],
+  "materials": [
+    {
+      "name": "vintage_electric_kettle",
+      "doubleSided": true,
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 0
+        },
+        "metallicRoughnessTexture": {
+          "index": 2
+        }
+      },
+      "normalTexture": {
+        "index": 1
+      }
+    },
+    {
+      "name": "vintage_electric_kettle_glass",
+      "alphaMode": "BLEND",
+      "doubleSided": true,
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 3
+        },
+        "metallicRoughnessTexture": {
+          "index": 2
+        }
+      },
+      "normalTexture": {
+        "index": 1
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Circle.012",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 2,
+            "NORMAL": 3,
+            "TEXCOORD_0": 4
+          },
+          "mode": 4,
+          "material": 0,
+          "indices": 0
+        },
+        {
+          "attributes": {
+            "POSITION": 5,
+            "NORMAL": 6,
+            "TEXCOORD_0": 7
+          },
+          "mode": 4,
+          "material": 1,
+          "indices": 1
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "vintage_electric_kettle",
+      "mesh": 0
+    }
+  ],
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "scene": 0
 }

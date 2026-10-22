@@ -212,6 +212,7 @@ export async function buildKitchen(g: THREE.Group, W: WorldIndex, restore: Resto
     const base = kind === "pan" ? panMat : ceramic;
     const mat = s.material(base as THREE.MeshStandardMaterial, kind === "pan" ? burnt : food);
     const mesh = new THREE.Group();
+    mesh.userData.dynamic = true; // dishes move to the sink and the rack
     const body = new THREE.Mesh(geo, mat);
     body.castShadow = body.receiveShadow = true;
     mesh.add(body);
