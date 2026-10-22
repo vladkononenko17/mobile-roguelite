@@ -17,8 +17,9 @@ export default defineConfig({
         stavka: fileURLToPath(new URL("./stavka/index.html", import.meta.url)),
         zhirky: fileURLToPath(new URL("./zhirky/index.html", import.meta.url)),
         hata: fileURLToPath(new URL("./hata/index.html", import.meta.url)),
+        legacyPlaycanvas: fileURLToPath(new URL("./legacy/playcanvas.html", import.meta.url)),
       },
-      output: { manualChunks: { phaser: ["phaser"], three: ["three"] } },
+      output: { manualChunks: { phaser: ["phaser"], three: ["three"], "playcanvas-engine": ["playcanvas"] } },
     },
   },
 });
