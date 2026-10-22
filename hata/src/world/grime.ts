@@ -146,7 +146,7 @@ export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions, mas
         float g = 0.0, moss = 0.0;
         if (gPeel > 0.5) {
           // old paint on bare wood: cracked, curling flakes that show the wood
-          float crack = smoothstep(0.5, 0.56, gn(gp * vec3(26.0, 8.0, 26.0) + n2 * 2.5)) * (0.5 + 0.5 * smoothstep(0.4, 0.6, n1));
+          float crack = smoothstep(0.64, 0.7, gn(gp * vec3(30.0, 9.0, 30.0) + n2 * 2.0)) * (0.35 + 0.65 * smoothstep(0.35, 0.65, n1));
           float flake = left * (1.0 - crack * 0.85);
           vec3 oldC = gOldPaint * (0.75 + 0.35 * n2);
           diffuseColor.rgb = mix(diffuseColor.rgb * 0.9, oldC, flake);

@@ -88,8 +88,8 @@ export const TOOLS: Record<ToolId, ToolDef> = {
   paint: {
     id: "paint", name: "Фарбування", short: "Фарба", works: ["paint"],
     levels: [
-      { name: "Шпатель і пензель", price: 600, radius: 0.13, rate: 1.4, range: 2.4, blurb: "Зішкребти стару фарбу, потім фарбувати." },
-      { name: "Шліфмашинка і валик", price: 2600, radius: 0.2, rate: 2.4, range: 2.4, blurb: "Удвічі швидше." },
+      { name: "Шпатель і пензель", price: 600, radius: 0.13, rate: 1.4, range: 2.9, blurb: "Зішкребти стару фарбу, потім фарбувати." },
+      { name: "Шліфмашинка і валик", price: 2600, radius: 0.2, rate: 2.4, range: 3.0, blurb: "Удвічі швидше." },
       { name: "Фарбопульт", price: 8000, radius: 0.34, rate: 3.8, range: 3.5, blurb: "Хмара фарби, рівний шар." },
     ],
   },
@@ -165,7 +165,7 @@ export const PERKS: Record<PerkId, PerkDef> = {
 export const PERK_IDS = Object.keys(PERKS) as PerkId[];
 
 /** Star thresholds by overall completion of a house. */
-export const STARS = [0.5, 0.65, 0.8, 0.9, 0.97];
+export const STARS = [0.35, 0.5, 0.65, 0.8, 0.92];
 
 export const DAY = {
   startHour: 8,

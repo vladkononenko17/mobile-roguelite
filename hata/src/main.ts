@@ -331,8 +331,8 @@ const VMS: Record<string, VM> = {
 };
 /** Long-handled tools stand in the world: the head on the ground ahead, the grip in your hands. */
 const POLE_TOOLS: Record<string, { drop: number; side: number; ahead: number; tilt: number }> = {
-  rake: { drop: 0.34, side: 0.2, ahead: 0.32, tilt: 0 },
-  mop: { drop: 0.34, side: 0.2, ahead: 0.32, tilt: 0 },
+  rake: { drop: 0.5, side: 0.13, ahead: 0.18, tilt: 0 },
+  mop: { drop: 0.5, side: 0.13, ahead: 0.18, tilt: 0 },
   net: { drop: 0.42, side: 0.22, ahead: 0.3, tilt: 0.35 },
   detector: { drop: 0.6, side: 0.24, ahead: 0.25, tilt: 0 },
 };
@@ -880,7 +880,7 @@ function toolEffects(using: boolean, dt: number, stats: ReturnType<typeof toolSt
         .addScaledVector(right, pole.side);
       o.rotation.set(0, 0, 0);
       o.rotateY(player.yaw + sw);
-      o.rotateX(THREE.MathUtils.clamp(player.pitch * pole.tilt, -0.3, 0.25));
+      o.rotateX(THREE.MathUtils.clamp(player.pitch * pole.tilt, -0.3, 0.25) + (k === "mop" || k === "rake" ? 0.13 : 0));
       continue;
     }
     const scrub = using && ["rag", "mop", "squeegee", "roller", "scraper", "rake"].includes(k) ? Math.sin(useAnim) * 0.035 : 0;

@@ -1,0 +1,12 @@
+{
+  "name": "Хата з краю",
+  "short_name": "Хата з краю",
+  "description": "Рогалик від першої особи: відмий, покоси й залатай чужу хату, купи кращу техніку.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#141a17",
+  "theme_color": "#141a17",
+  "orientation": "landscape",
+  "icons": [{ "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

@@ -54,7 +54,7 @@ export function makeSurface(
 
 export function finishSurface(W: WorldIndex, restore: Restore, s: CleanSurface, valueOverride?: number): CleanSurface {
   s.init(restore(s.key));
-  s.value = valueOverride ?? Math.max(20, Math.round(s.area * (PAY_PER_M2[s.kind] ?? 10) * Math.sqrt(s.tough)));
+  s.value = valueOverride ?? Math.max(s.kind === "wipe" ? 120 : 40, Math.round(s.area * (PAY_PER_M2[s.kind] ?? 10) * Math.sqrt(s.tough)));
   W.addSurface(s);
   return s;
 }

@@ -338,7 +338,7 @@ export class Hud {
     const el = this.overlay("ov-list", `<div class="panel" style="width:min(720px,100%)">
       <div class="overall"><div><div class="eyebrow">${client.toUpperCase()}</div><h2>Що лишилось</h2></div>
         <span class="big">${Math.floor(overall * 100)}%</span><span class="stars">${"★".repeat(st)}<s>${"★".repeat(5 - st)}</s></span></div>
-      <p>Зірки за загальну чистоту: 50% · 65% · 80% · 90% · 97%. Здати хату можна будь-коли; на третій вечір господар забере її сам. Уся хата ≈ ${money(value)}.</p>
+      <p>Зірки за загальну чистоту: 35% · 50% · 65% · 80% · 92%. Здати хату можна будь-коли; на третій вечір господар забере її сам. Уся хата ≈ ${money(value)}.</p>
       <div class="list">${list}</div>
       <div class="btns"><button class="btn primary" id="l-x">Працювати далі</button><button class="btn gold" id="l-h">Здати хату</button></div></div>`);
     el.querySelector("#l-x")!.addEventListener("click", onClose);

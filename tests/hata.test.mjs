@@ -107,15 +107,16 @@ describe('Хата з краю: day, hand-over and the run', () => {
 
   it('stars follow completion', () => {
     assert.equal(starsFor(0.3), 0);
-    assert.equal(starsFor(0.5), 1);
-    assert.equal(starsFor(0.85), 3);
+    assert.equal(starsFor(0.35), 1);
+    assert.equal(starsFor(0.5), 2);
+    assert.equal(starsFor(0.85), 4);
     assert.equal(starsFor(1), 5);
   });
 
   it('a good hand-over continues the run and offers three different perks', () => {
     const s = newSave(5);
     const m0 = s.money;
-    const r = handOver(s, 0.92, 10000, 77);
+    const r = handOver(s, 0.85, 10000, 77);
     assert.equal(r.stars, 4);
     assert.equal(r.failed, false);
     assert.ok(s.money > m0);
