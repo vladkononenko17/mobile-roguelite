@@ -9,7 +9,7 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { hdri, setAnisotropy } from "./assets";
+import { hdri, setAnisotropy, setSmallTextures } from "./assets";
 import { Audio } from "./audio";
 import type { CleanSurface } from "./clean/surface";
 import { DAY, PAY, PAY_PER_M2, TOOL_FOR, TOOL_ORDER, TOOLS, type PerkId, type ToolId, type WorkKind } from "./content";
@@ -53,15 +53,29 @@ function loadSave(): Save {
 }
 const save = loadSave();
 if (!localStorage.getItem(SAVE_KEY)) save.settings.quality = isTouch ? "medium" : "high";
+// If the tab died during the first seconds of play last time (out of memory on a phone),
+// step the graphics down one notch before loading anything.
+let downgraded = false;
+try {
+  if (localStorage.getItem("hata.crash")) {
+    localStorage.removeItem("hata.crash");
+    if (save.settings.quality !== "low") {
+      save.settings.quality = save.settings.quality === "high" ? "medium" : "low";
+      downgraded = true;
+      localStorage.setItem(SAVE_KEY, JSON.stringify(save));
+    }
+  }
+} catch { /* private mode */ }
 function persist(): void {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch { /* private mode */ }
 }
 
-const Q = {
+const QUALITY = {
   low: { dpr: 1, shadow: 1024, ao: false, grass: 60, lod: 0.6 },
   medium: { dpr: 1.5, shadow: 2048, ao: false, grass: 100, lod: 0.85 },
   high: { dpr: 2, shadow: 2048, ao: true, grass: 140, lod: 1 },
-}[(params.get("q") as Save["settings"]["quality"]) ?? save.settings.quality];
+};
+const Q = QUALITY[(params.get("q") as Save["settings"]["quality"]) ?? save.settings.quality];
 
 // ── Renderer, scene, cameras ────────────────────────────────────────────────
 const view = document.getElementById("view")!;
@@ -75,7 +89,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.95;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 view.appendChild(renderer.domElement);
-setAnisotropy(Math.min(8, renderer.capabilities.getMaxAnisotropy()));
+setAnisotropy(Math.min(isTouch ? 4 : 8, renderer.capabilities.getMaxAnisotropy()));
+setSmallTextures(Q !== QUALITY.high || isTouch);
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, view.clientWidth / view.clientHeight, 0.05, 260);
@@ -276,6 +291,7 @@ async function boot(): Promise<void> {
   player.place(-2.2, 12.5, 0);
   if (params.has("x")) player.place(Number(params.get("x")), Number(params.get("z")), Number(params.get("yaw") ?? 0));
   if (params.has("pitch")) player.pitch = Number(params.get("pitch"));
+  player.applyCamera(camera);
   if (params.has("tool")) tool = params.get("tool") as ToolId;
   hud.loading(1, true);
   window.__hata.ready = true;
@@ -408,6 +424,11 @@ function startPlay(): void {
   hud.playMode(true);
   mode = "play";
   if (save.run.offer) showPerks();
+  try {
+    localStorage.setItem("hata.crash", "1");
+    setTimeout(() => { try { localStorage.removeItem("hata.crash"); } catch { /* */ } }, 20000);
+  } catch { /* private mode */ }
+  if (downgraded) hud.toast(`Знизив якість графіки до «${save.settings.quality === "low" ? "низька" : "середня"}», щоб не вилітало`);
 }
 function openMenu(fn: () => void): void {
   mode = "menu";
