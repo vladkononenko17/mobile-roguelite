@@ -6,7 +6,7 @@ import "./hata.css";
 import qrcode from "qrcode-generator";
 
 /**
- * «Хата з краю» is made for the iPhone only. On a computer (no touch screen)
+ * «Клін Клінич» is made for the iPhone only. On a computer (no touch screen)
  * nothing heavy is loaded: a page asks you to open the game on your phone and
  * shows a QR code of the address. `?still` / `?dev` skip this for the
  * offline checks.
@@ -26,7 +26,7 @@ if (phone || params.has("still") || params.has("dev")) {
     <main class="desk">
       <div class="desk-text">
         <div class="eyebrow">ГРА ДЛЯ IPHONE</div>
-        <h1>Хата<br>з краю</h1>
+        <h1>Клін<br>Клінич</h1>
         <p>Рогалик від першої особи: відмий, покоси й залатай чужу хату — і купи техніку потужнішу.</p>
         <p>Гра зроблена тільки для iPhone. Наведи камеру телефона на код або відкрий адресу в Safari і тримай телефон горизонтально.</p>
         <a href="${url}">${url.replace(/^https?:\/\//, "")}</a>

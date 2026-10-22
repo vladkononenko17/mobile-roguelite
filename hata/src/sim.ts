@@ -1,5 +1,5 @@
 /**
- * «Хата з краю» — rules: money, tools and upgrades, the working day, handing
+ * «Клін Клінич» — rules: money, tools and upgrades, the working day, handing
  * a house over, stars, perks and the run. Pure TypeScript; the 3D world only
  * reports progress to it (`Ledger`) and reads stats from it (`toolStats`).
  */

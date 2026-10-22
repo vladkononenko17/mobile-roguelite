@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download CC0 assets from Poly Haven for «Хата з краю».
+"""Download CC0 assets from Poly Haven for «Клін Клінич».
 
 Runs in GitHub Actions (the dev sandbox cannot reach polyhaven.com).
 Reads hata/assets-wanted.json:

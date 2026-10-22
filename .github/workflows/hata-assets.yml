@@ -1,4 +1,4 @@
-name: Fetch CC0 assets for «Хата з краю»
+name: Fetch CC0 assets for «Клін Клінич»
 
 # Poly Haven is not reachable from the dev sandbox, so assets are pulled here
 # and committed back to this branch. Only runs on the asset branch.

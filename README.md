@@ -158,7 +158,7 @@ Rules are pure TypeScript — `zhirky/src/sim.ts` (the route map, slope generati
 Controls: swipe anywhere; tap in time for the push-off. Desktop: arrows/WASD, Space to jump (and flip in the air), Shift/S to duck, P pause. Progress between slopes and the Комора are saved on the device. For playtesting, open `/zhirky/#test`: a 🧪 button jumps to any slope, gives any power-up, fills the ватага, ends the slope, adds candies or turns on god mode. From the console: `__zhirky.run`, `__zhirky.stage`, `__zhirky.advance(seconds)` to run the game forward in fixed steps.
 
 
-## «Хата з краю» (hata)
+## «Клін Клінич» (hata)
 
 An eighth game in the same toolchain, in Ukrainian, served at `/mobile-roguelite/hata/`. Where every other game here is third-person or top-down with ink outlines, this one is first person, physically lit and calm: a cleaning roguelite. A client gives you a neglected house and three working days; every percent you clean pays, the money buys better machines, and the client's stars decide whether your crew moves on to the next house.
 

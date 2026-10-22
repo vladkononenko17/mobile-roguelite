@@ -3,7 +3,7 @@ import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 
 /**
- * Asset loading for «Хата з краю». Everything comes from Poly Haven (CC0):
+ * Asset loading for «Клін Клінич». Everything comes from Poly Haven (CC0):
  * PBR texture sets in public/hata/ph/textures/<id>/{diff,nor,rough,arm}.jpg,
  * glTF models in public/hata/ph/models/<id>/ and HDRIs in public/hata/ph/hdris/.
  */

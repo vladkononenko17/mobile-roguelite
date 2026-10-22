@@ -1,4 +1,4 @@
-«Хата з краю» — сторонні ресурси / third-party assets
+«Клін Клінич» — сторонні ресурси / third-party assets
 
 Textures (PBR sets), HDRI skies and furniture/garden models in public/hata/ph/
 are from Poly Haven (https://polyhaven.com), CC0 1.0 — public domain, no
