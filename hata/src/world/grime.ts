@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { noiseTexture } from "./noisetex";
 
 /**
  * Grime as a material layer: any MeshStandardMaterial can be patched so that
@@ -68,14 +69,6 @@ export const defaultMask = (): MaskBinding => ({
   size: new THREE.Vector2(1, 1),
 });
 
-const NOISE = /* glsl */ `
-float gh(vec3 p){ p = fract(p*0.3183099+0.1); p *= 17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
-float gn(vec3 x){ vec3 i=floor(x); vec3 f=fract(x); f=f*f*(3.0-2.0*f);
-  return mix(mix(mix(gh(i),gh(i+vec3(1,0,0)),f.x),mix(gh(i+vec3(0,1,0)),gh(i+vec3(1,1,0)),f.x),f.y),
-             mix(mix(gh(i+vec3(0,0,1)),gh(i+vec3(1,0,1)),f.x),mix(gh(i+vec3(0,1,1)),gh(i+vec3(1,1,1)),f.x),f.y),f.z); }
-float gfbm(vec3 p){ float a=0.5, s=0.0; for(int i=0;i<4;i++){ s+=a*gn(p); p*=2.03; a*=0.5; } return s; }
-`;
-
 export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions, mask: MaskBinding = defaultMask()): THREE.MeshStandardMaterial {
   const u = {
     gAmount: { value: o.amount },
@@ -99,6 +92,7 @@ export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions, mas
     gMV: { value: mask.v },
     gMS: { value: mask.size },
     gNO: { value: mask.offset ?? new THREE.Vector3() },
+    gNoise: { value: noiseTexture() },
     gHighlight: grimeGlobals.highlight,
     gTime: grimeGlobals.time,
   };
@@ -124,8 +118,7 @@ export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions, mas
         varying vec3 vGW; varying vec3 vGN;
         uniform float gAmount, gStreaks, gMoss, gScale, gSplash, gDust, gFilm, gPaintK, gGlass, gPeel, gHighlight, gTime;
         uniform vec3 gColor, gColor2, gPaint, gOldPaint, gFresh;
-        uniform sampler2D gMask; uniform vec3 gMO, gMU, gMV, gNO; uniform vec2 gMS;
-        ${NOISE}`,
+        uniform sampler2D gMask, gNoise; uniform vec3 gMO, gMU, gMV, gNO; uniform vec2 gMS;`,
       )
       .replace(
         "#include <map_fragment>",
@@ -133,12 +126,18 @@ export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions, mas
         vec2 muv = vec2(dot(vGW - gMO, gMU) / gMS.x, dot(vGW - gMO, gMV) / gMS.y);
         vec3 gp = vGW + gNO;
         vec4 mk = texture2D(gMask, clamp(muv, 0.0, 1.0));
-        float left = mk.r;
+        // planar world UVs: floors use xz, walls use their own horizontal axis and y
+        vec2 wuv = abs(vGN.y) > 0.6 ? gp.xz : (abs(vGN.x) > abs(vGN.z) ? gp.zy : gp.xy);
+        float n1 = texture2D(gNoise, wuv * gScale * 0.25).r;
+        float n2 = texture2D(gNoise, wuv * gScale * 0.12 + 0.37).g;
+        vec4 fine = texture2D(gNoise, wuv * 0.55 + 0.71);
+        float n3 = fine.b;
+        float spl = texture2D(gNoise, wuv * gScale * 0.6 + 0.13).a;
+        // ragged, crisp edges where the tool has been: the smooth mask is cut by splatter noise
+        float left = clamp((mk.r - 0.5) * 2.6 + (spl - 0.5) * 1.3 + (n3 - 0.5) * 0.5 + 0.5, 0.0, 1.0);
+        left = smoothstep(0.25, 0.75, left);
         float up = clamp(vGN.y, 0.0, 1.0);
         float side = 1.0 - abs(vGN.y);
-        float n1 = gfbm(gp * gScale);
-        float n2 = gfbm(gp * gScale * 4.7 + 13.1);
-        float n3 = gn(gp * gScale * 13.0 + 3.7);
         if (gPaintK > 0.0) {
           float lum = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
           diffuseColor.rgb = mix(diffuseColor.rgb, gPaint * clamp(0.45 + lum * 2.2, 0.0, 1.25), gPaintK);
@@ -146,26 +145,28 @@ export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions, mas
         float g = 0.0, moss = 0.0;
         if (gPeel > 0.5) {
           // old paint on bare wood: cracked, curling flakes that show the wood
-          float crack = smoothstep(0.64, 0.7, gn(gp * vec3(30.0, 9.0, 30.0) + n2 * 2.0)) * (0.35 + 0.65 * smoothstep(0.35, 0.65, n1));
-          float flake = left * (1.0 - crack * 0.85);
-          vec3 oldC = gOldPaint * (0.75 + 0.35 * n2);
+          float crack = smoothstep(0.62, 0.7, texture2D(gNoise, wuv * vec2(1.4, 0.5)).b) * (0.35 + 0.65 * smoothstep(0.35, 0.65, n1));
+          crack = max(crack, smoothstep(0.75, 0.85, fine.a));
+          float flake = left * (1.0 - crack * 0.9);
+          vec3 oldC = gOldPaint * (0.78 + 0.3 * n2);
           diffuseColor.rgb = mix(diffuseColor.rgb * 0.9, oldC, flake);
-          diffuseColor.rgb = mix(diffuseColor.rgb, gFresh * (0.92 + 0.12 * n3), mk.b);
-          g = left * 0.25 * (1.0 - mk.b);
+          float fresh = smoothstep(0.25, 0.75, clamp((mk.b - 0.5) * 2.6 - (spl - 0.5) * 1.0 + 0.5, 0.0, 1.0));
+          diffuseColor.rgb = mix(diffuseColor.rgb, gFresh * (0.92 + 0.12 * n3), fresh);
+          g = left * 0.25 * (1.0 - fresh);
         } else {
           // a film everywhere, heavy blotches, streaks from the top, mud near the ground
-          float blot = smoothstep(0.38, 0.62, n1);
-          g = gFilm + blot * 0.8 + n2 * 0.25;
-          float st = gn(vec3(gp.x * 7.0 + gp.z * 7.0, gp.y * 0.3, 0.0));
-          st = smoothstep(0.4, 0.9, st) * smoothstep(-0.8, 2.2, gp.y);
+          float blot = smoothstep(0.35, 0.65, n1);
+          g = gFilm + blot * 0.75 + (n2 - 0.5) * 0.4 + (spl - 0.3) * 0.35;
+          float st = texture2D(gNoise, vec2(wuv.x * 0.9, wuv.y * 0.05)).g;
+          st = smoothstep(0.45, 0.8, st) * smoothstep(-0.8, 2.2, gp.y);
           g += st * gStreaks * side;
-          g += gSplash * side * (1.0 - smoothstep(0.0, 1.1, gp.y)) * (0.7 + 0.6 * n2);
+          g += gSplash * side * (1.0 - smoothstep(0.0, 1.1, gp.y)) * (0.6 + 0.8 * spl);
           // muddy prints and spills on floors
-          g += gDust * up * smoothstep(0.62, 0.7, gn(gp * 2.2 + 31.0)) * 0.8;
+          g += gDust * up * smoothstep(0.6, 0.72, texture2D(gNoise, wuv * 0.35 + 0.5).r) * 0.8;
           g = clamp(g * gAmount, 0.0, 1.0) * left;
-          moss = gMoss * up * smoothstep(0.38, 0.85, gfbm(gp * gScale * 1.1 + 7.0)) * (0.35 + 0.65 * smoothstep(0.2, 0.8, n3)) * left;
+          moss = gMoss * up * smoothstep(0.35, 0.8, texture2D(gNoise, wuv * gScale * 0.18 + 0.61).r) * (0.35 + 0.65 * smoothstep(0.2, 0.8, n3)) * left;
         }
-        vec3 gc = mix(gColor, gColor2, smoothstep(0.3, 0.7, n2)) * (0.55 + 0.5 * n3) * (1.15 - 0.45 * smoothstep(0.45, 0.75, n1));
+        vec3 gc = mix(gColor, gColor2, smoothstep(0.3, 0.7, n2)) * (0.55 + 0.5 * n3) * (1.15 - 0.45 * smoothstep(0.45, 0.75, n1)) * (0.85 + 0.3 * spl);
         gc = mix(gc, vec3(0.27, 0.22, 0.16) * (0.75 + 0.5 * n2), gDust * up * 0.35);
         diffuseColor.rgb = mix(diffuseColor.rgb, gc, g * 0.94);
         vec3 mossC = mix(vec3(0.09, 0.12, 0.04), vec3(0.2, 0.25, 0.08), n2) * (0.7 + 0.5 * n3);
@@ -184,9 +185,9 @@ export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions, mas
       .replace(
         "#include <emissivemap_fragment>",
         `#include <emissivemap_fragment>
-        totalEmissiveRadiance += vec3(1.0, 0.42, 0.05) * smoothstep(0.04, 0.3, gPeel > 0.5 ? (left * 0.4 + (1.0 - mk.b) * 0.6) : grimeK) * gHighlight * (0.35 + 0.25 * sin(gTime * 6.0));`,
+        if (gHighlight > 0.0) totalEmissiveRadiance += vec3(1.0, 0.42, 0.05) * smoothstep(0.04, 0.3, gPeel > 0.5 ? (left * 0.4 + (1.0 - mk.b) * 0.6) : grimeK) * gHighlight * (0.35 + 0.25 * sin(gTime * 6.0));`,
       );
   };
-  mat.customProgramCacheKey = () => "grime3";
+  mat.customProgramCacheKey = () => "grime4";
   return mat;
 }

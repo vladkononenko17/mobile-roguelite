@@ -105,7 +105,7 @@ export async function buildHouse(W: WorldIndex, style: HouseStyle, restore: Rest
   // ── Facades: siding + its strip of foundation share one mask per side.
   const T = 0.22, t = 0.12, e = T / 2;
   const facade = (key: string, name: string, origin: THREE.Vector3, u: THREE.Vector3, w: number, withGable: boolean) => {
-    const s = makeSurface(W, restore, key, name, "wash", "siding", origin, u, V(0, 1, 0), w, top + (withGable ? R + 0.15 : 0.1) - 0.0, 20);
+    const s = makeSurface(W, restore, key, name, "wash", "siding", origin, u, V(0, 1, 0), w, top + (withGable ? R + 0.15 : 0.1) - 0.0, 30);
     return { s, siding: s.material(sidingB, sidingG), found: s.material(concreteB, foundG) };
   };
   const front = facade("facade:front", "Фасад", V(-X - e - 0.2, 0, Z + e), V(1, 0, 0), 2 * X + T + 0.4, false);
@@ -183,7 +183,7 @@ export async function buildHouse(W: WorldIndex, style: HouseStyle, restore: Rest
 
   // ── Floors: one surface per room.
   const floor = (key: string, name: string, x0: number, x1: number, z0: number, z1: number, base: THREE.MeshStandardMaterial): void => {
-    const s = makeSurface(W, restore, key, name, "mop", "floor", V(x0, F + 0.04, z1), V(1, 0, 0), V(0, 0, -1), x1 - x0, z1 - z0, 20);
+    const s = makeSurface(W, restore, key, name, "mop", "floor", V(x0, F + 0.04, z1), V(1, 0, 0), V(0, 0, -1), x1 - x0, z1 - z0, 28);
     const m = box(g, x1 - x0, 0.04, z1 - z0, (x0 + x1) / 2, F + 0.02, (z0 + z1) / 2, s.material(base, floorG), { cast: false });
     s.cover(m);
     finishSurface(W, restore, s);
@@ -274,7 +274,7 @@ export async function buildHouse(W: WorldIndex, style: HouseStyle, restore: Rest
       o.copy(slab.localToWorld(V(L / 2, 0.07, -slope / 2)));
       u.negate(); v.negate();
     }
-    const s = makeSurface(W, restore, sgn > 0 ? "roof:front" : "roof:back", sgn > 0 ? "Дах спереду" : "Дах ззаду", "wash", "roof", o, u, v, L, slope, 16);
+    const s = makeSurface(W, restore, sgn > 0 ? "roof:front" : "roof:back", sgn > 0 ? "Дах спереду" : "Дах ззаду", "wash", "roof", o, u, v, L, slope, 22);
     slab.material = [roofPlain, roofPlain, s.material(roofB, roofG), roofPlain, roofPlain, roofPlain];
     slab.castShadow = slab.receiveShadow = true;
     const uv = slab.geometry.getAttribute("uv") as THREE.BufferAttribute;
