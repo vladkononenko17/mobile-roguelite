@@ -303,7 +303,7 @@ export class Hud {
     const el = this.overlay("ov-title", `
       <div class="side">
         <div class="eyebrow">РОГАЛИК ВІД ПЕРШОЇ ОСОБИ</div>
-        <h1>Хата<br>з краю</h1>
+        <h1>Клін<br>Клінич</h1>
         <div class="lead">Покоси, відмий, залатай — і купи собі техніку потужнішу.</div>
         <div class="meta">${o.client} · ${o.owner}${o.houses ? ` · бригада: ${o.houses} хат, ${o.stars}★` : ""}<br>У кишені <b>${money(o.money)}</b>${o.best ? ` · рекорд ${o.best}` : ""}</div>
         ${(navigator as Navigator & { standalone?: boolean }).standalone ? "" : `<div class="tip">Порада: «Поділитися» → «На початковий екран» — гра відкриється на весь екран.</div>`}

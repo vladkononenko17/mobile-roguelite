@@ -1,5 +1,5 @@
 /**
- * «Хата з краю» — game data. Pure TypeScript, no rendering imports, so the
+ * «Клін Клінич» — game data. Pure TypeScript, no rendering imports, so the
  * rules can be tested with `node --test`.
  */
 

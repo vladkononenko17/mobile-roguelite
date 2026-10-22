@@ -29,7 +29,7 @@ import { buildKitchen, SINK } from "./world/kitchen";
 import { buildYard, LADDER, LAWN_ZONES, placeProps, POOL } from "./world/yard";
 
 /**
- * «Хата з краю» — a first-person cleaning roguelite. You get a dirty house
+ * «Клін Клінич» — a first-person cleaning roguelite. You get a dirty house
  * and three days; every percent you clean pays, the money buys better tools,
  * and the client's stars decide whether your crew goes on to the next house.
  */

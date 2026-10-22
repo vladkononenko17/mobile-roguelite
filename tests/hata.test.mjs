@@ -7,7 +7,7 @@ import {
 } from '../hata/src/sim.ts';
 import { STAGES, STAGE_DONE, stageShare, currentStage, matches } from '../hata/src/game/stages.ts';
 
-describe('Хата з краю: content', () => {
+describe('Клін Клінич: content', () => {
   it('every tool has levels with rising prices and the right work kinds', () => {
     for (const id of TOOL_ORDER) {
       const t = TOOLS[id];
@@ -36,7 +36,7 @@ describe('Хата з краю: content', () => {
   });
 });
 
-describe('Хата з краю: money and tools', () => {
+describe('Клін Клінич: money and tools', () => {
   it('starts with the basic kit and some money', () => {
     const s = newSave(5);
     for (const id of ['hands', 'washer', 'mower', 'leaves', 'net', 'mop', 'squeegee']) assert.equal(s.tools[id], 1, id);
@@ -92,7 +92,7 @@ describe('Хата з краю: money and tools', () => {
   });
 });
 
-describe('Хата з краю: day, hand-over and the run', () => {
+describe('Клін Клінич: day, hand-over and the run', () => {
   it('the clock runs from morning to evening', () => {
     const s = newSave(5);
     assert.equal(clock(s).label, '08:00');
@@ -163,7 +163,7 @@ describe('Хата з краю: day, hand-over and the run', () => {
   });
 });
 
-describe('Хата з краю: economy balance', () => {
+describe('Клін Клінич: economy balance', () => {
   it('the first upgrade is reachable within the first house', () => {
     // a starter house is worth ~14k at 100%; the first upgrades cost under 2k
     const cheapest = Math.min(...TOOL_ORDER.map((id) => TOOLS[id].levels.find((l) => l.price > 0)?.price ?? Infinity));
@@ -178,7 +178,7 @@ describe('Хата з краю: economy balance', () => {
   });
 });
 
-describe('Хата з краю: stages', () => {
+describe('Клін Клінич: stages', () => {
   it('only free tools are needed to finish a stage', () => {
     // paint and the detector cost money, so no stage may depend on them
     for (const s of STAGES) {

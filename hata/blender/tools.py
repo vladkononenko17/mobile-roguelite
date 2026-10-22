@@ -1,4 +1,4 @@
-"""Builds the first-person tools for «Хата з краю» in Blender and exports GLB.
+"""Builds the first-person tools for «Клін Клінич» in Blender and exports GLB.
 
 Run:  python3 hata/blender/tools.py   (needs the `bpy` module, Blender 4.2+)
 Out:  public/hata/models/tools.glb with one root node per tool:
