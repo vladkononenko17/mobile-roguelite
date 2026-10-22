@@ -185,9 +185,15 @@ export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions, mas
       .replace(
         "#include <emissivemap_fragment>",
         `#include <emissivemap_fragment>
-        if (gHighlight > 0.0) totalEmissiveRadiance += vec3(1.0, 0.42, 0.05) * smoothstep(0.04, 0.3, gPeel > 0.5 ? (left * 0.4 + (1.0 - mk.b) * 0.6) : grimeK) * gHighlight * (0.35 + 0.25 * sin(gTime * 6.0));`,
+        if (gHighlight > 0.0) {
+          // dirty spots get moving orange hatching: easy to spot, and the
+          // surface underneath stays readable (a flat glow washed everything out)
+          float hk = smoothstep(0.04, 0.3, gPeel > 0.5 ? (left * 0.4 + (1.0 - mk.b) * 0.6) : grimeK);
+          float hatch = smoothstep(0.35, 0.5, abs(fract((vGW.x + vGW.y + vGW.z) * 2.2 - gTime * 0.6) - 0.5) * 2.0);
+          totalEmissiveRadiance += vec3(1.0, 0.45, 0.08) * hk * gHighlight * (0.06 + 0.3 * hatch);
+        }`,
       );
   };
-  mat.customProgramCacheKey = () => "grime4";
+  mat.customProgramCacheKey = () => "grime5";
   return mat;
 }

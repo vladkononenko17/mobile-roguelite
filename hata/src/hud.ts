@@ -383,7 +383,8 @@ export class Hud {
     el.querySelector("#sh-x")!.addEventListener("click", onClose);
   }
 
-  checklist(rows: Array<{ group: string; name: string; pct: number; value: number }>, overall: number, value: number, onHand: () => void, onClose: () => void, client: string): void {
+  checklist(rows: Array<{ group: string; name: string; pct: number; value: number; now?: boolean }>, overall: number, value: number, onHand: () => void, onClose: () => void, client: string,
+    stage?: { name: string; pct: number; need: number; next: string | null }): void {
     const groups = new Map<string, typeof rows>();
     for (const r of rows) {
       if (!groups.has(r.group)) groups.set(r.group, []);
@@ -391,10 +392,11 @@ export class Hud {
     }
     const st = starsFor(overall);
     const list = [...groups].map(([g, rs]) => `<div class="grp">${g.toUpperCase()}</div>` + rs.map((r) => `
-      <div class="it${r.pct >= 0.999 ? " done" : ""}"><span>${r.name}</span><span class="bar"><i style="width:${r.pct * 100}%"></i></span><span class="p">${Math.floor(r.pct * 100)}%</span><span class="v">${r.value ? money(r.value) : ""}</span></div>`).join("")).join("");
+      <div class="it${r.pct >= 0.999 ? " done" : ""}${r.now ? " now" : ""}"><span>${r.name}</span><span class="bar"><i style="width:${r.pct * 100}%"></i></span><span class="p">${Math.floor(r.pct * 100)}%</span><span class="v">${r.value ? money(r.value) : ""}</span></div>`).join("")).join("");
     const el = this.overlay("ov-list", `<div class="panel" style="width:min(720px,100%)">
       <div class="overall"><div><div class="eyebrow">${client.toUpperCase()}</div><h2>Що лишилось</h2></div>
         <span class="big">${Math.floor(overall * 100)}%</span><span class="stars">${"★".repeat(st)}<s>${"★".repeat(5 - st)}</s></span></div>
+      ${stage ? `<div class="stagebox"><b>Зараз: ${stage.name}</b> — ${Math.floor(stage.pct * 100)}% із ${Math.round(stage.need * 100)}%.${stage.next ? ` Далі відкриється: ${stage.next}.` : ""} Роботи цього етапу позначені зеленим.</div>` : ""}
       <p>Зірки за загальну чистоту: 35% · 50% · 65% · 80% · 92%. Здати хату можна будь-коли; на третій вечір господар забере її сам. Уся хата ≈ ${money(value)}.</p>
       <div class="list">${list}</div>
       <div class="btns"><button class="btn primary" id="l-x">Працювати далі</button><button class="btn gold" id="l-h">Здати хату</button></div></div>`);

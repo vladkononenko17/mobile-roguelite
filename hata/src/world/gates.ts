@@ -102,11 +102,17 @@ function tapeLine(g: THREE.Group, a: THREE.Vector2, b: THREE.Vector2, y: number,
     }
   }
   if (sign) {
-    const s = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.23), new THREE.MeshStandardMaterial({ map: signTexture(), roughness: 0.6, side: THREE.DoubleSide }));
-    s.position.set((a.x + b.x) / 2, y + 1.02, (a.y + b.y) / 2);
-    s.rotation.y = -ang;
-    s.rotation.z = 0.04;
-    g.add(s);
+    // one plate per side, so the word reads correctly from both rooms
+    const plate = new THREE.PlaneGeometry(0.62, 0.23);
+    const mat = new THREE.MeshStandardMaterial({ map: signTexture(), roughness: 0.6 });
+    for (const flip of [0, Math.PI]) {
+      const s = new THREE.Mesh(plate, mat);
+      s.position.set((a.x + b.x) / 2, y + 1.02, (a.y + b.y) / 2);
+      s.rotation.set(0, -ang + flip, 0.04);
+      s.position.x += Math.sin(-ang + flip) * 0.006;
+      s.position.z += Math.cos(-ang + flip) * 0.006;
+      g.add(s);
+    }
   }
 }
 

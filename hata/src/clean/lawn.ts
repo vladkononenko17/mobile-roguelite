@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { atmos } from "../world/atmos";
 import { rng } from "../world/geo";
 
 /**
@@ -171,12 +172,14 @@ export class Lawn {
       sh.uniforms.uTime = uTime;
       sh.uniforms.uPix = Lawn.pix;
       sh.uniforms.uLod = uLod;
+      sh.uniforms.uSunDir = atmos.sunDir;
+      sh.uniforms.uSunCol = atmos.sunColor;
       sh.vertexShader = sh.vertexShader
         .replace(
           "#include <common>",
           `#include <common>
           attribute vec4 aOff; attribute float aH; attribute vec3 aVar; attribute float aRank; uniform float uLod;
-          varying vec3 vVar; varying float vV; varying float vFar; uniform float uTime; uniform float uPix;`,
+          varying vec3 vVar; varying float vV; varying float vFar; varying vec3 vBW; uniform float uTime; uniform float uPix;`,
         )
         .replace(
           "#include <beginnormal_vertex>",
@@ -202,10 +205,11 @@ export class Lawn {
           float sway = uv.y * uv.y * bh;
           transformed.x += wv * 0.25 * sway;
           transformed.z += wv * 0.12 * sway;
-          transformed += vec3(aOff.x, 0.0, aOff.y);`,
+          transformed += vec3(aOff.x, 0.0, aOff.y);
+          vBW = transformed;`,
         );
       sh.fragmentShader = sh.fragmentShader
-        .replace("#include <common>", "#include <common>\nvarying vec3 vVar; varying float vV; varying float vFar;")
+        .replace("#include <common>", "#include <common>\nvarying vec3 vVar; varying float vV; varying float vFar; varying vec3 vBW; uniform vec3 uSunDir, uSunCol;")
         .replace(
           "#include <map_fragment>",
           `#include <map_fragment>
@@ -220,6 +224,13 @@ export class Lawn {
           // far away: blades blend toward one average lawn colour
           vec3 avg = mix(root, tip, 0.6);
           diffuseColor.rgb = mix(col, avg, vFar * 0.85);`,
+        )
+        .replace(
+          "#include <emissivemap_fragment>",
+          `#include <emissivemap_fragment>
+          // looking toward the low sun, thin blades glow at the tips (light through the leaf)
+          float back = pow(max(dot(normalize(vBW - cameraPosition), uSunDir), 0.0), 5.0);
+          totalEmissiveRadiance += uSunCol * diffuseColor.rgb * back * h * 2.2;`,
         );
     };
     return mat;
