@@ -20,7 +20,7 @@ export interface Save {
   /** Best run: houses handed over and stars. */
   best: { houses: number; stars: number };
   totalEarned: number;
-  settings: { quality: "low" | "medium" | "high"; sound: boolean; sensitivity: number };
+  settings: { quality: "low" | "medium" | "high"; sound: boolean; sensitivity: number; showFps: boolean };
 }
 
 export interface RunState {
@@ -55,7 +55,7 @@ export function newSave(seed = 1): Save {
     run: newRun(seed),
     best: { houses: 0, stars: 0 },
     totalEarned: 0,
-    settings: { quality: "medium", sound: true, sensitivity: 1 },
+    settings: { quality: "medium", sound: true, sensitivity: 1, showFps: false },
   };
 }
 

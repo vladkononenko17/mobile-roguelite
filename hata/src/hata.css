@@ -66,7 +66,8 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 #action.gold { background: var(--gold); color: var(--gold-ink); box-shadow: 0 0 0 6px rgba(255,201,60,0.3); }
 #action.dim { background: rgba(255,255,255,0.2); color: #fff; box-shadow: none; }
 #action.pressed { transform: scale(0.94); }
-#mode { position: absolute; right: calc(128px + var(--sr)); bottom: calc(26px + var(--sb)); }
+#mode { position: absolute; right: calc(20px + var(--sr)); bottom: calc(130px + var(--sb)); padding: 6px 12px; font-size: 13px; }
+#fps { position: absolute; left: calc(14px + var(--sl)); top: calc(96px + var(--st)); font-size: 12px; padding: 4px 10px; pointer-events: none; }
 
 #tools { position: absolute; left: 50%; bottom: calc(10px + var(--sb)); transform: translateX(-50%); display: flex; gap: 6px; background: var(--glass); border-radius: 18px; padding: 6px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 .tool { width: 50px; height: 50px; border-radius: 13px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 9px; font-weight: 500; color: var(--muted); position: relative; }
@@ -84,7 +85,7 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 .toast.gold { background: var(--gold); color: var(--gold-ink); font-weight: 700; }
 @keyframes toastIn { 0% { opacity: 0; transform: translateY(-8px); } 8% { opacity: 1; transform: none; } 85% { opacity: 1; } 100% { opacity: 0; } }
 
-#detector { position: absolute; right: calc(132px + var(--sr)); bottom: calc(96px + var(--sb)); background: var(--glass-2); border-radius: 16px; padding: 8px 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; pointer-events: none; }
+#detector { position: absolute; right: calc(132px + var(--sr)); bottom: calc(110px + var(--sb)); background: var(--glass-2); border-radius: 16px; padding: 8px 10px; display: flex; flex-direction: column; align-items: center; gap: 5px; pointer-events: none; }
 #detector .bars { display: flex; gap: 3px; align-items: flex-end; height: 36px; }
 #detector .bars i { width: 8px; border-radius: 3px; background: rgba(255,255,255,0.18); }
 #detector .bars i.on { background: var(--gold); }

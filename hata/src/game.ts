@@ -65,9 +65,9 @@ function persist(): void {
 }
 
 const QUALITY = {
-  low: { dpr: 1, shadow: 1024, ao: false, grass: 60, lod: 0.6 },
-  medium: { dpr: 1.5, shadow: 2048, ao: false, grass: 100, lod: 0.85 },
-  high: { dpr: 2, shadow: 2048, ao: true, grass: 140, lod: 1 },
+  low: { dpr: 1.0, minDpr: 0.75, shadow: 1024, ao: false, grass: 55, lod: 0.6 },
+  medium: { dpr: 1.5, minDpr: 0.9, shadow: 1536, ao: false, grass: 80, lod: 0.8 },
+  high: { dpr: 2, minDpr: 1.1, shadow: 2048, ao: true, grass: 110, lod: 1 },
 };
 const Q = QUALITY[(params.get("q") as Save["settings"]["quality"]) ?? save.settings.quality];
 
@@ -78,7 +78,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: !Q.ao, powerPreference: "h
 renderer.setPixelRatio(Math.min(devicePixelRatio, Number(params.get("dpr") ?? Q.dpr)));
 renderer.setSize(view.clientWidth, view.clientHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.95;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -88,9 +88,15 @@ setAnisotropy(Math.min(4, renderer.capabilities.getMaxAnisotropy()));
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, view.clientWidth / view.clientHeight, 0.05, 260);
 scene.add(camera);
-const vmScene = new THREE.Scene();
+// Tools in hand ride on the camera, shrunk 4× and brought 4× closer: they look the
+// same but sit within 15 cm of the eye, so walls never cut through them — and no
+// second render pass is needed.
+const VM_SCALE = 0.25;
 const vmRoot = new THREE.Group();
-vmScene.add(vmRoot);
+vmRoot.scale.setScalar(VM_SCALE);
+camera.add(vmRoot);
+camera.near = 0.015;
+camera.updateProjectionMatrix();
 
 const hud = new Hud();
 hud.show(false);
@@ -128,9 +134,8 @@ const fx = new Particles();
 scene.add(jet.group, fx.mesh);
 const sun = new THREE.DirectionalLight(0xfff0d8, 3.2);
 const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x5a6a3a, 0.35);
-const vmSun = new THREE.DirectionalLight(0xfff0d8, 2.4);
-const vmHemi = new THREE.HemisphereLight(0xdfefff, 0x6a6a4a, 0.9);
-vmScene.add(vmSun, vmHemi);
+/** One warm light that follows you indoors (a single light keeps every shader cheap). */
+const roomLight = new THREE.PointLight(0xffe6c8, 0, 9, 1.4);
 const toolsGltf: Record<string, THREE.Object3D> = {};
 const vms: Partial<Record<string, THREE.Object3D>> = {};
 let mower: THREE.Object3D | null = null;
@@ -220,22 +225,18 @@ async function boot(): Promise<void> {
   scene.background = background;
   scene.backgroundIntensity = 0.9;
   scene.environmentIntensity = 0.85;
-  vmScene.environment = env;
+
   scene.fog = new THREE.Fog(0xc6d4da, 50, 170);
   step();
 
   sun.castShadow = true;
   sun.shadow.mapSize.set(Q.shadow, Q.shadow);
   const sc = sun.shadow.camera;
-  sc.left = -26; sc.right = 26; sc.top = 26; sc.bottom = -26; sc.near = 1; sc.far = 140;
+  sc.left = -20; sc.right = 20; sc.top = 20; sc.bottom = -20; sc.near = 1; sc.far = 120;
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.03;
   scene.add(sun, sun.target, hemi);
-  for (const [x, z] of [[-3.5, 2.5], [4, 2.5], [-3.5, -2.5], [1.5, -2.5], [5, -2.5]]) {
-    const l = new THREE.PointLight(0xffe6c8, 3.0, 8.5, 1.4);
-    l.position.set(x, HOUSE.floorY + 2.3, z);
-    scene.add(l);
-  }
+  scene.add(roomLight);
 
   const gltf = await new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}hata/models/tools.glb`);
   for (const name of ["washer", "mower", "blower", "detector", "rake", "net", "mop", "squeegee", "roller", "scraper", "rag", "sponge"]) {
@@ -289,6 +290,7 @@ async function boot(): Promise<void> {
   hud.loading(1, true);
   window.__hata.ready = true;
   setupComposer();
+  rendering = true;
   // offline checks drive the game through __hata.simulate and render on capture
   if (!still) frame();
   if (params.has("play")) startPlay();
@@ -381,25 +383,46 @@ function vmKey(): string | null {
   }
 }
 
-// ── Composer ────────────────────────────────────────────────────────────────
-let composer: EffectComposer;
+// ── Rendering ───────────────────────────────────────────────────────────────
+// Plain renderer.render on low/medium (no extra full-screen passes); the
+// ambient-occlusion composer only on high.
+let composer: EffectComposer | null = null;
+let dpr = Math.min(devicePixelRatio, Number(params.get("dpr") ?? Q.dpr));
 function setupComposer(): void {
+  if (!Q.ao) return;
   const w = view.clientWidth, h = view.clientHeight;
   composer = new EffectComposer(renderer);
   composer.setPixelRatio(renderer.getPixelRatio());
   composer.setSize(w, h);
   composer.addPass(new RenderPass(scene, camera));
-  if (Q.ao) {
-    const ao = new GTAOPass(scene, camera, w, h);
-    ao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1.5, thickness: 1.2, scale: 1.0, samples: 12 });
-    ao.blendIntensity = 0.8;
-    composer.addPass(ao);
-  }
-  const vmPass = new RenderPass(vmScene, camera);
-  vmPass.clear = false;
-  vmPass.clearDepth = true;
-  composer.addPass(vmPass);
+  const ao = new GTAOPass(scene, camera, w / 2, h / 2);
+  ao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1.5, thickness: 1.2, scale: 1.0, samples: 8 });
+  ao.blendIntensity = 0.8;
+  composer.addPass(ao);
   composer.addPass(new OutputPass());
+}
+/** Keeps the frame rate up by trading resolution: measured over ~1 s windows. */
+let fpsAcc = 0, fpsN = 0, fps = 60;
+function adaptResolution(dt: number): void {
+  fpsAcc += dt;
+  fpsN++;
+  if (fpsAcc < 1) return;
+  fps = fpsN / fpsAcc;
+  fpsAcc = 0;
+  fpsN = 0;
+  if (still || mode !== "play") return;
+  const max = Math.min(devicePixelRatio, Q.dpr);
+  let next = dpr;
+  if (fps < 48) next = Math.max(Q.minDpr, dpr - 0.15);
+  else if (fps > 58 && dpr < max) next = Math.min(max, dpr + 0.1);
+  if (Math.abs(next - dpr) > 0.01) {
+    dpr = next;
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(view.clientWidth, view.clientHeight);
+    composer?.setPixelRatio(dpr);
+    composer?.setSize(view.clientWidth, view.clientHeight);
+  }
+  hud.fps(save.settings.showFps ? Math.round(fps) : null);
 }
 addEventListener("resize", () => {
   camera.aspect = view.clientWidth / view.clientHeight;
@@ -576,7 +599,9 @@ const ACTION_LABEL: Record<ToolId, string> = {
 };
 
 function frame(): void {
-  const dt = Math.min(clockT.getDelta(), 0.05);
+  const raw = clockT.getDelta();
+  const dt = Math.min(raw, 0.05);
+  adaptResolution(raw);
   update(dt);
   render();
   requestAnimationFrame(frame);
@@ -853,8 +878,7 @@ function hudSet(label: string, style: "" | "gold" | "dim", want: ToolId | null, 
 // ── Tool visuals & sounds ───────────────────────────────────────────────────
 let swayX = 0, swayY = 0, useAnim = 0;
 function toolEffects(using: boolean, dt: number, stats: ReturnType<typeof toolStats> | null, held: boolean | null): void {
-  vmRoot.position.copy(camera.position);
-  vmRoot.quaternion.copy(camera.quaternion);
+
   const key = mode === "play" ? vmKey() : null;
   swayX = THREE.MathUtils.lerp(swayX, -input.state.look.x * 0.0004, 0.2);
   swayY = THREE.MathUtils.lerp(swayY, input.state.look.y * 0.0004, 0.2);
@@ -936,9 +960,10 @@ function sunUpdate(): void {
   scene.environmentIntensity = 0.85 - 0.45 * evening;
   scene.backgroundIntensity = 0.9 - 0.5 * evening;
   renderer.toneMappingExposure = 0.95 + 0.1 * evening;
-  vmSun.position.copy(dir);
-  vmSun.color.copy(sun.color);
-  vmSun.intensity = sun.intensity * 0.7;
+  // indoor light follows you inside the house
+  const inside = Math.abs(player.pos.x) < HOUSE.halfX && Math.abs(player.pos.z) < HOUSE.halfZ && !player.onRoof;
+  roomLight.intensity = THREE.MathUtils.lerp(roomLight.intensity, inside ? 7 : 0, 0.1);
+  roomLight.position.set(player.pos.x, HOUSE.floorY + 2.4, player.pos.z);
 }
 
 // ── HUD ─────────────────────────────────────────────────────────────────────
@@ -950,9 +975,11 @@ function hudUpdate(dt: number): void {
   hud.setClock(c.label, save.run.day, DAY.deadline, save.run.time / dayLength(save));
 }
 
+let rendering = false;
 function render(): void {
-  if (!composer) return;
-  composer.render();
+  if (!rendering) return;
+  if (composer) composer.render();
+  else renderer.render(scene, camera);
   window.__hata.frames++;
 }
 

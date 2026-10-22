@@ -69,6 +69,7 @@ export class Hud {
       <button id="action">Мити</button>
       <div id="tools"></div>
       <div id="floaters"></div>
+      <div id="fps" class="pill hidden"></div>
       <div id="toasts"></div>
       <div id="detector" class="hidden"><div class="bars"><i style="height:20%"></i><i style="height:40%"></i><i style="height:60%"></i><i style="height:80%"></i><i style="height:100%"></i></div><span class="arrow hidden">${ICONS.arrow}</span><span class="lbl">тихо</span></div>
       <div id="dishbar" class="hidden"><span id="dish-n"></span><button class="btn" id="dish-exit">Готово</button></div>
@@ -175,6 +176,12 @@ export class Hud {
       <button class="tool${id === current ? " on" : ""}${id === want && id !== current ? " want" : ""}" data-tool="${id}" aria-label="${TOOLS[id].name}">
         ${ICONS[id]}<span>${TOOLS[id].short}</span>
       </button>`).join("");
+  }
+
+  fps(n: number | null): void {
+    const f = $("fps");
+    f.classList.toggle("hidden", n === null);
+    if (n !== null) f.textContent = `${n} FPS`;
   }
 
   setLight(on: boolean): void {
@@ -294,6 +301,7 @@ export class Hud {
       <label>Графіка ${seg("quality", s.quality, [["low", "Низька"], ["medium", "Середня"], ["high", "Висока"]])}</label>
       <label>Звук ${seg("sound", String(s.sound), [["true", "Увімк."], ["false", "Вимк."]])}</label>
       <label>Чутливість огляду ${seg("sensitivity", String(s.sensitivity), [["0.7", "Низька"], ["1", "Звичайна"], ["1.4", "Висока"]])}</label>
+      <label>Показувати FPS ${seg("fps", String(s.showFps), [["true", "Так"], ["false", "Ні"]])}</label>
       <p>Якість застосується після перезапуску сторінки.</p>
       </div><div class="btns"><button class="btn primary" id="s-ok">Готово</button></div></div>`);
     el.querySelectorAll<HTMLElement>(".seg").forEach((sg) => sg.addEventListener("click", (e) => {
@@ -303,6 +311,7 @@ export class Hud {
       if (k === "quality") s.quality = v as Save["settings"]["quality"];
       if (k === "sound") s.sound = v === "true";
       if (k === "sensitivity") s.sensitivity = Number(v);
+      if (k === "fps") s.showFps = v === "true";
       sg.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
       onChange();
     }));
