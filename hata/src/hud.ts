@@ -171,9 +171,9 @@ export class Hud {
     const key = TOOL_ORDER.map((id) => save.tools[id]).join() + current + want;
     if (key === this.lastTools) return;
     this.lastTools = key;
-    $("tools").innerHTML = TOOL_ORDER.filter((id) => save.tools[id] > 0).map((id, i) => `
+    $("tools").innerHTML = TOOL_ORDER.filter((id) => save.tools[id] > 0).map((id) => `
       <button class="tool${id === current ? " on" : ""}${id === want && id !== current ? " want" : ""}" data-tool="${id}" aria-label="${TOOLS[id].name}">
-        ${ICONS[id]}<span>${TOOLS[id].short}</span><span class="lv">${i + 1}</span>
+        ${ICONS[id]}<span>${TOOLS[id].short}</span>
       </button>`).join("");
   }
 
@@ -255,6 +255,7 @@ export class Hud {
         <h1>Хата<br>з краю</h1>
         <div class="lead">Покоси, відмий, залатай — і купи собі техніку потужнішу.</div>
         <div class="meta">${o.client} · ${o.owner}${o.houses ? ` · бригада: ${o.houses} хат, ${o.stars}★` : ""}<br>У кишені <b>${money(o.money)}</b>${o.best ? ` · рекорд ${o.best}` : ""}</div>
+        ${(navigator as Navigator & { standalone?: boolean }).standalone ? "" : `<div class="tip">Порада: «Поділитися» → «На початковий екран» — гра відкриється на весь екран.</div>`}
         <div class="loading" id="loading">${o.loading ? "Завантажую подвір'я…<i><b></b></i>" : ""}</div>
         <button class="btn primary" id="t-play" ${o.loading ? "disabled" : ""}>${o.day > 1 || o.houses ? "Продовжити" : "Почати роботу"}</button>
         <div class="btns"><button class="btn" id="t-set">Налаштування</button><button class="btn" id="t-new">Нова бригада</button></div>

@@ -113,6 +113,7 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 #ov-title .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.16em; color: var(--mint); }
 #ov-title .lead { font-size: 14px; color: #d5ded9; line-height: 1.4; }
 #ov-title .meta { font-size: 13px; color: var(--muted); }
+#ov-title .tip { font-size: 12px; color: var(--sky); line-height: 1.35; }
 #ov-title .meta b { color: var(--gold); }
 .loading { font-size: 13px; color: var(--muted); }
 .loading i { display: block; height: 4px; border-radius: 9px; background: rgba(255,255,255,0.12); margin-top: 6px; overflow: hidden; }
@@ -169,7 +170,7 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
   #action { width: 88px; height: 88px; font-size: 14px; }
 }
 @media (max-height: 330px) {
-  #ov-title .lead, #ov-title .eyebrow { display: none; }
+  #ov-title .lead, #ov-title .eyebrow, #ov-title .tip { display: none; }
   #ov-title h1 { font-size: 32px; }
 }
 @media (orientation: portrait) {
@@ -177,3 +178,13 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 }
 #rotate { position: fixed; inset: 0; z-index: 50; background: #141a17; display: none; flex-direction: column; gap: 14px; align-items: center; justify-content: center; text-align: center; padding: 24px; font-size: 17px; }
 #rotate svg { width: 64px; height: 64px; color: var(--mint); }
+
+/* ── Computer: "open on your iPhone" page ───────── */
+.desk { min-height: 100%; display: flex; align-items: center; justify-content: center; gap: 48px; padding: 32px 16px; box-sizing: border-box; flex-wrap: wrap; background: radial-gradient(circle at 70% 40%, #20302a, #141a17 60%); }
+.desk-text { max-width: 420px; display: flex; flex-direction: column; gap: 14px; }
+.desk-text .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.16em; color: var(--mint); }
+.desk-text h1 { margin: 0; font-size: 64px; font-weight: 900; line-height: 0.92; letter-spacing: -0.02em; }
+.desk-text p { margin: 0; color: var(--muted); font-size: 16px; line-height: 1.5; }
+.desk-text a { color: var(--gold); font-weight: 700; font-size: 16px; word-break: break-all; }
+.desk-qr { width: 240px; height: 240px; background: #fff; border-radius: 22px; padding: 14px; box-sizing: border-box; }
+.desk-qr svg { width: 100%; height: 100%; display: block; }
