@@ -24,6 +24,8 @@ export interface GrimeOptions {
   splash?: number;
   /** Treat as floor dust: footprints-ish patches, lighter grey-brown. */
   dust?: number;
+  /** A uniform film of dirt under the patches (0..1). */
+  film?: number;
   /** Repaint the albedo: keep the texture's light/dark detail, replace its hue. */
   paint?: THREE.ColorRepresentation;
   paintStrength?: number;
@@ -63,6 +65,7 @@ export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions): TH
     gScale: { value: 1 / (o.scale ?? 1.2) },
     gSplash: { value: o.splash ?? 0 },
     gDust: { value: o.dust ?? 0 },
+    gFilm: { value: o.film ?? 0 },
     gPaint: { value: new THREE.Color(o.paint ?? 0xffffff) },
     gPaintK: { value: o.paint === undefined ? 0 : (o.paintStrength ?? 1) },
   };
@@ -90,7 +93,7 @@ export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions): TH
         "#include <common>",
         `#include <common>
         varying vec3 vGW; varying vec3 vGN;
-        uniform float gAmount, gStreaks, gMoss, gScale, gSplash, gDust;
+        uniform float gAmount, gStreaks, gMoss, gScale, gSplash, gDust, gFilm;
         uniform vec3 gColor; uniform vec3 gPaint; uniform float gPaintK;
         uniform vec4 gZoneMin[${MAX_ZONES}]; uniform vec4 gZoneMax[${MAX_ZONES}]; uniform int gZoneCount;
         ${NOISE}`,
@@ -98,12 +101,17 @@ export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions): TH
       .replace(
         "#include <map_fragment>",
         `#include <map_fragment>
+        {
+          float lum = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+          vec3 painted = gPaint * clamp(0.45 + lum * 2.2, 0.0, 1.25);
+          diffuseColor.rgb = mix(diffuseColor.rgb, painted, gPaintK);
+        }
         vec3 gp = vGW;
         float up = clamp(vGN.y, 0.0, 1.0);
         float side = 1.0 - abs(vGN.y);
         float n1 = gfbm(gp * gScale);
         float n2 = gfbm(gp * gScale * 4.7 + 13.1);
-        float g = smoothstep(0.32, 0.72, n1) * 0.75 + n2 * 0.35;
+        float g = smoothstep(0.32, 0.72, n1) * 0.75 + n2 * 0.35 + gFilm;
         // run-off: thin vertical streaks that fade downwards
         float st = gn(vec3(gp.x * 9.0 + gp.z * 9.0, gp.y * 0.35, 0.0));
         st = smoothstep(0.45, 0.95, st) * smoothstep(-0.5, 2.5, gp.y);

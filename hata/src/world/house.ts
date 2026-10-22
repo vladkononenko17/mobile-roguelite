@@ -54,14 +54,14 @@ export async function buildHouse(): Promise<HouseParts> {
     pbrMaterial("dirty_tiles", { scale: 1 / 2.26 }),
     pbrMaterial("wood_floor_worn", { scale: 0.5 }),
   ]);
-  applyGrime(siding, { paint: 0xe6e0d0, amount: 0.62, streaks: 0.8, splash: 0.7, color: 0x5a4630, scale: 1.1 });
+  applyGrime(siding, { paint: 0xe9e4d6, film: 0.45, amount: 0.95, streaks: 0.9, splash: 0.8, color: 0x4a4430, scale: 1.0 });
   applyGrime(plaster, { amount: 0.35, color: 0x5a4a38, scale: 0.9 });
   applyGrime(plasterBed, { amount: 0.3, color: 0x5a4a38 });
   applyGrime(tilesBath, { amount: 0.5, color: 0x50463a, scale: 0.5 });
   applyGrime(foundation, { amount: 0.8, splash: 1, moss: 0.4, color: 0x3a3226 });
   applyGrime(roof, { paint: 0x6e3e30, paintStrength: 0.85, amount: 0.55, moss: 0.55, color: 0x2d281f, scale: 0.7, streaks: 0.4 });
   applyGrime(ceil, { amount: 0.25, color: 0x6a5c48 });
-  for (const f of [fLiving, fKitchen, fBed, fHall]) applyGrime(f, { amount: 0.75, dust: 1, color: 0x4f4232, scale: 0.8 });
+  for (const f of [fLiving, fKitchen, fBed, fHall]) applyGrime(f, { amount: 0.6, dust: 0.35, color: 0x3a3024, scale: 0.6 });
   applyGrime(fBath, { amount: 0.6, color: 0x4a4030, scale: 0.5 });
   for (const m of [plaster, plasterBed, ceil, fLiving, fKitchen, fBed, fBath, fHall, tilesBath]) m.envMapIntensity = 0.45;
 

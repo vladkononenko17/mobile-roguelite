@@ -23,7 +23,7 @@ export const POOL = { x0: -9, x1: -1, z0: -15, z1: -10.5, depth: 1.5, water: -0.
 export const DECK = { x0: 1.5, x1: 8, z0: -9.5, z1: -5.2 };
 export const DRIVE = { x0: 8.5, x1: 12.5, z0: -6, z1: 22.5 };
 export const PATH = { x0: -2.8, x1: -1.4, z0: 6.6, z1: 22.5 };
-export const HAY = { x: 10.5, z: -16.5, r: 2.1, h: 2.0 };
+export const HAY = { x: 10.5, z: -16.5, r: 1.9, h: 3.1 };
 
 const inRect = (x: number, z: number, r: { x0: number; x1: number; z0: number; z1: number }, m = 0): boolean =>
   x > r.x0 - m && x < r.x1 + m && z > r.z0 - m && z < r.z1 + m;
@@ -57,7 +57,7 @@ export async function buildYard(o: YardOptions): Promise<YardParts> {
   const g = new THREE.Group();
   g.name = "yard";
   const [soil, pavers, overgrown, asphalt, coping, poolTiles, deck, fence, bark, sidewalk, leafLitter] = await Promise.all([
-    pbrMaterial("grass_ground", { scale: 1 / 2.5 }),
+    pbrMaterial("grass_ground", { scale: 1 / 2.5, color: 0xa8c088 }),
     pbrMaterial("patterned_concrete_pavers", { scale: 1 / 1.8 }),
     pbrMaterial("overgrown_concrete_pavers", { scale: 0.5 }),
     pbrMaterial("asphalt_02", { scale: 1 / 3 }),
@@ -153,7 +153,7 @@ export async function buildYard(o: YardOptions): Promise<YardParts> {
   const water = new THREE.Mesh(
     new THREE.PlaneGeometry(x1 - x0, z1 - z0),
     new THREE.MeshPhysicalMaterial({
-      color: 0x34502a, roughness: 0.06, metalness: 0, transparent: true, opacity: 0.9,
+      color: 0x26361a, roughness: 0.1, metalness: 0, transparent: true, opacity: 0.96,
       normalMap: waterNormal, normalScale: new THREE.Vector2(0.35, 0.35), envMapIntensity: 1.2,
       clearcoat: 0.6, clearcoatRoughness: 0.08,
     }),
@@ -219,7 +219,7 @@ export async function buildYard(o: YardOptions): Promise<YardParts> {
     isLawn: (x, z) => (z > 24.2 && z < 24.0) || (Math.abs(x) > 16.3 && Math.abs(x) < 40 && z < 22 && z > -40) || (z < -22.3 && z > -40 && Math.abs(x) < 40),
     mowed: () => 0.4,
     bounds: [-40, 40, -40, 22],
-    density: o.grassDensity * 0.18,
+    density: o.grassDensity * 0.45,
     seed: 3,
     tall: [0.15, 0.4],
   });
@@ -266,9 +266,9 @@ export async function buildYard(o: YardOptions): Promise<YardParts> {
   }));
 
   // A leaf-litter mat under the big tree so the ground there reads brown.
-  const litter = new THREE.Mesh(new THREE.CircleGeometry(7.5, 40), leafLitter);
+  const litter = new THREE.Mesh(new THREE.CircleGeometry(4.0, 40), leafLitter);
   litter.rotation.x = -Math.PI / 2;
-  litter.position.set(-12, 0.004, -16);
+  litter.position.set(-13, 0.004, -18.5);
   litter.receiveShadow = true;
   bakeWorldUV(litter);
   g.add(litter);
@@ -363,15 +363,17 @@ function strawTexture(): THREE.CanvasTexture {
 function buildHaystack(): THREE.Group {
   const g = new THREE.Group();
   const tex = strawTexture();
-  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, color: 0xf0e0b0 });
+  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, color: 0x9a927a });
   const geo = new THREE.SphereGeometry(1, 48, 24, 0, Math.PI * 2, 0, Math.PI / 2);
   const p = geo.getAttribute("position") as THREE.BufferAttribute;
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
     const a = Math.atan2(z, x);
-    const bump = 1 + Math.sin(a * 5) * 0.05 + Math.sin(a * 11 + y * 4) * 0.03;
-    const shape = Math.pow(y, 0.85);
-    p.setXYZ(i, x * HAY.r * bump * (1.05 - 0.15 * y), shape * HAY.h, z * HAY.r * bump * (1.05 - 0.15 * y));
+    const bump = 1 + Math.sin(a * 5 + y * 3) * 0.07 + Math.sin(a * 13 + y * 9) * 0.04 + Math.sin(a * 29) * 0.02;
+    // bulge low, taper to a point: a stack, not a dome
+    const prof = Math.sqrt(Math.max(0, 1 - y)) * (1 + 0.25 * Math.sin(y * Math.PI));
+    const rr = HAY.r * bump * prof / Math.max(1e-3, Math.hypot(x, z));
+    p.setXYZ(i, x * rr, y * HAY.h, z * rr);
   }
   geo.computeVertexNormals();
   const mound = new THREE.Mesh(geo, mat);
@@ -379,8 +381,14 @@ function buildHaystack(): THREE.Group {
   g.add(mound);
   // loose straws sticking out and scattered around
   const r = rng(77);
-  const n = 2600;
-  const straw = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.004, 0.004, 1, 3), new THREE.MeshStandardMaterial({ color: 0xd9bd72, roughness: 0.8 }), n);
+  // the pole through the top
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.0, 8), new THREE.MeshStandardMaterial({ color: 0x5a4632, roughness: 0.9 }));
+  pole.position.y = HAY.h + 0.25;
+  pole.rotation.z = 0.08;
+  pole.castShadow = true;
+  g.add(pole);
+  const n = 7000;
+  const straw = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.004, 0.004, 1, 3), new THREE.MeshStandardMaterial({ color: 0xc9b07a, roughness: 0.8 }), n);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), v = new THREE.Vector3();
   for (let i = 0; i < n; i++) {
     const onGround = i > n * 0.6;
@@ -390,13 +398,13 @@ function buildHaystack(): THREE.Group {
       v.set(Math.cos(a) * d, 0.02, Math.sin(a) * d);
       e.set(Math.PI / 2 + (r() - 0.5) * 0.3, 0, a + (r() - 0.5) * 2);
     } else {
-      const y = r();
-      const rad = HAY.r * (1.02 - 0.17 * y) * Math.sqrt(Math.max(0.02, 1 - y * y));
-      v.set(Math.cos(a) * rad, Math.pow(y, 0.85) * HAY.h, Math.sin(a) * rad);
+      const y = r() * 0.97;
+      const rad = HAY.r * Math.sqrt(Math.max(0, 1 - y)) * (1 + 0.25 * Math.sin(y * Math.PI)) * (1.0 + r() * 0.05);
+      v.set(Math.cos(a) * rad, y * HAY.h, Math.sin(a) * rad);
       e.set((r() - 0.5) * 2.4, r() * 3, (r() - 0.5) * 2.4);
     }
     q.setFromEuler(e);
-    s.set(1, 0.18 + r() * 0.3, 1);
+    s.set(1, 0.15 + r() * 0.4, 1);
     m.compose(v, q, s);
     straw.setMatrixAt(i, m);
   }

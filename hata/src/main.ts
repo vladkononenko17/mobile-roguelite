@@ -8,7 +8,7 @@ import { hdri, setAnisotropy } from "./assets";
 import { buildHouse, HOUSE } from "./world/house";
 import { buildYard, placeProps, POOL, HAY } from "./world/yard";
 import { addCleanZone } from "./world/grime";
-import { blenderTool, detector, spray } from "./tools";
+import { blenderTool, spray } from "./tools";
 
 /**
  * «Хата з краю» — prototype runtime. For now it builds the whole plot and
@@ -62,7 +62,7 @@ const SHOTS: Record<string, Shot> = {
     pos: [-6.3, 1.55, 19.2],
     look: [-4.6, 0.0, 15.6],
     fov: 55,
-    mowed: (x, z) => (x < -6.6 && z > 7 && z < 22.5 ? 1 : 0),
+    mowed: (x, z) => (x < -5.75 && z > 7 && z < 22.5 ? 1 : 0),
     stripe: (x) => Math.floor(x / lane) % 2 === 0,
     setup: async () => {
       // The mower stands on the lawn, handle half a metre in front of the player.
@@ -86,18 +86,18 @@ const SHOTS: Record<string, Shot> = {
       addCleanZone({ x: 6.8, y: 0.45, z: -0.2 }, { x: 7.5, y: 1.2, z: 1.0 }, 0.9, 0.22);
       addCleanZone({ x: 9.6, y: -0.2, z: 1.2 }, { x: 12.6, y: 0.2, z: 3.8 }, 0.8, 0.25);
       const gun = await blenderTool("washer");
-      gun.position.set(0.16, -0.3, -0.12);
-      gun.rotation.set(-0.06, 0.3, 0);
+      gun.position.set(0.13, -0.2, -0.2);
+      gun.rotation.set(0.1, 0.16, 0);
       camera.add(gun);
       camera.updateMatrixWorld(true);
       const tip = gun.getObjectByName("washer_tip")!.getWorldPosition(new THREE.Vector3());
-      scene.add(spray(tip, new THREE.Vector3(7.12, 1.0, 0.55)));
+      scene.add(spray(tip, new THREE.Vector3(7.12, 1.3, 0.6)));
     },
   },
   backyard: {
-    pos: [6.6, 2.05, -6.4],
-    look: [-3.5, 0.0, -14.0],
-    fov: 55,
+    pos: [1.2, 1.95, -8.4],
+    look: [-5.0, -0.2, -12.8],
+    fov: 58,
   },
   living: {
     pos: [0.4, 1.6, 1.0],
@@ -120,14 +120,20 @@ const SHOTS: Record<string, Shot> = {
     fov: 55,
   },
   find: {
-    pos: [7.0, 1.6, -12.4],
-    look: [HAY.x, 0.6, HAY.z],
-    fov: 52,
+    pos: [6.9, 1.6, -11.3],
+    look: [HAY.x - 1.6, 0.0, HAY.z + 3.4],
+    fov: 60,
+    mowed: (x, z) => (Math.hypot(x - HAY.x, z - HAY.z) < 6.5 ? 1 : 0),
+    stripe: (x, z) => Math.floor((x + z) / 0.6) % 2 === 0,
     setup: async () => {
-      const d = await detector();
-      d.position.set(0.15, -1.25, -1.0);
-      d.rotation.set(0.25, Math.PI / 2 + 0.25, 0);
-      camera.add(d);
+      // The detector sweeps the ground just in front of the stack.
+      const d = await blenderTool("detector");
+      const [px, , pz] = S.pos, [lx, , lz] = S.look;
+      const dir = new THREE.Vector3(lx - px, 0, lz - pz).normalize();
+      const side = new THREE.Vector3(-dir.z, 0, dir.x);
+      d.position.set(px + dir.x * 0.6 + side.x * 0.35, 1.05, pz + dir.z * 0.6 + side.z * 0.35);
+      d.rotation.y = Math.atan2(-dir.x, -dir.z) + 0.75;
+      scene.add(d);
     },
   },
   aerial: {

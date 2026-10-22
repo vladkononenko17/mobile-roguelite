@@ -4,7 +4,7 @@ import { instance, pbrMaterial } from "./assets";
 
 /** Tools modelled in Blender (hata/blender/tools.py → public/hata/models/tools.glb). */
 let toolsGltf: Promise<THREE.Object3D> | null = null;
-export async function blenderTool(name: "washer" | "mower" | "blower" | "glove_grip"): Promise<THREE.Object3D> {
+export async function blenderTool(name: "washer" | "mower" | "blower" | "detector" | "glove_grip"): Promise<THREE.Object3D> {
   toolsGltf ??= new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}hata/models/tools.glb`).then((g) => g.scene);
   const root = (await toolsGltf).getObjectByName(name);
   if (!root) throw new Error(`tool ${name} missing in tools.glb`);
@@ -102,9 +102,20 @@ export async function washerLance(): Promise<{ group: THREE.Group; nozzleWorld: 
 }
 
 /** Spray: a cone of stretched droplets from the nozzle to the hit point, plus a splash. */
-export function spray(from: THREE.Vector3, to: THREE.Vector3, n = 700): THREE.Group {
+export function spray(from: THREE.Vector3, to: THREE.Vector3, n = 1600): THREE.Group {
   const g = new THREE.Group();
-  const mat = new THREE.MeshBasicMaterial({ color: 0xe8f4ff, transparent: true, opacity: 0.55, depthWrite: false });
+  // the jet core: a thin bright tube that frays toward the wall
+  {
+    const len0 = from.distanceTo(to);
+    const core = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.03, 0.004, len0, 10, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xf4fbff, transparent: true, opacity: 0.45, depthWrite: false }),
+    );
+    core.position.copy(from).lerp(to, 0.5);
+    core.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), from.clone().sub(to).normalize());
+    g.add(core);
+  }
+  const mat = new THREE.MeshBasicMaterial({ color: 0xf0f8ff, transparent: true, opacity: 0.7, depthWrite: false });
   const drop = new THREE.SphereGeometry(1, 6, 4);
   const mesh = new THREE.InstancedMesh(drop, mat, n);
   const dir = to.clone().sub(from);
@@ -127,10 +138,10 @@ export function spray(from: THREE.Vector3, to: THREE.Vector3, n = 700): THREE.Gr
   g.add(mesh);
   // splash: droplets bouncing off the surface
   const back = dir.clone().negate();
-  const splash = new THREE.InstancedMesh(drop, mat, 260);
-  for (let i = 0; i < 260; i++) {
+  const splash = new THREE.InstancedMesh(drop, mat, 700);
+  for (let i = 0; i < 700; i++) {
     const v = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().add(back.clone().multiplyScalar(0.9)).normalize();
-    const d = Math.random() * 0.35;
+    const d = Math.random() * 0.5;
     p.copy(to).addScaledVector(v, d);
     const r = 0.003 + Math.random() * 0.006;
     s.set(r, r, r * 3);
@@ -139,7 +150,7 @@ export function spray(from: THREE.Vector3, to: THREE.Vector3, n = 700): THREE.Gr
   }
   g.add(splash);
   // mist
-  const mist = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.16, depthWrite: false }));
+  const mist = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.22, depthWrite: false }));
   mist.position.copy(to).addScaledVector(back, 0.08);
   mist.scale.set(1.3, 1.3, 0.5);
   g.add(mist);

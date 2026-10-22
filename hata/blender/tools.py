@@ -194,15 +194,8 @@ def glove_grip(name, parent=None, mirror=False):
     el.append(("CAPSULE", (0.0, -0.1, -0.06), 0.034, (0, math.radians(90), math.radians(30)), 0.02))
     g = blob(name + "_glove", el, M["glove"], root, voxel=0.0028, ratio=0.3, resolution=0.003)
     cuff = prim("cyl", name + "_cuff", M["cuff"], loc=(0, -0.13, -0.08), rot=(math.radians(-60), 0, 0), scale=(0.039, 0.039, 0.016), parent=root, vertices=28)
-    # sleeve: a soft tube with a few folds, along the forearm direction
-    axis = Vector((0, -math.cos(math.radians(30)), -math.sin(math.radians(30))))
-    start = Vector((0, -0.15, -0.09))
-    folds = [("CAPSULE", start + axis * 0.11, 0.036, (0, 0, 0), 0.0)]
-    rot = Vector((1, 0, 0)).rotation_difference(axis).to_euler()
-    folds[0] = ("CAPSULE", start + axis * 0.11, 0.048, rot, 0.1)
-    for k in range(4):
-        folds.append(("ELLIPSOID", start + axis * (0.03 + k * 0.055), 0.052 + 0.003 * k, rot, 0))
-    sleeve = blob(name + "_sleeve", folds, M["sleeve"], root, voxel=0.004, ratio=0.3)
+    # long gauntlet cuff instead of a sleeve: the forearm is out of frame in first person
+    prim("cyl", name + "_gauntlet", M["glove"], loc=(0, -0.15, -0.095), rot=(math.radians(-60), 0, 0), scale=(0.042, 0.042, 0.035), parent=root, vertices=28, subsurf=1)
     if mirror:
         root.scale = (-1, 1, 1)
     return root
@@ -254,10 +247,10 @@ def washer():
     # hands
     rh = glove_grip("washer_hand_r", root)
     rh.location = (0, -0.07, -0.08)
-    rh.rotation_euler = (math.radians(-20), 0, math.radians(90))
-    lh = glove_grip("washer_hand_l", root, mirror=True)
+    rh.rotation_euler = (math.radians(-15), math.radians(90), 0)
+    lh = glove_grip("washer_hand_l", root)
     lh.location = (0, 0.42, 0.012)
-    lh.rotation_euler = (math.radians(90), math.radians(180), math.radians(90))
+    lh.rotation_euler = (0, 0, math.radians(-90))
     return root
 
 
@@ -294,10 +287,10 @@ def mower():
     bag = prim("cube", "mower_bag", M["bag"], loc=(0, 0.48, 0.3), rot=(math.radians(-25), 0, 0), scale=(0.2, 0.17, 0.14), parent=root, bevel=0.06, subsurf=2)
     rh = glove_grip("mower_hand_r", root)
     rh.location = (0.12, 1.08, 1.02)
-    rh.rotation_euler = (math.radians(200), 0, math.radians(90))
-    lh = glove_grip("mower_hand_l", root, mirror=True)
+    rh.rotation_euler = (math.radians(-83), 0, math.radians(180))
+    lh = glove_grip("mower_hand_l", root)
     lh.location = (-0.12, 1.08, 1.02)
-    lh.rotation_euler = (math.radians(200), 0, math.radians(-90))
+    lh.rotation_euler = (math.radians(-83), 0, math.radians(180))
     return root
 
 
@@ -317,10 +310,33 @@ def blower():
     return root
 
 
+def detector():
+    """Metal detector held out in front: shaft along +Y (away from the player),
+    coil flat on the ground at the far end, grip and arm cuff near the player."""
+    root = empty("detector")
+    # shaft: from the grip (0, 0, 0) down-forward to the coil (0, 1.05, -0.95)
+    a, b = Vector((0, -0.05, 0.05)), Vector((0, 1.0, -0.92))
+    mid, d = (a + b) / 2, (b - a)
+    rot = Vector((0, 0, 1)).rotation_difference(d.normalized()).to_euler()
+    prim("cyl", "det_shaft", M["black"], loc=mid, rot=rot, scale=(0.012, 0.012, d.length / 2), parent=root, vertices=16)
+    prim("cyl", "det_shaft_low", M["steel"], loc=a.lerp(b, 0.8), rot=rot, scale=(0.009, 0.009, 0.16), parent=root, vertices=16)
+    # coil: a flat ring with a filled disc, tilted to lie on the ground
+    prim("torus", "det_coil", M["black"], loc=(0, 1.06, -0.96), rot=(0, 0, 0), parent=root, major_radius=0.13, minor_radius=0.018, major_segments=48, minor_segments=12)
+    prim("cyl", "det_coil_disc", M["orange"], loc=(0, 1.06, -0.96), scale=(0.12, 0.12, 0.008), parent=root, vertices=48)
+    # control box with a little screen
+    prim("cube", "det_box", M["black"], loc=(0, 0.12, -0.04), rot=(math.radians(42), 0, 0), scale=(0.045, 0.07, 0.03), parent=root, bevel=0.01)
+    prim("cube", "det_screen", mat("Screen", srgb(0x2BD4A0), 0.2), loc=(0, 0.115, -0.008), rot=(math.radians(42), 0, 0), scale=(0.032, 0.045, 0.004), parent=root)
+    # arm cuff behind the grip
+    rh = glove_grip("det_hand", root)
+    rh.location = (0, 0.0, 0.03)
+    rh.rotation_euler = (math.radians(-40), math.radians(90), 0)
+    return root
+
+
 def main():
     reset()
     mats()
-    roots = [washer(), mower(), blower(), glove_grip("glove_grip")]
+    roots = [washer(), mower(), blower(), detector(), glove_grip("glove_grip")]
     # spread them out so the file is easy to inspect; the game re-positions them
     for i, r in enumerate(roots):
         r.location.x += i * 1.5
