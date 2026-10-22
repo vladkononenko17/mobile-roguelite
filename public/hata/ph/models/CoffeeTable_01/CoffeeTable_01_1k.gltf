@@ -1,37 +1,138 @@
 {
   "asset": {
-    "generator": "Khronos glTF Blender I/O v1.6.16",
+    "generator": "glTF-Transform v4.5.1",
     "version": "2.0"
   },
-  "scene": 0,
-  "scenes": [
+  "accessors": [
     {
-      "name": "Scene",
-      "nodes": [
-        0
-      ]
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 10485,
+      "bufferView": 0,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 2625,
+      "max": [
+        0.7700076103210449,
+        0.5251627564430237,
+        0.4864234924316406
+      ],
+      "min": [
+        -0.7700034976005554,
+        0.0019255455117672682,
+        -0.4864235520362854
+      ],
+      "bufferView": 1,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 2625,
+      "bufferView": 1,
+      "byteOffset": 12
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 2625,
+      "bufferView": 1,
+      "byteOffset": 24
+    },
+    {
+      "type": "VEC4",
+      "componentType": 5123,
+      "count": 2625,
+      "normalized": true,
+      "bufferView": 1,
+      "byteOffset": 32
+    },
+    {
+      "type": "VEC4",
+      "componentType": 5123,
+      "count": 2625,
+      "normalized": true,
+      "bufferView": 1,
+      "byteOffset": 40
     }
   ],
-  "nodes": [
+  "bufferViews": [
     {
-      "mesh": 0,
-      "name": "CoffeeTable_01"
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 20972,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 20972,
+      "byteLength": 126000,
+      "byteStride": 48,
+      "target": 34962
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "textures": [
+    {
+      "source": 1,
+      "sampler": 0
+    },
+    {
+      "source": 0,
+      "sampler": 0
+    },
+    {
+      "source": 2,
+      "sampler": 0
+    }
+  ],
+  "images": [
+    {
+      "name": "CoffeeTable_01_nor_gl",
+      "mimeType": "image/jpeg",
+      "uri": "textures/CoffeeTable_01_nor_gl_1k.jpg"
+    },
+    {
+      "name": "CoffeeTable_01_diff",
+      "mimeType": "image/jpeg",
+      "uri": "textures/CoffeeTable_01_diff_1k.jpg"
+    },
+    {
+      "name": "CoffeeTable_01_metallic-CoffeeTable_01_roughness",
+      "mimeType": "image/jpeg",
+      "uri": "textures/CoffeeTable_01_arm_1k.jpg"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "CoffeeTable_01.bin",
+      "byteLength": 146972
     }
   ],
   "materials": [
     {
-      "doubleSided": true,
       "name": "CoffeeTable_01",
-      "normalTexture": {
-        "index": 0
-      },
+      "doubleSided": true,
       "pbrMetallicRoughness": {
         "baseColorTexture": {
-          "index": 1
+          "index": 0
         },
         "metallicRoughnessTexture": {
           "index": 2
         }
+      },
+      "normalTexture": {
+        "index": 1
       }
     }
   ],
@@ -41,141 +142,32 @@
       "primitives": [
         {
           "attributes": {
-            "POSITION": 0,
-            "NORMAL": 1,
-            "TEXCOORD_0": 2,
-            "COLOR_0": 3,
-            "COLOR_1": 4
+            "POSITION": 1,
+            "NORMAL": 2,
+            "TEXCOORD_0": 3,
+            "COLOR_0": 4,
+            "COLOR_1": 5
           },
-          "indices": 5,
-          "material": 0
+          "mode": 4,
+          "material": 0,
+          "indices": 0
         }
       ]
     }
   ],
-  "textures": [
+  "nodes": [
     {
-      "sampler": 0,
-      "source": 0
-    },
-    {
-      "sampler": 0,
-      "source": 1
-    },
-    {
-      "sampler": 0,
-      "source": 2
+      "name": "CoffeeTable_01",
+      "mesh": 0
     }
   ],
-  "images": [
+  "scenes": [
     {
-      "mimeType": "image/jpeg",
-      "name": "CoffeeTable_01_nor_gl",
-      "uri": "textures/CoffeeTable_01_nor_gl_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "CoffeeTable_01_diff",
-      "uri": "textures/CoffeeTable_01_diff_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "CoffeeTable_01_metallic-CoffeeTable_01_roughness",
-      "uri": "textures/CoffeeTable_01_arm_1k.jpg"
+      "name": "Scene",
+      "nodes": [
+        0
+      ]
     }
   ],
-  "accessors": [
-    {
-      "bufferView": 0,
-      "componentType": 5126,
-      "count": 6927,
-      "max": [
-        0.7700076103210449,
-        0.5251628756523132,
-        0.4864234924316406
-      ],
-      "min": [
-        -0.7700034976005554,
-        0.0019255455117672682,
-        -0.4864235520362854
-      ],
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 1,
-      "componentType": 5126,
-      "count": 6927,
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 2,
-      "componentType": 5126,
-      "count": 6927,
-      "type": "VEC2"
-    },
-    {
-      "bufferView": 3,
-      "componentType": 5123,
-      "count": 6927,
-      "normalized": true,
-      "type": "VEC4"
-    },
-    {
-      "bufferView": 4,
-      "componentType": 5123,
-      "count": 6927,
-      "normalized": true,
-      "type": "VEC4"
-    },
-    {
-      "bufferView": 5,
-      "componentType": 5123,
-      "count": 31212,
-      "type": "SCALAR"
-    }
-  ],
-  "bufferViews": [
-    {
-      "buffer": 0,
-      "byteLength": 83124,
-      "byteOffset": 0
-    },
-    {
-      "buffer": 0,
-      "byteLength": 83124,
-      "byteOffset": 83124
-    },
-    {
-      "buffer": 0,
-      "byteLength": 55416,
-      "byteOffset": 166248
-    },
-    {
-      "buffer": 0,
-      "byteLength": 55416,
-      "byteOffset": 221664
-    },
-    {
-      "buffer": 0,
-      "byteLength": 55416,
-      "byteOffset": 277080
-    },
-    {
-      "buffer": 0,
-      "byteLength": 62424,
-      "byteOffset": 332496
-    }
-  ],
-  "samplers": [
-    {
-      "magFilter": 9729,
-      "minFilter": 9987
-    }
-  ],
-  "buffers": [
-    {
-      "byteLength": 394920,
-      "uri": "CoffeeTable_01.bin"
-    }
-  ]
+  "scene": 0
 }

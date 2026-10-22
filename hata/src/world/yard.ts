@@ -8,7 +8,7 @@ import { bakeWorldUV, box, rng } from "./geo";
 import { finishSurface, HOUSE, makeSurface, type Restore } from "./house";
 import type { WorldIndex } from "./index";
 import { proxyBox } from "./index";
-import { buildHaystack, flowerBeds, HAY, inBed, makeWaterNormal, neighbours, scumTexture } from "./scenery";
+import { buildHaystack, flowerBeds, HAY, horizon, inBed, makeWaterNormal, neighbours, scumTexture } from "./scenery";
 import { buildTree, foliageMaterial } from "./tree";
 
 export { HAY };
@@ -260,19 +260,16 @@ export async function buildYard(W: WorldIndex, style: HouseStyle, restore: Resto
   fenceSurf.attach(backFence);
   fenceSurf.coverRect(0, 0, LOT.x1 - LOT.x0, 1.75);
   finishSurface(W, restore, fenceSurf);
-  W.solids.push(fenceRun(LOT.x0, LOT.z0, LOT.x0, 2, fencePlain));
-  W.solids.push(fenceRun(LOT.x1, LOT.z0, LOT.x1, -7, fencePlain));
+  // the whole plot is fenced in: the job is inside, the world outside is scenery
+  W.solids.push(fenceRun(LOT.x0, LOT.z0, LOT.x0, LOT.z1, fencePlain));
+  W.solids.push(fenceRun(LOT.x1, LOT.z0, LOT.x1, LOT.z1, fencePlain));
+  W.solids.push(fenceRun(LOT.x0, LOT.z1 + 0.15, LOT.x1, LOT.z1 + 0.15, fencePlain));
+  g.add(horizon());
 
   // ── Lawn.
   const lawn = new Lawn({ isLawn, zoneOf, zones: LAWN_ZONES, bounds: [LOT.x0, LOT.x1, LOT.z0, LOT.z1], density: o.grassDensity, seed: o.seed });
   g.add(lawn.group);
   LAWN_ZONES.forEach((z, i) => lawn.restore(i, restore(z.key)));
-  // a little verge grass beyond the plot so the edges aren't bare
-  const verge = new Lawn({
-    isLawn: (x, z) => !inRect(x, z, LOT, 0.3) && z < 22 && z > -30 && Math.abs(x) < 30,
-    zoneOf: () => 0, zones: [{ key: "verge", name: "" }], bounds: [-30, 30, -30, 22], density: o.grassDensity * 0.25, seed: 3, tall: [0.12, 0.3],
-  });
-  g.add(verge.group);
 
   // ── Flower beds by the front wall and along the path.
   g.add(flowerBeds(o.seed % 997));
@@ -290,12 +287,14 @@ export async function buildYard(W: WorldIndex, style: HouseStyle, restore: Resto
   const leafGreen = foliageMaterial(0.15), leafAutumn = foliageMaterial(0.75);
   const trees: Array<[number, number, number, number, THREE.Material, number]> = [
     [-12, -16, 5, 11, leafAutumn, 5200], [-11.5, 14, 9, 8.5, leafGreen, 3600],
-    [13.5, -19.5, 21, 6.5, leafGreen, 2400], [-30, -8, 3, 10, leafAutumn, 2000], [30, 6, 4, 9, leafGreen, 2000],
-    [24, -30, 6, 12, leafGreen, 2000], [-26, -32, 8, 11, leafAutumn, 2000],
+    [13.5, -19.5, 21, 6.5, leafGreen, 2400], [-30, -8, 3, 10, leafAutumn, 1100], [30, 6, 4, 9, leafGreen, 1100],
+    [24, -30, 6, 12, leafGreen, 1100], [-26, -32, 8, 11, leafAutumn, 1100],
   ];
   for (const [x, z, s, h, mat, n] of trees) {
     const t = buildTree({ seed: s, height: h, bark, leafMat: mat, leaves: n });
     t.position.set(x, 0, z);
+    // trees over the fence are scenery: no shadows
+    if (!inRect(x, z, LOT)) t.traverse((m) => { m.castShadow = false; });
     g.add(t);
     W.circles.push({ x, z, r: h * 0.045 + 0.15, y0: -1, y1: 4 });
   }
@@ -357,7 +356,8 @@ export async function buildYard(W: WorldIndex, style: HouseStyle, restore: Resto
 }
 
 /** Furniture and garden props. Big ones block the player and the crosshair. */
-export async function placeProps(g: THREE.Object3D, W: WorldIndex): Promise<void> {
+/** Props; the ones inside the house go into `interior` (hidden when you're far outside). */
+export async function placeProps(g: THREE.Object3D, W: WorldIndex, interior: THREE.Object3D = g): Promise<void> {
   const F = HOUSE.floorY;
   type P = [id: string, x: number, y: number, z: number, rotY?: number, scale?: number, solid?: boolean];
   const list: P[] = [
@@ -411,7 +411,9 @@ export async function placeProps(g: THREE.Object3D, W: WorldIndex): Promise<void
       o.position.set(x, y, z);
       o.rotation.y = rot;
       o.scale.setScalar(s);
-      g.add(o);
+      const inside = Math.abs(x) < HOUSE.halfX && Math.abs(z) < HOUSE.halfZ;
+      (inside ? interior : g).add(o);
+      if (inside) o.traverse((m) => { m.castShadow = false; });
       if (solid) {
         W.blockMesh(o, 0.05);
         W.solids.push(proxyBox(g, o));
@@ -426,5 +428,5 @@ export async function placeProps(g: THREE.Object3D, W: WorldIndex): Promise<void
   carpet.position.set(-4.4, F + 0.05, 2.0);
   carpet.receiveShadow = true;
   bakeWorldUV(carpet);
-  g.add(carpet);
+  interior.add(carpet);
 }

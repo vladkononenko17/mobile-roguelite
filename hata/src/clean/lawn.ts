@@ -49,6 +49,10 @@ export interface LawnOptions {
 }
 
 const CHUNK = 4;
+/** Index ranges in the blade geometry: the curved blade and the one-triangle far blade. */
+const NEAR_RANGE = [0, 24] as const, FAR_RANGE = [24, 3] as const;
+/** Chunks further than this (nearest point) draw one-triangle blades. */
+const FAR_AT = 12;
 
 function bladeGeometry(): THREE.BufferGeometry {
   const seg = 4;
@@ -64,6 +68,11 @@ function bladeGeometry(): THREE.BufferGeometry {
     const a = i * 2;
     idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
   }
+  // far version: a single triangle, drawn with a draw range on distant chunks
+  const b = (seg + 1) * 2;
+  pos.push(-0.5, 0, 0, 0.5, 0, 0, 0, 1, 0.35);
+  uv.push(0, 0, 1, 0, 0.5, 1);
+  idx.push(b, b + 1, b + 2);
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
@@ -321,6 +330,8 @@ export class Lawn {
       const d = Math.sqrt(dx * dx + dz * dz);
       const f = d < 9 ? 1 : d < 26 ? 1 - ((d - 9) / 17) * 0.8 : 0.2;
       ch.geo.instanceCount = Math.max(1, Math.min(ch.n, Math.ceil(ch.n * f * quality) + 8));
+      const r = d > FAR_AT ? FAR_RANGE : NEAR_RANGE;
+      ch.geo.setDrawRange(r[0], r[1]);
     }
   }
 }

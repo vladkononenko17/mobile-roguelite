@@ -22,6 +22,7 @@ import { grimeGlobals } from "./world/grime";
 import { buildHouse, HOUSE } from "./world/house";
 import { Gates, stageAt } from "./world/gates";
 import { SunsetSky } from "./world/sky";
+import { mergeStatic } from "./world/merge";
 import { currentStage, STAGE_DONE, STAGES, stageShare } from "./game/stages";
 import { WorldIndex, type Interactable } from "./world/index";
 import { buildKitchen, SINK } from "./world/kitchen";
@@ -83,6 +84,11 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, Number(params.get("dpr") ?? Q.
 renderer.setSize(view.clientWidth, view.clientHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+// shadows are redrawn every other frame (and whenever the sun's box moves):
+// the sun barely moves and 30 Hz is plenty for the few things that do
+renderer.shadowMap.autoUpdate = false;
+let shadowTick = 0;
+let shadowFocus = "";
 // ACES plus a little extra saturation and warmth: a cheap colour grade that
 // costs nothing extra (no post-processing pass), applied in every material.
 THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars_fragment.replace(
@@ -153,6 +159,10 @@ const hemi = new THREE.HemisphereLight(0xc6b8e8, 0x6a4a30, 0.55);
 /** Sun azimuth: low from the street-and-east corner, so the front and the east side glow. */
 const SUN_AZ = 0.8;
 let sky: SunsetSky | null = null;
+/** Furniture, kitchen and everything else inside: drawn only when you're in or near the house. */
+const interior = new THREE.Group();
+let houseGroup: THREE.Group = new THREE.Group();
+interior.name = "interior";
 /** The sky panorama and the direction of its sun, atan2(z, x) in three's equirect mapping. */
 const SKY = { id: "kloppenheim_06_puresky", sunAngle: (0.6123 - 0.5) * Math.PI * 2 };
 /** One warm light that follows you indoors (a single light keeps every shader cheap). */
@@ -278,15 +288,19 @@ async function boot(): Promise<void> {
   const house = await buildHouse(W, style, restore);
   roofAt = house.roofAt;
   scene.add(house.group);
+  houseGroup = house.group;
   gates = new Gates(W, house.doors);
   scene.add(gates.group);
   step();
-  const dishes = await buildKitchen(house.group, W, restore);
+  scene.add(interior);
+  const dishes = await buildKitchen(interior, W, restore);
   step();
   yard = await buildYard(W, style, restore, { grassDensity: Q.grass, seed: save.run.seed });
   scene.add(yard.group);
   step();
-  await placeProps(scene, W);
+  await placeProps(scene, W, interior);
+  // the sun only reaches the rooms through the windows: furniture needn't cast
+  interior.traverse((o) => { o.castShadow = false; });
   step();
   jobs = new Jobs({
     W, scene, seed: save.run.seed, restore,
@@ -305,6 +319,10 @@ async function boot(): Promise<void> {
   const sponge = toolsGltf.sponge?.clone(true) ?? new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.04, 0.06), new THREE.MeshStandardMaterial({ color: 0xffd23c }));
   station = new DishStation(dishes, sponge, scene);
   registerInteractables();
+  // bake static meshes into one draw per material (house, rooms, yard separately)
+  mergeStatic(houseGroup);
+  mergeStatic(interior);
+  mergeStatic(yard.group);
   buildRows();
   stage = stageNow();
   gates.init(stage);
@@ -997,11 +1015,16 @@ function sunUpdate(): void {
   const dir = new THREE.Vector3(Math.sin(SUN_AZ) * Math.cos(el), Math.sin(el), Math.cos(SUN_AZ) * Math.cos(el));
   const focus = new THREE.Vector3(Math.round(player.pos.x / 2) * 2, 0, Math.round(player.pos.z / 2) * 2);
   sun.position.copy(focus).addScaledVector(dir, 60);
+  const fk = `${focus.x},${focus.z}`;
+  if (fk !== shadowFocus) { shadowFocus = fk; renderer.shadowMap.needsUpdate = true; }
   sun.target.position.copy(focus);
   sun.color.setRGB(1, THREE.MathUtils.lerp(0.58, 0.48, k), THREE.MathUtils.lerp(0.28, 0.2, k));
   sun.intensity = THREE.MathUtils.lerp(5.0, 4.3, k);
   scene.environmentIntensity = THREE.MathUtils.lerp(0.6, 0.5, k);
   sky?.update(camera.position, dir, THREE.MathUtils.lerp(0.95, 0.8, k));
+  // skip drawing the rooms when you're well away from the house
+  const near = Math.abs(player.pos.x) < HOUSE.halfX + 5 && Math.abs(player.pos.z) < HOUSE.halfZ + 5;
+  interior.visible = near || mode === "dishes";
   // indoor light follows you inside the house
   const inside = Math.abs(player.pos.x) < HOUSE.halfX && Math.abs(player.pos.z) < HOUSE.halfZ && !player.onRoof;
   roomLight.intensity = THREE.MathUtils.lerp(roomLight.intensity, inside ? 7 : 0, 0.1);
@@ -1058,6 +1081,7 @@ let rendering = false;
 function render(): void {
   if (!rendering) return;
   sky?.mesh.position.copy(camera.position);
+  if ((shadowTick++ & 1) === 0 || still) renderer.shadowMap.needsUpdate = true;
   if (composer) composer.render();
   else renderer.render(scene, camera);
   window.__hata.frames++;
@@ -1091,6 +1115,12 @@ Object.assign(window.__hata, {
   vms, overall, houseValue, rows: () => rows.map((r) => ({ key: r.key, name: r.name, value: r.value, pct: r.share() })),
   dishes: () => station, enterDishes, exitDishes,
   capture: () => { render(); return renderer.domElement.toDataURL("image/jpeg", 0.88); },
+  scene,
+  info: () => {
+    render();
+    const r = renderer.info.render;
+    return { calls: r.calls, tris: r.triangles, progs: renderer.info.programs?.length };
+  },
   highlight: (on: boolean) => { highlight = on; grimeGlobals.highlight.value = on ? 1 : 0; },
   setTime: (sec: number) => { save.run.time = sec; },
   rng,

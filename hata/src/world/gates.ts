@@ -121,8 +121,8 @@ export class Gates {
     const V2 = (x: number, z: number) => new THREE.Vector2(x, z);
     const BZ = -Z - 0.6;
 
-    // back yard: both side passages (and the gap where the east fence ends)
-    this.add("backyard", 1, [[V2(-16, BZ), V2(-X - 0.12, BZ)], [V2(X + 0.12, BZ), V2(16, BZ)], [V2(16, BZ), V2(16, -7.05)]], 0, true, []);
+    // back yard: both side passages
+    this.add("backyard", 1, [[V2(-16, BZ), V2(-X - 0.12, BZ)], [V2(X + 0.12, BZ), V2(16, BZ)]], 0, true, []);
     // the house: front door (back and side doors open with the back hall)
     this.add("house", 2, [], F, false, [doors.front], [[-2.62, -1.58, Z - 0.15, Z + 0.15]]);
     // rooms, in order: living → bedroom → kitchen → bathroom → back hall

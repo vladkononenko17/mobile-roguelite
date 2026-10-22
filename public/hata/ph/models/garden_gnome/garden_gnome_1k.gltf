@@ -1,37 +1,122 @@
 {
   "asset": {
-    "generator": "Khronos glTF Blender I/O v3.3.32",
+    "generator": "glTF-Transform v4.5.1",
     "version": "2.0"
   },
-  "scene": 0,
-  "scenes": [
+  "accessors": [
     {
-      "name": "Scene",
-      "nodes": [
-        0
-      ]
+      "type": "SCALAR",
+      "componentType": 5123,
+      "count": 10473,
+      "bufferView": 0,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 2259,
+      "max": [
+        0.1137155219912529,
+        0.598910927772522,
+        0.11143830418586731
+      ],
+      "min": [
+        -0.143666610121727,
+        0.00048228591913357377,
+        -0.09772905707359314
+      ],
+      "bufferView": 1,
+      "byteOffset": 0
+    },
+    {
+      "type": "VEC3",
+      "componentType": 5126,
+      "count": 2259,
+      "bufferView": 1,
+      "byteOffset": 12
+    },
+    {
+      "type": "VEC2",
+      "componentType": 5126,
+      "count": 2259,
+      "bufferView": 1,
+      "byteOffset": 24
     }
   ],
-  "nodes": [
+  "bufferViews": [
     {
-      "mesh": 0,
-      "name": "garden_gnome"
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 20948,
+      "target": 34963
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 20948,
+      "byteLength": 72288,
+      "byteStride": 32,
+      "target": 34962
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "textures": [
+    {
+      "source": 1,
+      "sampler": 0
+    },
+    {
+      "source": 0,
+      "sampler": 0
+    },
+    {
+      "source": 2,
+      "sampler": 0
+    }
+  ],
+  "images": [
+    {
+      "name": "garden_gnome_nor_gl",
+      "mimeType": "image/jpeg",
+      "uri": "textures/garden_gnome_nor_gl_1k.jpg"
+    },
+    {
+      "name": "garden_gnome_diff",
+      "mimeType": "image/jpeg",
+      "uri": "textures/garden_gnome_diff_1k.jpg"
+    },
+    {
+      "name": "garden_gnome_metal-garden_gnome_rough",
+      "mimeType": "image/jpeg",
+      "uri": "textures/garden_gnome_arm_1k.jpg"
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "garden_gnome.bin",
+      "byteLength": 93236
     }
   ],
   "materials": [
     {
-      "doubleSided": true,
       "name": "garden_gnome_01",
-      "normalTexture": {
-        "index": 0
-      },
+      "doubleSided": true,
       "pbrMetallicRoughness": {
         "baseColorTexture": {
-          "index": 1
+          "index": 0
         },
         "metallicRoughnessTexture": {
           "index": 2
         }
+      },
+      "normalTexture": {
+        "index": 1
       }
     }
   ],
@@ -41,119 +126,30 @@
       "primitives": [
         {
           "attributes": {
-            "POSITION": 0,
-            "NORMAL": 1,
-            "TEXCOORD_0": 2
+            "POSITION": 1,
+            "NORMAL": 2,
+            "TEXCOORD_0": 3
           },
-          "indices": 3,
-          "material": 0
+          "mode": 4,
+          "material": 0,
+          "indices": 0
         }
       ]
     }
   ],
-  "textures": [
+  "nodes": [
     {
-      "sampler": 0,
-      "source": 0
-    },
-    {
-      "sampler": 0,
-      "source": 1
-    },
-    {
-      "sampler": 0,
-      "source": 2
+      "name": "garden_gnome",
+      "mesh": 0
     }
   ],
-  "images": [
+  "scenes": [
     {
-      "mimeType": "image/jpeg",
-      "name": "garden_gnome_nor_gl",
-      "uri": "textures/garden_gnome_nor_gl_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "garden_gnome_diff",
-      "uri": "textures/garden_gnome_diff_1k.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "garden_gnome_metal-garden_gnome_rough",
-      "uri": "textures/garden_gnome_arm_1k.jpg"
+      "name": "Scene",
+      "nodes": [
+        0
+      ]
     }
   ],
-  "accessors": [
-    {
-      "bufferView": 0,
-      "componentType": 5126,
-      "count": 15935,
-      "max": [
-        0.11409468948841095,
-        0.5990185737609863,
-        0.1119869202375412
-      ],
-      "min": [
-        -0.14382389187812805,
-        -0.00006727918662363663,
-        -0.09772905707359314
-      ],
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 1,
-      "componentType": 5126,
-      "count": 15935,
-      "type": "VEC3"
-    },
-    {
-      "bufferView": 2,
-      "componentType": 5126,
-      "count": 15935,
-      "type": "VEC2"
-    },
-    {
-      "bufferView": 3,
-      "componentType": 5123,
-      "count": 86574,
-      "type": "SCALAR"
-    }
-  ],
-  "bufferViews": [
-    {
-      "buffer": 0,
-      "byteLength": 191220,
-      "byteOffset": 0,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 191220,
-      "byteOffset": 191220,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 127480,
-      "byteOffset": 382440,
-      "target": 34962
-    },
-    {
-      "buffer": 0,
-      "byteLength": 173148,
-      "byteOffset": 509920,
-      "target": 34963
-    }
-  ],
-  "samplers": [
-    {
-      "magFilter": 9729,
-      "minFilter": 9987
-    }
-  ],
-  "buffers": [
-    {
-      "byteLength": 683068,
-      "uri": "garden_gnome.bin"
-    }
-  ]
+  "scene": 0
 }
