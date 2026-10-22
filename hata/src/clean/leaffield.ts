@@ -55,7 +55,7 @@ export class LeafField {
     this.floating = !!o.floating;
     const geo = leafGeometry();
     this.tile = new Float32Array(o.count + 64);
-    const mat = new THREE.MeshStandardMaterial({ map: leafAtlas(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.75 });
+    const mat = new THREE.MeshStandardMaterial({ map: leafAtlas(), alphaTest: 0.5, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.75 });
     mat.onBeforeCompile = (sh) => {
       sh.vertexShader = sh.vertexShader
         .replace("#include <common>", "#include <common>\nattribute float aTile;")

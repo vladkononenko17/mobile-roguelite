@@ -18,40 +18,66 @@ export interface TreeOptions {
   leafMat: THREE.Material;
 }
 
-let foliageTex: THREE.CanvasTexture | null = null;
+let foliageTex: THREE.DataTexture | null = null;
 
 export function foliageMaterial(autumn = 0): THREE.MeshStandardMaterial {
   if (!foliageTex) {
-    const S = 128, c = document.createElement("canvas");
-    c.width = c.height = S * 2;
-    const g = c.getContext("2d")!;
+    // Leaves are painted twice: colour on an opaque green backdrop (so mipmaps
+    // don't bleed black into the edges) and coverage as a white-on-black mask.
+    const S = 128, N = S * 2;
+    const col = document.createElement("canvas"), msk = document.createElement("canvas");
+    col.width = col.height = msk.width = msk.height = N;
+    const gc = col.getContext("2d")!, gm = msk.getContext("2d")!;
+    gc.fillStyle = "hsl(98, 55%, 30%)";
+    gc.fillRect(0, 0, N, N);
+    gm.fillStyle = "#000";
+    gm.fillRect(0, 0, N, N);
     for (let i = 0; i < 4; i++) {
       const ox = (i % 2) * S + S / 2, oy = Math.floor(i / 2) * S + S / 2;
       // a twig with 5 leaves per tile
       for (let k = 0; k < 5; k++) {
         const a = -Math.PI / 2 + (k - 2) * 0.55 + (Math.random() - 0.5) * 0.3;
         const lx = ox + Math.cos(a) * S * 0.22, ly = oy + Math.sin(a) * S * 0.22 + S * 0.1;
-        g.save();
-        g.translate(lx, ly);
-        g.rotate(a + Math.PI / 2);
         const l = 0.75 + Math.random() * 0.25;
-        g.fillStyle = `hsl(${85 + Math.random() * 25}, ${40 + Math.random() * 20}%, ${26 + Math.random() * 14}%)`;
-        g.beginPath();
-        g.ellipse(0, 0, S * 0.11 * l, S * 0.22 * l, 0, 0, Math.PI * 2);
-        g.fill();
-        g.strokeStyle = "rgba(20,35,10,0.5)";
-        g.lineWidth = 1.5;
-        g.beginPath();
-        g.moveTo(0, -S * 0.2 * l);
-        g.lineTo(0, S * 0.2 * l);
-        g.stroke();
-        g.restore();
+        const hue = 88 + Math.random() * 28, sat = 55 + Math.random() * 20, lit = 30 + Math.random() * 16;
+        for (const [g, fill] of [[gc, `hsl(${hue}, ${sat}%, ${lit}%)`], [gm, "#fff"]] as const) {
+          g.save();
+          g.translate(lx, ly);
+          g.rotate(a + Math.PI / 2);
+          g.fillStyle = fill;
+          g.beginPath();
+          g.ellipse(0, 0, S * 0.11 * l, S * 0.22 * l, 0, 0, Math.PI * 2);
+          g.fill();
+          if (g === gc) {
+            // a lighter side and a vein, so a leaf reads as a leaf up close
+            g.fillStyle = `hsla(${hue + 10}, ${sat}%, ${lit + 12}%, 0.55)`;
+            g.beginPath();
+            g.ellipse(S * 0.03 * l, 0, S * 0.06 * l, S * 0.18 * l, 0, 0, Math.PI * 2);
+            g.fill();
+            g.strokeStyle = "rgba(40,60,15,0.45)";
+            g.lineWidth = 1.5;
+            g.beginPath();
+            g.moveTo(0, -S * 0.2 * l);
+            g.lineTo(0, S * 0.2 * l);
+            g.stroke();
+          }
+          g.restore();
+        }
       }
     }
-    foliageTex = new THREE.CanvasTexture(c);
+    const a = gc.getImageData(0, 0, N, N), b = gm.getImageData(0, 0, N, N);
+    for (let i = 0; i < a.data.length; i += 4) a.data[i + 3] = b.data[i];
+    // a DataTexture keeps the colour under transparent pixels (a canvas would zero it)
+    foliageTex = new THREE.DataTexture(new Uint8Array(a.data.buffer.slice(0)), N, N);
+    foliageTex.flipY = false;
     foliageTex.colorSpace = THREE.SRGBColorSpace;
+    foliageTex.magFilter = THREE.LinearFilter;
+    foliageTex.minFilter = THREE.LinearMipmapLinearFilter;
+    foliageTex.generateMipmaps = true;
+    foliageTex.needsUpdate = true;
   }
-  const m = new THREE.MeshStandardMaterial({ map: foliageTex, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8 });
+  // alpha-to-coverage: with MSAA the cut-out edges come out smooth instead of stair-stepped
+  const m = new THREE.MeshStandardMaterial({ map: foliageTex, alphaTest: 0.4, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.8 });
   m.color.setRGB(1, 1, 1).lerp(new THREE.Color(1.6, 0.95, 0.35), autumn);
   m.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader

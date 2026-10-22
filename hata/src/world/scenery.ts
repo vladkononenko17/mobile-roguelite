@@ -109,11 +109,13 @@ export function buildHaystack(): THREE.Group {
   pole.rotation.z = 0.08;
   pole.castShadow = true;
   g.add(pole);
-  const n = 7000;
-  const straw = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.004, 0.004, 1, 3), new THREE.MeshStandardMaterial({ color: 0xc9b07a, roughness: 0.8 }), n);
+  // A few chunky straws, not thousands of hair-thin ones: sub-pixel straws
+  // flicker as you walk.
+  const n = 420;
+  const straw = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.012, 0.012, 1, 5), new THREE.MeshStandardMaterial({ color: 0xc8a660, roughness: 0.8 }), n);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), v = new THREE.Vector3();
   for (let i = 0; i < n; i++) {
-    const onGround = i > n * 0.6;
+    const onGround = i > n * 0.45;
     const a = r() * Math.PI * 2;
     if (onGround) {
       const d = HAY.r * (0.95 + r() * 0.8);
@@ -175,3 +177,78 @@ export async function neighbours(g: THREE.Group): Promise<void> {
   house(26, 40, 12, 10, 3.0, wallA, roofB, Math.PI);
 }
 
+
+/** Flower beds along the front wall and the garden path (x0, x1, z0, z1). */
+export const BEDS: Array<[number, number, number, number]> = [
+  [-6.7, -3.3, 5.3, 6.1],
+  [-0.9, 6.7, 5.3, 6.1],
+  [-3.4, -2.92, 7.2, 21.6],
+  [-1.28, -0.8, 7.2, 21.6],
+];
+
+export function inBed(x: number, z: number, m = 0): boolean {
+  return BEDS.some(([x0, x1, z0, z1]) => x > x0 - m && x < x1 + m && z > z0 - m && z < z1 + m);
+}
+
+/**
+ * Bright flower beds: mulch, low leafy clumps and flower heads in saturated
+ * colours. Three instanced draws in total; stems are thick enough not to
+ * flicker.
+ */
+export function flowerBeds(seed = 5): THREE.Group {
+  const g = new THREE.Group();
+  const r = rng(seed);
+  const mulch = new THREE.MeshStandardMaterial({ color: 0x3a2617, roughness: 1 });
+  const edge = new THREE.MeshStandardMaterial({ color: 0x8a8378, roughness: 0.95 });
+  const spots: Array<[number, number]> = [];
+  for (const [x0, x1, z0, z1] of BEDS) {
+    const w = x1 - x0, d = z1 - z0;
+    const bed = new THREE.Mesh(new THREE.BoxGeometry(w, 0.08, d), mulch);
+    bed.position.set((x0 + x1) / 2, 0.03, (z0 + z1) / 2);
+    bed.receiveShadow = true;
+    g.add(bed);
+    // a low stone edge
+    for (const [ex, ez, ew, ed] of [[(x0 + x1) / 2, z0, w, 0.06], [(x0 + x1) / 2, z1, w, 0.06], [x0, (z0 + z1) / 2, 0.06, d], [x1, (z0 + z1) / 2, 0.06, d]]) {
+      const e = new THREE.Mesh(new THREE.BoxGeometry(ew, 0.1, ed), edge);
+      e.position.set(ex, 0.05, ez);
+      e.receiveShadow = true;
+      g.add(e);
+    }
+    const n = Math.round(w * d * 26);
+    for (let i = 0; i < n; i++) spots.push([x0 + 0.08 + r() * (w - 0.16), z0 + 0.08 + r() * (d - 0.16)]);
+  }
+  const palette = [0xe8243c, 0xff5fa2, 0xffc21a, 0xff7a1a, 0x9b4dff, 0xf4f0ff, 0xd61f6a, 0xffe14d];
+  // leafy clumps
+  const bushGeo = new THREE.IcosahedronGeometry(1, 0);
+  const bushes = new THREE.InstancedMesh(bushGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true }), Math.ceil(spots.length / 3));
+  const heads = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55 }), spots.length);
+  const stems = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.008, 0.011, 1, 5), new THREE.MeshStandardMaterial({ color: 0x3f7a1e, roughness: 0.8 }), spots.length);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), e = new THREE.Euler(), c = new THREE.Color();
+  let b = 0;
+  spots.forEach(([x, z], i) => {
+    const h = 0.16 + r() * 0.24;
+    e.set((r() - 0.5) * 0.25, 0, (r() - 0.5) * 0.25);
+    q.setFromEuler(e);
+    m.compose(p.set(x, h / 2 + 0.06, z), q, s.set(1, h, 1));
+    stems.setMatrixAt(i, m);
+    const hr = 0.03 + r() * 0.025;
+    m.compose(p.set(x + Math.sin(e.z) * -h * 0.5, h + 0.06, z + Math.sin(e.x) * h * 0.5), q.identity(), s.set(hr, hr * 0.6, hr));
+    heads.setMatrixAt(i, m);
+    heads.setColorAt(i, c.setHex(palette[Math.floor(r() * palette.length)]).offsetHSL(0, 0, (r() - 0.5) * 0.08));
+    if (i % 3 === 0 && b < bushes.count) {
+      const br = 0.1 + r() * 0.09;
+      e.set(r(), r() * 6, r());
+      m.compose(p.set(x, 0.08, z), q.setFromEuler(e), s.set(br * 1.2, br * 0.8, br * 1.2));
+      bushes.setMatrixAt(b, m);
+      bushes.setColorAt(b, c.setHSL(0.26 + r() * 0.07, 0.5 + r() * 0.15, 0.1 + r() * 0.06));
+      b++;
+    }
+  });
+  bushes.count = b;
+  for (const im of [bushes, heads, stems]) {
+    im.castShadow = true;
+    im.receiveShadow = true;
+    g.add(im);
+  }
+  return g;
+}

@@ -67,7 +67,13 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 #action.dim { background: rgba(255,255,255,0.2); color: #fff; box-shadow: none; }
 #action.pressed { transform: scale(0.94); }
 #mode { position: absolute; right: calc(20px + var(--sr)); bottom: calc(130px + var(--sb)); padding: 6px 12px; font-size: 13px; }
-#fps { position: absolute; left: calc(14px + var(--sl)); top: calc(96px + var(--st)); font-size: 12px; padding: 4px 10px; pointer-events: none; }
+#fps { font-size: 12px; padding: 4px 10px; pointer-events: none; }
+#stage { font-size: 13px; font-weight: 500; }
+#stage b { color: var(--green, #3ddc97); font-weight: 700; }
+#stagebar { position: relative; width: 64px; height: 5px; border-radius: 9px; background: rgba(255,255,255,0.15); overflow: hidden; }
+#stagebar i { display: block; height: 100%; background: linear-gradient(90deg, #7fe8b8, #3ddc97); transition: width .4s; }
+#stage.flash { animation: stageflash 1.4s ease-out; }
+@keyframes stageflash { 0% { transform: scale(1.18); background: rgba(61,220,151,.85); color: #062; } 100% { transform: scale(1); } }
 
 #tools { position: absolute; left: 50%; bottom: calc(10px + var(--sb)); transform: translateX(-50%); display: flex; gap: 6px; background: var(--glass); border-radius: 18px; padding: 6px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 .tool { width: 50px; height: 50px; border-radius: 13px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 9px; font-weight: 500; color: var(--muted); position: relative; }

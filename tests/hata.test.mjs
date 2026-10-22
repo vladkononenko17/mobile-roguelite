@@ -5,6 +5,7 @@ import {
   newSave, migrate, toolStats, nextPrice, buy, Ledger, starsFor, handOver, choosePerk, offerPerks,
   dayLength, clock, tick, nextDay, doneAt, money,
 } from '../hata/src/sim.ts';
+import { STAGES, STAGE_DONE, stageShare, currentStage, matches } from '../hata/src/game/stages.ts';
 
 describe('Хата з краю: content', () => {
   it('every tool has levels with rising prices and the right work kinds', () => {
@@ -174,5 +175,39 @@ describe('Хата з краю: economy balance', () => {
     L.report('front', 2000, 0.25);
     for (let i = 0; i < 6; i++) L.bonus('dish', 25);
     assert.ok(s.money >= 600);
+  });
+});
+
+describe('Хата з краю: stages', () => {
+  it('only free tools are needed to finish a stage', () => {
+    // paint and the detector cost money, so no stage may depend on them
+    for (const s of STAGES) {
+      assert.ok(!matches(s, 'fence:back'), s.id);
+      assert.ok(!s.keys.some((k) => k.startsWith('buried') || k === 'lost'), s.id);
+    }
+    assert.equal(TOOLS.paint.levels[0].price > 0, true);
+  });
+  it('prefix keys match', () => {
+    const k = STAGES.find((s) => s.id === 'kitchen');
+    assert.ok(matches(k, 'kitchen:counter'));
+    assert.ok(matches(k, 'dishes'));
+    assert.ok(!matches(k, 'floor:living'));
+  });
+  it('stages advance by value-weighted share', () => {
+    const rows = [
+      { key: 'facade:front', value: 1000, share: 1 },
+      { key: 'drive', value: 500, share: 0.5 },
+      { key: 'deck', value: 400, share: 0 },
+      { key: 'floor:living', value: 100, share: 0 },
+    ];
+    assert.equal(currentStage(rows), 0);
+    assert.ok(Math.abs(stageShare(STAGES[0], rows) - 1250 / 1500) < 1e-9);
+    rows[1].share = 0.8; // (1000 + 400) / 1500 = 0.93
+    assert.equal(currentStage(rows), 1);
+    rows[2].share = 1;
+    assert.equal(currentStage(rows), 2);
+    rows[3].share = STAGE_DONE;
+    // empty rooms count as done, so everything is done
+    assert.equal(currentStage(rows), STAGES.length);
   });
 });

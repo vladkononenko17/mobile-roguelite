@@ -96,7 +96,7 @@ export function buildLeaves(o: LeafScatter): THREE.InstancedMesh {
   const tex = leafAtlas();
   const geo = leafGeometry();
   const tile = new Float32Array(o.count);
-  const mat = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.75 });
+  const mat = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.5, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.75 });
   mat.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", "#include <common>\nattribute float aTile;")

@@ -6,6 +6,7 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { hdri, setAnisotropy } from "./assets";
 import { Audio } from "./audio";
+import { Lawn } from "./clean/lawn";
 import type { CleanSurface } from "./clean/surface";
 import { DAY, PAY, PAY_PER_M2, TOOL_FOR, TOOLS, type PerkId, type ToolId, type WorkKind } from "./content";
 import { DishStation } from "./dishes";
@@ -19,6 +20,8 @@ import {
 } from "./sim";
 import { grimeGlobals } from "./world/grime";
 import { buildHouse, HOUSE } from "./world/house";
+import { Gates, stageAt } from "./world/gates";
+import { currentStage, STAGE_DONE, STAGES, stageShare } from "./game/stages";
 import { WorldIndex, type Interactable } from "./world/index";
 import { buildKitchen, SINK } from "./world/kitchen";
 import { buildYard, LADDER, LAWN_ZONES, placeProps, POOL } from "./world/yard";
@@ -79,8 +82,20 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, Number(params.get("dpr") ?? Q.
 renderer.setSize(view.clientWidth, view.clientHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.95;
+// ACES plus a little extra saturation and warmth: a cheap colour grade that
+// costs nothing extra (no post-processing pass), applied in every material.
+THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars_fragment.replace(
+  "vec3 CustomToneMapping( vec3 color ) { return color; }",
+  `vec3 CustomToneMapping( vec3 color ) {
+    vec3 c = ACESFilmicToneMapping( color );
+    float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
+    c = mix( vec3( l ), c, 1.18 ) * vec3( 1.07, 1.0, 0.88 );
+    c = c * c * ( 3.0 - 2.0 * c ) * 0.25 + c * 0.75; // a touch of S-curve contrast
+    return clamp( c, 0.0, 1.0 );
+  }`,
+);
+renderer.toneMapping = THREE.CustomToneMapping;
+renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 view.appendChild(renderer.domElement);
 setAnisotropy(Math.min(4, renderer.capabilities.getMaxAnisotropy()));
@@ -132,8 +147,12 @@ let station: DishStation;
 const jet = new Jet();
 const fx = new Particles();
 scene.add(jet.group, fx.mesh);
-const sun = new THREE.DirectionalLight(0xfff0d8, 3.2);
-const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x5a6a3a, 0.35);
+const sun = new THREE.DirectionalLight(0xffd6a0, 4.0);
+const hemi = new THREE.HemisphereLight(0xb8ccff, 0x6a5a38, 0.45);
+/** Sun azimuth: low from the street-and-east corner, so the front and the east side glow. */
+const SUN_AZ = 0.8;
+/** The sky panorama and the direction of its sun, atan2(z, x) in three's equirect mapping. */
+const SKY = { id: "kloppenheim_06_puresky", sunAngle: (0.6123 - 0.5) * Math.PI * 2 };
 /** One warm light that follows you indoors (a single light keeps every shader cheap). */
 const roomLight = new THREE.PointLight(0xffe6c8, 0, 9, 1.4);
 const toolsGltf: Record<string, THREE.Object3D> = {};
@@ -220,13 +239,18 @@ function applySettings(): void {
 
 async function boot(): Promise<void> {
   showTitle(true);
-  const { env, background } = await hdri(renderer, "kloofendal_48d_partly_cloudy_puresky");
+  const { env, background } = await hdri(renderer, SKY.id);
   scene.environment = env;
   scene.background = background;
-  scene.backgroundIntensity = 0.9;
-  scene.environmentIntensity = 0.85;
+  scene.backgroundIntensity = 0.95;
+  scene.environmentIntensity = 0.8;
+  // turn the sky so its low sun sits where our sun light comes from
+  const skyRot = SKY.sunAngle - Math.atan2(Math.cos(SUN_AZ), Math.sin(SUN_AZ));
+  scene.backgroundRotation.set(0, skyRot, 0);
+  scene.environmentRotation.set(0, skyRot, 0);
 
-  scene.fog = new THREE.Fog(0xc6d4da, 50, 170);
+  // warm late-afternoon haze
+  scene.fog = new THREE.Fog(0xd8c6a8, 45, 170);
   step();
 
   sun.castShadow = true;
@@ -253,6 +277,8 @@ async function boot(): Promise<void> {
   const house = await buildHouse(W, style, restore);
   roofAt = house.roofAt;
   scene.add(house.group);
+  gates = new Gates(W, house.doors);
+  scene.add(gates.group);
   step();
   const dishes = await buildKitchen(house.group, W, restore);
   step();
@@ -279,6 +305,8 @@ async function boot(): Promise<void> {
   station = new DishStation(dishes, sponge, scene);
   registerInteractables();
   buildRows();
+  stage = stageNow();
+  gates.init(stage);
   setupViewmodels();
   step();
 
@@ -391,7 +419,8 @@ let dpr = Math.min(devicePixelRatio, Number(params.get("dpr") ?? Q.dpr));
 function setupComposer(): void {
   if (!Q.ao) return;
   const w = view.clientWidth, h = view.clientHeight;
-  composer = new EffectComposer(renderer);
+  // multisampled target: the AO path keeps antialiasing (and alpha-to-coverage on foliage)
+  composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(w * renderer.getPixelRatio(), h * renderer.getPixelRatio(), { samples: 4, type: THREE.HalfFloatType }));
   composer.setPixelRatio(renderer.getPixelRatio());
   composer.setSize(w, h);
   composer.addPass(new RenderPass(scene, camera));
@@ -399,7 +428,13 @@ function setupComposer(): void {
   ao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1.5, thickness: 1.2, scale: 1.0, samples: 8 });
   ao.blendIntensity = 0.8;
   composer.addPass(ao);
-  composer.addPass(new OutputPass());
+  const out = new OutputPass();
+  // the output pass knows only the stock tone mappings: call our graded one directly
+  out.material.fragmentShader = out.material.fragmentShader.replace(
+    "gl_FragColor = texture2D( tDiffuse, vUv );",
+    "gl_FragColor = texture2D( tDiffuse, vUv );\n\tgl_FragColor.rgb = CustomToneMapping( gl_FragColor.rgb );",
+  );
+  composer.addPass(out);
 }
 /** Keeps the frame rate up by trading resolution: measured over ~1 s windows. */
 let fpsAcc = 0, fpsN = 0, fps = 60;
@@ -615,7 +650,11 @@ function update(dt: number): void {
   if (mode === "play") {
     const stats = toolStats(save, tool) ?? toolStats(save, "hands")!;
     player.look(st.look.x, st.look.y, save.settings.sensitivity);
+    const px = player.pos.x, pz = player.pos.z;
     player.update(dt, st.move.x, st.move.y, W, roofAt, tool === "mower" ? stats.walk ?? 1 : 1, st.sprint);
+    // never step into an area of a later stage (unless already standing in one)
+    if (!player.onRoof && stageAt(player.pos.x, player.pos.z) > stage && stageAt(px, pz) <= stage) { player.pos.x = px; player.pos.z = pz; }
+    stageUpdate(dt, Math.hypot(st.move.x, st.move.y) > 0.3);
     player.applyCamera(camera);
     camera.updateMatrixWorld();
     aim();
@@ -645,7 +684,10 @@ function update(dt: number): void {
   if (yard) {
     yard.tick(t, dt);
     yard.lawn.update(camera.position, t, Q.lod);
+    // ~2 pixels at 1 m, for the grass width floor
+    Lawn.pix.value = (2.2 * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / Math.max(200, renderer.domElement.height);
     jobs.update(dt, t, new THREE.Vector3(player.pos.x, player.feet, player.pos.z));
+    gates.update(dt);
     if (has(save, "kid") && Math.random() < dt * 1.2 * has(save, "kid")) {
       const f = yard.leaves.find((x) => x.active > 0);
       if (f) {
@@ -945,25 +987,61 @@ function cleaningNow(): boolean {
 
 // ── Sun ─────────────────────────────────────────────────────────────────────
 function sunUpdate(): void {
+  // A long golden hour: the sun hangs low in the west-southwest all day and
+  // only sinks a little and warms up toward the evening, so the light stays
+  // warm and the shadows long.
   const c = clock(save);
-  const k = Math.min(1, c.sun);
-  const az = THREE.MathUtils.lerp(-1.75, 1.75, k);
-  const el = Math.sin(Math.PI * Math.min(1, k * 0.95 + 0.03)) * 0.95 + 0.12;
-  const dir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el) * 0.6 + 0.4).normalize();
+  const k = Math.min(1, Math.max(0, c.sun));
+  const el = THREE.MathUtils.lerp(0.46, 0.2, k);
+  const dir = new THREE.Vector3(Math.sin(SUN_AZ) * Math.cos(el), Math.sin(el), Math.cos(SUN_AZ) * Math.cos(el));
   const focus = new THREE.Vector3(Math.round(player.pos.x / 2) * 2, 0, Math.round(player.pos.z / 2) * 2);
   sun.position.copy(focus).addScaledVector(dir, 60);
   sun.target.position.copy(focus);
-  const evening = THREE.MathUtils.smoothstep(k, 0.72, 1.05);
-  const morning = 1 - THREE.MathUtils.smoothstep(k, 0, 0.18);
-  sun.color.setRGB(1, 0.94 - 0.25 * evening - 0.08 * morning, 0.85 - 0.45 * evening - 0.15 * morning);
-  sun.intensity = 3.3 - 1.5 * evening - 0.6 * morning;
-  scene.environmentIntensity = 0.85 - 0.45 * evening;
-  scene.backgroundIntensity = 0.9 - 0.5 * evening;
-  renderer.toneMappingExposure = 0.95 + 0.1 * evening;
+  sun.color.setRGB(1, THREE.MathUtils.lerp(0.8, 0.66, k), THREE.MathUtils.lerp(0.54, 0.38, k));
+  sun.intensity = THREE.MathUtils.lerp(4.4, 3.6, k);
+  scene.environmentIntensity = THREE.MathUtils.lerp(0.8, 0.6, k);
+  scene.backgroundIntensity = THREE.MathUtils.lerp(0.95, 0.75, k);
   // indoor light follows you inside the house
   const inside = Math.abs(player.pos.x) < HOUSE.halfX && Math.abs(player.pos.z) < HOUSE.halfZ && !player.onRoof;
   roomLight.intensity = THREE.MathUtils.lerp(roomLight.intensity, inside ? 7 : 0, 0.1);
   roomLight.position.set(player.pos.x, HOUSE.floorY + 2.4, player.pos.z);
+}
+
+// ── Stages ──────────────────────────────────────────────────────────────────
+let gates: Gates;
+let stage = 0;
+let stageT = 0;
+let bumpT = 0;
+function stageRows() {
+  return rows.map((r) => ({ key: r.key, value: r.value, share: r.share() }));
+}
+function stageNow(): number {
+  return currentStage(stageRows());
+}
+function stageUpdate(dt: number, moving: boolean): void {
+  stageT -= dt;
+  bumpT -= dt;
+  if (stageT <= 0) {
+    stageT = 0.4;
+    const rs = stageRows();
+    const next = currentStage(rs);
+    if (next > stage) {
+      const opened = STAGES.slice(stage + 1, next + 1).map((s) => s.name);
+      stage = next;
+      gates.advance(stage);
+      hud.stageFlash();
+      audio.shot("done");
+      hud.toast(next >= STAGES.length ? "Усю хату відкрито!" : `Етап готово! Відкрито: ${opened.join(", ")}`, "good");
+    }
+    const cur = STAGES[stage];
+    hud.stage(stage, STAGES.length, cur?.name ?? "", cur ? stageShare(cur, rs) : 1, STAGE_DONE);
+  }
+  if (moving && bumpT <= 0 && stage < STAGES.length && gates.closedNear(player.pos, 0.75)) {
+    bumpT = 5;
+    const cur = STAGES[stage];
+    const pct = Math.floor(stageShare(cur, stageRows()) * 100);
+    hud.toast(`Закрито. Спершу доробіть «${cur.name}»: ${pct}% із ${Math.round(STAGE_DONE * 100)}%`);
+  }
 }
 
 // ── HUD ─────────────────────────────────────────────────────────────────────
