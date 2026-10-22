@@ -20,6 +20,8 @@ html, body { margin: 0; height: 100%; background: #141a17; overflow: hidden; ove
 body { font-family: Rubik, system-ui, sans-serif; color: var(--text); -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 #view { position: fixed; inset: 0; touch-action: none; }
 #view canvas { display: block; width: 100%; height: 100%; }
+/* a soft warm vignette: costs nothing on the GPU, frames the picture */
+#view::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 75% 70% at 50% 48%, rgba(0,0,0,0) 55%, rgba(40,18,8,0.32) 100%); }
 button { font-family: inherit; color: inherit; border: 0; background: none; cursor: pointer; touch-action: manipulation; }
 .hidden { display: none !important; }
 
@@ -206,3 +208,7 @@ button { font-family: inherit; color: inherit; border: 0; background: none; curs
 .desk-text a { color: var(--gold); font-weight: 700; font-size: 16px; word-break: break-all; }
 .desk-qr { width: 240px; height: 240px; background: #fff; border-radius: 22px; padding: 14px; box-sizing: border-box; }
 .desk-qr svg { width: 100%; height: 100%; display: block; }
+
+.stagebox { background: rgba(61,220,151,0.12); border: 1px solid rgba(61,220,151,0.35); border-radius: 12px; padding: 8px 12px; font-size: 13px; color: #d5ded9; }
+.stagebox b { color: var(--mint); }
+.list .it.now { box-shadow: inset 3px 0 0 var(--mint); padding-left: 8px; }

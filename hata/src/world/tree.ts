@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { atmos } from "./atmos";
 import { rng } from "./geo";
 
 /**
@@ -80,11 +81,39 @@ export function foliageMaterial(autumn = 0): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({ map: foliageTex, alphaTest: 0.4, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.8 });
   m.color.setRGB(1, 1, 1).lerp(new THREE.Color(1.6, 0.95, 0.35), autumn);
   m.onBeforeCompile = (sh) => {
+    sh.uniforms.uTime = atmos.time;
+    sh.uniforms.uSunDir = atmos.sunDir;
+    sh.uniforms.uSunCol = atmos.sunColor;
     sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", "#include <common>\nattribute float aTile;")
+      .replace("#include <common>", "#include <common>\nattribute float aTile; uniform float uTime; varying vec3 vFW;")
       .replace("#include <uv_vertex>", "#include <uv_vertex>\nvMapUv = vMapUv * 0.5 + vec2(mod(aTile, 2.0), floor(aTile / 2.0)) * 0.5;")
       // soften foliage shading: normals point away from the crown centre
-      .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\nobjectNormal = normalize(mix(objectNormal, vec3(0.0, 1.0, 0.0), 0.5));");
+      .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\nobjectNormal = normalize(mix(objectNormal, vec3(0.0, 1.0, 0.0), 0.5));")
+      // wind: the crown sways slowly, single leaves flutter
+      .replace(
+        "#include <project_vertex>",
+        `vec4 mvPosition = vec4(transformed, 1.0);
+        #ifdef USE_INSTANCING
+          mvPosition = instanceMatrix * mvPosition;
+        #endif
+        vec3 fw = (modelMatrix * mvPosition).xyz;
+        float ph = uTime * 1.1 + fw.x * 0.3 + fw.z * 0.23;
+        float lift = max(0.0, fw.y - 1.5);
+        fw += vec3(sin(ph), 0.0, cos(ph * 0.83)) * 0.012 * lift
+            + vec3(sin(uTime * 4.3 + fw.y * 3.1 + fw.x * 2.0), sin(uTime * 3.7 + fw.z * 2.7) * 0.6, cos(uTime * 3.9 + fw.x * 2.3)) * 0.02;
+        vFW = fw;
+        mvPosition = viewMatrix * vec4(fw, 1.0);
+        gl_Position = projectionMatrix * mvPosition;`,
+      );
+    sh.fragmentShader = sh.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vFW; uniform vec3 uSunDir, uSunCol;")
+      .replace(
+        "#include <emissivemap_fragment>",
+        `#include <emissivemap_fragment>
+        // sunlight through the leaves when you look toward the sun
+        float back = pow(max(dot(normalize(vFW - cameraPosition), uSunDir), 0.0), 4.0);
+        totalEmissiveRadiance += uSunCol * diffuseColor.rgb * back * 1.6;`,
+      );
   };
   return m;
 }

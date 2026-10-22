@@ -297,7 +297,7 @@ export function horizon(): THREE.Group {
   g.add(townMesh);
   // the tree line all around, closer, in the warm haze
   g.add(ring(78, 220, (a) => 5 + 2.2 * noise(a, [11, 23, 47, 97]) + 1.5 * Math.abs(Math.sin(a * 61)), -1,
-    new THREE.Color(0.05, 0.08, 0.03), new THREE.Color(0.1, 0.16, 0.05), true));
+    new THREE.Color(0.07, 0.07, 0.05), new THREE.Color(0.11, 0.13, 0.07), true));
   return g;
 }
 

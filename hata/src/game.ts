@@ -22,8 +22,9 @@ import { grimeGlobals } from "./world/grime";
 import { buildHouse, HOUSE } from "./world/house";
 import { Gates, stageAt } from "./world/gates";
 import { SunsetSky } from "./world/sky";
+import { atmos, Motes } from "./world/atmos";
 import { mergeStatic } from "./world/merge";
-import { currentStage, STAGE_DONE, STAGES, stageShare } from "./game/stages";
+import { currentStage, matches, STAGE_DONE, STAGES, stageShare } from "./game/stages";
 import { WorldIndex, type Interactable } from "./world/index";
 import { buildKitchen, SINK } from "./world/kitchen";
 import { buildYard, LADDER, LAWN_ZONES, placeProps, POOL } from "./world/yard";
@@ -176,6 +177,8 @@ let station: DishStation;
 const jet = new Jet();
 const fx = new Particles();
 scene.add(jet.group, fx.mesh);
+const motes = new Motes();
+scene.add(motes.points);
 const sun = new THREE.DirectionalLight(0xffd6a0, 4.0);
 const hemi = new THREE.HemisphereLight(0xc6b8e8, 0x6a4a30, 0.55);
 /** Sun azimuth: low from the street-and-east corner, so the front and the east side glow. */
@@ -400,7 +403,7 @@ function registerInteractables(): void {
 // ── Viewmodels ──────────────────────────────────────────────────────────────
 interface VM { node: string; pos: [number, number, number]; rot: [number, number, number] }
 const VMS: Record<string, VM> = {
-  rag: { node: "rag", pos: [0.2, -0.3, -0.38], rot: [0.3, 0.1, 0] },
+  rag: { node: "rag", pos: [0.17, -0.2, -0.4], rot: [0.55, 0.15, 0] },
   washer: { node: "washer", pos: [0.14, -0.22, -0.18], rot: [0.08, 0.12, 0] },
   rake: { node: "rake", pos: [0.26, -0.34, -0.2], rot: [0.0, 0.2, 0] },
   blower: { node: "blower", pos: [0.24, -0.32, -0.3], rot: [0.12, 0.08, 0] },
@@ -437,8 +440,17 @@ function setupViewmodels(): void {
     mower = toolsGltf.mower.clone(true);
     mower.traverse((m) => { if ((m as THREE.Mesh).isMesh) m.castShadow = true; });
     mower.visible = false;
-    scene.add(mower);
+    mower.traverse((m) => { m.castShadow = false; });
+    vmScene.add(mower);
   }
+}
+function mowerScale(): number {
+  const lv = save.tools.mower;
+  return lv >= 4 ? 1.5 : lv >= 3 ? 1.12 : 1;
+}
+/** Deck centre ahead of you: the handle (1.08 m long) ends ~45 cm in front of the eye. */
+function mowerAhead(): number {
+  return 1.08 * mowerScale() + 0.55;
 }
 function vmKey(): string | null {
   switch (tool) {
@@ -604,11 +616,12 @@ hud.onButton = (b) => {
   }
   if (b === "pause") openMenu(() => hud.pause(() => closeMenu("ov-pause"), () => hud.settings(save, applySettings, () => {}), () => { persist(); location.reload(); }));
   if (b === "shop") openMenu(showShop);
-  if (b === "list") openMenu(() => hud.checklist(rows.map((r) => ({ group: r.group, name: r.name, pct: r.share(), value: r.value })), overall(), houseValue(), () => {
+  if (b === "list") openMenu(() => hud.checklist(rows.map((r) => ({ group: r.group, name: r.name, pct: r.share(), value: r.value, now: !!STAGES[stage] && matches(STAGES[stage], r.key) })), overall(), houseValue(), () => {
     if (!confirm("Здати хату зараз? Господар оцінить те, що є.")) return;
     hud.close("ov-list");
     handOverNow();
-  }, () => closeMenu("ov-list"), `${style.name} · ${style.owner}`));
+  }, () => closeMenu("ov-list"), `${style.name} · ${style.owner}`,
+  STAGES[stage] ? { name: STAGES[stage].name, pct: stageShare(STAGES[stage], stageRows()), need: STAGE_DONE, next: STAGES[stage + 1]?.name ?? null } : undefined));
 };
 function showShop(): void {
   hud.shop(save, (id) => {
@@ -707,6 +720,8 @@ function vmVisibility(): void {
 function update(dt: number): void {
   t += dt;
   grimeGlobals.time.value = t;
+  atmos.time.value = t;
+  motes.update(dt, camera.position, t);
   const st = input.poll();
   audio.update(dt);
   if (mode === "play") {
@@ -865,8 +880,7 @@ function work(dt: number, held: boolean, pressed: boolean, stats: ReturnType<typ
         break;
       }
       case "mower": {
-        const lvM = save.tools.mower;
-        const ahead = lvM >= 4 ? 1.5 : lvM >= 3 ? 1.2 : 1.05;
+        const ahead = mowerAhead();
         const c = new THREE.Vector3(player.pos.x + player.forward.x * ahead, 0, player.pos.z + player.forward.z * ahead);
         const cut = yard.lawn.mow(c.x, c.z, stats.radius, player.forward.x, player.forward.z);
         const total = cut.reduce((a, b) => a + b, 0);
@@ -1016,14 +1030,17 @@ function toolEffects(using: boolean, dt: number, stats: ReturnType<typeof toolSt
     o.position.set(c.pos[0] + swayX + scrub, c.pos[1] + swayY + bob + kick + (k === "rake" ? Math.abs(scrub) : 0), c.pos[2] + (k === "mop" ? scrub : 0));
     o.rotation.set(c.rot[0], c.rot[1], c.rot[2]);
   }
-  // mower stands on the lawn in front of you
+  // The mower is pushed ahead of you, its handle just in front of your hands.
+  // It's drawn with the tools in hand (on top of the grass, which would hide
+  // it) and lifted a little while you look ahead so the handle and engine are
+  // in view; looking down, it sits right on the ground.
   if (mower) {
     mower.visible = mode === "play" && tool === "mower";
     if (mower.visible) {
-      const lv = save.tools.mower;
-      mower.scale.setScalar(lv >= 4 ? 1.5 : lv >= 3 ? 1.12 : 1);
-      const ahead = lv >= 4 ? 1.5 : lv >= 3 ? 1.2 : 1.05;
-      mower.position.set(player.pos.x + player.forward.x * ahead, player.feet + (using ? Math.sin(t * 40) * 0.004 : 0), player.pos.z + player.forward.z * ahead);
+      mower.scale.setScalar(mowerScale());
+      const ahead = mowerAhead();
+      const lift = 0.24 * THREE.MathUtils.clamp((player.pitch + 0.75) / 0.75, 0, 1);
+      mower.position.set(player.forward.x * ahead, player.feet - camera.position.y + lift + (using ? Math.sin(t * 40) * 0.004 : 0), player.forward.z * ahead);
       mower.rotation.set(0, player.yaw + Math.PI, 0);
       mower.updateMatrixWorld();
     }
@@ -1073,6 +1090,8 @@ function sunUpdate(): void {
   sun.intensity = THREE.MathUtils.lerp(5.0, 4.3, k);
   scene.environmentIntensity = THREE.MathUtils.lerp(0.6, 0.5, k);
   sky?.update(camera.position, dir, THREE.MathUtils.lerp(0.95, 0.8, k));
+  atmos.sunDir.value.copy(dir);
+  atmos.sunColor.value.copy(sun.color).multiplyScalar(sun.intensity / 4.5);
   // skip drawing the rooms when you're well away from the house
   const near = Math.abs(player.pos.x) < HOUSE.halfX + 5 && Math.abs(player.pos.z) < HOUSE.halfZ + 5;
   interior.visible = near || mode === "dishes";
@@ -1141,7 +1160,7 @@ function render(): void {
 
 /** The tool in hand, on top of everything (see vmScene). */
 function renderViewmodel(): void {
-  if (!vmRoot.children.some((o) => o.visible)) return;
+  if (!vmRoot.children.some((o) => o.visible) && !mower?.visible) return;
   syncVmCamera();
   vmSun.color.copy(sun.color);
   vmSun.intensity = sun.intensity;
@@ -1195,12 +1214,16 @@ Object.assign(window.__hata, {
   capture: () => { render(); return renderer.domElement.toDataURL("image/jpeg", 0.88); },
   scene,
   info: () => {
+    renderer.info.autoReset = false;
+    renderer.info.reset();
     render();
+    renderer.info.autoReset = true;
     const r = renderer.info.render;
     return { calls: r.calls, tris: r.triangles, progs: renderer.info.programs?.length };
   },
   highlight: (on: boolean) => { highlight = on; grimeGlobals.highlight.value = on ? 1 : 0; },
   setTime: (sec: number) => { save.run.time = sec; },
+  dayOver, handOver: handOverNow, getStage: () => stage, getMode: () => mode,
   rng,
 });
 
