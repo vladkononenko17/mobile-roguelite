@@ -21,10 +21,7 @@ TYPES = {"textures": "textures", "models": "models", "hdris": "hdris"}
 TEX_MAPS = {
     "Diffuse": "diff",
     "nor_gl": "nor",
-    "Rough": "rough",
-    "AO": "ao",
     "arm": "arm",
-    "Displacement": "disp",
 }
 
 
