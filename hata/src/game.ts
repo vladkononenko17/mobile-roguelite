@@ -154,6 +154,10 @@ type Mode = "title" | "play" | "dishes" | "menu";
 let mode: Mode = "title";
 let tool: ToolId = "washer";
 let highlight = false;
+/** Washer switched on (tap to toggle). */
+let sprayOn = false;
+/** The action button was touched since the last frame (a quick tap can start and end between frames). */
+let actionTap = false;
 let nozzleWide = false;
 let lastPaintMode: "scrape" | "paint" = "scrape";
 const player = new Player();
@@ -385,7 +389,9 @@ function registerInteractables(): void {
   };
   const sink: Interactable = {
     id: "sink", pos: new THREE.Vector3(SINK.x, SINK.top, SINK.z), reach: 1.9, kind: "dish", hold: 0, aimR: 0.55,
-    label: () => `Мити посуд (${station.left()})`, enabled: () => station.left() > 0,
+    label: () => `Мити посуд (${station.left()})`,
+    // only from inside the kitchen, never through the window
+    enabled: () => station.left() > 0 && Math.abs(player.pos.x) < HOUSE.halfX && Math.abs(player.pos.z) < HOUSE.halfZ && !player.onRoof,
     act: () => enterDishes(),
   };
   W.interactables.push(ladder, down, sink);
@@ -520,6 +526,7 @@ function startPlay(): void {
 }
 function openMenu(fn: () => void): void {
   mode = "menu";
+  sprayOn = false;
   input.reset();
   audio.stopLoops();
   jet.active = false;
@@ -532,6 +539,7 @@ function closeMenu(id: string): void {
 }
 function enterDishes(): void {
   mode = "dishes";
+  sprayOn = false;
   input.reset();
   input.direct = true;
   audio.stopLoops();
@@ -613,7 +621,7 @@ function showShop(): void {
     showShop();
   }, () => closeMenu("ov-shop"));
 }
-hud.onActionDown = () => { audio.unlock(); input.setAction(true); };
+hud.onActionDown = () => { audio.unlock(); input.setAction(true); actionTap = true; };
 hud.onActionUp = () => input.setAction(false);
 view.addEventListener("touchstart", () => audio.unlock(), { passive: true });
 document.addEventListener("visibilitychange", () => { if (document.hidden) { persist(); audio.stopLoops(); } });
@@ -654,6 +662,9 @@ function aim(): void {
     const dist = to.clone().addScaledVector(d, -t).length();
     if (dist > (it.aimR ?? 0.5)) continue;
     if (aimHit && aimHit.distance < t - 0.6) continue;
+    // nothing is reachable through a window pane or an outside wall
+    const hs = aimHit?.object.userData.surface as CleanSurface | undefined;
+    if (aimHit && hs && (hs.kind === "glass" || hs.key.startsWith("facade")) && aimHit.distance < t - 0.05) continue;
     if (t < bestT) { bestT = t; aimInter = it; }
   }
 }
@@ -709,7 +720,13 @@ function update(dt: number): void {
     player.applyCamera(camera);
     camera.updateMatrixWorld();
     aim();
-    work(dt, st.action, st.actionDown, stats);
+    // the washer is switched on and off with a tap, so the other thumb is free to look
+    // around; everything else (and using things like the sink) works while held
+    if (tool === "washer" && !aimInter) {
+      if (actionTap) sprayOn = !sprayOn;
+    } else sprayOn = false;
+    actionTap = false;
+    work(dt, tool === "washer" && !aimInter ? sprayOn : st.action, st.actionDown, stats);
     if (tick(save, dt)) dayOver();
   } else if (mode === "dishes") {
     camera.position.lerp(station.camPos, Math.min(1, dt * 5));
@@ -758,8 +775,8 @@ function update(dt: number): void {
 
 function work(dt: number, held: boolean, pressed: boolean, stats: ReturnType<typeof toolStats> & object): void {
   const T = TOOLS[tool];
-  let label = ACTION_LABEL[tool];
-  let style: "" | "gold" | "dim" = "";
+  let label = tool === "washer" && sprayOn ? "Стоп" : ACTION_LABEL[tool];
+  let style: "" | "gold" | "dim" | "on" = tool === "washer" && sprayOn ? "on" : "";
   let want: ToolId | null = null;
   let target: TargetInfo | null = null;
   let prompt: string | null = null;
@@ -959,7 +976,7 @@ function reportLawn(zi: number): void {
   if (row) ledger.report(row.key, row.value, yard.lawn.share(zi));
 }
 
-function hudSet(label: string, style: "" | "gold" | "dim", want: ToolId | null, target: TargetInfo | null, prompt: string | null, hold: number, cross: "" | "ok" | "no"): void {
+function hudSet(label: string, style: "" | "gold" | "dim" | "on", want: ToolId | null, target: TargetInfo | null, prompt: string | null, hold: number, cross: "" | "ok" | "no"): void {
   hud.setAction(label, style);
   hud.setTools(save, tool, want);
   hud.setTarget(target);
@@ -1147,12 +1164,14 @@ function renderViewmodel(): void {
 
 // ── Test hooks (used by the offline renders and the scripted checks) ───────
 Object.assign(window.__hata, {
-  player, W, setTool: (v: ToolId) => { tool = v; }, getTool: () => tool,
+  player, W, setTool: (v: ToolId) => { tool = v; }, getTool: () => tool, spray: () => sprayOn,
   setMode: (m: Mode) => { mode = m; },
   play: startPlay,
   /** Runs the game for `sec` seconds at 30 fps with the action held (or not). */
   simulate: (sec: number, hold = true, move: [number, number] = [0, 0], look: [number, number] = [0, 0]) => {
     const n = Math.round(sec * 30);
+    const forced = tool === "washer" && hold && !sprayOn;
+    if (forced) sprayOn = true;
     for (let i = 0; i < n; i++) {
       input.setAction(hold);
       (input as unknown as { joyVec: { x: number; y: number } }).joyVec = { x: move[0], y: move[1] };
@@ -1161,6 +1180,7 @@ Object.assign(window.__hata, {
       update(1 / 30);
     }
     input.setAction(false);
+    if (forced) sprayOn = false;
     (input as unknown as { joyVec: { x: number; y: number } }).joyVec = { x: 0, y: 0 };
   },
   teleport: (x: number, z: number, yaw: number, pitch = 0, roof = false) => {

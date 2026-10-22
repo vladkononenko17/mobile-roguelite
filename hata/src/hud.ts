@@ -167,7 +167,7 @@ export class Hud {
     if (hold >= 0) (h.firstElementChild as HTMLElement).style.width = `${hold * 100}%`;
   }
 
-  setAction(label: string, style: "" | "gold" | "dim" = ""): void {
+  setAction(label: string, style: "" | "gold" | "dim" | "on" = ""): void {
     const a = $("action");
     if (a.textContent !== label) a.textContent = label;
     a.className = style + (a.classList.contains("pressed") ? " pressed" : "");
@@ -333,7 +333,7 @@ export class Hud {
 
   pause(onResume: () => void, onSettings: () => void, onTitle: () => void): void {
     const el = this.overlay("ov-pause", `<div class="panel" style="width:min(420px,100%)"><div class="eyebrow">ПЕРЕКУР</div><h2>Пауза</h2>
-      <p>Ліва частина екрана — ходити, права — дивитися. Велика кнопка — працювати. Лампочка підсвічує бруд, який лишився.</p>
+      <p>Ліва частина екрана — ходити, права — дивитися. Велика кнопка — працювати (мийку вмикає і вимикає дотик, тримати не треба). Лампочка підсвічує бруд, який лишився.</p>
       <div class="btns"><button class="btn primary" id="p-r">Працювати далі</button><button class="btn" id="p-s">Налаштування</button><button class="btn" id="p-t">У меню</button></div></div>`);
     el.querySelector("#p-r")!.addEventListener("click", onResume);
     el.querySelector("#p-s")!.addEventListener("click", onSettings);
