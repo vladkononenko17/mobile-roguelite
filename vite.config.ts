@@ -17,6 +17,8 @@ export default defineConfig({
         stavka: fileURLToPath(new URL("./stavka/index.html", import.meta.url)),
         zhirky: fileURLToPath(new URL("./zhirky/index.html", import.meta.url)),
         hata: fileURLToPath(new URL("./hata/index.html", import.meta.url)),
+        // PlayCanvas 3D game (Wasteland / Station ORION / Hell) at /playcanvas.html, as before.
+        playcanvas: fileURLToPath(new URL("./playcanvas.html", import.meta.url)),
       },
       output: { manualChunks: { phaser: ["phaser"], three: ["three"] } },
     },

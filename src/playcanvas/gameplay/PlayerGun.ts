@@ -1,0 +1,273 @@
+import { Vec3 } from "playcanvas";
+import { audio } from "../audio/Audio";
+import type { ScreenProjector } from "../camera/ScreenProjector";
+import { COMBAT_FX, TARGETING, type WeaponStats } from "./config";
+import type { Combat } from "./Combat";
+import type { Effects } from "./Effects";
+import { aimY, isAlive, type Enemy, type EnemyManager } from "./EnemyManager";
+import { blocked } from "./NavField";
+import type { PlayerStats } from "./PlayerStats";
+import type { PlayerController } from "../player/PlayerController";
+import type { WeaponHolder } from "../player/WeaponHolder";
+import type { CollisionWorld } from "../world/collision/CollisionWorld";
+
+const WALL_STEP = 0.4;
+const SHOT_HEIGHT = 1.25;
+
+/** Screen-space debug info for the targeting overlay (CSS pixels of the canvas). */
+export interface TargetingDebug {
+  /** The inner combat viewport. */
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  /** The current target's aim point on screen and its distance (null: no target). */
+  target: { x: number; y: number; distance: number; label: string } | null;
+}
+
+/**
+ * The hero's gun: auto-aim and auto-fire, made for one-thumb mobile play. Only enemies the player can
+ * see are ever targeted: candidates are alive enemies whose chest point is inside the inner combat
+ * viewport of the gameplay camera (TARGETING margins), in weapon range and in line of sight, and the
+ * nearest one is picked. The target is then kept (no flicker between equals) while it stays valid,
+ * with a little slack and a very short grace at the viewport edge; off-screen enemies never become
+ * targets, and with no valid target the gun does not fire. The hero turns to the target (the legs
+ * keep running) and fires when facing it. Hitscan bullets with spread, pellets and penetration; walls
+ * stop bullets. Magazine and reload from the weapon stats (PlayerStats applies upgrades).
+ */
+export class PlayerGun {
+  target: Enemy | null = null;
+  ammo = 0;
+  reloading = 0;
+  private cooldown = 0;
+  private shotCount = 0;
+  /** Seconds without a target. */
+  private idle = 0;
+  private weaponKey = "";
+  private readonly origin = new Vec3();
+  private readonly muzzle = new Vec3();
+  private readonly end = new Vec3();
+  private readonly hits: { enemy: Enemy; t: number }[] = [];
+  private readonly aimPoint = new Vec3();
+  private readonly screen = new Vec3();
+  /** Seconds the current target has been outside the (slack) viewport. */
+  private hidden = 0;
+  /** Filled every update for the debug overlay. */
+  readonly debug: TargetingDebug = { left: 0, top: 0, right: 0, bottom: 0, target: null };
+
+
+  constructor(
+    private readonly enemies: EnemyManager,
+    private readonly effects: Effects,
+    private readonly collision: CollisionWorld,
+    private readonly stats: PlayerStats,
+    private readonly camera: ScreenProjector,
+    private readonly combat: Combat,
+  ) {}
+
+  /** Refills the magazine (new weapon, new level). */
+  reset(): void {
+    const s = this.stats.weaponStats();
+    this.ammo = s?.magazine ?? 0;
+    this.reloading = 0;
+    this.cooldown = 0.3;
+    this.target = null;
+  }
+
+  update(dt: number, player: PlayerController, weapon: WeaponHolder, scale: number, active: boolean): void {
+    const stats = this.stats.weaponStats();
+    const key = this.stats.weapon;
+    if (key !== this.weaponKey) {
+      this.weaponKey = key;
+      this.reset();
+    }
+    this.cooldown -= dt;
+    if (!active || !stats) {
+      this.target = null;
+      this.debug.target = null;
+      player.aimYawDeg = null;
+      return;
+    }
+    if (this.reloading > 0) {
+      this.reloading -= dt;
+      if (this.reloading <= 0) this.ammo = stats.magazine;
+    }
+    // Empty: reload at once. Partly empty with nothing to shoot for a moment: top up.
+    if (this.reloading <= 0 && this.ammo < stats.magazine && (this.ammo <= 0 || this.idle > 1.5)) {
+      this.reloading = stats.reloadSeconds;
+      audio.play("reload");
+      // Shock Reload: a pulse around the hero as the magazine drops.
+      const p = player.entity.getPosition();
+      this.combat.shockwave(p.x, p.z);
+    }
+    const position = player.entity.getPosition();
+    this.origin.set(position.x, SHOT_HEIGHT * scale, position.z);
+    this.target = this.pickTarget(position.x, position.z, stats, dt);
+    this.updateDebug(position.x, position.z);
+    if (!this.target) {
+      this.idle += dt;
+      player.aimYawDeg = null;
+      return;
+    }
+    this.idle = 0;
+    const tx = this.target.position.x - position.x, tz = this.target.position.z - position.z;
+    const aimYaw = (Math.atan2(tx, tz) * 180) / Math.PI;
+    player.aimYawDeg = aimYaw;
+    const facingError = Math.abs(((aimYaw - player.yawDeg + 540) % 360) - 180);
+    if (this.cooldown > 0 || this.reloading > 0 || facingError > 20) return;
+    if (this.ammo <= 0) return;
+    this.fire(stats, tx, tz, weapon);
+  }
+
+  /**
+   * The current target while it stays valid (alive, in range, in sight, on screen within the slack
+   * and grace), else the nearest valid enemy inside the combat viewport, else null.
+   */
+  private pickTarget(x: number, z: number, stats: WeaponStats, dt: number): Enemy | null {
+    const current = this.target;
+    // A visible boss wins over anything not already close (adds would otherwise shield it forever).
+    const boss = this.visibleBoss(x, z, stats, current);
+    if (boss) return boss;
+    if (current && this.valid(current, x, z, stats)) {
+      this.hidden = this.onScreen(current, TARGETING.keepSlack) ? 0 : this.hidden + dt;
+      if (this.hidden <= TARGETING.graceSeconds) return current;
+    }
+    this.hidden = 0;
+    let best: Enemy | null = null;
+    let bestDistance = Infinity;
+    for (const e of this.enemies.alive) {
+      const d = Math.hypot(e.position.x - x, e.position.z - z);
+      if (d >= bestDistance || e === current) continue;
+      if (!this.valid(e, x, z, stats) || !this.onScreen(e, 0)) continue;
+      best = e;
+      bestDistance = d;
+    }
+    return best;
+  }
+
+  /** The boss, if it is valid and on screen and no other enemy is within the close-threat radius. */
+  private visibleBoss(x: number, z: number, stats: WeaponStats, current: Enemy | null): Enemy | null {
+    let boss: Enemy | null = null;
+    let closest = Infinity;
+    for (const e of this.enemies.alive) {
+      if (!isAlive(e)) continue;
+      if (e.def.boss) boss = e;
+      else closest = Math.min(closest, Math.hypot(e.position.x - x, e.position.z - z));
+    }
+    if (!boss || closest < TARGETING.closeThreat) return null;
+    if (!this.valid(boss, x, z, stats) || !this.onScreen(boss, boss === current ? TARGETING.keepSlack : 0)) return null;
+    return boss;
+  }
+
+  /** Alive, in weapon range and in line of sight (screen visibility is checked separately). */
+  private valid(e: Enemy, x: number, z: number, stats: WeaponStats): boolean {
+    if (!isAlive(e)) return false;
+    if (Math.hypot(e.position.x - x, e.position.z - z) > stats.range + e.def.radius) return false;
+    return this.lineOfSight(x, z, e.position.x, e.position.z);
+  }
+
+  /** Whether the enemy's chest point is inside the combat viewport grown by `slack` (fraction). */
+  private onScreen(e: Enemy, slack: number): boolean {
+    this.aimPoint.set(e.position.x, aimY(e), e.position.z);
+    const s = this.camera.normalized(this.aimPoint, this.screen);
+    if (s.z <= 0) return false;
+    return (
+      s.x >= TARGETING.marginX - slack && s.x <= 1 - TARGETING.marginX + slack &&
+      s.y >= TARGETING.marginTop - slack && s.y <= 1 - TARGETING.marginBottom + slack
+    );
+  }
+
+  /** Nearest living enemy within `range` of (x, z) that is visible in the combat viewport (drones). */
+  nearestVisible(x: number, z: number, range: number): Enemy | null {
+    let best: Enemy | null = null;
+    let bestDistance = range;
+    for (const e of this.enemies.alive) {
+      if (!isAlive(e)) continue;
+      const d = Math.hypot(e.position.x - x, e.position.z - z);
+      if (d >= bestDistance || !this.onScreen(e, 0)) continue;
+      best = e;
+      bestDistance = d;
+    }
+    return best;
+  }
+
+  private updateDebug(x: number, z: number): void {
+    const { width, height } = this.camera;
+    const d = this.debug;
+    d.left = width * TARGETING.marginX;
+    d.right = width * (1 - TARGETING.marginX);
+    d.top = height * TARGETING.marginTop;
+    d.bottom = height * (1 - TARGETING.marginBottom);
+    const t = this.target;
+    if (!t) {
+      d.target = null;
+      return;
+    }
+    this.aimPoint.set(t.position.x, aimY(t), t.position.z);
+    const s = this.camera.toScreen(this.aimPoint, this.screen);
+    d.target = { x: s.x, y: s.y, distance: Math.hypot(t.position.x - x, t.position.z - z), label: t.def.label };
+  }
+
+  private lineOfSight(x0: number, z0: number, x1: number, z1: number): boolean {
+    const d = Math.hypot(x1 - x0, z1 - z0);
+    const steps = Math.floor(d / WALL_STEP);
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      if (blocked(this.collision, x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, 0.05, true)) return false;
+    }
+    return true;
+  }
+
+  /** Distance a bullet from the origin along (dx, dz) travels before a wall (up to `range`). */
+  private wallDistance(dx: number, dz: number, range: number): number {
+    for (let d = WALL_STEP; d < range; d += WALL_STEP) {
+      if (blocked(this.collision, this.origin.x + dx * d, this.origin.z + dz * d, 0.05, true)) return d;
+    }
+    return range;
+  }
+
+  private fire(stats: WeaponStats, tx: number, tz: number, weapon: WeaponHolder): void {
+    this.cooldown = 1 / stats.fireRate;
+    this.ammo--;
+    this.shotCount++;
+    const shot = stats.audio ?? { id: `shot_${this.weaponKey}`, volume: 1, rate: 1 };
+    audio.play(shot.id, { volume: shot.volume, rate: shot.rate });
+    const muzzle = weapon.muzzle(this.muzzle, this.shotCount - 1) ?? this.muzzle.copy(this.origin);
+    const fx = stats.fx;
+    this.effects.muzzleFlash(muzzle, fx?.muzzleSize ?? (stats.pellets > 1 ? 0.32 : 0.22), fx?.muzzle);
+    const baseAngle = Math.atan2(tx, tz);
+    // A casing flies out to the right (the hero faces the target when firing).
+    this.effects.casing(muzzle, -Math.cos(baseAngle), Math.sin(baseAngle));
+    const bonus = this.stats.fifthShot && this.shotCount % 5 === 0 ? 2.5 : 1;
+    // Split Shot adds bullets fanned out around the aim (+-8, +-16 degrees...).
+    const extra = Math.round(this.stats.extraBullets);
+    const bullets = stats.pellets + extra;
+    for (let p = 0; p < bullets; p++) {
+      const fan = p < stats.pellets ? 0 : Math.ceil((p - stats.pellets + 1) / 2) * (p % 2 ? 1 : -1) * COMBAT_FX.splitSpreadDeg;
+      const spread = (((Math.random() * 2 - 1) * stats.spreadDeg + fan) * Math.PI) / 180;
+      const angle = baseAngle + spread;
+      const dx = Math.sin(angle), dz = Math.cos(angle);
+      const range = this.wallDistance(dx, dz, stats.range);
+      this.enemies.raycast(this.origin.x, this.origin.z, dx, dz, range, this.hits);
+      let travel = range;
+      let pierce = stats.penetration;
+      for (const hit of this.hits) {
+        const crit = Math.random() < this.stats.critChance;
+        const amount = stats.damage * bonus * (crit ? this.stats.critMult : 1);
+        const point = this.end.set(this.origin.x + dx * hit.t, muzzle.y, this.origin.z + dz * hit.t);
+        this.effects.bloodHit(point, dx, dz, hit.enemy.def.gore);
+        this.combat.bulletHit(hit.enemy, amount, crit || bonus > 1, this.origin.x, this.origin.z, stats.knockback);
+        if (fx?.burn) this.combat.burnFrom(hit.enemy, fx.burn);
+        if (fx?.splash) this.combat.splash(hit.enemy, fx.splash.radius, amount * fx.splash.fraction);
+        travel = hit.t;
+        if (crit) pierce += Math.round(this.stats.critPierce);
+        if (pierce-- <= 0) break;
+      }
+      this.end.set(this.origin.x + dx * travel, muzzle.y, this.origin.z + dz * travel);
+      this.effects.tracer(muzzle, this.end, fx && { color: fx.tracer, width: fx.tracerWidth, life: fx.tracerLife });
+      if (fx?.shot) this.effects.energyShot(muzzle, this.end, fx.shot.speed, fx.shot.color, fx.shot.size);
+      // Stopped by a wall (not an enemy, not the end of the range): dust and a spark there.
+      if (travel === range && range < stats.range) this.effects.impact(this.end);
+    }
+  }
+}

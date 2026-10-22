@@ -1,0 +1,1132 @@
+import { Vec3, type AnimTrack, type AppBase, type Asset, type ContainerResource, type Entity, type Texture } from "playcanvas";
+import { WEAPONS, type WeaponId } from "../config";
+import { audio } from "../audio/Audio";
+import { BIOME_AUDIO, BOSS_MUSIC, COMMON_SOUNDS, footstepAt, footstepsOf, voiceOf, voiceRate } from "../audio/soundMap";
+import type { PlayerController } from "../player/PlayerController";
+import type { WeaponHolder } from "../player/WeaponHolder";
+import type { Hud } from "../ui/Hud";
+import type { CollisionWorld } from "../world/collision/CollisionWorld";
+import type { Biome, Campaign, LevelBounds, WayPoint, Zone } from "../world/level/Biome";
+import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, shopPrice, TRAPS, ENEMY_PACE, WEAPON_CARDS, levelsAt, type DifficultyDef, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
+import { BossBrain } from "./BossBrain";
+import { BOSS_SCRIPTS, TYPE_SKINS } from "./campaigns";
+import { Effects } from "./Effects";
+import { EnemyManager, isAlive, type BodySource, type Enemy } from "./EnemyManager";
+import { Hazards } from "./Hazards";
+import { NavField } from "./NavField";
+import { PlayerGun } from "./PlayerGun";
+import { Pickups, type PickupKind } from "./Pickups";
+import { PlayerStats } from "./PlayerStats";
+import { SpawnDirector } from "./SpawnDirector";
+import { TargetDebug } from "../ui/TargetDebug";
+import { clearedCampaign, menuUrl, reachedLevel } from "../ui/progress";
+import { Combat } from "./Combat";
+import { Drones } from "./Drones";
+import { ScreenProjector } from "../camera/ScreenProjector";
+import { applyUpgrade, availableUpgrades, rollUpgrades, tagCounts, upgradeStacks, type SynergyReached } from "./Upgrades";
+import { modsForWeapon, weaponMod } from "../weaponMods";
+
+/** "travel": a campaign level is won and the hero walks to the way on (see Zone.exit). */
+export type RunPhase = "loading" | "combat" | "cleared" | "shop" | "travel" | "dead" | "complete";
+
+async function loadBody(app: AppBase, url: string): Promise<BodySource> {
+  const asset = await new Promise<Asset>((resolve, reject) => {
+    app.assets.loadFromUrlAndFilename(url, url.split("/").pop()!, "container", (error, loaded) => {
+      if (error || !loaded) reject(new Error(`Failed to load ${url}: ${error}`));
+      else resolve(loaded);
+    });
+  });
+  const resource = asset.resource as ContainerResource;
+  const animations = (resource as unknown as { animations: Asset[] }).animations ?? [];
+  return { resource, tracks: animations.map((a) => a.resource as AnimTrack) };
+}
+
+async function loadTexture(app: AppBase, url: string): Promise<Texture> {
+  const asset = await new Promise<Asset>((resolve, reject) => {
+    app.assets.loadFromUrl(url, "texture", (error, loaded) => {
+      if (error || !loaded) reject(new Error(`Failed to load ${url}: ${error}`));
+      else resolve(loaded);
+    });
+  });
+  return asset.resource as Texture;
+}
+
+/**
+ * The roguelite run on the arena: owns the hero's run stats, the enemies, the gun, the spawn director,
+ * hazards, effects and the HUD, and steps them every frame. The player controller, weapon holder and
+ * hand/pose systems stay as they are; this only reads the hero's position and steers aiming.
+ */
+/** End-screen button back to the title screen. */
+const MAIN_MENU = { label: "Main menu", onClick: () => location.assign(menuUrl()) };
+
+/** Footstep spacing (m of ground per step, times the hero's scale) and the horde's idle groan interval (s). */
+const STEP_LENGTH = 1.25;
+const GROAN_EVERY = [1.4, 3.2];
+
+/** A boss's death plays in slow motion: this long (real seconds) at this time scale. */
+const SLOW_MO = { seconds: 1.1, scale: 0.3 };
+
+export class Gameplay {
+  phase: RunPhase = "loading";
+  readonly stats = new PlayerStats();
+  readonly enemies: EnemyManager;
+  readonly gun: PlayerGun;
+  readonly director: SpawnDirector;
+  readonly nav: NavField;
+  private readonly effects: Effects;
+  private readonly hazards: Hazards;
+  readonly pickups: Pickups;
+  private readonly tmp = new Vec3();
+  /** The walk to the next level's zone (phase "travel"). */
+  private travel: { next: number; zone: string; exits: WayPoint[]; opened: boolean[]; exit: NonNullable<Zone["exit"]>; region: LevelBounds } | null = null;
+  private readonly wayPoint = new Vec3();
+  private navTimer = 0;
+  private clearTimer = 0;
+  /** Level-ups waiting for an upgrade choice (the choice modal pauses the game). */
+  private pendingLevelUps = 0;
+  private choosing = false;
+  private readonly params = new URLSearchParams(location.search);
+  private readonly targetDebug = new TargetDebug();
+  private readonly projector: ScreenProjector;
+  private readonly combat: Combat;
+  private readonly drones: Drones;
+  private readonly brain: BossBrain;
+  /** The run's levels (a biome campaign, else the shared WAVES) and its zones. */
+  readonly levels: WaveDef[];
+  private readonly campaign: Campaign | null;
+  private region: LevelBounds;
+  /** Burn damage waiting to be applied (fire zones tick in small amounts). */
+  private burn = 0;
+  /** Seconds to the next trap (WaveDef.traps). */
+  private trapTimer = 0;
+  /** Hellhound bite: remaining seconds and the speed multiplier. */
+  private cripple = { time: 0, slow: 1 };
+  /** On-kill healing still available (campaign run.killHealPerSecond; refills per second). */
+  private killHealBudget = 0;
+  /** The campaign difficulty of this run (null: no difficulties, or not chosen yet). */
+  private difficultyId: string | null = null;
+  private difficulty: DifficultyDef | null = null;
+  /** A weapon picked up between levels: its NEW WEAPON card shows when the next level starts. */
+  private unlocked: WeaponId | null = null;
+  /** The armory has been visited this run (campaign-only weapons appear in the shop). */
+  private armorySeen = false;
+  private meteorTimer = 0;
+  /** Seconds to the next idle groan from the horde. */
+  private groanTimer = 2;
+  /** Distance walked since the last footstep (m), and where the hero was last frame. */
+  private stride = 0;
+  private readonly lastStep = new Vec3();
+  /** A boss is up: its theme plays (the chapter's music resumes when it falls). */
+  private bossMusic = false;
+
+  constructor(
+    private readonly app: AppBase,
+    camera: Entity,
+    collision: CollisionWorld,
+    private readonly biome: Biome,
+    private readonly player: PlayerController,
+    private readonly weapons: WeaponHolder,
+    private readonly hud: Hud,
+    private readonly characterScale: () => number,
+    private readonly onTeleport: () => void = () => {},
+  ) {
+    const bounds = biome.bounds;
+    this.campaign = biome.campaign ?? null;
+    // A copy for campaigns: the chosen difficulty rewrites it in place (the director shares it).
+    this.levels = this.campaign ? [...this.campaign.levels] : WAVES;
+    this.region = bounds;
+    this.effects = new Effects(app);
+    this.hazards = new Hazards(app);
+    this.pickups = new Pickups(app);
+    this.pickups.onCollect = (kind, value, upgrade) => this.collect(kind, value, upgrade);
+    // The nav grid covers the first level's region (re-gridded per level on large maps).
+    const first = this.zoneOf(0);
+    this.region = first?.region ?? bounds;
+    this.nav = new NavField(collision, this.region);
+    this.enemies = new EnemyManager(app, collision, this.nav, this.hazards);
+    this.enemies.bounds = this.region;
+    this.director = new SpawnDirector(this.enemies, this.nav, this.region, this.levels);
+    this.brain = new BossBrain(this.enemies, this.hazards);
+    this.enemies.brain = this.brain;
+    this.projector = new ScreenProjector(camera.camera!);
+    this.combat = new Combat(this.enemies, this.effects, this.stats);
+    this.combat.onHit = (position, amount, style, enemy) => {
+      this.hud.damageNumber(position, String(amount), style);
+      if (style !== "burn") audio.voice(voiceOf(enemy.id, enemy.def), "hit", { x: position.x, z: position.z, rate: voiceRate(enemy.scale) });
+    };
+    this.gun = new PlayerGun(this.enemies, this.effects, collision, this.stats, this.projector, this.combat);
+    this.drones = new Drones(app, this.effects, this.combat, this.gun);
+    this.enemies.onPlayerHit = (damage, from) => {
+      const c = this.rules?.cripple === false ? undefined : from.def.cripple;
+      if (c) this.cripple = { time: Math.max(this.cripple.time, c.seconds), slow: Math.min(this.cripple.time > 0 ? this.cripple.slow : 1, c.slow) };
+      const push = from.def.knockback ?? 0;
+      if (push > 0 && this.hurtPlayer(damage)) {
+        const p = this.player.entity.getPosition();
+        const dx = p.x - from.position.x, dz = p.z - from.position.z;
+        const d = Math.hypot(dx, dz) || 1;
+        this.player.push.set((dx / d) * push, 0, (dz / d) * push);
+      } else if (push <= 0) this.hurtPlayer(damage);
+    };
+    this.enemies.onAttack = (enemy) => audio.voice(voiceOf(enemy.id, enemy.def), "attack", { x: enemy.position.x, z: enemy.position.z, rate: enemy.def.boss ? 0.75 : voiceRate(enemy.scale) });
+    this.enemies.onSlam = (position, radius) => {
+      audio.play("slam", { x: position.x, z: position.z });
+      this.effects.ring(position, radius, false);
+      this.shakeAt(position.x, position.z, 0.4);
+    };
+    this.hazards.onImpact = (position, radius, damage) => {
+      const p = this.player.entity.getPosition();
+      if (Math.hypot(p.x - position.x, p.z - position.z) <= radius) this.hurtPlayer(damage);
+      this.effects.spark(position, radius * 0.8);
+    };
+    this.hazards.onBoltHit = (damage) => this.hurtPlayer(damage);
+    this.hazards.onBurn = (damage) => {
+      // Fire ticks twice a second (each tick can hit through the short post-hit invulnerability).
+      this.burn += damage;
+      if (this.burn >= 4) {
+        this.stats.invulnerable = 0;
+        this.hurtPlayer(this.burn);
+        this.burn = 0;
+      }
+    };
+    this.hazards.onBlast = (position, radius, kind) => {
+      if (kind === "bolt") this.effects.spark(position, 0.3);
+      else {
+        this.effects.explosion(position, radius);
+        audio.play("explosion", { x: position.x, z: position.z });
+        this.shakeAt(position.x, position.z, 0.3);
+      }
+    };
+    this.brain.onWindup = (enemy) => {
+      this.tmp.set(enemy.position.x, enemy.lift + 1.2 * enemy.scale * 0.5, enemy.position.z);
+      this.effects.ring(this.tmp, 1.2 + enemy.def.radius, true);
+      this.effects.flame(this.tmp);
+      audio.voice(voiceOf(enemy.id, enemy.def), "attack", { x: enemy.position.x, z: enemy.position.z, rate: 0.75, volume: 1.4 });
+    };
+    this.brain.onBlast = (position, radius) => {
+      audio.play("slam", { x: position.x, z: position.z });
+      this.effects.ring(position, radius, false);
+      this.shakeAt(position.x, position.z, 0.45);
+    };
+    this.brain.onSummon = (type, x, z) => {
+      const w = this.director.wave;
+      this.effects.explosion(this.tmp.set(x, 0.1, z), 0.8);
+      this.enemies.spawn(type, x, z, w.hpScale, w.damageScale);
+    };
+    this.brain.onPhase = (enemy, phase) => {
+      if (phase.enter) {
+        this.hud.showBanner(phase.enter.banner, 2.2);
+        this.campaign?.arena?.(phase.enter.arena);
+      }
+      audio.voice(voiceOf(enemy.id, enemy.def), "roar", { x: enemy.position.x, z: enemy.position.z });
+      this.effects.ring(this.tmp.set(enemy.position.x, 0.1, enemy.position.z), 7, true);
+      this.effects.explosion(this.tmp, 2);
+    };
+    this.enemies.onDeath = (enemy) => this.onEnemyDeath(enemy);
+    this.enemies.onStranded = (enemy) => this.director.relocate(enemy, this.player.entity.getPosition(), this.projector);
+  }
+
+  /** Loads the enemy looks (the walkers' before the run starts, the rest in the background). */
+  async init(): Promise<void> {
+    const base = import.meta.env.BASE_URL;
+    // Looks may share a model file (walker and brute): each file downloads once.
+    const bodies = new Map<string, Promise<BodySource>>();
+    const body = (url: string) => {
+      let promise = bodies.get(url);
+      if (!promise) bodies.set(url, (promise = loadBody(this.app, `${base}${url}`)));
+      return promise;
+    };
+    // Attachment models (horns...) before the looks that wear them.
+    const attachmentUrls = new Set(Object.values(ENEMY_VISUALS).flatMap((v) => (v.attachments ?? []).map((a) => a.url).filter((u): u is string => !!u)));
+    await Promise.all([...attachmentUrls].map((url) => body(url).then(
+      (b) => this.enemies.attachmentModels.set(url, b.resource),
+      (error: unknown) => console.warn(`[Gameplay] attachment ${url} failed to load.`, error),
+    )));
+    const load = (visual: EnemyVisualId, count: number) =>
+      body(ENEMY_VISUALS[visual].url).then(
+        (body) => this.enemies.addVisual(visual, body, count),
+        (error: unknown) => console.warn(`[Gameplay] enemy look ${visual} failed to load.`, error),
+      );
+    // Only the enemy types this run's levels (and their bosses' summons) use.
+    const types = new Set<EnemyId>();
+    for (const level of this.levels) {
+      for (const p of level.phases) for (const id of Object.keys(p.weights)) types.add(id as EnemyId);
+      if (level.boss) {
+        types.add(level.boss.type);
+        const script = ENEMIES[level.boss.type].script;
+        for (const phase of script ? BOSS_SCRIPTS[script] : []) for (const a of phase.attacks) if (a.kind === "summon") a.enemies.forEach((e) => types.add(e.type));
+      }
+    }
+    this.preloadSounds(types);
+    const openers = Object.keys(this.levels[0].phases[0].weights) as EnemyId[];
+    const first = new Set(openers.flatMap((id) => ENEMIES[id].visuals));
+    const neededSkins = new Set<EnemySkinId>([...types].flatMap((id) => [
+      ...(TYPE_SKINS[id] ?? []),
+      ...ENEMIES[id].visuals.flatMap((v) => ENEMY_VISUALS[v].skins ?? []),
+    ]));
+    const skins = (Object.keys(ENEMY_SKINS) as EnemySkinId[]).filter((skin) => neededSkins.has(skin)).map((skin) =>
+      loadTexture(this.app, `${base}${ENEMY_SKINS[skin]}`).then(
+        (texture) => this.enemies.addSkin(skin, texture),
+        (error: unknown) => console.warn(`[Gameplay] enemy skin ${skin} failed to load.`, error),
+      ),
+    );
+    await Promise.all([...[...first].map((v) => load(v, ENEMY_LIMITS.prebuild)), ...skins]);
+    const rest = new Set([...types].flatMap((id) => ENEMIES[id].visuals).filter((v) => !first.has(v)));
+    for (const visual of rest) void load(visual, ENEMY_LIMITS.prebuild / 4);
+    this.startRun();
+  }
+
+  /** "Hard · " for the end screens (empty without difficulties). */
+  private get difficultyTag(): string {
+    return this.difficultyId && this.difficulty ? `${this.difficulty.label} · ` : "";
+  }
+
+  /** The difficulty rules in force (campaigns with difficulties; else none). */
+  private get rules(): DifficultyDef | null {
+    return this.difficulty;
+  }
+
+  /**
+   * Campaigns with difficulties: pick one (?difficulty=id, else a choice screen; remembered), then
+   * rewrite the levels for it and start the run.
+   */
+  private chooseDifficulty(then: () => void): void {
+    const all = this.campaign?.difficulties;
+    if (!all) {
+      then();
+      return;
+    }
+    const apply = (id: string) => {
+      this.difficultyId = id;
+      this.difficulty = all[id];
+      try { localStorage.setItem(`${this.biome.id}.difficulty`, id); } catch { /* private mode */ }
+      this.levels.splice(0, this.levels.length, ...levelsAt(this.campaign!.levels, all[id]));
+      then();
+    };
+    const requested = this.params.get("difficulty");
+    if (requested && all[requested]) {
+      apply(requested);
+      return;
+    }
+    let last: string | null = null;
+    try { last = localStorage.getItem(`${this.biome.id}.difficulty`); } catch { /* private mode */ }
+    const ids = Object.keys(all);
+    this.phase = "shop";
+    this.player.controlsEnabled = false;
+    this.hud.openModal({
+      title: "CHOOSE YOUR DOOM",
+      text: last && all[last] ? `Last time: ${all[last].label}` : "How hard do you want it?",
+      cards: ids.map((id) => ({ title: all[id].label, text: all[id].text, tag: id === this.campaign?.defaultDifficulty ? "intended" : "", kind: id === "nightmare" ? "special" : "player" })),
+      onCard: (i) => apply(ids[i]),
+      actions: [MAIN_MENU],
+    });
+  }
+
+  startRun(): void {
+    if (this.campaign?.difficulties && !this.difficulty) {
+      this.chooseDifficulty(() => this.startRun());
+      return;
+    }
+    const s = this.stats;
+    Object.assign(s, new PlayerStats());
+    s.owned.clear();
+    s.owned.add("pistol");
+    s.weaponMods.clear();
+    s.upgrades.clear();
+    this.unlocked = null;
+    this.armorySeen = false;
+    const kit = this.campaign?.run;
+    const requested = this.params.get("weapon");
+    this.weapons.setMods([], false);
+    this.equip(requested && requested in WEAPON_STATS ? (requested as WeaponId) : kit?.startWeapon ?? "pistol");
+    this.pendingLevelUps = 0;
+    if (kit) {
+      // A veteran: cash for the first shop, and the first upgrades picked before the first demon.
+      s.cash = kit.startCash;
+      s.level += kit.startPicks;
+      this.pendingLevelUps = kit.startPicks;
+    }
+    this.choosing = false;
+    this.app.timeScale = 1;
+    // Debug: ?wave=2 starts at wave 2, ?waveTime=0.2 shortens every wave.
+    this.director.durationScale = Number(this.params.get("waveTime")) || 1;
+    const wave = Math.min(this.levels.length, Math.max(1, Number(this.params.get("wave")) || 1));
+    this.params.delete("wave"); // only for the first run; restarts begin at wave 1
+    this.startWave(wave - 1);
+  }
+
+  /** The zone of level `index` (campaigns on large maps), or null. */
+  private zoneOf(index: number) {
+    const zone = this.levels[index]?.zone;
+    return zone && this.campaign ? this.campaign.zones[zone] ?? null : null;
+  }
+
+  /** Starts level `index`; `arrived`: the hero walked into its zone (no move to the zone's start). */
+  startWave(index: number, arrived = false): void {
+    this.travel = null;
+    this.enemies.clear();
+    this.pickups.clear();
+    // The level's zone: its region bounds the player, the nav grid and spawning.
+    const zone = this.zoneOf(index);
+    const region = zone?.region ?? this.biome.bounds;
+    if (region !== this.region) {
+      this.region = region;
+      this.nav.setBounds(region);
+      this.director.bounds = region;
+      this.enemies.bounds = region;
+    }
+    this.player.bounds = region;
+    this.campaign?.onLevel?.(index, this.levels[index].zone ?? "");
+    reachedLevel(this.biome.id, index + 1);
+    this.bossMusic = false;
+    audio.music(BIOME_AUDIO[this.biome.id]?.music ?? null);
+    this.campaign?.arena?.(0);
+    this.burn = 0;
+    this.meteorTimer = this.levels[index].meteors?.every ?? 0;
+    this.trapTimer = (this.levels[index].traps?.every ?? 0) * 0.6;
+    this.cripple.time = 0;
+    // Every wave starts in the zone's (or map's) open area.
+    const start = zone?.start ?? this.biome.runStart;
+    if (!arrived) {
+      this.player.entity.setPosition(start.x, 0, start.z);
+      this.player.yawDeg = start.yawDeg;
+      this.player.velocity.set(0, 0, 0);
+      this.onTeleport();
+    }
+    const here = this.player.entity.getPosition();
+    this.nav.build(here.x, here.z);
+    this.hazards.reset();
+    this.combat.reset();
+    if (index > 0) this.stats.rerolls += LEVEL_UP.rerollsPerWave;
+    this.director.start(index);
+    this.gun.reset();
+    this.phase = "combat";
+    this.player.controlsEnabled = true;
+    this.hud.closeModal();
+    const level = this.levels[index];
+    this.hud.showBanner(level.subtitle ? `${level.label} · ${level.subtitle}` : level.label, 2.6);
+    const card = this.unlocked && WEAPON_CARDS[this.unlocked];
+    if (card) this.hud.showWeapon(WEAPONS.list[this.unlocked!].label, card.text, card.stats, card.color);
+    this.unlocked = null;
+  }
+
+  equip(weapon: WeaponId): void {
+    if (this.phase !== "loading" && !this.stats.owned.has(weapon) && WEAPON_CARDS[weapon]) this.unlocked = weapon;
+    this.stats.weapon = weapon;
+    this.stats.owned.add(weapon);
+    this.weapons.setMods(this.stats.modsFor(weapon), false);
+    this.weapons.equip(weapon);
+    this.gun.reset();
+  }
+
+  /** Damages the hero; returns whether any damage was taken. */
+  /** Screen shake (set by Game: the camera's). */
+  onShake: (amount: number) => void = () => {};
+  /** Bloaters about to pop (death bursts): where, when, how hard; their warning rings. */
+  private readonly pops: { x: number; z: number; left: number; radius: number; damage: number; marker: ReturnType<Hazards["ring"]> }[] = [];
+
+  private updatePops(dt: number, hero: Vec3): void {
+    for (let i = this.pops.length - 1; i >= 0; i--) {
+      const p = this.pops[i];
+      p.left -= dt;
+      if (p.left > 0) continue;
+      this.pops.splice(i, 1);
+      this.hazards.clear(p.marker);
+      this.tmp.set(p.x, 0.6, p.z);
+      this.effects.goreBurst(this.tmp, 2.6, "goo");
+      this.effects.explosion(this.tmp, p.radius * 0.7);
+      this.effects.ring(this.tmp.set(p.x, 0.1, p.z), p.radius, false);
+      this.effects.bloodDecal(p.x, p.z, 2.2, "goo");
+      this.shakeAt(p.x, p.z, 0.3);
+      audio.play("pop", { x: p.x, z: p.z });
+      if (Math.hypot(hero.x - p.x, hero.z - p.z) <= p.radius) this.hurtPlayer(Math.round(p.damage));
+    }
+  }
+
+  /** Boss-kill slow motion left (scaled seconds). */
+  private slowMo = 0;
+
+  /** Shakes the screen for a blow at (x, z), fading with distance from the hero. */
+  private shakeAt(x: number, z: number, amount: number, reach = 14): void {
+    const p = this.player.entity.getPosition();
+    const k = Math.max(0, 1 - Math.hypot(p.x - x, p.z - z) / reach);
+    if (k > 0) this.onShake(amount * k);
+  }
+
+  private hurtPlayer(damage: number): boolean {
+    if (this.phase !== "combat") return false;
+    const taken = this.stats.hurt(damage);
+    if (taken <= 0) return false;
+    audio.play("hurt");
+    this.hud.flashHurt();
+    this.onShake(Math.min(0.45, 0.12 + taken / 80));
+    this.tmp.copy(this.player.entity.getPosition());
+    this.tmp.y += 2.1 * this.characterScale();
+    this.hud.damageNumber(this.tmp, `-${taken}`, "player");
+    if (!this.stats.alive) this.die();
+    return true;
+  }
+
+  private die(): void {
+    this.phase = "dead";
+    audio.play("die");
+    this.player.controlsEnabled = false;
+    this.player.aimYawDeg = null;
+    this.hud.openModal({
+      title: "YOU DIED",
+      text: `${this.difficultyTag}${this.director.wave.label} · Level ${this.stats.level} · ${this.stats.kills} kills · ${this.stats.cash}$`,
+      actions: [
+        { label: "Restart run", onClick: () => this.startRun() },
+        ...(this.difficulty ? [{ label: "Change difficulty", onClick: () => { this.difficulty = null; this.params.delete("difficulty"); this.startRun(); } }] : []),
+        MAIN_MENU,
+      ],
+    });
+  }
+
+  /** The wave is over: the rest of the horde drops (no rewards), leftover pickups fly to the hero. */
+  private waveComplete(): void {
+    this.phase = "cleared";
+    this.enemies.killAll();
+    this.hazards.reset();
+    this.clearTimer = 2.8;
+    this.player.aimYawDeg = null;
+    this.hud.showBanner(`${this.director.wave.label} complete`, 2.4);
+  }
+
+  /** After the short "wave complete": the shop, then the next wave (or the end of the run). */
+  private afterWave(): void {
+    const next = this.director.waveIndex + 1;
+    if (next < this.levels.length) {
+      const run = this.campaign?.run;
+      if (run && this.director.waveIndex === run.pactAfter) this.openPact(next);
+      else if (run?.armory && this.director.waveIndex === run.armory.after) this.openArmory(next, run.armory.weapons);
+      else this.openShop(next);
+      return;
+    }
+    this.phase = "complete";
+    this.player.controlsEnabled = false;
+    this.player.aimYawDeg = null;
+    const victory = this.campaign?.victory ?? { title: "RUN COMPLETE", text: "The outpost is quiet." };
+    clearedCampaign(this.biome.id, this.difficulty?.label ?? "Normal");
+    this.hud.openModal({
+      title: victory.title,
+      text: `${victory.text} ${this.difficultyTag}Level ${this.stats.level} · ${this.stats.kills} kills · ${this.stats.cash}$ left.`,
+      actions: [{ label: "New run", onClick: () => this.startRun() }, MAIN_MENU],
+    });
+  }
+
+  /**
+   * Level-up: the game pauses (time scale 0), three upgrade cards from the level-up pool; the pick is
+   * applied and play resumes (several pending level-ups are chosen one after another).
+   */
+  private offers: UpgradeDef[] = [];
+
+  /**
+   * Level-up: the game pauses (time scale 0) and three upgrade cards from the level-up pool are
+   * offered (evolutions first when unlocked); the player can reroll all or banish one (limited per
+   * run), then picks one: it is applied (with any synergy tier it completes) and play resumes.
+   * Several pending level-ups are chosen one after another.
+   */
+  private openLevelUp(): void {
+    this.offers = rollUpgrades(this.stats, XP.choices, "levelUp");
+    if (!this.offers.length) {
+      this.pendingLevelUps = 0;
+      return;
+    }
+    this.choosing = true;
+    audio.play("levelup");
+    this.app.timeScale = 0;
+    this.player.aimYawDeg = null;
+    this.showLevelUp();
+  }
+
+  private showLevelUp(): void {
+    const s = this.stats;
+    const counts = tagCounts(s);
+    this.hud.openLevelUp({
+      level: s.level - this.pendingLevelUps + 1,
+      cards: this.offers.map((u) => {
+        const stacks = upgradeStacks(s, u.id);
+        return {
+          name: u.name, text: upgradeText(u), icon: u.icon, category: u.category, evolution: !!u.requires,
+          tag: stacks > 0 ? `Lv ${stacks} → ${stacks + 1}` : u.rarity === "common" ? "new" : `new · ${u.rarity}`,
+          tags: (u.tags ?? []).map((t) => ({ label: SYNERGIES[t].label, color: SYNERGIES[t].color })),
+        };
+      }),
+      synergies: (Object.keys(SYNERGIES) as UpgradeTag[]).map((tag) => {
+        const tier = s.synergyTiers.get(tag) ?? 0;
+        const next = SYNERGIES[tag].tiers[tier];
+        return { label: SYNERGIES[tag].label, color: SYNERGIES[tag].color, count: counts[tag], next: next ? next.count : null, tier };
+      }),
+      rerolls: s.rerolls,
+      banishes: s.banishes,
+      onPick: (i) => this.pickLevelUp(i),
+      onReroll: () => {
+        if (s.rerolls <= 0) return;
+        s.rerolls--;
+        const fresh = rollUpgrades(s, XP.choices, "levelUp", this.offers.map((u) => u.id));
+        // Not enough new options left: allow repeats of the current ones.
+        this.offers = fresh.length >= Math.min(XP.choices, this.offers.length) ? fresh : rollUpgrades(s, XP.choices, "levelUp");
+        this.showLevelUp();
+      },
+      onBanish: (i) => {
+        if (s.banishes <= 0) return;
+        s.banishes--;
+        s.banished.add(this.offers[i].id);
+        const [replacement] = rollUpgrades(s, 1, "levelUp", this.offers.map((u) => u.id));
+        if (replacement) this.offers[i] = replacement;
+        else this.offers.splice(i, 1);
+        if (!this.offers.length) this.offers = rollUpgrades(s, XP.choices, "levelUp");
+        if (!this.offers.length) {
+          this.pickLevelUp(-1);
+          return;
+        }
+        this.showLevelUp();
+      },
+    });
+  }
+
+  /** Applies offer `i` (-1: nothing left to offer), closes the screen and resumes play. */
+  private pickLevelUp(i: number): void {
+    this.pendingLevelUps--;
+    this.hud.closeModal();
+    this.choosing = false;
+    this.app.timeScale = 1;
+    if (i >= 0) this.announce(applyUpgrade(this.stats, this.offers[i].id));
+  }
+
+  /** Upgrade toast, then a toast per synergy tier it completed. */
+  private announce(result: { def: UpgradeDef; synergies: SynergyReached[] }): void {
+    this.hud.showUpgrade(result.def, this.player.entity);
+    for (const { tag, tier, level } of result.synergies) {
+      const syn = SYNERGIES[tag];
+      this.hud.showUpgrade({
+        name: `${syn.label} synergy ${"I".repeat(level)} · ${tier.name}`, stat: tier.text, value: "", icon: syn.icon,
+        category: "special", rarity: "common", color: syn.color,
+      }, this.player.entity);
+    }
+  }
+
+  /** Between waves: spend cash. */
+  private openShop(next: number): void {
+    this.phase = "shop";
+    const s = this.stats;
+    const items = SHOP.filter((item) =>
+      (!item.weapon || WEAPON_STATS[item.weapon]) && (!item.campaign || this.armorySeen) && (!item.biomes || item.biomes.includes(this.biome.id)),
+    );
+    const count = (item: ShopItem) => s.bought.get(item.id) ?? 0;
+    const maxed = (item: ShopItem) => item.max !== undefined && count(item) >= item.max;
+    const soldOut = (item: ShopItem) => (item.weapon ? s.owned.has(item.weapon) : false) || (item.id === "heal" && s.hp >= s.maxHp) || maxed(item);
+    const note = (item: ShopItem) => item.weapon ? "Owned" : maxed(item) ? `Maxed ${count(item)}/${item.max}` : "HP full";
+    this.hud.openModal({
+      title: "SHOP",
+      compact: true,
+      text: `Cash: ${s.cash}$ · HP ${Math.ceil(s.hp)}/${s.maxHp} · ${WEAPONS.list[s.weapon]?.label ?? s.weapon}`,
+      cards: items.map((item) => ({
+        title: maxed(item) ? item.title : `${item.title} — ${this.shopPrice(item)}$`,
+        text: soldOut(item) ? note(item) : item.max !== undefined ? `${item.text} · ${count(item)}/${item.max}` : item.text,
+        tag: item.weapon ? "weapon" : "",
+        kind: item.weapon ? "weapon" : "player",
+        disabled: soldOut(item) || s.cash < this.shopPrice(item),
+      })),
+      onCard: (i) => {
+        const item = items[i];
+        const price = this.shopPrice(item);
+        if (s.cash < price || soldOut(item)) return;
+        s.cash -= price;
+        s.bought.set(item.id, count(item) + 1);
+        this.buy(item);
+        this.openShop(next);
+      },
+      actions: [{
+        label: this.biome.id === "outpost" ? "Choose loadout" : `${this.wayOn(next) ? "On to" : "Start"} ${this.levels[next].label}`,
+        onClick: () => this.biome.id === "outpost" ? this.openLoadout(next) : this.beforeLevel(next),
+      }],
+    });
+  }
+
+  /** Wasteland-only test: choose any owned weapon before the next level, then tune it at the bench. */
+  private openLoadout(next: number): void {
+    this.phase = "shop";
+    const s = this.stats;
+    const weapons = [...s.owned].filter((id) => !!WEAPON_STATS[id]);
+    this.hud.openModal({
+      title: "LOADOUT",
+      text: `Choose a weapon for ${this.levels[next].label}. Tap one to inspect its attachments.`,
+      cards: weapons.map((id) => {
+        const stats = s.weaponStatsFor(id)!;
+        const count = s.modsFor(id).size;
+        return {
+          title: WEAPONS.list[id].label,
+          text: `${stats.damage.toFixed(stats.damage < 10 ? 1 : 0)} dmg · ${stats.fireRate.toFixed(1)}/s · ${stats.magazine} mag · ${stats.range.toFixed(1)} m`,
+          tag: id === s.weapon ? "equipped" : count ? `${count} mod${count === 1 ? "" : "s"}` : "owned",
+          kind: "weapon" as const,
+        };
+      }),
+      onCard: (i) => {
+        this.equip(weapons[i]);
+        this.openWeaponBench(next, weapons[i]);
+      },
+      actions: [{ label: `Continue with ${WEAPONS.list[s.weapon].label}`, onClick: () => this.beforeLevel(next) }],
+    });
+  }
+
+  /** Weapon-specific modules bought with run cash. Each slot is permanent for this run. */
+  private openWeaponBench(next: number, weapon: WeaponId): void {
+    const s = this.stats;
+    const installed = s.modsFor(weapon);
+    const mods = modsForWeapon(weapon);
+    const occupied = new Set([...installed].map((id) => weaponMod(id).slot));
+    this.hud.openModal({
+      title: "WEAPON BENCH",
+      text: `${WEAPONS.list[weapon].label} · ${s.cash}$ · modules are fitted to this weapon for the run.`,
+      cards: mods.map((mod) => {
+        const owned = installed.has(mod.id);
+        const blocked = !owned && occupied.has(mod.slot);
+        return {
+          title: owned ? mod.name : `${mod.name} — ${mod.cost}$`,
+          text: owned ? `${mod.text} · fitted` : blocked ? `${mod.text} · slot occupied` : mod.text,
+          tag: owned ? "installed" : mod.slot,
+          kind: "weapon" as const,
+          disabled: owned || blocked || s.cash < mod.cost,
+        };
+      }),
+      onCard: (i) => {
+        const mod = mods[i];
+        if (s.cash < mod.cost || !s.installMod(weapon, mod.id)) return;
+        s.cash -= mod.cost;
+        this.weapons.setMods(s.modsFor(weapon));
+        this.gun.reset();
+        this.openWeaponBench(next, weapon);
+      },
+      actions: [
+        { label: "Back to weapons", onClick: () => this.openLoadout(next) },
+        { label: `${this.wayOn(next) ? "On to" : "Start"} ${this.levels[next].label}`, onClick: () => this.beforeLevel(next) },
+      ],
+    });
+  }
+
+  /** What `item` costs now (its price grows with each purchase this run). */
+  shopPrice(item: ShopItem): number {
+    return shopPrice(item, this.stats.bought.get(item.id) ?? 0);
+  }
+
+  /** The last level gets a warning first: this is the final encounter. */
+  private beforeLevel(next: number): void {
+    if (this.campaign?.run && next === this.campaign.run.finalLevel) {
+      this.hud.openModal({
+        title: this.campaign.run.text?.finalWarning?.[0] ?? "THE FINAL ENCOUNTER",
+        text: this.campaign.run.text?.finalWarning?.[1] ?? "There is no way back and no second chance: read its attacks, move, and trust your build.",
+        actions: [{ label: `Enter ${this.levels[next].label}`, onClick: () => this.proceed(next) }],
+      });
+      return;
+    }
+    this.proceed(next);
+  }
+
+  /** The current zone's way on to level `next` (campaigns whose zones have exits), or null. */
+  private wayOn(next: number): { zone: string; exit: NonNullable<Zone["exit"]>; region: LevelBounds } | null {
+    const zone = this.levels[this.director.waveIndex]?.zone;
+    const from = this.zoneOf(this.director.waveIndex), to = this.zoneOf(next);
+    return zone && from?.exit && to && this.campaign?.exits ? { zone, exit: from.exit, region: to.region } : null;
+  }
+
+  /** Next level: walk there over the map when the zone has a way on, else start it in place. */
+  private proceed(next: number): void {
+    const way = this.wayOn(next);
+    const exits = way ? this.campaign!.exits!(way.zone) : [];
+    if (!way || !exits.length) {
+      this.startWave(next);
+      return;
+    }
+    this.travel = { next, zone: way.zone, exits, opened: exits.map(() => false), exit: way.exit, region: way.region };
+    this.phase = "travel";
+    this.hud.closeModal();
+    this.player.controlsEnabled = true;
+    // Free to walk this zone and the next one (the island rims and bridge walls still hold).
+    const a = this.region, b = way.region;
+    this.player.bounds = { minX: Math.min(a.minX, b.minX), maxX: Math.max(a.maxX, b.maxX), minZ: Math.min(a.minZ, b.minZ), maxZ: Math.max(a.maxZ, b.maxZ) };
+    this.hud.showBanner("The way is open", 2.4);
+  }
+
+  /** Walking to the way on: seals open as the hero comes near; past the line, the next level starts. */
+  private updateTravel(position: Vec3): void {
+    const t = this.travel!;
+    for (let i = 0; i < t.exits.length; i++) {
+      if (t.opened[i] || wayDistance(t.exits[i], position, this.wayPoint) > TRAVEL.openDistance) continue;
+      t.opened[i] = true;
+      this.campaign?.openExit?.(t.zone, i);
+      const w = t.exits[i];
+      audio.play(BIOME_AUDIO[this.biome.id]?.gate ?? "gate_space", { x: w.x, z: w.z });
+      this.effects.explosion(this.tmp.set(w.x, 0.4, w.z), Math.min(3, w.width / 2));
+    }
+    const along = (t.exit.axis === "z" ? position.z : position.x) - t.exit.at;
+    const r = t.region;
+    const inside = position.x > r.minX + 1 && position.x < r.maxX - 1 && position.z > r.minZ + 1 && position.z < r.maxZ - 1;
+    if (along * t.exit.dir > TRAVEL.crossDistance && inside) {
+      this.travel = null;
+      this.startWave(t.next, true);
+    }
+  }
+
+  /**
+   * The Infernal Pact (before Hell's last act): three build-defining upgrades, each with a price;
+   * one must be taken. Then the shop.
+   */
+  private openPact(next: number): void {
+    this.phase = "shop";
+    const offers = rollUpgrades(this.stats, 3, "pact");
+    if (!offers.length) {
+      this.openShop(next);
+      return;
+    }
+    this.hud.openModal({
+      title: this.campaign?.run?.text?.pact?.[0] ?? "THE PACT",
+      text: this.campaign?.run?.text?.pact?.[1] ?? "What lies ahead will test your build. Choose one - its power has a price.",
+      cards: offers.map((u) => ({ title: u.name, text: upgradeText(u), tag: "pact", kind: "special" })),
+      onCard: (i) => {
+        this.announce(applyUpgrade(this.stats, offers[i].id));
+        this.openShop(next);
+      },
+    });
+  }
+
+  /**
+   * The Infernal Armory (after the first Hell boss): one new rifle, free. Each suits a different
+   * build; the other one is sold in the shop from now on. Then the shop.
+   */
+  private openArmory(next: number, weapons: readonly WeaponId[]): void {
+    this.phase = "shop";
+    this.armorySeen = true;
+    const offers = weapons.filter((id) => WEAPON_STATS[id] && !this.stats.owned.has(id));
+    if (!offers.length) {
+      this.openShop(next);
+      return;
+    }
+    this.hud.openModal({
+      title: this.campaign?.run?.text?.armory?.[0] ?? "THE ARMORY",
+      text: this.campaign?.run?.text?.armory?.[1] ?? "Take one new weapon - the other waits in the shop.",
+      cards: offers.map((id) => ({ title: WEAPONS.list[id].label, text: WEAPON_CARDS[id]?.text ?? "", tag: "weapon", kind: "weapon" })),
+      onCard: (i) => {
+        this.equip(offers[i]);
+        this.openShop(next);
+      },
+    });
+  }
+
+  private buy(item: ShopItem): void {
+    const s = this.stats;
+    switch (item.id) {
+      case "heal": s.hp = s.maxHp; break;
+      case "maxHp": s.maxHp += 25; s.heal(25); break;
+      case "armor": s.armor = Math.min(0.6, s.armor + 0.1); break;
+      case "damage": s.damageMult *= 1.1; break;
+      case "fireRate": s.fireRateMult *= 1.1; break;
+      default: if (item.weapon) this.equip(item.weapon);
+    }
+  }
+
+  /** Called exactly once per enemy death (EnemyManager.die): XP, heal-on-kill, drops. */
+  private onEnemyDeath(enemy: Enemy): void {
+    this.stats.kills++;
+    if (this.stats.healOnKill > 0) this.killHeal(this.stats.healOnKill);
+    this.pendingLevelUps += this.stats.gainXp(enemy.def.xp);
+    if (this.stats.vampireChance > 0 && Math.random() < this.stats.vampireChance) this.killHeal(this.stats.vampireHeal);
+    // Drops: most zombies leave nothing, so the ground stays readable.
+    const { x, z } = enemy.position;
+    // Every kill pops: a quick bright flash at the body; big ones shake the screen, a boss's death
+    // slows time for a moment.
+    this.effects.killFlash(this.tmp.set(x, 0.55 * enemy.scale + enemy.lift, z), enemy.def.boss ? 2.4 : Math.min(1.2, 0.45 * enemy.scale));
+    const voice = voiceOf(enemy.id, enemy.def);
+    if (enemy.def.boss) audio.voice(voice, "roar", { x, z, rate: 0.8 });
+    else audio.voice(voice, "death", { x, z, rate: voiceRate(enemy.scale) });
+    if (enemy.def.deathFx === "blast") audio.play("explosion", { x, z, rate: enemy.def.boss ? 0.7 : 1 });
+    if (enemy.def.boss) {
+      this.onShake(0.9);
+      this.effects.ring(this.tmp.set(x, 0.1, z), 6, true);
+      this.slowMo = SLOW_MO.seconds * SLOW_MO.scale;
+      this.app.timeScale = SLOW_MO.scale;
+    } else if (enemy.def.maxHp >= 150) this.shakeAt(x, z, 0.18);
+    if (enemy.def.deathFx === "burst" && enemy.def.deathBurst) {
+      // Swells over a warning ring, then pops (see updatePops).
+      const b = enemy.def.deathBurst;
+      this.pops.push({ x, z, left: b.delay, radius: b.radius, damage: b.damage * enemy.damageScale, marker: this.hazards.ring(x, z, b.radius, b.delay) });
+      this.effects.bloodDecal(x, z, enemy.scale * 1.2, "goo");
+    } else if (enemy.def.deathFx === "bones") {
+      this.effects.boneShards(this.tmp.set(x, 0.5 * enemy.scale + enemy.lift, z), enemy.scale);
+    } else if (enemy.def.deathFx === "blast") {
+      // Machines blow apart: a fireball, sparks, oil.
+      this.tmp.set(x, 0.8 * enemy.scale + enemy.lift, z);
+      this.effects.explosion(this.tmp, (enemy.def.boss ? 2.6 : 1.1) * Math.min(2, enemy.scale));
+      for (let i = 0; i < 3; i++) this.effects.spark(this.tmp.set(x + (Math.random() - 0.5), 0.6 + Math.random(), z + (Math.random() - 0.5)), 0.5);
+      this.effects.goreBurst(this.tmp.set(x, 0.6 * enemy.scale, z), enemy.scale, "oil");
+      this.effects.bloodDecal(x, z, enemy.scale * 1.2, "oil");
+      this.shakeAt(x, z, 0.25);
+    } else if (enemy.def.deathFx === "ember") {
+      // Demons burst into embers and leave a scorch mark.
+      this.tmp.set(x, 0.6 * enemy.scale + enemy.lift, z);
+      this.effects.explosion(this.tmp, (enemy.def.boss ? 2.4 : 0.55) * Math.min(2, enemy.scale));
+      this.effects.flame(this.tmp);
+      this.effects.bloodDecal(x, z, enemy.scale * (enemy.def.boss ? 1.6 : 0.8));
+    } else if (enemy.def.gore) {
+      // Aliens burst in glowing goo, machines blow apart in sparks and leave an oil stain.
+      this.tmp.set(x, 0.6 * enemy.scale + enemy.lift, z);
+      this.effects.goreBurst(this.tmp, enemy.scale * (enemy.def.boss ? 2.5 : 1), enemy.def.gore);
+      this.effects.bloodDecal(x, z, enemy.scale * (enemy.def.boss ? 1.8 : 1.1), enemy.def.gore);
+    } else this.effects.bloodDecal(x, z, enemy.scale * (enemy.def.boss ? 1.6 : 1));
+    const drops = enemy.def.drops;
+    if (enemy.def.boss) {
+      const pieces = DROPS.bossCashPieces;
+      for (let i = 0; i < pieces; i++) this.pickups.drop("cash", x, z, Math.ceil(enemy.def.cash / pieces));
+    } else if (Math.random() < drops.cash) this.pickups.drop("cash", x, z, enemy.def.cash);
+    if (Math.random() < drops.health) this.pickups.drop("health", x, z);
+    if (Math.random() < drops.upgrade) {
+      // Rolled now so the world badge shows which upgrade it is.
+      const [offer] = rollUpgrades(this.stats, 1, "drop");
+      if (offer) this.pickups.drop("upgrade", x, z, 0, offer.id);
+    }
+  }
+
+  private collect(kind: PickupKind, value: number, upgrade: UpgradeId | null): void {
+    const s = this.stats;
+    audio.play(kind === "cash" ? "cash" : kind === "health" ? "heal" : "upgrade");
+    if (kind === "cash") s.cash += value;
+    else if (kind === "health") {
+      const before = s.hp;
+      s.heal(Math.min(s.maxHp * DROPS.healthFraction, this.rules?.pickupHealMax ?? Infinity));
+      const p = this.player.entity.getPosition();
+      this.tmp.set(p.x, 2.1 * this.characterScale(), p.z);
+      this.hud.damageNumber(this.tmp, `+${Math.round(s.hp - before)} HP`, "heal");
+    } else {
+      // The pickup carries the upgrade it shows; reroll if that one got maxed out meanwhile.
+      const pick = upgrade && availableUpgrades(s, "drop").some((u) => u.id === upgrade) ? upgrade : rollUpgrades(s, 1, "drop")[0]?.id;
+      if (pick) this.announce(applyUpgrade(s, pick));
+    }
+  }
+
+  /** Starts loading the sounds this run can play: the map's, the weapons', its enemies' voices. */
+  private preloadSounds(types: Set<EnemyId>): void {
+    const weaponSounds = Object.entries(WEAPON_STATS).map(([id, stats]) => stats?.audio?.id ?? `shot_${id}`);
+    const sounds = new Set<string>([...COMMON_SOUNDS, ...footstepsOf(this.biome), ...weaponSounds, "shot_suppressed"]);
+    for (const id of types) {
+      const def = ENEMIES[id];
+      const voice = voiceOf(id, def);
+      for (const kind of ["groan", "attack", "hit", "death"]) sounds.add(`${voice}_${kind}`);
+      if (def.boss) sounds.add(`roar_${voice}`);
+      if (def.deathFx === "burst") sounds.add("pop");
+    }
+    const biome = BIOME_AUDIO[this.biome.id];
+    if (biome) [biome.music, biome.gate, BOSS_MUSIC].forEach((s) => sounds.add(s));
+    audio.preload(sounds);
+  }
+
+  /** Footsteps, the horde's idle groans, and the boss theme while a boss is up. */
+  private updateSounds(dt: number, position: Vec3, combat: boolean): void {
+    // A step every stride of ground covered (teleports do not count).
+    const moved = Math.hypot(position.x - this.lastStep.x, position.z - this.lastStep.z);
+    this.lastStep.copy(position);
+    if (moved < 3 && this.stats.alive && this.phase !== "dead") {
+      this.stride += moved;
+      if (this.stride >= STEP_LENGTH * this.characterScale()) {
+        this.stride = 0;
+        audio.play(footstepAt(this.biome, position.x, position.z));
+      }
+    }
+    if (combat) {
+      this.groanTimer -= dt;
+      if (this.groanTimer <= 0) {
+        this.groanTimer = GROAN_EVERY[0] + Math.random() * (GROAN_EVERY[1] - GROAN_EVERY[0]);
+        const alive = this.enemies.alive;
+        const e = alive.length ? alive[Math.floor(Math.random() * alive.length)] : null;
+        if (e && isAlive(e)) audio.voice(voiceOf(e.id, e.def), e.def.boss ? "roar" : "groan", { x: e.position.x, z: e.position.z, rate: e.def.boss ? 0.9 : voiceRate(e.scale) });
+      }
+    }
+    const boss = this.director.boss;
+    const up = combat && !!boss && isAlive(boss);
+    if (up !== this.bossMusic) {
+      this.bossMusic = up;
+      if (up) audio.voice(voiceOf(boss!.id, boss!.def), "roar", { x: boss!.position.x, z: boss!.position.z });
+      audio.music(up ? BOSS_MUSIC : BIOME_AUDIO[this.biome.id]?.music ?? null);
+    }
+  }
+
+  /** Level hazards: environmental meteor showers around the hero (Hell's last act). */
+  private environment(dt: number, position: Vec3): void {
+    this.springTraps(dt, position);
+    const m = this.director.wave.meteors;
+    if (!m) return;
+    this.meteorTimer -= dt;
+    if (this.meteorTimer > 0) return;
+    this.meteorTimer = m.every * (0.7 + Math.random() * 0.6);
+    const w = this.director.wave;
+    for (let i = 0; i < m.count; i++) {
+      const r = i === 0 ? 0.5 : 2 + Math.random() * 4, a = Math.random() * Math.PI * 2;
+      this.hazards.strike(position.x + Math.sin(a) * r, position.z + Math.cos(a) * r, m.radius, 1.3 + i * 0.25, m.damage * w.damageScale, "meteor", 3, 8);
+    }
+  }
+
+  /** WaveDef.traps: every few seconds a cage, a sweep or tar pools around the hero. */
+  private springTraps(dt: number, position: Vec3): void {
+    const t = this.director.wave.traps;
+    if (!t) return;
+    this.trapTimer -= dt;
+    if (this.trapTimer > 0) return;
+    this.trapTimer = t.every * (0.75 + Math.random() * 0.5);
+    const damage = t.damage * this.director.wave.damageScale;
+    const kind = t.kinds[Math.floor(Math.random() * t.kinds.length)];
+    const h = this.hazards;
+    if (kind === "cage") {
+      // A ring of eruptions with one gap closes round the hero; the ground under him erupts too.
+      const c = TRAPS.cage, gap = Math.random() * Math.PI * 2, half = (c.gapDeg * Math.PI) / 360;
+      for (let i = 0; i < c.strikes; i++) {
+        const a = gap + half + ((Math.PI * 2 - half * 2) * (i + 0.5)) / c.strikes;
+        h.strike(position.x + Math.sin(a) * c.radius, position.z + Math.cos(a) * c.radius, c.strikeRadius, c.delay, damage, "eruption", 2.5, 8);
+      }
+      h.strike(position.x, position.z, c.centreRadius, c.delay + 0.35, damage, "eruption");
+    } else if (kind === "sweep") {
+      // A line of eruptions across the hero, rippling from one end.
+      const c = TRAPS.sweep, a = Math.random() * Math.PI, dx = Math.sin(a), dz = Math.cos(a);
+      for (let i = 0; i < c.strikes; i++) {
+        const o = (i - (c.strikes - 1) / 2) * c.spacing;
+        h.strike(position.x + dx * o, position.z + dz * o, c.strikeRadius, c.delay + i * c.ripple, damage, "eruption", c.fire, 8);
+      }
+    } else {
+      // Brimstone tar: pools near the hero, one of them where he is heading.
+      const c = TRAPS.tar, v = this.player.velocity;
+      for (let i = 0; i < c.pools; i++) {
+        const lead = i === 0 && v.lengthSq() > 1;
+        const a = lead ? Math.atan2(v.x, v.z) : Math.random() * Math.PI * 2;
+        const r = c.near[0] + Math.random() * (c.near[1] - c.near[0]);
+        h.tar(position.x + Math.sin(a) * r, position.z + Math.cos(a) * r, c.radius[0] + Math.random() * (c.radius[1] - c.radius[0]), c.seconds);
+      }
+    }
+  }
+
+  /** Heals on a kill, within the campaign's per-second budget (so a fast-killing build can't out-heal Hell). */
+  private killHeal(amount: number): void {
+    const rate = this.rules?.killHealPerSecond;
+    if (rate === undefined) {
+      this.stats.heal(amount);
+      return;
+    }
+    const given = Math.min(amount, this.killHealBudget);
+    this.killHealBudget -= given;
+    if (given > 0) this.stats.heal(given);
+  }
+
+  update(dt: number): void {
+    if (this.phase === "loading") return;
+    if (this.slowMo > 0) {
+      this.slowMo -= dt;
+      // Back to full speed (unless a menu has paused the game meanwhile).
+      if (this.slowMo <= 0 && this.app.timeScale === SLOW_MO.scale) this.app.timeScale = 1;
+    }
+    // Screen projections for this frame (targeting, spawning, HUD), read before any DOM writes.
+    this.projector.refresh();
+    const position = this.player.entity.getPosition();
+    const combat = this.phase === "combat";
+    // Weapon shown in the hands is the one fired (the tune panel may switch it for testing).
+    const held = this.weapons.current;
+    if (held && held !== this.stats.weapon && WEAPON_STATS[held]) this.stats.weapon = held;
+    if (combat) {
+      this.navTimer -= dt;
+      if (this.navTimer <= 0) {
+        this.nav.build(position.x, position.z);
+        this.navTimer = 0.3;
+      }
+      this.stats.invulnerable = Math.max(0, this.stats.invulnerable - dt);
+      // Tar and hellhound bites slow the hero; demons keep pace with his speed upgrades.
+      this.cripple.time = Math.max(0, this.cripple.time - dt);
+      this.player.speedMultiplier = this.stats.moveSpeedMult * (this.hazards.playerInTar ? TRAPS.tarSlow : 1) * (this.cripple.time > 0 ? this.cripple.slow : 1);
+      this.enemies.pace = (this.director.wave.speedScale ?? 1) * (1 + (this.rules?.followHero ?? ENEMY_PACE.followHero) * (this.stats.moveSpeedMult - 1));
+      const rate = this.rules?.killHealPerSecond;
+      if (rate !== undefined) this.killHealBudget = Math.min(rate * 2, this.killHealBudget + rate * dt);
+      this.director.update(dt, position, this.projector);
+      this.enemies.update(dt, position, this.stats.alive);
+      this.combat.update(dt);
+      this.hazards.update(dt, position, this.player.radius);
+      this.environment(dt, position);
+      if (this.director.phase === "complete") this.waveComplete();
+    } else if (this.phase === "cleared") {
+      this.enemies.update(dt, position, false);
+      this.clearTimer -= dt;
+      if (this.clearTimer <= 0 && !this.choosing) this.afterWave();
+    } else if (this.phase === "travel" && !this.choosing) {
+      this.updateTravel(position);
+    }
+    this.gun.update(dt, this.player, this.weapons, this.characterScale(), combat && this.stats.alive);
+    this.drones.update(dt, position, this.stats.drones, this.characterScale(), combat && this.stats.alive);
+    if (combat || this.phase === "cleared") this.pickups.update(dt, position, this.characterScale(), this.phase === "cleared");
+    this.effects.update(dt);
+    this.campaign?.update?.(dt, position);
+    if (this.pops.length) this.updatePops(dt, position);
+    this.updateSounds(dt, position, combat);
+    // Level-ups wait for combat (or the wave-complete pause) and a living hero.
+    if (this.pendingLevelUps > 0 && !this.choosing && (combat || this.phase === "cleared" || this.phase === "travel") && this.stats.alive) this.openLevelUp();
+    this.updateHud(dt);
+  }
+
+  private updateHud(dt: number): void {
+    const s = this.stats;
+    const d = this.director;
+    this.hud.setHp(s.hp, s.maxHp);
+    this.hud.setCash(s.cash);
+    const ws = s.weaponStats();
+    const label = WEAPONS.list[s.weapon]?.label ?? s.weapon;
+    this.hud.setWeapon(label, this.gun.ammo, ws?.magazine ?? 0, this.gun.reloading > 0);
+    const remaining = Math.max(0, d.duration - d.time);
+    const right = d.phase === "waves" ? `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(Math.floor(remaining % 60)).padStart(2, "0")}` : d.phase === "boss" ? "BOSS" : "CLEAR";
+    if (this.travel) this.hud.setWave(this.levels[this.travel.next].label, 0, "GO");
+    else this.hud.setWave(d.wave.label, d.progress, right);
+    this.hud.setXp(s.level, s.xp, s.xpNeeded);
+    const boss = d.boss && isAlive(d.boss) ? d.boss : null;
+    this.hud.setBoss(boss ? boss.def.label : null, boss ? boss.hp / boss.maxHp : 0);
+    // Off-screen pointer: the way on while travelling, else the boss (the arenas are large; its
+    // attacks can land from off screen).
+    const hero = this.player.entity.getPosition();
+    const combatBoss = boss && this.phase === "combat" ? boss : null;
+    if (this.travel) {
+      const t = this.travel;
+      let best = Infinity;
+      const past = ((t.exit.axis === "z" ? hero.z : hero.x) - t.exit.at) * t.exit.dir > 0;
+      if (past) {
+        // Through the seal: lead on into the next zone (its near edge, straight ahead), not back.
+        const r = t.region;
+        const edge = t.exit.dir < 0 ? (t.exit.axis === "z" ? r.maxZ : r.maxX) - 2 : (t.exit.axis === "z" ? r.minZ : r.minX) + 2;
+        if (t.exit.axis === "z") this.wayPoint.set(Math.min(r.maxX - 2, Math.max(r.minX + 2, hero.x)), 0, edge);
+        else this.wayPoint.set(edge, 0, Math.min(r.maxZ - 2, Math.max(r.minZ + 2, hero.z)));
+        best = Math.hypot(this.wayPoint.x - hero.x, this.wayPoint.z - hero.z);
+      } else {
+        for (const w of t.exits) {
+          const dist = wayDistance(w, hero, this.tmp);
+          if (dist < best) {
+            best = dist;
+            this.wayPoint.copy(this.tmp);
+          }
+        }
+      }
+      this.hud.setPointer(Number.isFinite(best) ? this.wayPoint : null, best, "way");
+    } else {
+      this.hud.setPointer(combatBoss?.position ?? null, combatBoss ? Math.hypot(combatBoss.position.x - hero.x, combatBoss.position.z - hero.z) : 0, "boss");
+    }
+    this.hud.update(dt, this.projector);
+    this.targetDebug.update(this.gun.debug);
+  }
+}
+
+/** The walk between campaign levels. */
+const TRAVEL = {
+  /** A way-on seal opens when the hero comes this close (m). */
+  openDistance: 4.5,
+  /** The next level starts this far past the exit line (m), inside the next region. */
+  crossDistance: 3,
+};
+
+/** Distance (m, ground plane) from `p` to a way-on seal; its nearest point goes to `out`. */
+function wayDistance(w: WayPoint, p: Vec3, out: Vec3): number {
+  const half = w.width / 2;
+  const alongX = Math.abs(((w.yawDeg % 180) + 180) % 180) < 45;
+  const x = alongX ? Math.min(w.x + half, Math.max(w.x - half, p.x)) : w.x;
+  const z = alongX ? w.z : Math.min(w.z + half, Math.max(w.z - half, p.z));
+  out.set(x, 0, z);
+  return Math.hypot(p.x - x, p.z - z);
+}

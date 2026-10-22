@@ -1,7 +1,8 @@
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 
-const files = await readdir('dist/assets');
+// The PlayCanvas 3D game is big; keep its engine and code out of the other games' offline cache.
+const files = (await readdir('dist/assets')).filter(file => !file.startsWith('playcanvas'));
 const voices = [
   ...(await readdir('dist/fishing/voice').catch(() => [])).map(f => `fishing/voice/${f}`),
   ...(await readdir('dist/rozshuk/voice').catch(() => [])).map(f => `rozshuk/voice/${f}`),
