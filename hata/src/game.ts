@@ -110,15 +110,33 @@ setAnisotropy(Math.min(4, renderer.capabilities.getMaxAnisotropy()));
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, view.clientWidth / view.clientHeight, 0.05, 260);
 scene.add(camera);
-// Tools in hand ride on the camera, shrunk 4× and brought 4× closer: they look the
-// same but sit within 15 cm of the eye, so walls never cut through them — and no
-// second render pass is needed.
+camera.near = 0.03;
+camera.updateProjectionMatrix();
+// Tools in hand live in their own tiny scene, drawn after the world on a cleared
+// depth buffer (the usual first-person trick): nothing in the world — a wall,
+// grass, the sky dome — can ever hide or cut them. The view-model camera sits at
+// the origin with the main camera's rotation, so "vm space + camera position"
+// is world space. Its own sun and sky light copy the world's every frame.
 const VM_SCALE = 0.25;
+const vmScene = new THREE.Scene();
+const vmCam = new THREE.PerspectiveCamera(62, view.clientWidth / view.clientHeight, 0.005, 4);
+vmScene.add(vmCam);
 const vmRoot = new THREE.Group();
 vmRoot.scale.setScalar(VM_SCALE);
-camera.add(vmRoot);
-camera.near = 0.015;
-camera.updateProjectionMatrix();
+vmCam.add(vmRoot);
+const vmSun = new THREE.DirectionalLight(0xffffff, 1);
+const vmHemi = new THREE.HemisphereLight(0xffffff, 0x000000, 0.5);
+const vmRoom = new THREE.PointLight(0xffe6c8, 0, 9, 1.4);
+vmScene.add(vmSun, vmSun.target, vmHemi, vmRoom);
+function syncVmCamera(): void {
+  vmCam.quaternion.copy(camera.quaternion);
+  if (vmCam.aspect !== camera.aspect || vmCam.fov !== camera.fov) {
+    vmCam.aspect = camera.aspect;
+    vmCam.fov = camera.fov;
+    vmCam.updateProjectionMatrix();
+  }
+  vmCam.updateMatrixWorld(true);
+}
 
 const hud = new Hud();
 hud.show(false);
@@ -390,7 +408,7 @@ const VMS: Record<string, VM> = {
 /** Long-handled tools stand in the world: the head on the ground ahead, the grip in your hands. */
 const POLE_TOOLS: Record<string, { drop: number; side: number; ahead: number; tilt: number }> = {
   rake: { drop: 0.5, side: 0.13, ahead: 0.18, tilt: 0 },
-  mop: { drop: 0.5, side: 0.13, ahead: 0.18, tilt: 0 },
+  mop: { drop: 0.5, side: 0.13, ahead: 0.42, tilt: 0 },
   net: { drop: 0.42, side: 0.22, ahead: 0.3, tilt: 0.35 },
   detector: { drop: 0.6, side: 0.24, ahead: 0.25, tilt: 0 },
 };
@@ -652,13 +670,27 @@ const ACTION_LABEL: Record<ToolId, string> = {
   hands: "Терти", washer: "Мити", mower: "Косити", leaves: "Збирати", net: "Ловити", mop: "Мити", squeegee: "Терти", paint: "Шкребти", detector: "Копати",
 };
 
+const seenErrors = new Set<string>();
 function frame(): void {
+  requestAnimationFrame(frame);
   const raw = clockT.getDelta();
   const dt = Math.min(raw, 0.05);
   adaptResolution(raw);
-  update(dt);
+  // an error in one frame must not freeze the game: keep rendering and say what broke
+  try {
+    update(dt);
+  } catch (e) {
+    const msg = e instanceof Error ? `${e.message} @ ${(e.stack ?? "").split("\n")[1]?.trim() ?? ""}` : String(e);
+    if (!seenErrors.has(msg)) { seenErrors.add(msg); console.error(e); hud.toast(`Помилка: ${msg.slice(0, 120)}`); }
+  }
+  try { vmVisibility(); } catch { /* */ }
   render();
-  requestAnimationFrame(frame);
+}
+
+/** The tool in hand is always the current one, whatever else happened this frame. */
+function vmVisibility(): void {
+  const key = mode === "play" ? vmKey() : null;
+  for (const [k, o] of Object.entries(vms)) if (o) o.visible = k === key;
 }
 
 function update(dt: number): void {
@@ -983,7 +1015,9 @@ function toolEffects(using: boolean, dt: number, stats: ReturnType<typeof toolSt
   jet.active = mode === "play" && tool === "washer" && !!held;
   if (jet.active) {
     const tip = vms.washer?.getObjectByName("washer_tip");
-    const from = tip ? tip.getWorldPosition(new THREE.Vector3()) : camera.position.clone();
+    syncVmCamera();
+    // vm space is world space shifted to the eye
+    const from = tip ? tip.getWorldPosition(new THREE.Vector3()).add(camera.position) : camera.position.clone();
     const reach = stats?.range ?? 4.5;
     const to = aimHit && aimHit.distance <= reach ? aimHit.point.clone() : ray.ray.origin.clone().addScaledVector(ray.ray.direction, reach);
     const n = aimHit?.face ? aimHit.face.normal.clone().transformDirection(aimHit.object.matrixWorld) : null;
@@ -1084,7 +1118,31 @@ function render(): void {
   if ((shadowTick++ & 1) === 0 || still) renderer.shadowMap.needsUpdate = true;
   if (composer) composer.render();
   else renderer.render(scene, camera);
+  renderViewmodel();
   window.__hata.frames++;
+}
+
+/** The tool in hand, on top of everything (see vmScene). */
+function renderViewmodel(): void {
+  if (!vmRoot.children.some((o) => o.visible)) return;
+  syncVmCamera();
+  vmSun.color.copy(sun.color);
+  vmSun.intensity = sun.intensity;
+  vmSun.position.copy(sun.position).sub(sun.target.position).normalize().multiplyScalar(2);
+  vmHemi.color.copy(hemi.color);
+  vmHemi.groundColor.copy(hemi.groundColor);
+  vmHemi.intensity = hemi.intensity;
+  vmRoom.intensity = roomLight.intensity;
+  vmRoom.position.copy(roomLight.position).sub(camera.position);
+  vmScene.environment = scene.environment;
+  vmScene.environmentIntensity = scene.environmentIntensity;
+  vmScene.environmentRotation.copy(scene.environmentRotation);
+  const auto = renderer.autoClear;
+  renderer.autoClear = false;
+  renderer.setRenderTarget(null);
+  renderer.clearDepth();
+  renderer.render(vmScene, vmCam);
+  renderer.autoClear = auto;
 }
 
 // ── Test hooks (used by the offline renders and the scripted checks) ───────

@@ -249,6 +249,7 @@ export async function buildHouse(W: WorldIndex, style: HouseStyle, restore: Rest
     leaf.position.set(axis === "x" ? w / 2 : 0, h / 2, axis === "x" ? 0 : w / 2);
     leaf.castShadow = leaf.receiveShadow = true;
     pivot.add(leaf);
+    solid(leaf); // the crosshair stops at a door instead of reaching through it
     const knob = new THREE.Mesh(new THREE.SphereGeometry(0.035, 12, 8), new THREE.MeshStandardMaterial({ color: 0xb8954a, metalness: 1, roughness: 0.35 }));
     knob.position.set(axis === "x" ? w - 0.08 : 0.05, 1.0, axis === "x" ? 0.05 : w - 0.08);
     pivot.add(knob);
