@@ -59,6 +59,13 @@ def mats():
     M["sleeve"] = mat("SleeveDenim", srgb(0x34506E), 0.95)
     M["orange"] = mat("PlasticOrange", srgb(0xE8661E), 0.4, 0, 0.3)
     M["bag"] = mat("Canvas", srgb(0x3D4A3B), 0.95)
+    M["wood"] = mat("WoodHandle", srgb(0x9A6A3C), 0.6)
+    M["green"] = mat("PlasticGreen", srgb(0x3E8A3A), 0.45, 0, 0.3)
+    M["blue"] = mat("PlasticBlue", srgb(0x2D6FB0), 0.4, 0, 0.3)
+    M["mesh"] = mat("NetMesh", srgb(0x2A3A4A), 0.8)
+    M["cotton"] = mat("Cotton", srgb(0xE6E0D2), 0.95)
+    M["paint"] = mat("PaintWet", srgb(0x5D8A5A), 0.3)
+    M["cloth"] = mat("Cloth", srgb(0x3A7FBF), 0.9)
 
 
 def link(obj, parent=None):
@@ -333,10 +340,115 @@ def detector():
     return root
 
 
+def pole(name, root, start, end, radius, material, verts=16):
+    a, b = Vector(start), Vector(end)
+    d = b - a
+    rot = Vector((0, 0, 1)).rotation_difference(d.normalized()).to_euler()
+    return prim("cyl", name, material, loc=(a + b) / 2, rot=rot, scale=(radius, radius, d.length / 2), parent=root, vertices=verts)
+
+
+def hand_on(root, name, loc, rot):
+    h = glove_grip(name, root)
+    h.location = loc
+    h.rotation_euler = rot
+    return h
+
+
+def rake():
+    """Leaf rake: long pole down to a fan of tines lying on the grass."""
+    root = empty("rake")
+    head = Vector((0, 1.3, -1.25))
+    pole("rake_pole", root, (0, -0.1, 0.05), head, 0.014, M["wood"])
+    for i in range(15):
+        a = math.radians(-50 + i * (100 / 14))
+        tip = head + Vector((math.sin(a) * 0.32, math.cos(a) * 0.32, -0.02))
+        pole(f"rake_tine{i}", root, head, tip, 0.004, M["green"], verts=6)
+    prim("cyl", "rake_collar", M["green"], loc=head, rot=(math.radians(-45), 0, 0), scale=(0.03, 0.03, 0.05), parent=root, vertices=16)
+    hand_on(root, "rake_hand", (0, 0.05, 0.0), (math.radians(-45), math.radians(90), 0))
+    return root
+
+
+def net():
+    """Pool skimmer: telescopic pole and a net frame."""
+    root = empty("net")
+    head = Vector((0, 2.0, -1.0))
+    pole("net_pole", root, (0, -0.1, 0.05), head, 0.013, M["steel"])
+    pole("net_pole2", root, (0, -0.1, 0.05), (0, 0.6, -0.3), 0.016, M["blue"])
+    prim("torus", "net_frame", M["blue"], loc=head + Vector((0, 0.22, 0)), rot=(0, 0, 0), parent=root, major_radius=0.22, minor_radius=0.01, major_segments=40, minor_segments=8)
+    prim("cone", "net_bag", M["mesh"], loc=head + Vector((0, 0.22, -0.1)), rot=(math.radians(180), 0, 0), scale=(0.21, 0.21, 0.1), parent=root, vertices=32, radius2=0.2)
+    hand_on(root, "net_hand", (0, 0.05, 0.0), (math.radians(-27), math.radians(90), 0))
+    return root
+
+
+def mop():
+    """Mop: pole and a head of twisted strings on the floor."""
+    root = empty("mop")
+    head = Vector((0, 0.9, -1.25))
+    pole("mop_pole", root, (0, -0.1, 0.05), head, 0.013, M["blue"])
+    prim("cyl", "mop_cap", M["blue"], loc=head, scale=(0.04, 0.04, 0.03), parent=root, vertices=16)
+    for i in range(22):
+        a = i / 22 * math.pi * 2
+        r = 0.04 + (i % 3) * 0.035
+        tip = head + Vector((math.cos(a) * r * 2.2, math.sin(a) * r * 2.2, -0.12))
+        pole(f"mop_str{i}", root, head + Vector((math.cos(a) * 0.02, math.sin(a) * 0.02, 0)), tip, 0.011, M["cotton"], verts=6)
+    hand_on(root, "mop_hand", (0, 0.05, 0.0), (math.radians(-55), math.radians(90), 0))
+    return root
+
+
+def squeegee():
+    """Window squeegee: short handle, a T with a rubber blade, held up at the glass."""
+    root = empty("squeegee")
+    pole("sq_handle", root, (0, 0, 0), (0, 0.32, 0.1), 0.014, M["rubber"])
+    prim("cube", "sq_bar", M["steel"], loc=(0, 0.34, 0.11), scale=(0.17, 0.012, 0.02), parent=root, bevel=0.004)
+    prim("cube", "sq_blade", M["rubber"], loc=(0, 0.355, 0.11), scale=(0.18, 0.006, 0.026), parent=root)
+    hand_on(root, "sq_hand", (0, 0.02, 0.0), (math.radians(-10), math.radians(90), 0))
+    return root
+
+
+def roller():
+    """Paint roller with a short frame; the sleeve is wet with paint."""
+    root = empty("roller")
+    pole("rl_handle", root, (0, 0, 0), (0, 0.2, 0.05), 0.016, M["yellow"])
+    pole("rl_frame", root, (0, 0.2, 0.05), (0.09, 0.32, 0.12), 0.005, M["steel"])
+    prim("cyl", "rl_sleeve", M["paint"], loc=(0.0, 0.34, 0.13), rot=(0, math.radians(90), 0), scale=(0.032, 0.032, 0.1), parent=root, vertices=24, subsurf=0)
+    hand_on(root, "rl_hand", (0, 0.02, 0.0), (math.radians(-10), math.radians(90), 0))
+    return root
+
+
+def scraper():
+    """Paint scraper: wooden handle, wide steel blade."""
+    root = empty("scraper")
+    pole("sc_handle", root, (0, 0, 0), (0, 0.16, 0.03), 0.017, M["wood"])
+    prim("cube", "sc_blade", M["steel"], loc=(0, 0.21, 0.04), rot=(math.radians(-12), 0, 0), scale=(0.05, 0.05, 0.002), parent=root)
+    hand_on(root, "sc_hand", (0, 0.02, 0.0), (math.radians(-10), math.radians(90), 0))
+    return root
+
+
+def rag():
+    """A gloved hand holding a crumpled cloth."""
+    root = empty("rag")
+    hand_on(root, "rag_hand", (0, 0, 0), (math.radians(-60), math.radians(90), 0))
+    blob("rag_cloth", [
+        ("BALL", (0, 0.05, 0.03), 0.04, (0, 0, 0), 0),
+        ("BALL", (0.03, 0.08, 0.01), 0.03, (0, 0, 0), 0),
+        ("BALL", (-0.03, 0.07, 0.04), 0.03, (0, 0, 0), 0),
+        ("CAPSULE", (0.0, 0.1, -0.02), 0.022, (0, 0, math.radians(30)), 0.04),
+    ], M["cloth"], root, voxel=0.004, ratio=0.4)
+    return root
+
+
+def sponge():
+    """Kitchen sponge (yellow with a green scourer)."""
+    root = empty("sponge")
+    prim("cube", "sponge_soft", M["yellow"], loc=(0, 0, 0.012), scale=(0.045, 0.03, 0.012), parent=root, bevel=0.006)
+    prim("cube", "sponge_hard", M["green"], loc=(0, 0, -0.004), scale=(0.045, 0.03, 0.004), parent=root, bevel=0.002)
+    return root
+
+
 def main():
     reset()
     mats()
-    roots = [washer(), mower(), blower(), detector(), glove_grip("glove_grip")]
+    roots = [washer(), mower(), blower(), detector(), rake(), net(), mop(), squeegee(), roller(), scraper(), rag(), sponge(), glove_grip("glove_grip")]
     # spread them out so the file is easy to inspect; the game re-positions them
     for i, r in enumerate(roots):
         r.location.x += i * 1.5

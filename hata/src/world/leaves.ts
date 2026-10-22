@@ -10,7 +10,7 @@ import { rng } from "./geo";
 
 let atlas: THREE.CanvasTexture | null = null;
 
-function leafAtlas(): THREE.CanvasTexture {
+export function leafAtlas(): THREE.CanvasTexture {
   if (atlas) return atlas;
   const S = 256, c = document.createElement("canvas");
   c.width = c.height = S * 2;
@@ -69,7 +69,7 @@ function leafAtlas(): THREE.CanvasTexture {
   return atlas;
 }
 
-function leafGeometry(): THREE.BufferGeometry {
+export function leafGeometry(): THREE.BufferGeometry {
   // a 3×3 grid, curled up along its length and edges
   const g = new THREE.PlaneGeometry(1, 1, 2, 2);
   const p = g.getAttribute("position") as THREE.BufferAttribute;
