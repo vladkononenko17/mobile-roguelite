@@ -156,7 +156,7 @@ export class Lawn {
   }
 
   private makeMaterial(): THREE.MeshStandardMaterial {
-    const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.82 });
+    const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 1 });
     const uTime = this.time, uLod = this.lodU;
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.uTime = uTime;
@@ -174,7 +174,7 @@ export class Lawn {
           `#include <beginnormal_vertex>
           float cr = cos(aOff.z), sr = sin(aOff.z);
           objectNormal = vec3(cr * objectNormal.x + sr * objectNormal.z, objectNormal.y, -sr * objectNormal.x + cr * objectNormal.z);
-          objectNormal = normalize(mix(objectNormal, vec3(0.0, 1.0, 0.0), 0.6));`,
+          objectNormal = normalize(mix(objectNormal, vec3(0.0, 1.0, 0.0), 0.8));`,
         )
         .replace(
           "#include <begin_vertex>",
@@ -187,7 +187,7 @@ export class Lawn {
           float grow = 1.0 - smoothstep(keep - 0.1, keep, aRank);
           float bh = aH * grow;
           vec3 transformed = vec3(position.x * bw * grow, position.y * bh, position.z * bh * 0.75);
-          vVar = aVar; vV = uv.y; vFar = smoothstep(5.0, 28.0, dCam);
+          vVar = aVar; vV = uv.y; vFar = smoothstep(3.0, 20.0, dCam);
           transformed = vec3(cr * transformed.x + sr * transformed.z, transformed.y, -sr * transformed.x + cr * transformed.z);
           float wv = sin(uTime * 1.7 + aOff.x * 0.6 + aOff.y * 0.35) * 0.5 + sin(uTime * 2.9 + aOff.x * 1.7) * 0.25;
           float sway = uv.y * uv.y * bh;
@@ -210,7 +210,7 @@ export class Lawn {
           vec3 col = mix(root, tip, h);
           // far away: blades blend toward one average lawn colour
           vec3 avg = mix(root, tip, 0.6);
-          diffuseColor.rgb = mix(col, avg, vFar * 0.75);`,
+          diffuseColor.rgb = mix(col, avg, vFar * 0.85);`,
         );
     };
     return mat;

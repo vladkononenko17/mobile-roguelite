@@ -214,13 +214,14 @@ export function flowerBeds(seed = 5): THREE.Group {
       e.receiveShadow = true;
       g.add(e);
     }
-    const n = Math.round(w * d * 26);
+    const n = Math.round(w * d * (w < 1 || d < 1 ? 13 : 18));
     for (let i = 0; i < n; i++) spots.push([x0 + 0.08 + r() * (w - 0.16), z0 + 0.08 + r() * (d - 0.16)]);
   }
-  const palette = [0xe8243c, 0xff5fa2, 0xffc21a, 0xff7a1a, 0x9b4dff, 0xf4f0ff, 0xd61f6a, 0xffe14d];
+  // soft garden colours: a few bright accents among dusty pinks, creams and lavender
+  const palette = [0xc24a5a, 0xd98aa0, 0xe8c76a, 0xb79ad6, 0xece6da, 0xd9a0b8, 0xc9705a, 0xf0dca0];
   // leafy clumps
   const bushGeo = new THREE.IcosahedronGeometry(1, 0);
-  const bushes = new THREE.InstancedMesh(bushGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true }), Math.ceil(spots.length / 3));
+  const bushes = new THREE.InstancedMesh(bushGeo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true }), Math.ceil(spots.length / 2));
   const heads = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.55 }), spots.length);
   const stems = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.008, 0.011, 1, 5), new THREE.MeshStandardMaterial({ color: 0x3f7a1e, roughness: 0.8 }), spots.length);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), e = new THREE.Euler(), c = new THREE.Color();
@@ -231,11 +232,11 @@ export function flowerBeds(seed = 5): THREE.Group {
     q.setFromEuler(e);
     m.compose(p.set(x, h / 2 + 0.06, z), q, s.set(1, h, 1));
     stems.setMatrixAt(i, m);
-    const hr = 0.03 + r() * 0.025;
+    const hr = 0.022 + r() * 0.018;
     m.compose(p.set(x + Math.sin(e.z) * -h * 0.5, h + 0.06, z + Math.sin(e.x) * h * 0.5), q.identity(), s.set(hr, hr * 0.6, hr));
     heads.setMatrixAt(i, m);
     heads.setColorAt(i, c.setHex(palette[Math.floor(r() * palette.length)]).offsetHSL(0, 0, (r() - 0.5) * 0.08));
-    if (i % 3 === 0 && b < bushes.count) {
+    if (i % 2 === 0 && b < bushes.count) {
       const br = 0.1 + r() * 0.09;
       e.set(r(), r() * 6, r());
       m.compose(p.set(x, 0.08, z), q.setFromEuler(e), s.set(br * 1.2, br * 0.8, br * 1.2));
