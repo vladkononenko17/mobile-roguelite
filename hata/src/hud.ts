@@ -53,6 +53,8 @@ export class Hud {
       <div id="hud-tl">
         <span class="pill" id="money">₴ 0</span>
         <span class="pill" id="clock"><span id="clock-t">08:00</span><span class="day" id="clock-d">день 1/3</span><span id="sunbar"><i></i></span></span>
+        <span class="pill hidden" id="stage"><b id="stage-n"></b><span id="stage-name"></span><span id="stagebar"><i></i><em></em></span></span>
+        <div id="fps" class="pill hidden"></div>
       </div>
       <div id="hud-tr">
         <button class="ibtn" id="b-light" aria-label="Підсвітити бруд">${ICONS.light}</button>
@@ -69,7 +71,6 @@ export class Hud {
       <button id="action">Мити</button>
       <div id="tools"></div>
       <div id="floaters"></div>
-      <div id="fps" class="pill hidden"></div>
       <div id="toasts"></div>
       <div id="detector" class="hidden"><div class="bars"><i style="height:20%"></i><i style="height:40%"></i><i style="height:60%"></i><i style="height:80%"></i><i style="height:100%"></i></div><span class="arrow hidden">${ICONS.arrow}</span><span class="lbl">тихо</span></div>
       <div id="dishbar" class="hidden"><span id="dish-n"></span><button class="btn" id="dish-exit">Готово</button></div>
@@ -176,6 +177,29 @@ export class Hud {
       <button class="tool${id === current ? " on" : ""}${id === want && id !== current ? " want" : ""}" data-tool="${id}" aria-label="${TOOLS[id].name}">
         ${ICONS[id]}<span>${TOOLS[id].short}</span>
       </button>`).join("");
+  }
+
+  /** Current stage of the job: its number, name and progress toward `need`. */
+  stage(i: number, total: number, name: string, share: number, need: number): void {
+    const el = $("stage");
+    el.classList.remove("hidden");
+    if (i >= total) {
+      $("stage-n").textContent = "✓";
+      $("stage-name").textContent = "Усе відкрито";
+      $("stagebar").classList.add("hidden");
+      return;
+    }
+    $("stagebar").classList.remove("hidden");
+    $("stage-n").textContent = `${i + 1}/${total}`;
+    $("stage-name").textContent = name;
+    ($("stagebar").firstElementChild as HTMLElement).style.width = `${Math.min(100, (share / need) * 100)}%`;
+  }
+
+  stageFlash(): void {
+    const el = $("stage");
+    el.classList.remove("flash");
+    void el.offsetWidth;
+    el.classList.add("flash");
   }
 
   fps(n: number | null): void {

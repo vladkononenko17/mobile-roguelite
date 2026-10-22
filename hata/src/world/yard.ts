@@ -8,7 +8,7 @@ import { bakeWorldUV, box, rng } from "./geo";
 import { finishSurface, HOUSE, makeSurface, type Restore } from "./house";
 import type { WorldIndex } from "./index";
 import { proxyBox } from "./index";
-import { buildHaystack, HAY, makeWaterNormal, neighbours, scumTexture } from "./scenery";
+import { buildHaystack, flowerBeds, HAY, inBed, makeWaterNormal, neighbours, scumTexture } from "./scenery";
 import { buildTree, foliageMaterial } from "./tree";
 
 export { HAY };
@@ -41,6 +41,7 @@ export function isLawn(x: number, z: number): boolean {
   if (inRect(x, z, POOL, 0.55) || inRect(x, z, DECK, 0.1)) return false;
   if (Math.hypot(x - HAY.x, z - HAY.z) < HAY.r * 0.95) return false;
   if (z > 4 && z < 6.7 && x > -3.2 && x < -1) return false; // front steps
+  if (inBed(x, z, 0.05)) return false;
   return true;
 }
 
@@ -272,6 +273,9 @@ export async function buildYard(W: WorldIndex, style: HouseStyle, restore: Resto
     zoneOf: () => 0, zones: [{ key: "verge", name: "" }], bounds: [-30, 30, -30, 22], density: o.grassDensity * 0.25, seed: 3, tall: [0.12, 0.3],
   });
   g.add(verge.group);
+
+  // ── Flower beds by the front wall and along the path.
+  g.add(flowerBeds(o.seed % 997));
 
   // ── Haystack.
   g.add(buildHaystack());

@@ -77,6 +77,9 @@ export class Lawn {
   readonly zones: LawnZone[];
   readonly material: THREE.MeshStandardMaterial;
   readonly time = { value: 0 };
+  private readonly lodU = { value: 1 };
+  /** Minimum blade width per metre of distance (≈ 2 pixels), set from the camera. */
+  static readonly pix = { value: 0.0045 };
   private chunks: Chunk[] = [];
   private grid = new Map<string, Chunk>();
   private cutH: number;
@@ -119,13 +122,15 @@ export class Lawn {
           off[i * 4] = xs[i];
           off[i * 4 + 1] = zs[i];
           off[i * 4 + 2] = r() * Math.PI * 2;
-          off[i * 4 + 3] = 0.016 + r() * 0.02; // width
+          off[i * 4 + 3] = 0.022 + r() * 0.022; // width
           aH[i] = hs[i];
           vars[i * 3] = r();
           vars[i * 3 + 1] = r() < 0.14 ? 0.5 + r() * 0.5 : 0; // dry blades
           vars[i * 3 + 2] = r();
         }
         geo.setAttribute("aOff", new THREE.InstancedBufferAttribute(off, 4));
+        // blades are in random order, so the index is a random rank for the distance fade
+        geo.setAttribute("aRank", new THREE.InstancedBufferAttribute(Float32Array.from({ length: n }, (_, i) => (i + 0.5) / n), 1));
         const hAttr = new THREE.InstancedBufferAttribute(aH, 1);
         hAttr.setUsage(THREE.DynamicDrawUsage);
         const vAttr = new THREE.InstancedBufferAttribute(vars, 3);
@@ -152,15 +157,17 @@ export class Lawn {
 
   private makeMaterial(): THREE.MeshStandardMaterial {
     const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.82 });
-    const uTime = this.time;
+    const uTime = this.time, uLod = this.lodU;
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.uTime = uTime;
+      sh.uniforms.uPix = Lawn.pix;
+      sh.uniforms.uLod = uLod;
       sh.vertexShader = sh.vertexShader
         .replace(
           "#include <common>",
           `#include <common>
-          attribute vec4 aOff; attribute float aH; attribute vec3 aVar;
-          varying vec3 vVar; varying float vV; uniform float uTime;`,
+          attribute vec4 aOff; attribute float aH; attribute vec3 aVar; attribute float aRank; uniform float uLod;
+          varying vec3 vVar; varying float vV; varying float vFar; uniform float uTime; uniform float uPix;`,
         )
         .replace(
           "#include <beginnormal_vertex>",
@@ -171,25 +178,39 @@ export class Lawn {
         )
         .replace(
           "#include <begin_vertex>",
-          `vec3 transformed = vec3(position.x * aOff.w, position.y * aH, position.z * aH * 0.75);
-          vVar = aVar; vV = uv.y;
+          `// A blade thinner than ~2 pixels flickers as you walk: widen far blades
+          // (the LOD draws fewer of them, so the lawn keeps the same coverage).
+          float dCam = distance(cameraPosition.xz, vec2(aOff.x, aOff.y));
+          float bw = max(aOff.w, dCam * uPix);
+          // distance thinning: blades past the kept share shrink into the ground smoothly
+          float keep = (dCam < 9.0 ? 1.0 : dCam < 26.0 ? 1.0 - (dCam - 9.0) / 17.0 * 0.8 : 0.2) * uLod;
+          float grow = 1.0 - smoothstep(keep - 0.1, keep, aRank);
+          float bh = aH * grow;
+          vec3 transformed = vec3(position.x * bw * grow, position.y * bh, position.z * bh * 0.75);
+          vVar = aVar; vV = uv.y; vFar = smoothstep(5.0, 28.0, dCam);
           transformed = vec3(cr * transformed.x + sr * transformed.z, transformed.y, -sr * transformed.x + cr * transformed.z);
           float wv = sin(uTime * 1.7 + aOff.x * 0.6 + aOff.y * 0.35) * 0.5 + sin(uTime * 2.9 + aOff.x * 1.7) * 0.25;
-          float sway = uv.y * uv.y * aH;
+          float sway = uv.y * uv.y * bh;
           transformed.x += wv * 0.25 * sway;
           transformed.z += wv * 0.12 * sway;
           transformed += vec3(aOff.x, 0.0, aOff.y);`,
         );
       sh.fragmentShader = sh.fragmentShader
-        .replace("#include <common>", "#include <common>\nvarying vec3 vVar; varying float vV;")
+        .replace("#include <common>", "#include <common>\nvarying vec3 vVar; varying float vV; varying float vFar;")
         .replace(
           "#include <map_fragment>",
           `#include <map_fragment>
-          vec3 root = vec3(0.015, 0.03, 0.006);
-          vec3 tip = mix(vec3(0.10, 0.20, 0.03), vec3(0.21, 0.31, 0.06), vVar.x);
-          tip = mix(tip, vec3(0.40, 0.33, 0.13), vVar.y);
-          tip *= 0.8 + 0.4 * vVar.z;
-          diffuseColor.rgb = mix(root, tip, smoothstep(0.0, 0.9, vV));`,
+          // soft, saturated greens; the root is a shaded green, not black, so
+          // neighbouring blades don't flicker light/dark as you move
+          vec3 root = vec3(0.045, 0.085, 0.016);
+          vec3 tip = mix(vec3(0.12, 0.30, 0.035), vec3(0.24, 0.42, 0.06), vVar.x);
+          tip = mix(tip, vec3(0.52, 0.42, 0.14), vVar.y);
+          tip *= 0.88 + 0.24 * vVar.z;
+          float h = smoothstep(0.0, 0.95, vV);
+          vec3 col = mix(root, tip, h);
+          // far away: blades blend toward one average lawn colour
+          vec3 avg = mix(root, tip, 0.6);
+          diffuseColor.rgb = mix(col, avg, vFar * 0.75);`,
         );
     };
     return mat;
@@ -282,6 +303,7 @@ export class Lawn {
   /** Uploads changed heights and thins far chunks. */
   update(cam: THREE.Vector3, t: number, quality = 1): void {
     this.time.value = t;
+    this.lodU.value = quality;
     for (const ch of this.chunks) {
       if (ch.dirty1 >= 0) {
         ch.aH.clearUpdateRanges();
@@ -293,10 +315,12 @@ export class Lawn {
         ch.dirty0 = Infinity;
         ch.dirty1 = -1;
       }
-      const dx = ch.cx * CHUNK + CHUNK / 2 - cam.x, dz = ch.cz * CHUNK + CHUNK / 2 - cam.z;
-      const d = Math.sqrt(dx * dx + dz * dz + cam.y * cam.y);
+      // nearest point of the chunk: the shader fades the rest, this only skips work
+      const x0 = ch.cx * CHUNK, z0 = ch.cz * CHUNK;
+      const dx = Math.max(x0 - cam.x, 0, cam.x - x0 - CHUNK), dz = Math.max(z0 - cam.z, 0, cam.z - z0 - CHUNK);
+      const d = Math.sqrt(dx * dx + dz * dz);
       const f = d < 9 ? 1 : d < 26 ? 1 - ((d - 9) / 17) * 0.8 : 0.2;
-      ch.geo.instanceCount = Math.max(1, Math.floor(ch.n * f * quality));
+      ch.geo.instanceCount = Math.max(1, Math.min(ch.n, Math.ceil(ch.n * f * quality) + 8));
     }
   }
 }

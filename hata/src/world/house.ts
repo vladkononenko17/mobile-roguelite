@@ -36,7 +36,11 @@ export interface HouseParts {
   roofSlabs: THREE.Mesh[];
   /** Height of the roof surface at (x, z), or null when off the roof. */
   roofAt: (x: number, z: number) => number | null;
+  doors: { front: HouseDoor; back: HouseDoor; side: HouseDoor };
 }
+
+/** A door leaf on its hinge; `open` is the swung-open angle. */
+export interface HouseDoor { pivot: THREE.Group; open: number }
 
 export type Restore = (key: string) => number;
 
@@ -228,7 +232,7 @@ export async function buildHouse(W: WorldIndex, style: HouseStyle, restore: Rest
   windowAt("z", X, 2.25, 1.5, 1.0, 2.25, 1, "Бічне вікно кухні");
 
   // ── Doors.
-  const door = (axis: "x" | "z", fixed: number, c: number, w: number, open: number): void => {
+  const door = (axis: "x" | "z", fixed: number, c: number, w: number, open: number): HouseDoor => {
     const h = 2.1;
     if (axis === "x") {
       solid(box(g, 0.08, h + 0.08, 0.16, c - w / 2 - 0.04, F + h / 2, fixed, trim), box(g, 0.08, h + 0.08, 0.16, c + w / 2 + 0.04, F + h / 2, fixed, trim), box(g, w + 0.16, 0.08, 0.16, c, F + h + 0.04, fixed, trim));
@@ -247,11 +251,14 @@ export async function buildHouse(W: WorldIndex, style: HouseStyle, restore: Rest
     const knob = new THREE.Mesh(new THREE.SphereGeometry(0.035, 12, 8), new THREE.MeshStandardMaterial({ color: 0xb8954a, metalness: 1, roughness: 0.35 }));
     knob.position.set(axis === "x" ? w - 0.08 : 0.05, 1.0, axis === "x" ? 0.05 : w - 0.08);
     pivot.add(knob);
+    return { pivot, open };
   };
-  // all doors stand open so the house is one walkable space
-  door("x", Z, -2.1, 1.0, -1.35);
-  door("x", -Z, 5.0, 1.0, 1.35);
-  door("z", X, -3.0, 1.0, -1.35);
+  // doors start open; the stage gates close the ones that aren't reachable yet
+  const doors = {
+    front: door("x", Z, -2.1, 1.0, -1.35),
+    back: door("x", -Z, 5.0, 1.0, 1.35),
+    side: door("z", X, -3.0, 1.0, -1.35),
+  };
 
   // ── Roof: two slopes, each a wash surface (moss!), fascia, ridge, gutters.
   const eaveDrop = (R * oh) / Z;
@@ -305,7 +312,7 @@ export async function buildHouse(W: WorldIndex, style: HouseStyle, restore: Rest
   };
 
   await buildBathroom(g, W, restore, tilesB, concreteB);
-  return { group: g, roofSlabs, roofAt };
+  return { group: g, roofSlabs, roofAt, doors };
 }
 
 /** Bathtub, washbasin and toilet — white ceramic with a grimy ring, wiped with the rag. */
