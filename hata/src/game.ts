@@ -21,6 +21,7 @@ import {
 import { grimeGlobals } from "./world/grime";
 import { buildHouse, HOUSE } from "./world/house";
 import { Gates, stageAt } from "./world/gates";
+import { SunsetSky } from "./world/sky";
 import { currentStage, STAGE_DONE, STAGES, stageShare } from "./game/stages";
 import { WorldIndex, type Interactable } from "./world/index";
 import { buildKitchen, SINK } from "./world/kitchen";
@@ -89,7 +90,7 @@ THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars
   `vec3 CustomToneMapping( vec3 color ) {
     vec3 c = ACESFilmicToneMapping( color );
     float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
-    c = mix( vec3( l ), c, 1.18 ) * vec3( 1.07, 1.0, 0.88 );
+    c = mix( vec3( l ), c, 1.15 ) * vec3( 1.09, 0.99, 0.84 );
     c = c * c * ( 3.0 - 2.0 * c ) * 0.25 + c * 0.75; // a touch of S-curve contrast
     return clamp( c, 0.0, 1.0 );
   }`,
@@ -148,9 +149,10 @@ const jet = new Jet();
 const fx = new Particles();
 scene.add(jet.group, fx.mesh);
 const sun = new THREE.DirectionalLight(0xffd6a0, 4.0);
-const hemi = new THREE.HemisphereLight(0xb8ccff, 0x6a5a38, 0.45);
+const hemi = new THREE.HemisphereLight(0xc6b8e8, 0x6a4a30, 0.55);
 /** Sun azimuth: low from the street-and-east corner, so the front and the east side glow. */
 const SUN_AZ = 0.8;
+let sky: SunsetSky | null = null;
 /** The sky panorama and the direction of its sun, atan2(z, x) in three's equirect mapping. */
 const SKY = { id: "kloppenheim_06_puresky", sunAngle: (0.6123 - 0.5) * Math.PI * 2 };
 /** One warm light that follows you indoors (a single light keeps every shader cheap). */
@@ -241,16 +243,15 @@ async function boot(): Promise<void> {
   showTitle(true);
   const { env, background } = await hdri(renderer, SKY.id);
   scene.environment = env;
-  scene.background = background;
-  scene.backgroundIntensity = 0.95;
-  scene.environmentIntensity = 0.8;
+  scene.environmentIntensity = 0.7;
   // turn the sky so its low sun sits where our sun light comes from
   const skyRot = SKY.sunAngle - Math.atan2(Math.cos(SUN_AZ), Math.sin(SUN_AZ));
-  scene.backgroundRotation.set(0, skyRot, 0);
   scene.environmentRotation.set(0, skyRot, 0);
+  sky = new SunsetSky(background, skyRot);
+  scene.add(sky.mesh);
 
-  // warm late-afternoon haze
-  scene.fog = new THREE.Fog(0xd8c6a8, 45, 170);
+  // warm sunset haze
+  scene.fog = new THREE.Fog(0xe2b88e, 40, 165);
   step();
 
   sun.castShadow = true;
@@ -684,8 +685,8 @@ function update(dt: number): void {
   if (yard) {
     yard.tick(t, dt);
     yard.lawn.update(camera.position, t, Q.lod);
-    // ~2 pixels at 1 m, for the grass width floor
-    Lawn.pix.value = (2.2 * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / Math.max(200, renderer.domElement.height);
+    // ~3 pixels at 1 m, for the grass width floor
+    Lawn.pix.value = (3.0 * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) / Math.max(200, renderer.domElement.height);
     jobs.update(dt, t, new THREE.Vector3(player.pos.x, player.feet, player.pos.z));
     gates.update(dt);
     if (has(save, "kid") && Math.random() < dt * 1.2 * has(save, "kid")) {
@@ -987,20 +988,20 @@ function cleaningNow(): boolean {
 
 // ── Sun ─────────────────────────────────────────────────────────────────────
 function sunUpdate(): void {
-  // A long golden hour: the sun hangs low in the west-southwest all day and
-  // only sinks a little and warms up toward the evening, so the light stays
-  // warm and the shadows long.
+  // A sunset that lasts the whole working day: the sun hangs just above the
+  // horizon (where the sky panorama has it) and only sinks a little and turns
+  // redder toward the evening. Long shadows, orange light.
   const c = clock(save);
   const k = Math.min(1, Math.max(0, c.sun));
-  const el = THREE.MathUtils.lerp(0.46, 0.2, k);
+  const el = THREE.MathUtils.lerp(0.24, 0.13, k);
   const dir = new THREE.Vector3(Math.sin(SUN_AZ) * Math.cos(el), Math.sin(el), Math.cos(SUN_AZ) * Math.cos(el));
   const focus = new THREE.Vector3(Math.round(player.pos.x / 2) * 2, 0, Math.round(player.pos.z / 2) * 2);
   sun.position.copy(focus).addScaledVector(dir, 60);
   sun.target.position.copy(focus);
-  sun.color.setRGB(1, THREE.MathUtils.lerp(0.8, 0.66, k), THREE.MathUtils.lerp(0.54, 0.38, k));
-  sun.intensity = THREE.MathUtils.lerp(4.4, 3.6, k);
-  scene.environmentIntensity = THREE.MathUtils.lerp(0.8, 0.6, k);
-  scene.backgroundIntensity = THREE.MathUtils.lerp(0.95, 0.75, k);
+  sun.color.setRGB(1, THREE.MathUtils.lerp(0.58, 0.48, k), THREE.MathUtils.lerp(0.28, 0.2, k));
+  sun.intensity = THREE.MathUtils.lerp(5.0, 4.3, k);
+  scene.environmentIntensity = THREE.MathUtils.lerp(0.6, 0.5, k);
+  sky?.update(camera.position, dir, THREE.MathUtils.lerp(0.95, 0.8, k));
   // indoor light follows you inside the house
   const inside = Math.abs(player.pos.x) < HOUSE.halfX && Math.abs(player.pos.z) < HOUSE.halfZ && !player.onRoof;
   roomLight.intensity = THREE.MathUtils.lerp(roomLight.intensity, inside ? 7 : 0, 0.1);
@@ -1056,6 +1057,7 @@ function hudUpdate(dt: number): void {
 let rendering = false;
 function render(): void {
   if (!rendering) return;
+  sky?.mesh.position.copy(camera.position);
   if (composer) composer.render();
   else renderer.render(scene, camera);
   window.__hata.frames++;

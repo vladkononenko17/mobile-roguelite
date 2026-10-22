@@ -69,7 +69,7 @@ export class Hud {
       <div id="joy"><div class="ring"></div><div class="knob"></div></div>
       <button id="mode" class="pill hidden"></button>
       <button id="action">Мити</button>
-      <div id="tools"></div>
+      <div id="toolsel"><div id="tools" class="hidden"></div><button id="toolbtn" class="tool" aria-label="Інструменти"></button></div>
       <div id="floaters"></div>
       <div id="toasts"></div>
       <div id="detector" class="hidden"><div class="bars"><i style="height:20%"></i><i style="height:40%"></i><i style="height:60%"></i><i style="height:80%"></i><i style="height:100%"></i></div><span class="arrow hidden">${ICONS.arrow}</span><span class="lbl">тихо</span></div>
@@ -94,11 +94,20 @@ export class Hud {
     act.addEventListener("mousedown", down);
     act.addEventListener("mouseup", up);
     act.addEventListener("mouseleave", up);
+    // One button shows the tool in hand; tapping it unfolds the others, and
+    // picking one (or tapping anywhere else) folds them away again.
+    $("toolbtn").addEventListener("click", () => this.toolsOpen(!this.toolsShown));
     $("tools").addEventListener("click", (e) => {
       const b = (e.target as HTMLElement).closest<HTMLElement>("[data-tool]");
       if (b) this.onTool(b.dataset.tool as ToolId);
+      this.toolsOpen(false);
     });
-    for (const id of ["hud-tr", "tools", "mode", "dishbar"]) {
+    const outside = (e: Event) => {
+      if (this.toolsShown && !$("toolsel").contains(e.target as Node)) this.toolsOpen(false);
+    };
+    document.addEventListener("touchstart", outside, { capture: true, passive: true });
+    document.addEventListener("mousedown", outside, { capture: true });
+    for (const id of ["hud-tr", "toolsel", "mode", "dishbar"]) {
       $(id).addEventListener("touchstart", (e) => e.stopPropagation(), { passive: true });
       $(id).addEventListener("mousedown", (e) => e.stopPropagation());
     }
@@ -113,7 +122,8 @@ export class Hud {
   }
 
   playMode(play: boolean): void {
-    for (const id of ["action", "tools", "crosshair", "joyhint", "hud-tr"]) $(id).classList.toggle("hidden", !play);
+    for (const id of ["action", "toolsel", "crosshair", "joyhint", "hud-tr"]) $(id).classList.toggle("hidden", !play);
+    if (!play) this.toolsOpen(false);
     $("dishbar").classList.toggle("hidden", play);
     $("dishhint").classList.toggle("hidden", play);
     if (!play) { $("target").classList.add("hidden"); $("prompt").classList.add("hidden"); $("detector").classList.add("hidden"); $("mode").classList.add("hidden"); }
@@ -173,10 +183,20 @@ export class Hud {
     const key = TOOL_ORDER.map((id) => save.tools[id]).join() + current + want;
     if (key === this.lastTools) return;
     this.lastTools = key;
-    $("tools").innerHTML = TOOL_ORDER.filter((id) => save.tools[id] > 0).map((id) => `
-      <button class="tool${id === current ? " on" : ""}${id === want && id !== current ? " want" : ""}" data-tool="${id}" aria-label="${TOOLS[id].name}">
+    $("tools").innerHTML = TOOL_ORDER.filter((id) => save.tools[id] > 0 && id !== current).map((id) => `
+      <button class="tool${id === want ? " want" : ""}" data-tool="${id}" aria-label="${TOOLS[id].name}">
         ${ICONS[id]}<span>${TOOLS[id].short}</span>
       </button>`).join("");
+    const b = $("toolbtn");
+    b.innerHTML = `${ICONS[current]}<span>${TOOLS[current].short}</span>`;
+    b.classList.toggle("want", !!want && want !== current);
+  }
+
+  private toolsShown = false;
+  toolsOpen(on: boolean): void {
+    this.toolsShown = on;
+    $("tools").classList.toggle("hidden", !on);
+    $("toolbtn").classList.toggle("open", on);
   }
 
   /** Current stage of the job: its number, name and progress toward `need`. */
