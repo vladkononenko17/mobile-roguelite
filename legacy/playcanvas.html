@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#c79a6b" />
+    <title>Dustline 3D Prototype</title>
+    <link rel="icon" href="%BASE_URL%icon.svg" type="image/svg+xml" />
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #66503e; touch-action: none; }
+      body { font: 12px/1.4 system-ui, sans-serif; color: #f3e7d3; }
+      #app-canvas { display: block; width: 100%; height: 100%; }
+      #loading { position: fixed; inset: 0; z-index: 25; display: grid; place-content: center; gap: 12px; background: #1c1612; transition: opacity 0.4s; }
+      #loading.done { opacity: 0; pointer-events: none; }
+      #loading-title { font: 800 30px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; text-align: center; color: #ece3cf; }
+      #loading-text { text-align: center; opacity: 0.8; }
+      #loading-track { width: min(280px, 70vw); height: 6px; background: #3b2f26; overflow: hidden; }
+      #loading-bar { height: 100%; background: #e8a92f; transform: scaleX(0); transform-origin: left; }
+      #debug { position: fixed; top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); width: min(420px, calc(100vw - 16px)); max-height: 45vh; overflow-y: auto; padding: 8px 10px; background: rgba(20, 15, 12, 0.72); border-radius: 8px; box-sizing: border-box; font-size: 12px; -webkit-user-select: none; user-select: none; }
+      #debug.collapsed { width: auto; }
+      #debug [data-stats] { white-space: pre; margin-right: 64px; font-variant-numeric: tabular-nums; }
+      /* Two slider columns keep the open panel in the top ~40% of a portrait phone, above the hero. */
+      #debug [data-sliders] { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; margin-top: 4px; }
+      #debug label { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "name value" "slider slider"; align-items: center; }
+      #debug label > span:first-child { grid-area: name; opacity: 0.85; }
+      #debug .value { grid-area: value; font-variant-numeric: tabular-nums; }
+      #debug input[type="range"] { grid-area: slider; width: 100%; min-width: 0; height: 28px; margin: 0; accent-color: #e8a92f; touch-action: pan-x; }
+      #debug [data-output] { margin-top: 6px; opacity: 0.7; font-size: 11px; word-break: break-word; }
+      #debug .actions { display: flex; gap: 8px; margin-top: 6px; }
+      #debug button { min-height: 32px; padding: 0 12px; background: none; border: 1px solid #f3e7d3; color: inherit; border-radius: 6px; font: inherit; }
+      #debug [data-toggle] { position: absolute; top: 6px; right: 8px; }
+      #debug .model { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+      #debug .model select { flex: 1; min-height: 32px; font: inherit; color: #f3e7d3; background: #2b221c; border: 1px solid #f3e7d3; border-radius: 6px; }
+      #debug.collapsed .model,
+      #debug.collapsed [data-sliders], #debug.collapsed [data-output], #debug.collapsed .hint, #debug.collapsed .actions { display: none; }
+      #debug .hint { opacity: 0.7; margin-top: 2px; font-size: 11px; }
+      #debug:not(.collapsed) { max-height: 92vh; overflow-y: auto; }
+      #debug .actions { flex-wrap: wrap; }
+      #debug [data-weapon-tuner] { margin-top: 8px; border-top: 1px solid rgba(243, 231, 211, 0.3); padding-top: 6px; }
+      #debug [data-weapon-tuner][hidden], #debug.collapsed [data-weapon-tuner] { display: none; }
+      #debug .tuner-title { font-weight: 600; }
+      #debug .tuner-group { margin-top: 6px; opacity: 0.85; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+      #debug .tuner-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; column-gap: 10px; }
+      #debug .tuner-output { margin: 6px 0 0; font-size: 10px; white-space: pre-wrap; opacity: 0.8; }
+      @media (max-width: 520px) { #debug [data-output], #debug .hint { display: none; } }
+      /* Cheap focal vignette composited by the browser, no post-processing pass. */
+      #vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse 75% 65% at 50% 58%, rgba(0, 0, 0, 0) 55%, rgba(16, 10, 6, 0.45) 100%); }
+      #app-canvas { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+      .joystick { position: fixed; left: -64px; top: -64px; width: 128px; height: 128px; border-radius: 50%; border: 2px solid rgba(243, 231, 211, 0.5); background: rgba(20, 15, 12, 0.25); pointer-events: none; opacity: 0; transition: opacity 0.15s; }
+      .joystick.active { opacity: 1; }
+      #attack { position: fixed; right: max(24px, env(safe-area-inset-right)); bottom: max(32px, env(safe-area-inset-bottom)); width: 76px; height: 76px; border-radius: 50%; border: 2px solid rgba(243, 231, 211, 0.6); background: rgba(20, 15, 12, 0.35); color: #f3e7d3; font: 600 13px system-ui, sans-serif; touch-action: none; -webkit-user-select: none; user-select: none; }
+      #attack.hidden { display: none; }
+      .joystick-knob { position: absolute; left: 40px; top: 40px; width: 48px; height: 48px; border-radius: 50%; background: rgba(243, 231, 211, 0.75); }
+    </style>
+  </head>
+  <body>
+    <canvas id="app-canvas"></canvas>
+    <div id="vignette" aria-hidden="true"></div>
+    <button type="button" id="attack" class="hidden" data-attack>ATTACK</button>
+    <div id="debug" class="collapsed">
+      <button type="button" data-toggle>tune</button>
+      <div data-stats>Loading…</div>
+      <div class="hint">WASD / arrows to run · Shift to walk · touch: drag anywhere (light push walks)</div>
+      <label class="model">Model <select data-model></select></label>
+      <label class="model">Weapon <select data-weapon></select></label>
+      <label class="model">Map <select data-biome></select></label>
+      <div data-sliders></div>
+      <div class="actions"><button type="button" data-reset>reset</button><button type="button" data-copy>copy values</button><button type="button" data-colliders>colliders</button><button type="button" data-grips>grips</button><button type="button" data-weapon-tune>weapon</button><button type="button" data-mapview>map view</button></div>
+      <div data-output></div>
+      <div data-weapon-tuner hidden></div>
+    </div>
+    <div id="loading">
+      <div id="loading-text">Loading character…</div>
+      <div id="loading-track"><div id="loading-bar"></div></div>
+    </div>
+    <script type="module" src="./src/playcanvas/main.ts"></script>
+  </body>
+</html>
