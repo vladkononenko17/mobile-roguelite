@@ -1,0 +1,11 @@
+«Хата з краю» — сторонні ресурси / third-party assets
+
+Textures (PBR sets), HDRI skies and furniture/garden models in public/hata/ph/
+are from Poly Haven (https://polyhaven.com), CC0 1.0 — public domain, no
+attribution required; credited here anyway. They are downloaded by
+scripts/hata-fetch-assets.py (list: hata/assets-wanted.json).
+
+The first-person tools and gloves (public/hata/models/tools.glb) are built by
+hata/blender/tools.py in Blender. Trees, grass, leaves, the haystack, dishes,
+fixtures and the house itself are generated in code. All sound is synthesized
+with WebAudio at runtime. Font: Rubik (SIL Open Font License) via @fontsource.

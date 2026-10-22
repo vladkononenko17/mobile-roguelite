@@ -1,0 +1,46 @@
+name: Fetch CC0 assets for «Хата з краю»
+
+# Poly Haven is not reachable from the dev sandbox, so assets are pulled here
+# and committed back to this branch. Only runs on the asset branch.
+on:
+  push:
+    branches: [hata-assets]
+    paths:
+      - hata/assets-wanted.json
+      - scripts/hata-fetch-assets.py
+      - .github/workflows/hata-assets.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hata-assets
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download
+        run: python scripts/hata-fetch-assets.py
+      - name: Report sizes
+        run: |
+          du -sh public/hata/ph/* || true
+          find public/hata -type f -size +40M -printf '%s %p\n' | while read s f; do echo "::warning::big file $f $((s/1048576)) MB"; done
+          echo "::notice::total $(du -sh public/hata | cut -f1)"
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          # GitHub refuses files over 100 MB: skip them and say so.
+          find public/hata -type f -size +95M -printf '%p\n' | while read f; do echo "::warning::skipped (too big for git) $f"; rm -f "$f"; echo "$f" >> hata/assets-skipped.txt; done
+          mkdir -p public/hata && git add -A hata public/hata
+          git diff --cached --quiet && exit 0
+          git commit -q -m "hata: fetch CC0 assets from Poly Haven"
+          git pull -q --rebase origin "${GITHUB_REF_NAME}" > /tmp/git.log 2>&1 || { echo "::error::pull: $(tail -c 600 /tmp/git.log | tr '\n' ' ')"; exit 1; }
+          git push -q origin "HEAD:${GITHUB_REF_NAME}" > /tmp/git.log 2>&1 || { echo "::error::push: $(tail -c 600 /tmp/git.log | tr '\n' ' ')"; exit 1; }

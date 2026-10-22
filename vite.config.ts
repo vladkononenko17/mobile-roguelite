@@ -16,6 +16,7 @@ export default defineConfig({
         tikai: fileURLToPath(new URL("./tikai/index.html", import.meta.url)),
         stavka: fileURLToPath(new URL("./stavka/index.html", import.meta.url)),
         zhirky: fileURLToPath(new URL("./zhirky/index.html", import.meta.url)),
+        hata: fileURLToPath(new URL("./hata/index.html", import.meta.url)),
       },
       output: { manualChunks: { phaser: ["phaser"], three: ["three"] } },
     },
