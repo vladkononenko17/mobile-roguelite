@@ -997,6 +997,14 @@ Object.assign(window.__hata, {
 
 boot().catch((e) => {
   console.error(e);
-  window.__hata.error = String(e?.stack ?? e);
-  document.body.insertAdjacentHTML("beforeend", `<pre style="color:#f88;position:fixed;top:0;left:0;z-index:99;white-space:pre-wrap">${String(e?.stack ?? e)}</pre>`);
+  const msg = e instanceof Error ? e.message : e instanceof Event ? `Не вдалося завантажити ${(e.target as HTMLImageElement | null)?.src ?? "файл"}` : String(e);
+  window.__hata.error = msg;
+  const box = document.createElement("div");
+  box.className = "ov";
+  box.style.zIndex = "60";
+  box.innerHTML = `<div class="panel" style="width:min(460px,100%)"><div class="eyebrow">ОЙ</div><h2>Подвір'я не завантажилось</h2>
+    <p>Схоже, інтернет підвів або сайт саме оновлюється. Спробуй ще раз за хвилинку.</p><p style="font-size:12px;opacity:.7">${msg.replace(/</g, "&lt;")}</p>
+    <div class="btns"><button class="btn primary" id="retry">Спробувати ще</button></div></div>`;
+  document.body.appendChild(box);
+  box.querySelector("#retry")!.addEventListener("click", () => location.reload());
 });
