@@ -16,6 +16,11 @@ const texCache = new Map<string, Promise<THREE.Texture>>();
 const modelCache = new Map<string, Promise<GLTF>>();
 
 let maxAniso = 4;
+/** Phones load the 512 px versions of the surface textures (`diff_s.jpg`…) to stay within memory. */
+let suffix = "";
+export function setSmallTextures(small: boolean): void {
+  suffix = small ? "_s" : "";
+}
 
 /** Thrown when an asset could not be fetched after a few tries; carries the URL. */
 export class AssetError extends Error {
@@ -72,9 +77,9 @@ export function pbr(id: string): Promise<PbrSet> {
   if (!p) {
     const dir = `${BASE}textures/${id}/`;
     p = Promise.all([
-      loadTex(`${dir}diff.jpg`, true),
-      loadTex(`${dir}nor.jpg`, false),
-      loadTex(`${dir}arm.jpg`, false),
+      loadTex(`${dir}diff${suffix}.jpg`, true),
+      loadTex(`${dir}nor${suffix}.jpg`, false),
+      loadTex(`${dir}arm${suffix}.jpg`, false),
     ]).then(([map, normalMap, arm]) => ({ map, normalMap, arm }));
     pbrCache.set(id, p);
   }
