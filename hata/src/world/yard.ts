@@ -292,8 +292,8 @@ export async function buildYard(W: WorldIndex, style: HouseStyle, restore: Resto
   // ── Trees.
   const leafGreen = foliageMaterial(0.15), leafAutumn = foliageMaterial(0.75);
   const trees: Array<[number, number, number, number, THREE.Material, number]> = [
-    [-12, -16, 5, 11, leafAutumn, 5200], [-11.5, 14, 9, 8.5, leafGreen, 3600],
-    [13.5, -19.5, 21, 6.5, leafGreen, 2400], [-30, -8, 3, 10, leafAutumn, 1100], [30, 6, 4, 9, leafGreen, 1100],
+    [-12, -16, 5, 11, leafAutumn, 4400], [-11.5, 14, 9, 8.5, leafGreen, 3000],
+    [13.5, -19.5, 21, 6.5, leafGreen, 1800], [-30, -8, 3, 10, leafAutumn, 1100], [30, 6, 4, 9, leafGreen, 1100],
     [24, -30, 6, 12, leafGreen, 1100], [-26, -32, 8, 11, leafAutumn, 1100],
   ];
   for (const [x, z, s, h, mat, n] of trees) {

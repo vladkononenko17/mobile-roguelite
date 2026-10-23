@@ -97,6 +97,12 @@ export function foliageMaterial(autumn = 0): THREE.MeshStandardMaterial {
           mvPosition = instanceMatrix * mvPosition;
         #endif
         vec3 fw = (modelMatrix * mvPosition).xyz;
+        // cards right in front of the eye would cover the whole screen many
+        // layers deep (very expensive on a phone): shrink them to nothing
+        #ifdef USE_INSTANCING
+          vec3 cardC = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+          fw = cardC + (fw - cardC) * smoothstep(0.7, 2.2, distance(cardC, cameraPosition));
+        #endif
         float ph = uTime * 1.1 + fw.x * 0.3 + fw.z * 0.23;
         float lift = max(0.0, fw.y - 1.5);
         fw += vec3(sin(ph), 0.0, cos(ph * 0.83)) * 0.012 * lift
