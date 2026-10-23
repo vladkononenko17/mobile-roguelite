@@ -171,8 +171,16 @@ export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions, mas
         diffuseColor.rgb = mix(diffuseColor.rgb, gc, g * 0.94);
         vec3 mossC = mix(vec3(0.09, 0.12, 0.04), vec3(0.2, 0.25, 0.08), n2) * (0.7 + 0.5 * n3);
         diffuseColor.rgb = mix(diffuseColor.rgb, mossC, clamp(moss, 0.0, 1.0));
+        // fake ambient occlusion: walls darken where they meet the ground or
+        // the floor, and indoors also under the ceiling (corners get depth)
+        bool indoors = abs(vGW.x) < 7.0 && abs(vGW.z) < 5.0;
+        float baseY = indoors ? 0.45 : 0.0;
+        float ao = mix(0.6, 1.0, smoothstep(0.0, 0.6, vGW.y - baseY));
+        if (indoors) ao *= mix(0.78, 1.0, smoothstep(0.0, 0.45, baseY + 2.75 - vGW.y));
+        diffuseColor.rgb *= mix(1.0, ao, side);
+        // freshly washed surfaces look wet for a while: darker and glossy
         float wetK = mk.g;
-        diffuseColor.rgb *= 1.0 - wetK * 0.06;
+        diffuseColor.rgb *= 1.0 - wetK * 0.2;
         if (gGlass > 0.5) diffuseColor.a = mix(diffuseColor.a, 0.92, clamp(g * 1.2, 0.0, 1.0));
         float grimeK = clamp(g + moss, 0.0, 1.0);`,
       )
@@ -194,6 +202,6 @@ export function applyGrime(mat: THREE.MeshStandardMaterial, o: GrimeOptions, mas
         }`,
       );
   };
-  mat.customProgramCacheKey = () => "grime5";
+  mat.customProgramCacheKey = () => "grime6";
   return mat;
 }

@@ -132,7 +132,7 @@ export function buildHaystack(): THREE.Group {
     m.compose(v, q, s);
     straw.setMatrixAt(i, m);
   }
-  straw.castShadow = true;
+  straw.castShadow = false; // thin straws: no visible shadow, real cost
   g.add(straw);
   g.position.set(HAY.x, 0, HAY.z);
   return g;
@@ -247,7 +247,7 @@ export function flowerBeds(seed = 5): THREE.Group {
   });
   bushes.count = b;
   for (const im of [bushes, heads, stems]) {
-    im.castShadow = true;
+    im.castShadow = im === bushes; // flower heads and stems are too small to shadow
     im.receiveShadow = true;
     g.add(im);
   }

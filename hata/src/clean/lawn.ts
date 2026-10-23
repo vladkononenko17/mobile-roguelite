@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { atmos } from "../world/atmos";
+import { noiseTexture } from "../world/noisetex";
 import { rng } from "../world/geo";
 
 /**
@@ -174,6 +175,7 @@ export class Lawn {
       sh.uniforms.uLod = uLod;
       sh.uniforms.uSunDir = atmos.sunDir;
       sh.uniforms.uSunCol = atmos.sunColor;
+      sh.uniforms.uNoise = { value: noiseTexture() };
       sh.vertexShader = sh.vertexShader
         .replace(
           "#include <common>",
@@ -209,7 +211,7 @@ export class Lawn {
           vBW = transformed;`,
         );
       sh.fragmentShader = sh.fragmentShader
-        .replace("#include <common>", "#include <common>\nvarying vec3 vVar; varying float vV; varying float vFar; varying vec3 vBW; uniform vec3 uSunDir, uSunCol;")
+        .replace("#include <common>", "#include <common>\nvarying vec3 vVar; varying float vV; varying float vFar; varying vec3 vBW; uniform vec3 uSunDir, uSunCol; uniform sampler2D uNoise;")
         .replace(
           "#include <map_fragment>",
           `#include <map_fragment>
@@ -219,6 +221,10 @@ export class Lawn {
           vec3 tip = mix(vec3(0.12, 0.30, 0.035), vec3(0.24, 0.42, 0.06), vVar.x);
           tip = mix(tip, vec3(0.52, 0.42, 0.14), vVar.y);
           tip *= 0.88 + 0.24 * vVar.z;
+          // big patches: lusher dark green here, sun-dried yellowish there
+          float patchN = texture2D(uNoise, vBW.xz * 0.035).r;
+          tip = mix(tip, tip * vec3(1.3, 1.08, 0.62), smoothstep(0.55, 0.85, patchN) * 0.7);
+          tip = mix(tip, tip * vec3(0.78, 0.92, 0.85), smoothstep(0.4, 0.15, patchN) * 0.6);
           float h = smoothstep(0.0, 0.95, vV);
           vec3 col = mix(root, tip, h);
           // far away: blades blend toward one average lawn colour
