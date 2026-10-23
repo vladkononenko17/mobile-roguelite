@@ -1226,6 +1226,18 @@ Object.assign(window.__hata, {
     const r = renderer.info.render;
     return { calls: r.calls, tris: r.triangles, progs: renderer.info.programs?.length };
   },
+  /** Milliseconds per frame over n renders, with parts of the scene switched off by name. */
+  perf: (n = 5, hide: string[] = []) => {
+    const off: THREE.Object3D[] = [];
+    scene.traverse((o) => { if (hide.some((h) => o.name === h || o.userData.tag === h) && o.visible) { o.visible = false; off.push(o); } });
+    renderer.getContext().finish();
+    const t0 = performance.now();
+    for (let i = 0; i < n; i++) render();
+    renderer.getContext().finish();
+    const ms = (performance.now() - t0) / n;
+    for (const o of off) o.visible = true;
+    return Math.round(ms);
+  },
   highlight: (on: boolean) => { highlight = on; grimeGlobals.highlight.value = on ? 1 : 0; },
   setTime: (sec: number) => { save.run.time = sec; },
   dayOver, handOver: handOverNow, getStage: () => stage, getMode: () => mode,
