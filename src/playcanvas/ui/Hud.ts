@@ -3,6 +3,7 @@ import { audio } from "../audio/Audio";
 import type { ScreenProjector } from "../camera/ScreenProjector";
 import "@fontsource/barlow-condensed/latin-700.css";
 import "@fontsource/barlow-condensed/latin-800.css";
+import { DEV_MODE } from "../devMode";
 import { CATEGORY_COLORS, ICON_PATHS, iconSvg, type UpgradeCategory, type UpgradeIcon, type UpgradeRarity } from "./UpgradeIcons";
 
 const CSS = `
@@ -43,8 +44,8 @@ const CSS = `
 #hud .ammo.low b { color: var(--warn); animation: hud-pulse 0.9s ease-in-out infinite; }
 #hud .ammo.reloading b { opacity: 0.3; }
 #hud .ammo.reloading .cap { color: var(--amber); opacity: 1; animation: hud-blink 0.6s steps(2, jump-none) infinite; }
-#hud .gear { pointer-events: auto; width: 26px; height: 26px; align-self: center; padding: 0; display: grid; place-items: center; color: var(--cream); opacity: 0.75; }
-#hud .gear svg { width: 15px; height: 15px; }
+#hud .gear { pointer-events: auto; width: 34px; height: 34px; align-self: center; padding: 0; display: grid; place-items: center; color: var(--cream); opacity: 0.75; }
+#hud .gear svg { width: 17px; height: 17px; }
 #hud .gear:active { opacity: 1; }
 #hud .snd.off { opacity: 0.4; }
 #hud .snd.off .wave { display: none; }
@@ -169,7 +170,7 @@ body:not(.debug-on) #debug { display: none; }
 `;
 
 /** Settings cog: a dashed ring makes the teeth. */
-const GEAR_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="8.2" stroke-width="3.2" stroke-dasharray="3.2 3.24"/><circle cx="12" cy="12" r="5.6" stroke-width="2.4"/></svg>`;
+const PAUSE_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><rect x="6" y="5" width="4.2" height="14" rx="1"/><rect x="13.8" y="5" width="4.2" height="14" rx="1"/></svg>`;
 
 /** Speaker: waves when on, a cross when muted. */
 const SOUND_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5H7L12 5V19L7 14.5H3Z" fill="currentColor"/><path class="wave" d="M15.5 9A4.5 4.5 0 0 1 15.5 15M18.5 6.5A8 8 0 0 1 18.5 17.5"/><path class="mute" d="M16 9.5L21 14.5M21 9.5L16 14.5"/></svg>`;
@@ -283,6 +284,8 @@ export class Hud {
   private upgradeShowing = false;
   private pulseAnchor: Entity | null = null;
   private pulseTime = 0;
+  /** The pause button (Gameplay opens its pause menu; without a run it toggles the dev panel in dev mode). */
+  onPause: () => void = () => { if (DEV_MODE) document.body.classList.toggle("debug-on"); };
 
   constructor() {
     const style = document.createElement("style");
@@ -299,7 +302,7 @@ export class Hud {
         <div class="row">
           <div class="plate ammo">${bulletSvg}<span class="cap"></span><span class="count"><b></b><small></small></span></div>
           <button type="button" class="plate gear snd" aria-label="sound">${SOUND_SVG}</button>
-          <button type="button" class="plate gear cog" aria-label="settings">${GEAR_SVG}</button>
+          <button type="button" class="plate gear cog" aria-label="pause">${PAUSE_SVG}</button>
         </div>
       </div>
       <div class="corner tr">
@@ -355,7 +358,7 @@ export class Hud {
       this.nextUpgrade();
     });
     if (new URLSearchParams(location.search).get("debug") === "1") document.body.classList.add("debug-on");
-    q(".cog").addEventListener("click", () => document.body.classList.toggle("debug-on"));
+    q(".cog").addEventListener("click", () => this.onPause());
     const sound = q(".snd");
     sound.classList.toggle("off", audio.muted);
     sound.addEventListener("click", () => {

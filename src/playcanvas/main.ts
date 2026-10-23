@@ -1,6 +1,7 @@
 import { CHARACTERS, DEFAULT_CHARACTER, type CharacterId } from "./config";
 import { audio } from "./audio/Audio";
 import { Game } from "./Game";
+import { DEV_MODE } from "./devMode";
 import { chapterName, menuWanted, showMainMenu } from "./ui/MainMenu";
 import { pickBiome, type BiomeId } from "./world/level/Biomes";
 
@@ -16,6 +17,8 @@ const isCharacterId = (value: string | null): value is CharacterId => value !== 
 
 // ?model=<id> wins, then the last choice made in this browser, then the default.
 function pickCharacter(): CharacterId {
+  // Players always get the default hero (a test model picked in the tune panel can be ~40 MB).
+  if (!DEV_MODE) return DEFAULT_CHARACTER;
   const fromUrl = new URLSearchParams(location.search).get("model");
   if (isCharacterId(fromUrl)) return fromUrl;
   try {

@@ -25,6 +25,7 @@ import { Drones } from "./Drones";
 import { ScreenProjector } from "../camera/ScreenProjector";
 import { applyUpgrade, availableUpgrades, rollUpgrades, tagCounts, upgradeStacks, type SynergyReached } from "./Upgrades";
 import { modsForWeapon, weaponMod } from "../weaponMods";
+import { DEV_MODE } from "../devMode";
 
 /** "travel": a campaign level is won and the hero walks to the way on (see Zone.exit). */
 export type RunPhase = "loading" | "combat" | "cleared" | "shop" | "travel" | "dead" | "complete";
@@ -85,6 +86,9 @@ export class Gameplay {
   /** Level-ups waiting for an upgrade choice (the choice modal pauses the game). */
   private pendingLevelUps = 0;
   private choosing = false;
+  /** The pause menu is open (time scale 0); `pausedScale` is the time scale to return to. */
+  private paused = false;
+  private pausedScale = 1;
   private readonly params = new URLSearchParams(location.search);
   private readonly targetDebug = new TargetDebug();
   private readonly projector: ScreenProjector;
@@ -180,11 +184,14 @@ export class Gameplay {
     };
     this.hazards.onBoltHit = (damage) => this.hurtPlayer(damage);
     this.hazards.onBurn = (damage) => {
-      // Fire ticks twice a second (each tick can hit through the short post-hit invulnerability).
+      // Fire ticks twice a second. A tick hits through the short post-hit invulnerability but does
+      // not grant any: otherwise standing in fire would shield the hero from blows and slams.
       this.burn += damage;
       if (this.burn >= 4) {
+        const iframes = this.stats.invulnerable;
         this.stats.invulnerable = 0;
         this.hurtPlayer(this.burn);
+        this.stats.invulnerable = iframes;
         this.burn = 0;
       }
     };
@@ -223,6 +230,51 @@ export class Gameplay {
     };
     this.enemies.onDeath = (enemy) => this.onEnemyDeath(enemy);
     this.enemies.onStranded = (enemy) => this.director.relocate(enemy, this.player.entity.getPosition(), this.projector);
+    // A health pack stays on the ground while the hero is at full health (picked up when needed).
+    this.pickups.canCollect = (kind) => kind !== "health" || this.stats.hp < this.stats.maxHp;
+    // Pause: the HUD button, Escape / P, and whenever the page is hidden (a call, the app switcher).
+    this.hud.onPause = () => this.togglePause();
+    window.addEventListener("keydown", (event) => {
+      if (event.code === "Escape" || event.code === "KeyP") this.togglePause();
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) this.pause();
+    });
+  }
+
+  /** Opens or closes the pause menu. */
+  togglePause(): void {
+    if (this.paused) this.resume();
+    else this.pause();
+  }
+
+  /** Freezes the run under a pause menu (only while playing, never over another screen). */
+  pause(): void {
+    const playing = this.phase === "combat" || this.phase === "cleared" || this.phase === "travel";
+    if (this.paused || this.choosing || !playing || !this.stats.alive || this.hud.modalOpen) return;
+    this.paused = true;
+    this.pausedScale = this.app.timeScale;
+    this.app.timeScale = 0;
+    this.player.controlsEnabled = false;
+    const s = this.stats;
+    this.hud.openModal({
+      title: "PAUSED",
+      text: `${this.difficultyTag}${this.director.wave.label} · Level ${s.level} · ${s.kills} kills · ${s.cash}$`,
+      actions: [
+        { label: "Resume", onClick: () => this.resume() },
+        ...(DEV_MODE ? [{ label: "Dev tools", onClick: () => { document.body.classList.toggle("debug-on"); this.resume(); } }] : []),
+        { label: "Restart run", onClick: () => this.startRun() },
+        MAIN_MENU,
+      ],
+    });
+  }
+
+  resume(): void {
+    if (!this.paused) return;
+    this.paused = false;
+    this.hud.closeModal();
+    this.app.timeScale = this.pausedScale;
+    this.player.controlsEnabled = true;
   }
 
   /** Loads the enemy looks (the walkers' before the run starts, the rest in the background). */
@@ -335,7 +387,7 @@ export class Gameplay {
     this.unlocked = null;
     this.armorySeen = false;
     const kit = this.campaign?.run;
-    const requested = this.params.get("weapon");
+    const requested = DEV_MODE ? this.params.get("weapon") : null;
     this.weapons.setMods([], false);
     this.equip(requested && requested in WEAPON_STATS ? (requested as WeaponId) : kit?.startWeapon ?? "pistol");
     this.pendingLevelUps = 0;
@@ -346,10 +398,13 @@ export class Gameplay {
       this.pendingLevelUps = kit.startPicks;
     }
     this.choosing = false;
+    this.paused = false;
+    this.slowMo = 0;
+    this.killHealBudget = 0;
     this.app.timeScale = 1;
     // Debug: ?wave=2 starts at wave 2, ?waveTime=0.2 shortens every wave.
-    this.director.durationScale = Number(this.params.get("waveTime")) || 1;
-    const wave = Math.min(this.levels.length, Math.max(1, Number(this.params.get("wave")) || 1));
+    this.director.durationScale = (DEV_MODE && Number(this.params.get("waveTime"))) || 1;
+    const wave = DEV_MODE ? Math.min(this.levels.length, Math.max(1, Number(this.params.get("wave")) || 1)) : 1;
     this.params.delete("wave"); // only for the first run; restarts begin at wave 1
     this.startWave(wave - 1);
   }
@@ -365,6 +420,9 @@ export class Gameplay {
     this.travel = null;
     this.enemies.clear();
     this.pickups.clear();
+    // Bloaters still swelling from the last level (or a lost run) must not pop into the new one.
+    for (const p of this.pops) this.hazards.clear(p.marker);
+    this.pops.length = 0;
     // The level's zone: its region bounds the player, the nav grid and spawning.
     const zone = this.zoneOf(index);
     const region = zone?.region ?? this.biome.bounds;
@@ -1061,7 +1119,7 @@ export class Gameplay {
     if (this.pops.length) this.updatePops(dt, position);
     this.updateSounds(dt, position, combat);
     // Level-ups wait for combat (or the wave-complete pause) and a living hero.
-    if (this.pendingLevelUps > 0 && !this.choosing && (combat || this.phase === "cleared" || this.phase === "travel") && this.stats.alive) this.openLevelUp();
+    if (this.pendingLevelUps > 0 && !this.choosing && !this.paused && (combat || this.phase === "cleared" || this.phase === "travel") && this.stats.alive) this.openLevelUp();
     this.updateHud(dt);
   }
 

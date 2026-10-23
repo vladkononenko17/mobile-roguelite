@@ -106,6 +106,7 @@ export class Hazards {
   private readonly root = new Entity("Hazards");
   private readonly rings: Marker[] = [];
   private readonly lanes: Marker[] = [];
+  private readonly markerLists: readonly Marker[][] = [this.rings, this.lanes];
   private readonly projectiles: Projectile[] = [];
   private readonly bolts: Bolt[] = [];
   private readonly strikes: Strike[] = [];
@@ -322,16 +323,19 @@ export class Hazards {
 
   update(dt: number, player?: Vec3, playerRadius = 0.35): void {
     this.time += dt;
-    for (const m of [...this.rings, ...this.lanes]) {
-      if (!m.entity.enabled) continue;
-      m.life -= dt;
-      if (m.life <= 0) {
-        m.entity.enabled = false;
-        continue;
-      }
-      if (m.fill) {
-        const k = Math.max(0.001, 1 - m.life / m.total);
-        m.fill.setLocalScale(k, 1, k);
+    // Two plain loops (spreading both lists into a new array allocated garbage every frame).
+    for (const list of this.markerLists) {
+      for (const m of list) {
+        if (!m.entity.enabled) continue;
+        m.life -= dt;
+        if (m.life <= 0) {
+          m.entity.enabled = false;
+          continue;
+        }
+        if (m.fill) {
+          const k = Math.max(0.001, 1 - m.life / m.total);
+          m.fill.setLocalScale(k, 1, k);
+        }
       }
     }
     for (const p of this.projectiles) {

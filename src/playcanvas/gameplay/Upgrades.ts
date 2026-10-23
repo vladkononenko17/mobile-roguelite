@@ -18,8 +18,10 @@ function applyEffect(stats: PlayerStats, effect: UpgradeEffect): void {
   }
   const current = stats[effect.stat];
   let next = effect.op === "mul" ? current * effect.value : current + effect.value;
-  if (effect.max !== undefined) next = Math.min(effect.max, next);
-  if (effect.min !== undefined) next = Math.max(effect.min, next);
+  // A cap only stops growth: a stat already past it (raised by a source with a higher cap) is kept,
+  // so taking an upgrade never lowers it.
+  if (effect.max !== undefined) next = Math.min(Math.max(effect.max, current), next);
+  if (effect.min !== undefined) next = Math.max(Math.min(effect.min, current), next);
   stats[effect.stat] = next;
 }
 

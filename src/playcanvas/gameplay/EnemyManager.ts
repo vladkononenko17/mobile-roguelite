@@ -6,6 +6,8 @@ import type { Hazards } from "./Hazards";
 import type { NavField } from "./NavField";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
 import { createContactShadow } from "../world/ContactShadow";
+import { CHARACTER_LIGHT_MASK } from "../world/Environment";
+import { FX } from "../world/GraphicsFx";
 
 /** A loaded enemy GLB that bodies are cloned from. */
 export interface BodySource {
@@ -176,6 +178,8 @@ export class EnemyManager {
       render.castShadows = false;
       meshes.push(...render.meshInstances);
     }
+    // Experiment (?fx=rim): the hero's rim and fill lights also outline the horde.
+    if (FX.has("rim")) for (const mi of meshes) mi.mask |= CHARACTER_LIGHT_MASK;
     model.addComponent("anim", { activate: true });
     const anim = model.anim!;
     anim.loadStateGraph({
@@ -319,6 +323,7 @@ export class EnemyManager {
     enemy.flashMaterial = mats.flash;
     for (const mi of enemy.meshes) mi.material = mats.normal;
     const anim = enemy.model.anim!;
+    anim.enabled = true;
     const track = (name: string) => pool.source.tracks.find((t) => t.name === name) ?? pool.source.tracks[0];
     const clips = enemy.clips;
     // assignAnimation's `loop` argument defaults to true and overrides the state graph, so one-shot
@@ -492,7 +497,11 @@ export class EnemyManager {
         enemy.lift = Math.max(0, enemy.lift - dt * 6);
         enemy.root.setPosition(enemy.position.x, enemy.lift, enemy.position.z);
       }
-      if (enemy.stateTime >= ENEMY_LIMITS.dyingSeconds) this.setState(enemy, "dead");
+      if (enemy.stateTime >= ENEMY_LIMITS.dyingSeconds) {
+        this.setState(enemy, "dead");
+        // The death clip has ended: freeze the corpse's pose instead of evaluating it every frame.
+        enemy.model.anim!.enabled = false;
+      }
       return;
     }
     if (enemy.state === "dead") {

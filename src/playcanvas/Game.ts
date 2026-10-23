@@ -38,6 +38,8 @@ import { AmbientFx } from "./world/AmbientFx";
 import { Lava } from "./world/Lava";
 import { ModelKit } from "./world/props/ModelKit";
 import { ResolutionGovernor } from "./perf/ResolutionGovernor";
+import { DEV_MODE } from "./devMode";
+import { createPostFx } from "./world/GraphicsFx";
 
 export interface GameOptions {
   canvas: HTMLCanvasElement;
@@ -117,6 +119,8 @@ export class Game {
       gammaCorrection: GAMMA_SRGB,
     });
     app.root.addChild(cameraEntity);
+    // Optional post-processing experiments (?fx=bloom,grade,half); off unless asked for.
+    createPostFx(app, cameraEntity.camera!, biome.id);
     // The ground is painted procedurally (no download). Needs camera + lights.
     const groundLoaded = this.ground.load();
     // The environment kit (~3 MB) downloads alongside the character; the level is built from it and
@@ -230,8 +234,10 @@ export class Game {
 
     // DEV MAP VIEW: tune panel button, the M key, or ?map=1.
     this.options.debugRoot.querySelector("[data-mapview]")?.addEventListener("click", () => this.setMapView(!this.camera.mapView));
-    window.addEventListener("keydown", (event) => { if (event.code === "KeyM") this.setMapView(!this.camera.mapView); });
-    if (new URLSearchParams(location.search).get("map") === "1") this.setMapView(true);
+    if (DEV_MODE) {
+      window.addEventListener("keydown", (event) => { if (event.code === "KeyM") this.setMapView(!this.camera.mapView); });
+      if (new URLSearchParams(location.search).get("map") === "1") this.setMapView(true);
+    }
 
     this.debug = new DebugPanel(this.options.debugRoot, this.tuneParams());
 
@@ -334,9 +340,10 @@ export class Game {
   private setupWeaponSelect(): void {
     const KEY = "dustline3d.weapon";
     const isWeapon = (value: string | null): value is WeaponId => value !== null && value in WEAPONS.list;
-    const fromUrl = new URLSearchParams(location.search).get("weapon");
+    // Players always hold the default; a weapon picked in the tune panel only sticks in dev mode.
+    const fromUrl = DEV_MODE ? new URLSearchParams(location.search).get("weapon") : null;
     let saved: string | null = null;
-    try { saved = localStorage.getItem(KEY); } catch { /* storage unavailable */ }
+    if (DEV_MODE) try { saved = localStorage.getItem(KEY); } catch { /* storage unavailable */ }
     const pick = fromUrl ?? saved;
     const initial: WeaponId | null = pick === "none" ? null : isWeapon(pick) ? pick : DEFAULT_WEAPON;
     this.weapons.equip(initial);

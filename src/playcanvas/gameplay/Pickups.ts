@@ -212,7 +212,9 @@ export class Pickups {
 
   /** Drops a pickup; an upgrade pickup shows (and grants) `upgrade`. */
   drop(kind: PickupKind, x: number, z: number, value = 1, upgrade: UpgradeId | null = null): void {
-    const p = this.items.find((i) => !i.active) ?? this.items.reduce((a, b) => (a.life < b.life ? a : b));
+    // Pool full: recycle the oldest common pickup; an upgrade token is only replaced by another one.
+    const p = this.items.find((i) => !i.active) ?? this.oldest((i) => i.kind !== "upgrade" || kind === "upgrade");
+    if (!p) return;
     p.kind = kind;
     p.value = value;
     p.active = true;
@@ -239,6 +241,16 @@ export class Pickups {
     }
     p.entity.setLocalScale(0, 0, 0);
     p.entity.enabled = true;
+  }
+
+  /** Whether the hero can take a pickup of this kind now (a full-health hero leaves health packs). */
+  canCollect: (kind: PickupKind) => boolean = () => true;
+
+  /** The active pickup with the least life left among those `ok` accepts (null: none). */
+  private oldest(ok: (p: Pickup) => boolean): Pickup | null {
+    let best: Pickup | null = null;
+    for (const p of this.items) if (ok(p) && (!best || p.life < best.life)) best = p;
+    return best;
   }
 
   /** `vacuum`: everything flies to the hero (end of a level). */
@@ -269,13 +281,14 @@ export class Pickups {
       }
       const dx = player.x - p.position.x, dz = player.z - p.position.z;
       const d = Math.hypot(dx, dz);
-      if (d < grab) {
+      const collectable = this.canCollect(p.kind);
+      if (d < grab && collectable) {
         this.onCollect(p.kind, p.value, p.upgrade);
         p.collecting = COLLECT;
         p.entity.enabled = true;
         continue;
       }
-      if (d < magnet) {
+      if (d < magnet && collectable) {
         const step = Math.min(d, PLAYER_COMBAT.magnetSpeed * dt * (vacuum ? 2.5 : 1 + (magnet - d) / magnet));
         p.position.x += (dx / d) * step;
         p.position.z += (dz / d) * step;
