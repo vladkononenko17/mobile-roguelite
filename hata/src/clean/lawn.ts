@@ -86,7 +86,7 @@ function bladeGeometry(): THREE.BufferGeometry {
 export class Lawn {
   readonly group = new THREE.Group();
   readonly zones: LawnZone[];
-  readonly material: THREE.MeshStandardMaterial;
+  readonly material: THREE.MeshLambertMaterial;
   readonly time = { value: 0 };
   private readonly lodU = { value: 1 };
   /** Minimum blade width per metre of distance (≈ 2 pixels), set from the camera. */
@@ -166,8 +166,12 @@ export class Lawn {
     }
   }
 
-  private makeMaterial(): THREE.MeshStandardMaterial {
-    const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 1 });
+  private makeMaterial(): THREE.MeshLambertMaterial {
+    // Lambert, not PBR: grass is the largest, most overdrawn surface on screen and
+    // matte anyway, so the cheaper lighting model is the biggest single saving.
+    // The sky's fill light (which Lambert doesn't take from the environment map)
+    // is added back as a soft emissive term below.
+    const mat = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide });
     const uTime = this.time, uLod = this.lodU;
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.uTime = uTime;
@@ -236,7 +240,8 @@ export class Lawn {
           `#include <emissivemap_fragment>
           // looking toward the low sun, thin blades glow at the tips (light through the leaf)
           float back = pow(max(dot(normalize(vBW - cameraPosition), uSunDir), 0.0), 5.0);
-          totalEmissiveRadiance += uSunCol * diffuseColor.rgb * back * h * 2.2;`,
+          totalEmissiveRadiance += uSunCol * diffuseColor.rgb * back * h * 2.2;
+          totalEmissiveRadiance += diffuseColor.rgb * vec3(0.32, 0.3, 0.36) * (0.45 + 0.55 * h);`,
         );
     };
     return mat;

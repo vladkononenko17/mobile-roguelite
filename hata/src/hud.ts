@@ -189,7 +189,8 @@ export class Hud {
       </button>`).join("");
     const b = $("toolbtn");
     b.innerHTML = `${ICONS[current]}<span>${TOOLS[current].short}</span>`;
-    b.classList.toggle("want", !!want && want !== current);
+    // pulse only for a tool you own (a missing one is pointed out in the target panel)
+    b.classList.toggle("want", !!want && want !== current && save.tools[want] > 0);
   }
 
   private toolsShown = false;
