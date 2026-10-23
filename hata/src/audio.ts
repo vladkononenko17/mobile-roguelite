@@ -8,6 +8,9 @@
 export type Loop = "washer" | "mower" | "vacuum" | "tap" | "scrub" | "roller";
 export type Shot = "coin" | "pick" | "done" | "beep" | "dig" | "fix" | "chem" | "buy" | "click" | "splash" | "rake";
 
+/** What you're walking on. */
+export type Ground = "grass" | "leaves" | "dirt" | "stone" | "wood" | "tile" | "deck" | "roof";
+
 export class Audio {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
@@ -172,6 +175,52 @@ export class Audio {
       case "click": tone(900, 0, 0.03, "square", 0.05); break;
       case "splash": burst(0, 0.3, 1500, 0.3, 0.6); break;
       case "rake": burst(0, 0.15, 4200, 0.12, 2); break;
+    }
+  }
+
+  /**
+   * One footstep on a surface: a short filtered noise burst for the texture
+   * (swish of grass, crunch of leaves, grit on paving, clack of clay tiles)
+   * plus a low thump for the heel. Pitch and level vary a little per step.
+   */
+  step(g: Ground, loud = 1): void {
+    const c = this.ctx;
+    if (!c || !this.enabled) return;
+    const t = c.currentTime;
+    const v = (0.85 + Math.random() * 0.3) * loud, p = 0.9 + Math.random() * 0.2;
+    const burst = (at: number, dur: number, freq: number, vol: number, q: number, type: BiquadFilterType = "bandpass") => {
+      const src = c.createBufferSource();
+      src.buffer = this.noise;
+      const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq * p; f.Q.value = q;
+      const gn = c.createGain();
+      gn.gain.setValueAtTime(0.0001, t + at);
+      gn.gain.linearRampToValueAtTime(vol * v, t + at + Math.min(0.012, dur * 0.25));
+      gn.gain.exponentialRampToValueAtTime(0.0001, t + at + dur);
+      src.connect(f).connect(gn).connect(this.master);
+      src.start(t + at, Math.random() * 1.5);
+      src.stop(t + at + dur + 0.03);
+    };
+    const thump = (freq: number, dur: number, vol: number) => {
+      const o = c.createOscillator(), gn = c.createGain();
+      o.type = "sine";
+      o.frequency.setValueAtTime(freq * p, t);
+      o.frequency.exponentialRampToValueAtTime(freq * p * 0.55, t + dur);
+      gn.gain.setValueAtTime(0.0001, t);
+      gn.gain.linearRampToValueAtTime(vol * v, t + 0.006);
+      gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(gn).connect(this.master);
+      o.start(t);
+      o.stop(t + dur + 0.03);
+    };
+    switch (g) {
+      case "grass": burst(0, 0.16, 2600, 0.09, 0.6); burst(0.03, 0.1, 5200, 0.04, 0.8); thump(85, 0.08, 0.12); break;
+      case "leaves": burst(0, 0.12, 3400, 0.12, 1.2); burst(0.05, 0.14, 2200, 0.1, 1); burst(0.1, 0.08, 4600, 0.06, 1.5); thump(85, 0.07, 0.1); break;
+      case "dirt": burst(0, 0.1, 900, 0.14, 0.8); burst(0.02, 0.07, 2400, 0.05, 1); thump(95, 0.08, 0.16); break;
+      case "stone": burst(0, 0.05, 1700, 0.14, 1.5); burst(0.01, 0.04, 4200, 0.05, 2); thump(120, 0.06, 0.18); break;
+      case "wood": burst(0, 0.04, 700, 0.1, 2); thump(150, 0.09, 0.22); break;
+      case "tile": burst(0, 0.03, 3000, 0.1, 3); thump(180, 0.06, 0.16); break;
+      case "deck": burst(0, 0.12, 480, 0.12, 5); thump(110, 0.14, 0.24); break;
+      case "roof": burst(0, 0.06, 1250, 0.16, 5); burst(0.015, 0.05, 2500, 0.08, 4); thump(160, 0.05, 0.12); break;
     }
   }
 

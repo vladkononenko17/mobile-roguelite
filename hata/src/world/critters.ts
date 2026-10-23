@@ -67,6 +67,47 @@ function butterflyTexture(): THREE.CanvasTexture {
   return t;
 }
 
+/** A swallow-like silhouette: swept wings, body, head and a forked tail (head toward v = 0). */
+function birdTexture(): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = 256; c.height = 128;
+  const x = c.getContext("2d")!;
+  const grad = x.createLinearGradient(0, 128, 0, 0);
+  grad.addColorStop(0, "#3a3036");
+  grad.addColorStop(1, "#1c171b");
+  x.fillStyle = grad;
+  for (const side of [-1, 1]) {
+    x.save();
+    x.translate(128, 0);
+    x.scale(side, 1);
+    // wing: leading edge curves forward, tip swept back, trailing edge with feathers
+    x.beginPath();
+    x.moveTo(6, 78);
+    x.bezierCurveTo(40, 92, 90, 84, 124, 50);
+    x.lineTo(118, 40);
+    for (let k = 0; k < 6; k++) x.lineTo(104 - k * 17, 46 - k * 1.5 + (k % 2) * 6);
+    x.lineTo(6, 60);
+    x.closePath();
+    x.fill();
+    x.restore();
+  }
+  // body and head
+  x.beginPath();
+  x.ellipse(128, 70, 9, 34, 0, 0, Math.PI * 2);
+  x.fill();
+  x.beginPath();
+  x.arc(128, 108, 9, 0, Math.PI * 2);
+  x.fill();
+  // forked tail
+  x.beginPath();
+  x.moveTo(121, 42); x.lineTo(112, 4); x.lineTo(128, 30); x.lineTo(144, 4); x.lineTo(135, 42);
+  x.closePath();
+  x.fill();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 interface Flyer { home: THREE.Vector3; r: number; speed: number; phase: number; y: number }
 
 export class Critters {
@@ -112,7 +153,7 @@ export class Critters {
       });
     }
     // birds: dark silhouettes gliding in wide circles, slow wing beats
-    const birdMat = new THREE.MeshBasicMaterial({ color: 0x2a2026, side: THREE.DoubleSide, fog: false });
+    const birdMat = new THREE.MeshBasicMaterial({ map: birdTexture(), alphaTest: 0.5, side: THREE.DoubleSide, fog: false });
     flap(birdMat, this.time, 5, 0.7);
     const birdGeo = wing.clone();
     const nb = 6;
@@ -122,7 +163,7 @@ export class Critters {
     this.birds = new THREE.InstancedMesh(birdGeo, birdMat, nb);
     this.birds.frustumCulled = false;
     for (let i = 0; i < nb; i++) {
-      this.bd.push({ home: new THREE.Vector3((i % 3) * 3 - 3, 0, Math.floor(i / 3) * 4 - 2), r: 24 + i * 2.5, speed: 0.07 + Math.random() * 0.02, phase: i * 0.4, y: 18 + Math.random() * 6 });
+      this.bd.push({ home: new THREE.Vector3((i % 3) * 3 - 3, 0, Math.floor(i / 3) * 4 - 2), r: 30 + i * 3, speed: 0.06 + Math.random() * 0.02, phase: i * 0.4, y: 32 + Math.random() * 10 });
     }
     this.group.add(this.butterflies, this.birds);
   }
@@ -148,7 +189,7 @@ export class Critters {
       this.p.set(b.home.x + Math.cos(a) * b.r, b.y + Math.sin(a * 2) * 2, b.home.z + Math.sin(a) * b.r);
       this.e.set(0, Math.atan2(-Math.sin(a), Math.cos(a)), 0.25);
       this.q.setFromEuler(this.e);
-      this.s.set(0.85, 0.85, 0.85);
+      this.s.set(0.55, 0.55, 0.55);
       this.m.compose(this.p, this.q, this.s);
       this.birds.setMatrixAt(i, this.m);
     });
