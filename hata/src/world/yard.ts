@@ -247,6 +247,7 @@ export async function buildYard(W: WorldIndex, style: HouseStyle, restore: Resto
       planks.setMatrixAt(i, m);
     }
     planks.castShadow = planks.receiveShadow = true;
+    planks.userData.tag = "fence";
     g.add(planks);
     for (const y of [0.35, 1.45]) {
       if (alongX) box(g, len, 0.09, 0.05, (ax + bx) / 2, y, az - 0.05, fencePlain);
@@ -264,10 +265,13 @@ export async function buildYard(W: WorldIndex, style: HouseStyle, restore: Resto
   W.solids.push(fenceRun(LOT.x0, LOT.z0, LOT.x0, LOT.z1, fencePlain));
   W.solids.push(fenceRun(LOT.x1, LOT.z0, LOT.x1, LOT.z1, fencePlain));
   W.solids.push(fenceRun(LOT.x0, LOT.z1 + 0.15, LOT.x1, LOT.z1 + 0.15, fencePlain));
-  g.add(horizon());
+  const hz = horizon();
+  hz.userData.tag = "horizon";
+  g.add(hz);
 
   // ── Lawn.
   const lawn = new Lawn({ isLawn, zoneOf, zones: LAWN_ZONES, bounds: [LOT.x0, LOT.x1, LOT.z0, LOT.z1], density: o.grassDensity, seed: o.seed });
+  lawn.group.userData.tag = "lawn";
   g.add(lawn.group);
   LAWN_ZONES.forEach((z, i) => lawn.restore(i, restore(z.key)));
 
@@ -275,7 +279,9 @@ export async function buildYard(W: WorldIndex, style: HouseStyle, restore: Resto
   g.add(flowerBeds(o.seed % 997));
 
   // ── Haystack.
-  g.add(buildHaystack());
+  const hay = buildHaystack();
+  hay.userData.tag = "hay";
+  g.add(hay);
   W.circles.push({ x: HAY.x, z: HAY.z, r: HAY.r * 0.9, y0: -1, y1: 4 });
   const hayProxy = new THREE.Mesh(new THREE.SphereGeometry(HAY.r, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshBasicMaterial({ visible: false }));
   hayProxy.scale.y = HAY.h / HAY.r;
@@ -293,6 +299,7 @@ export async function buildYard(W: WorldIndex, style: HouseStyle, restore: Resto
   for (const [x, z, s, h, mat, n] of trees) {
     const t = buildTree({ seed: s, height: h, bark, leafMat: mat, leaves: n });
     t.position.set(x, 0, z);
+    t.userData.tag = inRect(x, z, LOT) ? "trees" : "trees-out";
     // trees over the fence are scenery: no shadows
     if (!inRect(x, z, LOT)) t.traverse((m) => { m.castShadow = false; });
     g.add(t);
@@ -329,6 +336,7 @@ export async function buildYard(W: WorldIndex, style: HouseStyle, restore: Resto
   const leaves = [yardLeaves, frontLeaves, deckLeaves];
   for (const f of [...leaves, poolLeaves]) {
     f.restore(restore(f.key));
+    f.mesh.userData.tag = "leaves";
     g.add(f.mesh);
   }
   const litter = new THREE.Mesh(new THREE.CircleGeometry(4.0, 40), leafLitter);
