@@ -23,6 +23,7 @@ import { buildHouse, HOUSE } from "./world/house";
 import { Gates, stageAt } from "./world/gates";
 import { SunsetSky } from "./world/sky";
 import { atmos, Motes } from "./world/atmos";
+import { Critters } from "./world/critters";
 import { mergeStatic } from "./world/merge";
 import { currentStage, matches, STAGE_DONE, STAGES, stageShare } from "./game/stages";
 import { WorldIndex, type Interactable } from "./world/index";
@@ -97,7 +98,7 @@ THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars
   `vec3 CustomToneMapping( vec3 color ) {
     vec3 c = ACESFilmicToneMapping( color );
     float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
-    c = mix( vec3( l ), c, 1.15 ) * vec3( 1.09, 0.99, 0.84 );
+    c = mix( vec3( l ), c, 1.22 ) * vec3( 1.09, 0.99, 0.84 );
     c = c * c * ( 3.0 - 2.0 * c ) * 0.25 + c * 0.75; // a touch of S-curve contrast
     return clamp( c, 0.0, 1.0 );
   }`,
@@ -179,8 +180,10 @@ const fx = new Particles();
 scene.add(jet.group, fx.mesh);
 const motes = new Motes();
 scene.add(motes.points);
+const critters = new Critters();
+scene.add(critters.group);
 const sun = new THREE.DirectionalLight(0xffd6a0, 4.0);
-const hemi = new THREE.HemisphereLight(0xc6b8e8, 0x6a4a30, 0.55);
+const hemi = new THREE.HemisphereLight(0xc6b8e8, 0x6a4a30, 0.7);
 /** Sun azimuth: low from the street-and-east corner, so the front and the east side glow. */
 const SUN_AZ = 0.8;
 let sky: SunsetSky | null = null;
@@ -727,6 +730,7 @@ function update(dt: number): void {
   grimeGlobals.time.value = t;
   atmos.time.value = t;
   motes.update(dt, camera.position, t);
+  critters.update(t);
   const st = input.poll();
   audio.update(dt);
   if (mode === "play") {
