@@ -62,7 +62,8 @@ export class LeafField {
         .replace("#include <uv_vertex>", "#include <uv_vertex>\nvMapUv = vMapUv * 0.5 + vec2(mod(aTile, 2.0), floor(aTile / 2.0)) * 0.5;");
     };
     this.mesh = new THREE.InstancedMesh(geo, mat, o.count + 64);
-    this.mesh.castShadow = true;
+    // leaves lying flat cast no visible shadow: keep them out of the shadow pass
+    this.mesh.castShadow = false;
     this.mesh.receiveShadow = true;
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     const r = rng(o.seed);

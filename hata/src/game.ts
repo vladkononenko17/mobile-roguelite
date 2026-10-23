@@ -186,6 +186,9 @@ const SUN_AZ = 0.8;
 let sky: SunsetSky | null = null;
 /** Furniture, kitchen and everything else inside: drawn only when you're in or near the house. */
 const interior = new THREE.Group();
+/** Garden props (gnome, planters, cans…): static, baked into a few draws. */
+const props = new THREE.Group();
+props.name = "props";
 let houseGroup: THREE.Group = new THREE.Group();
 interior.name = "interior";
 /** The sky panorama and the direction of its sun, atan2(z, x) in three's equirect mapping. */
@@ -323,7 +326,8 @@ async function boot(): Promise<void> {
   yard = await buildYard(W, style, restore, { grassDensity: Q.grass, seed: save.run.seed });
   scene.add(yard.group);
   step();
-  await placeProps(scene, W, interior);
+  scene.add(props);
+  await placeProps(props, W, interior);
   // the sun only reaches the rooms through the windows: furniture needn't cast
   interior.traverse((o) => { o.castShadow = false; });
   step();
@@ -348,6 +352,7 @@ async function boot(): Promise<void> {
   mergeStatic(houseGroup);
   mergeStatic(interior);
   mergeStatic(yard.group);
+  mergeStatic(props);
   buildRows();
   stage = stageNow();
   gates.init(stage);
@@ -417,7 +422,7 @@ const VMS: Record<string, VM> = {
 /** Long-handled tools stand in the world: the head on the ground ahead, the grip in your hands. */
 const POLE_TOOLS: Record<string, { drop: number; side: number; ahead: number; tilt: number }> = {
   rake: { drop: 0.5, side: 0.13, ahead: 0.18, tilt: 0 },
-  mop: { drop: 0.5, side: 0.13, ahead: 0.42, tilt: 0 },
+  mop: { drop: 0.36, side: 0.16, ahead: 0.55, tilt: 0 },
   net: { drop: 0.42, side: 0.22, ahead: 0.3, tilt: 0.35 },
   detector: { drop: 0.6, side: 0.24, ahead: 0.25, tilt: 0 },
 };
@@ -1224,6 +1229,15 @@ Object.assign(window.__hata, {
   highlight: (on: boolean) => { highlight = on; grimeGlobals.highlight.value = on ? 1 : 0; },
   setTime: (sec: number) => { save.run.time = sec; },
   dayOver, handOver: handOverNow, getStage: () => stage, getMode: () => mode,
+  /** Test hook: finishes every job of the current stage. */
+  finishStage: () => {
+    const st = STAGES[stage];
+    if (!st) return;
+    for (const s of W.surfaces) if (matches(st, s.key)) { s.finish(); save.run.progress[s.key] = 1; }
+    LAWN_ZONES.forEach((z, i) => { if (matches(st, z.key)) yard.lawn.finish(i); });
+    for (const f of [...yard.leaves, yard.poolLeaves]) if (matches(st, f.key)) f.steal(1e6);
+    if (matches(st, "pool:chem")) { jobs.poolChem.done = true; yard.setPoolClean(1); }
+  },
   rng,
 });
 
