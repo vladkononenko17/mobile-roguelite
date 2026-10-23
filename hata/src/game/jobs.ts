@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { instance } from "../assets";
+import { instance, pbrMaterial } from "../assets";
 import { LOST_ITEMS, PAY } from "../content";
 import type { LeafField } from "../clean/leaffield";
 import type { Lawn } from "../clean/lawn";
@@ -176,7 +176,11 @@ export class Jobs {
     const ang = Math.atan2(R, Z);
     const top = F + H;
     const holeMat = new THREE.MeshStandardMaterial({ color: 0x1a120e, roughness: 1 });
+    // a new tile: the same clay tile texture as the roof, just clean and a bit brighter
     const patchMat = new THREE.MeshStandardMaterial({ color: 0xb4583a, roughness: 0.6 });
+    void pbrMaterial("clay_roof_tiles_02", { scale: 0.4, color: 0xd9b49c }).then((m) => {
+      for (const t of this.tiles) t.patch.material = m;
+    }).catch(() => { /* keep the plain colour */ });
     for (let i = 0; i < 4; i++) {
       const key = `tile:${i}`;
       const s = i % 2 === 0 ? 1 : -1;
@@ -185,7 +189,11 @@ export class Jobs {
       const z = s * d;
       const y = top + R - (d / Z) * R + 0.07 / Math.cos(ang) + 0.075;
       const mk = (mat: THREE.Material) => {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.02, 0.3), mat);
+        const geo = new THREE.BoxGeometry(0.34, 0.02, 0.3);
+        // UVs in roof units (metres × 0.4, like the roof slabs) so the tiles line up in size
+        const uv = geo.getAttribute("uv") as THREE.BufferAttribute;
+        for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getX(k) * 0.34 * 0.4 + x * 0.16, uv.getY(k) * 0.3 * 0.4);
+        const m = new THREE.Mesh(geo, mat);
         m.position.set(x, y, z);
         m.rotation.x = s * ang;
         this.d.scene.add(m);

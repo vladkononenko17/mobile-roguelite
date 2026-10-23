@@ -5,7 +5,7 @@ import { GTAOPass } from "three/examples/jsm/postprocessing/GTAOPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { hdri, setAnisotropy } from "./assets";
-import { Audio } from "./audio";
+import { Audio, type Ground } from "./audio";
 import { Lawn } from "./clean/lawn";
 import type { CleanSurface } from "./clean/surface";
 import { DAY, PAY, PAY_PER_M2, TOOL_FOR, TOOLS, type PerkId, type ToolId, type WorkKind } from "./content";
@@ -28,7 +28,7 @@ import { mergeStatic } from "./world/merge";
 import { currentStage, matches, STAGE_DONE, STAGES, stageShare } from "./game/stages";
 import { WorldIndex, type Interactable } from "./world/index";
 import { buildKitchen, SINK } from "./world/kitchen";
-import { buildYard, LADDER, LAWN_ZONES, placeProps, POOL } from "./world/yard";
+import { buildYard, DECK, DRIVE, isLawn, LADDER, LAWN_ZONES, PATH, placeProps, POOL } from "./world/yard";
 
 /**
  * «Клін Клінич» — a first-person cleaning roguelite. You get a dirty house
@@ -741,6 +741,7 @@ function update(dt: number): void {
     // never step into an area of a later stage (unless already standing in one)
     if (!player.onRoof && stageAt(player.pos.x, player.pos.z) > stage && stageAt(px, pz) <= stage) { player.pos.x = px; player.pos.z = pz; }
     stageUpdate(dt, Math.hypot(st.move.x, st.move.y) > 0.3);
+    footsteps(st.sprint);
     player.applyCamera(camera);
     camera.updateMatrixWorld();
     aim();
@@ -1108,6 +1109,39 @@ function sunUpdate(): void {
   const inside = Math.abs(player.pos.x) < HOUSE.halfX && Math.abs(player.pos.z) < HOUSE.halfZ && !player.onRoof;
   roomLight.intensity = THREE.MathUtils.lerp(roomLight.intensity, inside ? 7 : 0, 0.1);
   roomLight.position.set(player.pos.x, HOUSE.floorY + 2.4, player.pos.z);
+}
+
+// ── Footsteps ───────────────────────────────────────────────────────────────
+const stepPrev = new THREE.Vector3();
+let stepDist = 0;
+let stepLeft = false;
+function footsteps(sprint: boolean): void {
+  const dx = player.pos.x - stepPrev.x, dz = player.pos.z - stepPrev.z;
+  stepPrev.set(player.pos.x, 0, player.pos.z);
+  const d = Math.hypot(dx, dz);
+  if (d > 1) { stepDist = 0; return; } // teleport / ladder
+  stepDist += d;
+  if (stepDist < (sprint ? 0.85 : 0.66)) return;
+  stepDist = 0;
+  stepLeft = !stepLeft;
+  // the mower drowns your steps; alternate feet are a touch different
+  audio.step(groundKind(), (tool === "mower" ? 0.5 : 1) * (stepLeft ? 1 : 0.85));
+}
+function groundKind(): Ground {
+  const x = player.pos.x, z = player.pos.z, y = player.feet;
+  const inR = (r: { x0: number; x1: number; z0: number; z1: number }, m = 0) => x > r.x0 - m && x < r.x1 + m && z > r.z0 - m && z < r.z1 + m;
+  if (player.onRoof) return "roof";
+  if (Math.abs(x) < HOUSE.halfX && Math.abs(z) < HOUSE.halfZ && y > 0.3) {
+    const tiled = (z > 0 && x >= 1) || (z <= 0 && x >= 0 && x < 3); // kitchen and bathroom
+    return tiled ? "tile" : "wood";
+  }
+  if (inR(DECK, 0.05) && y > 0.2) return "deck";
+  if (inR(DRIVE) || inR(PATH) || inR(POOL, 0.5) || z > 22.4 || (z > 4.9 && z < 6.4 && x > -3.1 && x < -1.1) || y > 0.1) return "stone";
+  if (isLawn(x, z)) {
+    const p = new THREE.Vector3(x, 0, z);
+    return yard.leaves.some((f) => f.near(p, 0.7)) ? "leaves" : "grass";
+  }
+  return "dirt";
 }
 
 // ── Stages ──────────────────────────────────────────────────────────────────
