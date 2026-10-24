@@ -1279,6 +1279,21 @@ Object.assign(window.__hata, {
   highlight: (on: boolean) => { highlight = on; grimeGlobals.highlight.value = on ? 1 : 0; },
   setTime: (sec: number) => { save.run.time = sec; },
   dayOver, handOver: handOverNow, getStage: () => stage, getMode: () => mode,
+  // ── trailer capture only (branch trailer-hata): a free camera and hiding the hands
+  camera,
+  cine: (px: number, py: number, pz: number, tx: number, ty: number, tz: number, fov = 62) => {
+    camera.position.set(px, py, pz);
+    camera.lookAt(tx, ty, tz);
+    if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+    camera.updateMatrixWorld();
+  },
+  hands: (on: boolean) => { vmScene.visible = on; },
+  finishAll: () => {
+    for (const s of W.surfaces) { s.finish(); save.run.progress[s.key] = 1; }
+    LAWN_ZONES.forEach((_z, i) => yard.lawn.finish(i));
+    for (const f of [...yard.leaves, yard.poolLeaves]) f.steal(1e6);
+    jobs.poolChem.done = true; yard.setPoolClean(1);
+  },
   /** Test hook: finishes every job of the current stage. */
   finishStage: () => {
     const st = STAGES[stage];

@@ -1,0 +1,21 @@
+{
+  "fps": 30,
+  "bpm": 140,
+  "frames": 540,
+  "_note": "Output timeline. Each cut sits on the 140 BPM grid (a beat = 12.857 frames): the drop at 3.0 s (beat 7), sections at beats 16, 26, 35, the final hit on beat 40 (17.14 s).",
+  "cuts": [
+    { "shot": "a1_grass",     "at": 0,   "len": 45, "from": 0 },
+    { "shot": "a2_wall",      "at": 45,  "len": 45, "from": 0 },
+    { "shot": "b1_wash",      "at": 90,  "len": 51, "from": 0 },
+    { "shot": "b2_drive",     "at": 141, "len": 33, "from": 1 },
+    { "shot": "b3_timelapse", "at": 174, "len": 32, "from": 1 },
+    { "shot": "c1_mow",       "at": 206, "len": 32, "from": 1 },
+    { "shot": "c2_roof",      "at": 238, "len": 32, "from": 1 },
+    { "shot": "c3_pool",      "at": 270, "len": 32, "from": 1 },
+    { "shot": "c4_dishes",    "at": 302, "len": 32, "from": 1 },
+    { "shot": "d1_done",      "at": 334, "len": 39, "from": 0 },
+    { "shot": "d2_shop",      "at": 373, "len": 38, "from": 1 },
+    { "shot": "d3_pro",       "at": 411, "len": 39, "from": 2 },
+    { "shot": "e1_clean",     "at": 450, "len": 90, "from": 0 }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "klin-klinych-trailer",
+  "private": true,
+  "type": "module",
+  "description": "Capture and assembly scripts for the «Клін Клінич» trailer. Not part of the game build.",
+  "dependencies": {
+    "@sparticuz/chromium": "^153.0.0",
+    "puppeteer-core": "^25.15.0"
+  }
+}
