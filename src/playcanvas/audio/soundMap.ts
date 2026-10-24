@@ -7,6 +7,7 @@ export const BIOME_AUDIO: Record<string, { music: string; gate: string }> = {
   outpost: { music: "music_wasteland", gate: "gate_wood" },
   facility: { music: "music_station", gate: "gate_space" },
   hell: { music: "music_hell", gate: "gate_hell" },
+  medieval: { music: "music_hell", gate: "gate_wood" },
 };
 export const BOSS_MUSIC = "music_boss";
 
@@ -15,7 +16,8 @@ const STEP: Partial<Record<GroundSurface, string>> = {
   sand: "step_sand", dirt: "step_sand", ash: "step_sand", cinder: "step_sand", boneash: "step_sand",
   concrete: "step_concrete", asphalt: "step_concrete", flagstone: "step_concrete",
   basalt: "step_stone", obsidian: "step_stone", bloodrock: "step_stone", asteroid: "step_stone",
-  overgrowth: "step_grass",
+  overgrowth: "step_grass", meadow: "step_grass",
+  mud: "step_sand", gravedirt: "step_sand", cobble: "step_stone",
   deck: "step_metal", hangardeck: "step_metal", stationdeck: "step_metal", labdeck: "step_metal", quarantine: "step_metal",
   grate: "step_metal", gatefloor: "step_metal", dockdeck: "step_metal",
 };

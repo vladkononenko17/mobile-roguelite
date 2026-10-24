@@ -11,6 +11,7 @@ const CHAPTERS: { id: BiomeId; numeral: string; name: string; tagline: string; a
   { id: "outpost", numeral: "I", name: "The Wasteland", tagline: "The dead own the city. Hold the outpost, cross the Dead Streets, and bring down what waits in the Plaza.", accent: "#d6a23c" },
   { id: "facility", numeral: "II", name: "Station ORION", tagline: "A research station gone silent. Fight through seven sectors to Project Gate, and whatever came through it.", accent: "#4fd8ff" },
   { id: "hell", numeral: "III", name: "Hell", tagline: "Nine circles of fire and ash. Descend past the Citadel to the Archfiend's throne.", accent: "#ff6a2e" },
+  { id: "medieval", numeral: "IV", name: "The Dark Kingdom", tagline: "A plague-struck realm where the dead rise. Cross the graveyard and the abbey, storm the castle, and face the Fallen King.", accent: "#c9a25a" },
 ];
 
 const LAST_KEY = "dustline3d.chapter";
