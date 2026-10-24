@@ -450,6 +450,14 @@ export const GROUND = {
     grate: { base: "#373b41", dark: "#2f3338", light: "#3f444a", speckDark: "#23262b", speckLight: "#8a5a2a", specks: 450, slabs: 8, seam: "#1d1f23" },
     /** ORION Project Gate: dark violet-graphite plates, crystal glints. */
     gatefloor: { base: "#34323f", dark: "#2c2a36", light: "#3c3a48", speckDark: "#211f2a", speckLight: "#8e6ad6", specks: 700, slabs: 6, seam: "#1c1a24" },
+    /** Dark Kingdom: cold wet meadow grass, the ground between the walls. */
+    meadow: { base: "#4f5a3c", dark: "#454f34", light: "#5a6545", speckDark: "#384029", speckLight: "#6d7650", specks: 900 },
+    /** Dark Kingdom: trodden mud of the village lanes and the bailey. */
+    mud: { base: "#5a4a3a", dark: "#4d3f31", light: "#665444", speckDark: "#3a2f25", speckLight: "#73624f", specks: 800 },
+    /** Dark Kingdom: worn cobbles of the abbey, the bridge and the castle (small setts, dark joints). */
+    cobble: { base: "#6a665f", dark: "#5f5b55", light: "#75716a", speckDark: "#4d4a45", speckLight: "#827d75", specks: 600, slabs: 6, seam: "#55524d" },
+    /** Dark Kingdom: the graveyard's dug earth, ash-grey with bone flecks. */
+    gravedirt: { base: "#58534b", dark: "#4e4a43", light: "#625d54", speckDark: "#332f2b", speckLight: "#8c877a", specks: 900 },
     /** Oil, soot and dried blood trodden into the facility floor. */
     grime: { base: "#48463f", dark: "#3d3b35", light: "#524f47", speckDark: "#2e2926", speckLight: "#5e3a33", specks: 700 },
   },
@@ -785,6 +793,39 @@ export const LIGHTING: LightingSpec = {
   clearColor: [0.62, 0.52, 0.4],
   fogStart: 31,
   fogEnd: 82,
+};
+
+/**
+ * The Dark Kingdom (medieval chapter): a low red-gold dusk under a bruised sky, cold violet haze
+ * and a warm rim so the hero reads against grey stone. Torches and braziers come from AmbientFx.
+ */
+export const MEDIEVAL_LIGHTING: LightingSpec = {
+  sun: {
+    color: [1.0, 0.74, 0.52],
+    intensity: 2.2,
+    elevationDeg: 34,
+    azimuthDeg: 318,
+    shadowResolution: 1024,
+    shadowDistance: 38,
+    shadowBias: 0.2,
+    normalOffsetBias: 0.04,
+    shadowIntensity: 0.8,
+  },
+  fill: { color: [0.55, 0.6, 0.95], intensity: 0.4, elevationDeg: 25, azimuthDeg: 140 },
+  rim: { color: [1.0, 0.72, 0.5], intensity: 1.3, elevationDeg: 30, azimuthDeg: 190 },
+  environment: { zenith: [0.26, 0.28, 0.42], horizon: [0.86, 0.58, 0.46], ground: [0.22, 0.2, 0.17], intensity: 0.55 },
+  exposure: 1.0,
+  groundAmbient: [0.72, 0.78, 0.98],
+  clearColor: [0.32, 0.3, 0.38],
+  fogStart: 30,
+  fogEnd: 80,
+};
+
+/** The medieval chapter's kit: KayKit CC0 packs merged by scripts/build-medieval-kit.mjs. */
+export const MEDIEVAL = {
+  url: "models/medieval/medieval-kit.glb",
+  brightness: 0.92,
+  batchCellMetres: 12,
 };
 
 /**

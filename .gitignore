@@ -38,3 +38,5 @@ assets-src/ruined-city/
 assets-src/raven/
 # CC0 audio sources (Kenney, OpenGameArt): scripts/build-audio.mjs encodes them to public/audio/
 assets-src/audio/
+# KayKit medieval packs (CC0, github.com/KayKit-Game-Assets): raw files local only; built into public/models/medieval/
+assets-src/medieval

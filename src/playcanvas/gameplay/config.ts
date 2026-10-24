@@ -6,6 +6,7 @@ import type { UpgradeCategory, UpgradeIcon, UpgradeRarity } from "../ui/UpgradeI
 import { HELL_ENEMIES, HELL_SKINS, HELL_VISUALS, type HellEnemyId, type HellSkinId, type HellVisualId } from "./hellConfig";
 import { SPACE_ENEMIES, SPACE_SKINS, SPACE_VISUALS, type SpaceEnemyId, type SpaceSkinId, type SpaceVisualId } from "./spaceConfig";
 import { WASTELAND_ENEMIES, WASTELAND_SKINS, WASTELAND_VISUALS, type WastelandEnemyId, type WastelandSkinId, type WastelandVisualId } from "./wastelandConfig";
+import { MEDIEVAL_ENEMIES, MEDIEVAL_SKINS, MEDIEVAL_VISUALS, type MedievalEnemyId, type MedievalSkinId, type MedievalVisualId } from "./medievalConfig";
 
 /* ------------------------------------------------------------------------------------------------
  * Player combat
@@ -124,7 +125,7 @@ export const WEAPON_CARDS: Partial<Record<WeaponId, { text: string; stats: strin
  * Enemies
  * ---------------------------------------------------------------------------------------------- */
 
-export type EnemyId = "walker" | "runner" | "thrower" | "brute" | "charger" | "tank" | HellEnemyId | SpaceEnemyId | WastelandEnemyId;
+export type EnemyId = "walker" | "runner" | "thrower" | "brute" | "charger" | "tank" | HellEnemyId | SpaceEnemyId | WastelandEnemyId | MedievalEnemyId;
 /** chaser / charger / thrower / tank: melee walkers with specials; caster: keeps its distance and
  * fires bolts; flyer: flies over everything (orbits, bolts, dives); boss: driven by a BossScript. */
 export type EnemyBehavior = "chaser" | "charger" | "thrower" | "tank" | "caster" | "flyer" | "boss";
@@ -136,16 +137,17 @@ export type EnemyBehavior = "chaser" | "charger" | "thrower" | "tank" | "caster"
 export type EnemyVisualId =
   | "zombieMaleCasual" | "zombieMaleFarmer" | "zombieFemaleCasual" | "zombieFemaleOffice"
   | "zombieRunnerMale" | "zombieRunnerFemale" | "zombieThrower" | "zombieBrute"
-  | "vanguard" | HellVisualId | SpaceVisualId | WastelandVisualId;
+  | "vanguard" | HellVisualId | SpaceVisualId | WastelandVisualId | MedievalVisualId;
 
 /** Zombie colour skins: recoloured copies of the zombie pack's swatch palette (one small texture
  * each, shared by every zombie model), built by scripts/build-zombies.mjs. */
-export type EnemySkinId = "green" | "darkgreen" | "purple" | "brown" | "toxic" | "brute" | HellSkinId | SpaceSkinId | WastelandSkinId;
+export type EnemySkinId = "green" | "darkgreen" | "purple" | "brown" | "toxic" | "brute" | HellSkinId | SpaceSkinId | WastelandSkinId | MedievalSkinId;
 
 export const ENEMY_SKINS: Record<EnemySkinId, string> = {
   ...HELL_SKINS,
   ...SPACE_SKINS,
   ...WASTELAND_SKINS,
+  ...MEDIEVAL_SKINS,
   green: "models/zombies/skins/green.webp",
   darkgreen: "models/zombies/skins/darkgreen.webp",
   purple: "models/zombies/skins/purple.webp",
@@ -216,6 +218,7 @@ export const ENEMY_VISUALS: Record<EnemyVisualId, EnemyVisual> = {
   ...HELL_VISUALS,
   ...SPACE_VISUALS,
   ...WASTELAND_VISUALS,
+  ...MEDIEVAL_VISUALS,
   zombieMaleCasual: zombie("zombie_male_casual", 0.98),
   zombieMaleFarmer: zombie("zombie_male_farmer", 1.04),
   zombieFemaleCasual: zombie("zombie_female_casual", 1.05),
@@ -301,6 +304,7 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
   ...HELL_ENEMIES,
   ...SPACE_ENEMIES,
   ...WASTELAND_ENEMIES,
+  ...MEDIEVAL_ENEMIES,
   // Hero is ~1.95 m (1.70 m model x 1.15); walkers are 0.9 - 1.0x of that, hunched.
   walker: {
     label: "Walker", visuals: WALKER_LOOKS, scale: 1.1, scaleJitter: 0.05, behavior: "chaser",
@@ -367,7 +371,7 @@ export const ENEMY_LIMITS = {
  * ---------------------------------------------------------------------------------------------- */
 
 /** Boss enemy types (a wave's `boss`); every other type can be in a wave's weights. */
-export type BossId = Extract<EnemyId, "brute" | "charger" | "tank" | "glutton" | "wyrm" | "archfiend" | "warden" | "broodmother" | "abomination">;
+export type BossId = Extract<EnemyId, "brute" | "charger" | "tank" | "glutton" | "wyrm" | "archfiend" | "warden" | "broodmother" | "abomination" | "abbot" | "fallenKing">;
 export type WaveEnemyId = Exclude<EnemyId, BossId>;
 
 /** One pacing step of a wave, in effect from `at` seconds until the next step. */
