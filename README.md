@@ -170,3 +170,22 @@ An eighth game in the same toolchain, in Ukrainian, served at `/mobile-roguelite
 Rules are pure TypeScript — `hata/src/content.ts` (tools and levels, pay rates, perks, clients, stars) and `hata/src/sim.ts` (save, buying, the ledger that pays per percent, the day, hand-over, perks) — covered by `tests/hata.test.mjs`. Textures, HDRI sky and furniture/garden models are Poly Haven CC0 assets fetched by a GitHub Action (`scripts/hata-fetch-assets.py`, list in `hata/assets-wanted.json`, recompressed JPEGs in `public/hata/ph/`); the first-person tools and gloves are modelled by a Blender script (`hata/blender/tools.py` → `public/hata/models/tools.glb`); the house, kitchen, trees, grass, leaves, haystack and dishes are built in code. All sound is synthesized (`hata/src/audio.ts`). See `public/hata/CREDITS.txt`.
 
 The game is made for the iPhone only: on a computer (no touch screen) `hata/src/main.ts` loads nothing heavy and shows a page with a QR code to open it on the phone; the game itself (`hata/src/game.ts`) is loaded only on touch devices. Controls (landscape): left part of the screen — walk (floating stick, push to the edge to jog), the rest — look, the big button — work (it changes to «Підняти», «Лізти», «Мити посуд»… when you aim at something to use, and offers the right tool when you aim at a surface it can't clean); washing up is done by rubbing the dish with a finger. Textures are 512 px to stay well within iPhone Safari's memory; if the tab ever dies in the first seconds of play, the next launch lowers the graphics one step by itself. Graphics quality (low/medium/high) is in the settings; medium by default. Adding the page to the Home Screen runs it full screen. Progress is saved on the device. For offline checks: open with `?still=1` (or `?dev=1`) and drive it from the console with `__hata.teleport(x, z, yaw, pitch)`, `__hata.setTool('washer')`, `__hata.simulate(seconds, holdAction, [strafe, forward], [lookX, lookY])`, `__hata.rows()`.
+
+## Dustline 3D — Chapter IV: The Dark Kingdom (medieval)
+
+The 3D game at `/playcanvas.html` gains a fourth chapter: open it from the menu (chapter IV) or with
+`?level=medieval` (also `?level=kingdom`). A plague-struck realm where the dead rise, seven levels
+south to north (`src/playcanvas/world/level/MedievalLevel.ts`): the Burned Village, the Graveyard,
+the Abbey (boss: **the Mad Abbot**), the Bridge, the Outer Bailey, the Great Hall and the Throne Yard
+(boss: **the Fallen King**), joined by lanes whose barricades sink when a level is won.
+
+- **Enemies** (`src/playcanvas/gameplay/medievalConfig.ts`): risen dead, plague ghouls, bone
+  cutthroats, cultist monks and bone mages (casters), skeleton warriors (shields), black knights
+  (armoured chargers) and the executioner (slam); the two bosses use the shared boss-script vocabulary.
+  Seven-level campaign with Easy / Hard / Nightmare, the abbey's reliquary and the black bargain.
+- **Assets**: KayKit packs by Kay Lousberg (CC0, github.com/KayKit-Game-Assets) — Dungeon Remastered,
+  Medieval Hexagon, Halloween Bits (environment, `scripts/build-medieval-kit.mjs` →
+  `public/models/medieval/medieval-kit.glb`, 139 models, 3 materials) and Adventurers / Skeletons
+  (creatures with their clips and colour skins, `scripts/build-medieval-creatures.mjs`). The raw packs
+  stay local in `assets-src/medieval/` (git-ignored).
+- Tests: `tests/medieval.test.mjs`. Music for now reuses the Hell track.
