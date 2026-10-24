@@ -88,6 +88,8 @@ export const AMBIENT: AmbientEmitter[] = [
 
 export const GROUND_SPEC: GroundSpec = {
   base: "meadow",
+  // The whole chapter (the default ground square is far smaller than this 540 m map).
+  areas: [{ x0: -130, z0: -540, x1: 130, z1: 140 }],
   pads: [
     // Cobbled courts: the abbey, the bridge deck, the bailey yard; flagstones in the hall and the throne yard.
     { x0: -22, z0: -164, x1: 22, z1: -118, surface: "cobble" },
@@ -118,6 +120,9 @@ export const GROUND_SPEC: GroundSpec = {
 };
 
 type Placement = [MedievalModel, number, number, number?, SpawnOptions?];
+
+/** Wall-like models whose length runs along their local Z. */
+const ALONG_Z = new Set<MedievalModel>(["fenceStone", "fenceWood"]);
 
 /** Deterministic RNG so the layout is the same on every load. */
 function rng(seed: number): () => number {
@@ -159,7 +164,10 @@ export function buildMedievalLevel(kit: ModelKit<MedievalModel>): Entity {
       if (o.skip?.includes(i)) continue;
       const id = o.pattern[i % o.pattern.length];
       if (!id) continue;
-      place(id, ax + dx * width * (i + 0.5), az + dz * width * (i + 0.5), yaw, { scale: [width / module, h, 1], noCollider: o.noCollider });
+      // Models built along their local Z (the stone fence) turn a quarter and stretch on Z.
+      const alongZ = ALONG_Z.has(id);
+      place(id, ax + dx * width * (i + 0.5), az + dz * width * (i + 0.5), yaw + (alongZ ? 90 : 0),
+        { scale: alongZ ? [1, h, width / module] : [width / module, h, 1], noCollider: o.noCollider });
     }
     if (o.pillarsEvery) {
       for (let i = 0; i <= count; i += o.pillarsEvery) place(o.pillar ?? "wallPillar", ax + dx * width * i, az + dz * width * i, yaw, { scale: [1, h, 1], noCollider: o.noCollider });
@@ -236,9 +244,9 @@ function buildVillage(place: Place, placeAll: PlaceAll, wallRun: WallRun, scatte
   void place;
   const b = ZONE_BOXES.village;
   // A low wooden fence along the south (the camera looks over it), stone walls with gaps north.
-  wallRun(b.x0, b.z1, b.x1, b.z1, { pattern: ["fenceWood"], module: 13, height: 0.8 });
-  wallRun(b.x0, b.z0, -GAP, b.z0, { pattern: ["fenceStone", "fenceStone", ""], module: 13 });
-  wallRun(GAP, b.z0, b.x1, b.z0, { pattern: ["", "fenceStone", "fenceStone"], module: 13 });
+  wallRun(b.x0, b.z1, b.x1, b.z1, { pattern: ["fenceWood"], module: 7.5, height: 0.8 });
+  wallRun(b.x0, b.z0, -GAP, b.z0, { pattern: ["fenceStone", "fenceStone", ""], module: 7.5 });
+  wallRun(GAP, b.z0, b.x1, b.z0, { pattern: ["", "fenceStone", "fenceStone"], module: 7.5 });
   // Houses down both sides of the lane, gables to the street; two burned to the frame.
   placeAll([
     ["homeA", -23, 25, 90], ["homeB", -22, 14, 90, { scale: 1.1 }], ["ruin", -23, 2, 90], ["tavern", -22, -12, 90],
@@ -323,7 +331,7 @@ function buildBridge(place: Place, placeAll: PlaceAll, wallRun: WallRun, scatter
   void place;
   const b = ZONE_BOXES.bridge;
   // Stone parapets along the causeway (low: the camera sees over), gate towers at both ends.
-  for (const s of [-1, 1]) wallRun(s * b.x1, b.z1, s * b.x1, b.z0, { pattern: ["fenceStone"], module: 13, height: 1.2, flip: s < 0 });
+  for (const s of [-1, 1]) wallRun(s * b.x1, b.z1, s * b.x1, b.z0, { pattern: ["fenceStone"], module: 7.5, height: 1.2, flip: s < 0 });
   wallRun(b.x0, b.z1, -GAP, b.z1, { pattern: ["wallHalf"], height: 0.7 });
   wallRun(GAP, b.z1, b.x1, b.z1, { pattern: ["wallHalf"], height: 0.7 });
   wallRun(b.x0, b.z0, -GAP, b.z0, { pattern: ["wall"] });

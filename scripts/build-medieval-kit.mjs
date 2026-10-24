@@ -13,7 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
-import { NodeIO } from "@gltf-transform/core";
+import { NodeIO, getBounds } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
 import { dedup, mergeDocuments, prune, unpartition, textureCompress } from "@gltf-transform/functions";
 import sharp from "sharp";
@@ -95,10 +95,23 @@ for (const [id, [name, scale]] of Object.entries(MANIFEST)) {
   for (const a of doc.getRoot().listAnimations()) a.dispose();
   const map = mergeDocuments(out, doc);
   const scenes = doc.getRoot().listScenes().map((s) => map.get(s));
-  const holder = out.createNode(id).setScale([scale, scale, scale]);
+  // The game's kit loader places each id's children and ignores the id node's own transform, so
+  // the scale is baked into the children (uniform: scale their translation and scale).
+  const holder = out.createNode(id);
   for (const s of scenes) {
-    for (const child of s.listChildren()) { s.removeChild(child); holder.addChild(child); }
+    for (const child of s.listChildren()) {
+      s.removeChild(child);
+      const t = child.getTranslation(), k = child.getScale();
+      child.setTranslation([t[0] * scale, t[1] * scale, t[2] * scale]).setScale([k[0] * scale, k[1] * scale, k[2] * scale]);
+      holder.addChild(child);
+    }
     s.dispose();
+  }
+  // Centre every model's footprint on its origin (the hexagon pack's fences sit on a tile edge).
+  const bb = getBounds(holder);
+  const cx = (bb.min[0] + bb.max[0]) / 2, cz = (bb.min[2] + bb.max[2]) / 2;
+  if (Math.abs(cx) > 0.05 || Math.abs(cz) > 0.05) {
+    for (const child of holder.listChildren()) { const t = child.getTranslation(); child.setTranslation([t[0] - cx, t[1], t[2] - cz]); }
   }
   outScene.addChild(holder);
 }

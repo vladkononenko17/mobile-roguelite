@@ -455,9 +455,9 @@ export const GROUND = {
     /** Dark Kingdom: trodden mud of the village lanes and the bailey. */
     mud: { base: "#5a4a3a", dark: "#4d3f31", light: "#665444", speckDark: "#3a2f25", speckLight: "#73624f", specks: 800 },
     /** Dark Kingdom: worn cobbles of the abbey, the bridge and the castle (small setts, dark joints). */
-    cobble: { base: "#6a665f", dark: "#5f5b55", light: "#75716a", speckDark: "#4d4a45", speckLight: "#827d75", specks: 500, slabs: 10, seam: "#3a3835" },
+    cobble: { base: "#6a665f", dark: "#5f5b55", light: "#75716a", speckDark: "#4d4a45", speckLight: "#827d75", specks: 600, slabs: 6, seam: "#55524d" },
     /** Dark Kingdom: the graveyard's dug earth, ash-grey with bone flecks. */
-    gravedirt: { base: "#4a4640", dark: "#403c37", light: "#544f48", speckDark: "#332f2b", speckLight: "#8c877a", specks: 900 },
+    gravedirt: { base: "#58534b", dark: "#4e4a43", light: "#625d54", speckDark: "#332f2b", speckLight: "#8c877a", specks: 900 },
     /** Oil, soot and dried blood trodden into the facility floor. */
     grime: { base: "#48463f", dark: "#3d3b35", light: "#524f47", speckDark: "#2e2926", speckLight: "#5e3a33", specks: 700 },
   },
