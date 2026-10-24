@@ -185,7 +185,7 @@ async function frame(f) {
     words.forEach(([w, at, col], i) => {
       if (f < at) return;
       const t = (f - at) / 7, out = f > 444 ? 1 - (f - 444) / 6 : 1;
-      title(w, W / 2, H * 0.2 + i * 118, 112, { color: col, scale: outBack(t), rot: -0.04, alpha: clamp(t * 3) * out });
+      title(w, W / 2, H * 0.105 + i * 108, 100, { color: col, scale: outBack(t), rot: -0.04, alpha: clamp(t * 3) * out });
     });
   }
   // finale: darken a little, then the title, the line and the call to action
