@@ -171,8 +171,8 @@ async function frame(f) {
   if (f >= 6 && f < 90) {
     const t1 = (f - 6) / 8, t2 = (f - 22) / 8;
     const out = f > 84 ? 1 - (f - 84) / 6 : 1;
-    title("ХТО ЦЕ БУДЕ", W / 2, H * 0.3, 104, { scale: outBack(t1) * 1, rot: -0.05, alpha: clamp(t1 * 3) * out });
-    title("ПРИБИРАТИ?!", W / 2, H * 0.3 + 128, 132, { color: "#ffc93c", scale: outBack(t2), rot: -0.05, alpha: clamp(t2 * 3) * out });
+    title("ХТО ЦЕ БУДЕ", W / 2, H * 0.2, 104, { scale: outBack(t1) * 1, rot: -0.05, alpha: clamp(t1 * 3) * out });
+    title("ПРИБИРАТИ?!", W / 2, H * 0.2 + 128, 132, { color: "#ffc93c", scale: outBack(t2), rot: -0.05, alpha: clamp(t2 * 3) * out });
   }
   // short tool captions on the montage
   if (LABELS[cut.shot] && local >= 2) {
