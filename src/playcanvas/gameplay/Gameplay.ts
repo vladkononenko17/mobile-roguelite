@@ -197,7 +197,11 @@ export class Gameplay {
     };
     this.hazards.onBlast = (position, radius, kind) => {
       if (kind === "bolt") this.effects.spark(position, 0.3);
-      else {
+      else if (kind === "splash") {
+        this.effects.splash(position, radius);
+        audio.play("explosion", { x: position.x, z: position.z, rate: 0.55, volume: 0.6 });
+        this.shakeAt(position.x, position.z, 0.15);
+      } else {
         this.effects.explosion(position, radius);
         audio.play("explosion", { x: position.x, z: position.z });
         this.shakeAt(position.x, position.z, 0.3);
@@ -213,6 +217,12 @@ export class Gameplay {
       audio.play("slam", { x: position.x, z: position.z });
       this.effects.ring(position, radius, false);
       this.shakeAt(position.x, position.z, 0.45);
+    };
+    this.brain.onTentacle = (x, z, dx, dz, length, width, seconds) => this.campaign?.tentacle?.(x, z, dx, dz, length, width, seconds);
+    this.brain.onTentacleSlam = (x, z, dx, dz, length) => {
+      for (let k = 1; k < length; k += 3) this.effects.splash(this.tmp.set(x + dx * k, 0.1, z + dz * k), 1.3);
+      audio.play("slam", { x: x + dx * length * 0.5, z: z + dz * length * 0.5 });
+      this.shakeAt(x + dx * length * 0.5, z + dz * length * 0.5, 0.6);
     };
     this.brain.onSummon = (type, x, z) => {
       const w = this.director.wave;
@@ -1046,6 +1056,19 @@ export class Gameplay {
       for (let i = 0; i < c.strikes; i++) {
         const o = (i - (c.strikes - 1) / 2) * c.spacing;
         h.strike(position.x + dx * o, position.z + dz * o, c.strikeRadius, c.delay + i * c.ripple, damage, "eruption", c.fire, 8);
+      }
+    } else if (kind === "tide") {
+      // A wave rolls in from the sea side: rows of crests across the hero, nearest the sea first.
+      const c = TRAPS.tide;
+      const from = this.campaign?.tideFrom?.(position.x, position.z);
+      const a = from ? Math.atan2(from[0], from[1]) : Math.random() * Math.PI * 2;
+      const fx = Math.sin(a), fz = Math.cos(a);
+      for (let row = 0; row < c.rows; row++) {
+        const back = (row - (c.rows - 1) / 2) * c.rowGap;
+        for (let i = 0; i < c.strikes; i++) {
+          const o = (i - (c.strikes - 1) / 2) * c.spacing + (Math.random() - 0.5) * 0.6;
+          h.strike(position.x + fx * back - fz * o, position.z + fz * back + fx * o, c.strikeRadius, c.delay + (c.rows - 1 - row) * c.rowDelay + Math.abs(o) * c.ripple * 0.3, damage, "splash");
+        }
       }
     } else {
       // Brimstone tar: pools near the hero, one of them where he is heading.

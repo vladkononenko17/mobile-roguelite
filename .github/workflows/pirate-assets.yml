@@ -1,0 +1,56 @@
+name: Fetch CC0 assets for «Black Tide»
+
+# kenney.nl is not reachable from the dev sandbox, so the pirate kit is pulled here and committed
+# back to this branch. Only runs on the asset branch; the raw files never reach main.
+on:
+  push:
+    branches: [pirate-assets]
+    paths:
+      - .github/workflows/pirate-assets.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pirate-assets
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Kenney packs (CC0)
+        run: |
+          set -u
+          mkdir -p /tmp/dl assets-src/pirate
+          : > assets-src/pirate/FETCH.txt
+          get() { # name, kenney page slug, fallback url
+            name="$1"; slug="$2"; fallback="${3:-}"
+            url=$(curl -fsSL -A "Mozilla/5.0" "https://kenney.nl/assets/$slug" | grep -oE "https://kenney.nl/media/pages/assets/$slug/[^\"']+\.zip" | head -1 || true)
+            [ -z "$url" ] && url="$fallback"
+            echo "$name <- $url" | tee -a assets-src/pirate/FETCH.txt
+            [ -z "$url" ] && { echo "::warning::no url for $name"; return 0; }
+            curl -fsSL -A "Mozilla/5.0" -o "/tmp/dl/$name.zip" "$url" || { echo "::warning::download failed $name"; return 0; }
+            rm -rf "/tmp/dl/$name" && mkdir -p "/tmp/dl/$name" && unzip -q -o "/tmp/dl/$name.zip" -d "/tmp/dl/$name"
+            mkdir -p "assets-src/pirate/$name"
+            # Keep the glTF/GLB models, textures they use, previews and the licence.
+            (cd "/tmp/dl/$name" && find . -type f \( -iname "*.glb" -o -iname "*.gltf" -o -iname "*.bin" -o -iname "*.png" -o -iname "License*.txt" \) ! -ipath "*/FBX*" ! -ipath "*/OBJ*" ! -ipath "*/Isometric*" ! -ipath "*/Side*" -print0 | xargs -0 -I{} cp --parents "{}" "$GITHUB_WORKSPACE/assets-src/pirate/$name/")
+            echo "$name: $(find assets-src/pirate/$name -type f | wc -l) files" | tee -a assets-src/pirate/FETCH.txt
+          }
+          get pirate-kit pirate-kit "https://opengameart.org/sites/default/files/kenney_pirate-kit.zip"
+          get graveyard-kit graveyard-kit
+          get nature-kit nature-kit
+          find assets-src/pirate -type f | sed 's|^assets-src/pirate/||' | sort > assets-src/pirate/FILES.txt
+          du -sh assets-src/pirate/* || true
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          find assets-src/pirate -type f -size +95M -delete
+          git add -f assets-src/pirate
+          git diff --cached --quiet && exit 0
+          git commit -q -m "pirate: fetch CC0 Kenney packs"
+          git pull -q --rebase origin "${GITHUB_REF_NAME}" || true
+          git push -q origin "HEAD:${GITHUB_REF_NAME}"

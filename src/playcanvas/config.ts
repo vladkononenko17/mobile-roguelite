@@ -458,6 +458,18 @@ export const GROUND = {
     cobble: { base: "#6a665f", dark: "#5f5b55", light: "#75716a", speckDark: "#4d4a45", speckLight: "#827d75", specks: 600, slabs: 6, seam: "#55524d" },
     /** Dark Kingdom: the graveyard's dug earth, ash-grey with bone flecks. */
     gravedirt: { base: "#58534b", dark: "#4e4a43", light: "#625d54", speckDark: "#332f2b", speckLight: "#8c877a", specks: 900 },
+    /** Black Tide: pale tropical beach sand, shell grit. */
+    beach: { base: "#cdb486", dark: "#c0a679", light: "#d9c194", speckDark: "#a68d64", speckLight: "#efe2c4", specks: 900 },
+    /** Black Tide: dark wet sand at the waterline and on the reef's bars. */
+    wetsand: { base: "#8f7c5c", dark: "#816f51", light: "#9b8866", speckDark: "#5f513c", speckLight: "#c9bfa6", specks: 700 },
+    /** Black Tide: the treasure grotto's floor, damp dark stone. */
+    grotto: { base: "#4a4744", dark: "#403d3b", light: "#55514d", speckDark: "#2f2c2a", speckLight: "#77705f", specks: 800 },
+    /** Black Tide: weathered deck planks (narrow boards, dark seams). */
+    planks: { base: "#7a5a3e", dark: "#6c4f36", light: "#876547", speckDark: "#4c3726", speckLight: "#9a7a58", specks: 500, slabs: 8, seam: "#3e2c1e", boards: true },
+    /** Black Tide: the ghost ship's deck, rotten boards with a cold green cast. */
+    ghostdeck: { base: "#4a5a50", dark: "#3e4c44", light: "#56675c", speckDark: "#2a342e", speckLight: "#7fbf9a", specks: 600, slabs: 8, seam: "#1f2823", boards: true },
+    /** Black Tide: the fort's worn stone and the skull rock's ledges. */
+    fortstone: { base: "#7b7568", dark: "#6f695d", light: "#878073", speckDark: "#57524a", speckLight: "#9b9384", specks: 600, slabs: 5, seam: "#5f594f" },
     /** Oil, soot and dried blood trodden into the facility floor. */
     grime: { base: "#48463f", dark: "#3d3b35", light: "#524f47", speckDark: "#2e2926", speckLight: "#5e3a33", specks: 700 },
   },
@@ -826,6 +838,40 @@ export const MEDIEVAL = {
   url: "models/medieval/medieval-kit.glb",
   brightness: 0.92,
   batchCellMetres: 12,
+};
+
+/**
+ * Black Tide (the pirate chapter): a low gold sun over the sea - warm key light from the west, a
+ * cool sea-blue fill, a warm rim. Each act shifts the mood (PIRATE_MOODS): the cave, the storm, the
+ * cursed night; this is the open beach of Act I.
+ */
+export const PIRATE_LIGHTING: LightingSpec = {
+  sun: {
+    color: [1.0, 0.8, 0.58],
+    intensity: 2.5,
+    elevationDeg: 36,
+    azimuthDeg: 300,
+    shadowResolution: 1024,
+    shadowDistance: 38,
+    shadowBias: 0.2,
+    normalOffsetBias: 0.04,
+    shadowIntensity: 0.75,
+  },
+  fill: { color: [0.55, 0.75, 1.0], intensity: 0.45, elevationDeg: 25, azimuthDeg: 140 },
+  rim: { color: [1.0, 0.75, 0.5], intensity: 1.3, elevationDeg: 30, azimuthDeg: 190 },
+  environment: { zenith: [0.32, 0.46, 0.66], horizon: [0.95, 0.72, 0.52], ground: [0.2, 0.3, 0.32], intensity: 0.6 },
+  exposure: 1.0,
+  groundAmbient: [0.78, 0.84, 0.98],
+  clearColor: [0.42, 0.52, 0.6],
+  fogStart: 34,
+  fogEnd: 95,
+};
+
+/** The pirate chapter's kit: Kenney Pirate Kit + KayKit pieces, merged by scripts/build-pirate-kit.mjs. */
+export const PIRATE = {
+  url: "models/pirate/pirate-kit.glb",
+  brightness: 0.95,
+  batchCellMetres: 14,
 };
 
 /**
