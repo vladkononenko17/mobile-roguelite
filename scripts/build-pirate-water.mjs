@@ -15,7 +15,7 @@ let shapes = "";
 // Soft swells: large light and dark ellipses.
 for (let i = 0; i < 22; i++) {
   const x = rnd() * N, y = rnd() * N, rx = 50 + rnd() * 90, ry = 18 + rnd() * 30, light = rnd() < 0.5;
-  const c = light ? "#3f8f97" : "#1d5a66", o = (0.25 + rnd() * 0.3).toFixed(2);
+  const c = light ? "#5fd3cf" : "#16788a", o = (0.25 + rnd() * 0.3).toFixed(2);
   shapes += wrap((ox, oy) => `<ellipse cx="${x + ox}" cy="${y + oy}" rx="${rx}" ry="${ry}" fill="${c}" opacity="${o}" filter="url(#b)"/>`);
 }
 // Foam crests: short curved strokes.
@@ -29,7 +29,7 @@ for (let i = 0; i < 70; i++) {
   shapes += wrap((ox, oy) => `<circle cx="${x + ox}" cy="${y + oy}" r="${r}" fill="#bfe9e4" opacity="0.5"/>`);
 }
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${N}" height="${N}"><defs><filter id="b" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="14"/></filter></defs>
-<rect width="${N}" height="${N}" fill="#246b74"/>${shapes}</svg>`;
+<rect width="${N}" height="${N}" fill="#1f9aa5"/>${shapes}</svg>`;
 const out = path.join(ROOT, "public/models/pirate/water.webp");
 fs.mkdirSync(path.dirname(out), { recursive: true });
 await sharp(Buffer.from(svg)).webp({ quality: 88 }).toFile(out);

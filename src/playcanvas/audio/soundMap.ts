@@ -19,7 +19,7 @@ const STEP: Partial<Record<GroundSurface, string>> = {
   basalt: "step_stone", obsidian: "step_stone", bloodrock: "step_stone", asteroid: "step_stone",
   overgrowth: "step_grass", meadow: "step_grass",
   mud: "step_sand", gravedirt: "step_sand", cobble: "step_stone",
-  beach: "step_sand", wetsand: "step_sand", grotto: "step_stone", fortstone: "step_stone", planks: "step_concrete", ghostdeck: "step_concrete",
+  beach: "step_sand", wetsand: "step_sand", jungle: "step_grass", grotto: "step_stone", fortstone: "step_stone", planks: "step_concrete", ghostdeck: "step_concrete",
   deck: "step_metal", hangardeck: "step_metal", stationdeck: "step_metal", labdeck: "step_metal", quarantine: "step_metal",
   grate: "step_metal", gatefloor: "step_metal", dockdeck: "step_metal",
 };

@@ -42,6 +42,15 @@ export const PIRATE_MODELS = {
   mountainA: decor, mountainB: decor, mountainC: decor, mountainGrass: decor, hills: decor, hillsBare: decor,
   rock: clutter, rock2: box(0.7), rock3: box(0.7), rock4: box(0.7),
   curtainWall: box(), curtainGate: decor, curtainCorner: box(0.9), ruin: box(0.85), waterplant: clutter, waterplant2: clutter,
+  waterlily: clutter, waterlily2: clutter,
+  // Colour: banners, flags, awnings, market clutter.
+  bannerBlue: decor, bannerYellow: decor, bannerRed: decor, bannerWhite: decor, bannerGreen: decor,
+  flagRed: circle(0.15), flagBlue: circle(0.15), flagYellow: circle(0.15), flagGreen: circle(0.15),
+  lanternHanging: clutter, sack: clutter, bucket: clutter, tent: box(0.8), crateOpen: box(0.85), crateLong: box(0.85), bottlesGreen: clutter, bottlesBrown: clutter,
+  // Tropical decor (modelled in code).
+  starfish: clutter, starfishPurple: clutter, starfishRed: clutter, conch: clutter, shells: clutter,
+  coralPink: decor, coralOrange: decor, seaFan: decor, kelp: clutter,
+  bushRed: circle(0.6), bushYellow: circle(0.6), bushPink: circle(0.6), fern: clutter, buoy: decor, tiki: circle(0.15),
 } satisfies Record<string, KitModelDef>;
 
 export type PirateModel = keyof typeof PIRATE_MODELS;

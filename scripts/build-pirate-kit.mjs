@@ -28,6 +28,11 @@ const outFile = path.join(ROOT, "public/models/pirate/pirate-kit.glb");
 
 const kayFiles = execSync(`find -L "${KAYKIT}" -name "*.gltf" -o -name "*.glb"`, { encoding: "utf8" }).split("\n").filter((f) => f && !/\/Characters\/|\/Samples\//.test(f));
 const find = (name) => {
+  if (name.startsWith("d:")) {
+    const f = path.join(ROOT, "assets-src/pirate/decor", `${name.slice(2)}.glb`);
+    if (!fs.existsSync(f)) throw new Error(`no decor ${name} (run scripts/build-pirate-decor.mjs)`);
+    return f;
+  }
   if (name.startsWith("k:")) {
     const f = path.join(KENNEY, `${name.slice(2)}.glb`);
     if (!fs.existsSync(f)) throw new Error(`no model ${name}`);
@@ -92,6 +97,17 @@ const MANIFEST = {
   rock: ["rock_single_A", HX], rock2: ["rock_single_C", HX], rock3: ["rock_single_E", HX], rock4: ["rock_single_D", HX],
   curtainWall: ["wall_straight", HX], curtainGate: ["wall_straight_gate", HX], curtainCorner: ["wall_corner_A_outside", HX],
   ruin: ["building_destroyed", HX], waterplant: ["waterplant_B", HX], waterplant2: ["waterplant_C", HX],
+  waterlily: ["waterlily_A", HX], waterlily2: ["waterlily_B", HX],
+  // ---- colour: banners, flags, awnings, market clutter (KayKit Dungeon / Hexagon)
+  bannerBlue: ["banner_patternA_blue", 1], bannerYellow: ["banner_patternB_yellow", 1], bannerRed: ["banner_patternC_red", 1],
+  bannerWhite: ["banner_patternA_white", 1], bannerGreen: ["banner_triple_green", 1],
+  flagRed: ["flag_red", HX], flagBlue: ["flag_blue", HX], flagYellow: ["flag_yellow", HX], flagGreen: ["flag_green", HX],
+  lanternHanging: ["lantern_hanging", 1], sack: ["sack", HX], bucket: ["bucket_water", HX], tent: ["tent", HX],
+  crateOpen: ["crate_open", HX], crateLong: ["crate_long_A", HX], bottlesGreen: ["bottle_A_labeled_green", 1], bottlesBrown: ["bottle_B_brown", 1],
+  // ---- tropical decor modelled in code (scripts/build-pirate-decor.mjs)
+  starfish: ["d:starfish", 1], starfishPurple: ["d:starfishPurple", 1], starfishRed: ["d:starfishRed", 1], conch: ["d:conch", 1], shells: ["d:shells", 1],
+  coralPink: ["d:coralPink", 1], coralOrange: ["d:coralOrange", 1], seaFan: ["d:seaFan", 1], kelp: ["d:kelp", 1],
+  bushRed: ["d:bushRed", 1], bushYellow: ["d:bushYellow", 1], bushPink: ["d:bushPink", 1], fern: ["d:fern", 1], buoy: ["d:buoy", 1], tiki: ["d:tiki", 1],
 };
 
 /**
@@ -106,7 +122,9 @@ const MANIFEST = {
 // over the bow): everything above the deck forward of model z 1.7 goes, the deck stays.
 const bow = (cx, cy, cz, ymax) => (cz > 3.4 && cy > 2.0) || (cz > 1.7 && ymax > 2.25) ||
   // the masts and their collars (a pole through the middle of the arena hides the fight)
-  (Math.abs(cx) < 0.8 && cz > -1.9 && cz < 1.7 && cy > 2.85) || (Math.abs(cx) < 0.8 && cz > 0.15 && cz < 1.25 && cy > 2.15);
+  (Math.abs(cx) < 0.8 && cz > -1.9 && cz < 1.7 && cy > 2.85) || (Math.abs(cx) < 0.8 && cz > 0.15 && cz < 1.25 && cy > 2.15) ||
+  // the hatch, its coaming and its shaft (from the camera, a wall across the deck): planked over
+  (Math.abs(cx) < 0.8 && cz > -1.5 && cz < 0.1 && cy > 0.9);
 const CUTS = {
   bowTip: (cx, cy, cz, ymax) => bow(cx, cy, cz, ymax),
   brokenBow: (cx, cy, cz, ymax) => cz < -2.0 || bow(cx, cy, cz, ymax),

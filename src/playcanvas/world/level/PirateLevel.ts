@@ -8,6 +8,7 @@ import { PIRATE_MODELS, type PirateModel } from "../props/PirateKit";
 import { PIRATE, PIRATE_LIGHTING } from "../../config";
 import { PIRATE_DIFFICULTIES, PIRATE_LEVELS, PIRATE_RUN } from "../../gameplay/pirateConfig";
 import type { Biome, LevelBounds, WayPoint, Zone } from "./Biome";
+import { buildSeaFx, sway, updateSeaFx, type Shoreline } from "./PirateFx";
 
 /**
  * BLACK TIDE - the pirate chapter: ten zones south to north (~90 x 820 m), the biggest map. The
@@ -134,6 +135,8 @@ const SEA_POOLS: LavaPool[] = [
   ...[[-70, 0.18], [-42, 0.3], [-60, 0.62], [-32, 0.72], [-76, 0.82], [-48, 0.95]].map(([x, f]) => ({
     x, z: B.shallows.z1 - (B.shallows.z1 - B.shallows.z0) * f, w: 12 + (x % 7), d: 9 + (x % 5), soft: true,
   })),
+  // Rock pools along the waterline of the cove and the shore (walkable).
+  ...[0.12, 0.3, 0.46, 0.62, 0.8, 0.93].map((f, i) => ({ x: 15 + (i % 2) * 2, z: B.cove.z1 - (B.cove.z1 - B.shore.z0) * f, w: 7 + (i % 3) * 2, d: 6 + (i % 2) * 3, soft: true })),
   // The skull rock's lagoon: a pool in the middle of the arena (the Sea Hag hovers over it).
   { x: WEST_X, z: (B.skull.z0 + B.skull.z1) / 2 - 4, w: 20, d: 16, soft: true, solid: true },
 ];
@@ -149,8 +152,29 @@ export const SEA: LavaSpec = {
 const mid = (b: Box): [number, number] => [(b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2];
 const [gx, gz] = mid(B.grotto), [cx, cz] = mid(B.cove), [sx, sz] = mid(B.shore), [hx, hz] = mid(B.hold), [, fz] = mid(B.fort), [kx, kz] = mid(B.skull);
 
+/** Beach edges where the waves break (the sea on their `sea` side). */
+const SHORELINES: Shoreline[] = [
+  { x0: 21.7, z0: B.grotto.z0 - 8, x1: 21.7, z1: B.shore.z0 - 10, sea: [1, 0], y: SEA_Y },
+  { x0: -60, z0: B.shore.z0 - 10.2, x1: 0, z1: B.shore.z0 - 10.2, sea: [0, -1], y: SEA_Y },
+  { x0: B.shallows.x1 + 0.2, z0: B.shallows.z1 + 4, x1: B.shallows.x1 + 0.2, z1: B.shallows.z0 - 2, sea: [1, 0], y: SEA_Y },
+  { x0: B.fort.x1 + 6.2, z0: B.shallows.z0 - 2, x1: B.fort.x1 + 6.2, z1: B.fort.z0 - 9, sea: [1, 0], y: SEA_Y },
+  { x0: B.skull.x1 + 4.2, z0: B.fort.z0 - 9, x1: B.skull.x1 + 4.2, z1: B.skull.z0, sea: [1, 0], y: SEA_Y },
+  { x0: -110, z0: B.skull.z0 - 0.2, x1: WEST_X - 8, z1: B.skull.z0 - 0.2, sea: [0, -1], y: SEA_Y },
+  { x0: WEST_X + 8, z0: B.skull.z0 - 0.2, x1: B.skull.x1 + 4, z1: B.skull.z0 - 0.2, sea: [0, -1], y: SEA_Y },
+];
+
+/** Tiki torches lining the walk along the beach (models in buildColour, flames here). */
+const TIKIS: [number, number][] = [];
+for (let zz = B.cove.z1 - 8; zz > B.shore.z0 + 8; zz -= 15) TIKIS.push([zz > B.cove.z0 ? -12 : -16, zz], [zz > B.cove.z0 ? 12 : 14, zz - 7]);
+
 /** Torches, campfires, cannon smoke, gulls; lanterns in the hold; ghost lights. Sparse so combat reads. */
 export const AMBIENT: AmbientEmitter[] = [
+  ...TIKIS.map(([x, zz]) => ({ kind: "fire" as const, x, y: 2.1, z: zz, size: [0.25, 0.25] as [number, number], intensity: 0.8 })),
+  // Spray blowing in off the breakers, palm leaves on the wind.
+  { kind: "dust", x: 22, y: 0.6, z: (B.cove.z1 + B.shore.z0) / 2, size: [8, 180], intensity: 1, color: [0.95, 1.0, 1.0] },
+  { kind: "leaves", x: -10, y: 0.6, z: (B.cove.z1 + B.shore.z0) / 2, size: [50, 170], intensity: 0.9, color: [0.45, 0.75, 0.3] },
+  { kind: "leaves", x: WEST_X, y: 0.6, z: (B.shallows.z1 + B.skull.z0) / 2, size: [60, 260], intensity: 0.7, color: [0.5, 0.78, 0.32] },
+  { kind: "dust", x: B.fort.x1 + 4, y: 0.6, z: (B.shallows.z1 + B.skull.z0) / 2, size: [8, 260], intensity: 0.9, color: [0.95, 1.0, 1.0] },
   // Grotto: torches on the walls, gold glinting, dust in the shafts of light.
   ...[[-20, 30], [20, 30], [-20, 6], [-20, -10], [20, -10], [-6, B.grotto.z0 - 4], [6, B.grotto.z0 - 4]].map(([x, zz]) => ({ kind: "fire" as const, x, y: 1.6, z: zz, size: [0.35, 0.35] as [number, number], intensity: 0.9 })),
   { kind: "glow", x: 0, z: B.grotto.z0 + 10, size: [16, 10], color: [1.0, 0.75, 0.3], intensity: 0.45, pulse: 0.3 },
@@ -208,10 +232,10 @@ export const GROUND_SPEC: GroundSpec = {
     // The grotto's floor and the rock round it.
     { x0: -70, z0: B.grotto.z0 - 8, x1: 70, z1: B.grotto.z1 + 30, surface: "grotto" },
     // The beach from the cave mouth to the pier's foot (the sea begins at x 24).
-    { x0: -110, z0: B.shore.z0 - 10, x1: 24, z1: B.grotto.z0 - 8 },
+    { x0: -110, z0: B.shore.z0 - 10, x1: 21.5, z1: B.grotto.z0 - 8 },
     // The shallows' sandbars, the fort's headland and the skull rock's ledges.
     { x0: -130, z0: B.shallows.z0 - 2, x1: B.shallows.x1, z1: B.shallows.z1 + 4, surface: "wetsand" },
-    { x0: -140, z0: B.fort.z0 - 9, x1: B.fort.x1 + 6, z1: B.shallows.z0 - 2, surface: "overgrowth" },
+    { x0: -140, z0: B.fort.z0 - 9, x1: B.fort.x1 + 6, z1: B.shallows.z0 - 2, surface: "jungle" },
     { x0: -140, z0: B.skull.z0, x1: B.skull.x1 + 4, z1: B.fort.z0 - 9, surface: "fortstone" },
     // The pier's boards.
     { x0: B.pier.x0 - 0.6, z0: B.pier.z0 - 8, x1: B.pier.x1 + 0.6, z1: B.pier.z1 + 1, surface: "planks" },
@@ -230,12 +254,12 @@ export const GROUND_SPEC: GroundSpec = {
     ...[0.1, 0.3, 0.5, 0.7, 0.9].map((f, i) => ({ x: 18, z: B.cove.z1 - (B.cove.z1 - B.shore.z0) * f, w: 12, d: 36, surface: "wetsand" as const, seed: i })),
     // Sand drifted into the cave mouth; rock ledges and grass on the beach.
     { x: 0, z: B.grotto.z0 - 2, w: 14, d: 20, surface: "beach", seed: 1 },
-    { x: -30, z: cz, w: 18, d: 40, surface: "overgrowth", seed: 2 },
-    { x: -34, z: sz - 10, w: 16, d: 30, surface: "overgrowth", seed: 3 },
+    { x: -30, z: cz, w: 18, d: 40, surface: "jungle", seed: 2 },
+    { x: -34, z: sz - 10, w: 16, d: 30, surface: "jungle", seed: 3 },
     // Shallows: dry bars on the wet sand.
     ...[[-74, 0.2], [-46, 0.45], [-66, 0.7], [-38, 0.88]].map(([x, f], i) => ({ x, z: B.shallows.z1 - (B.shallows.z1 - B.shallows.z0) * f, w: 18, d: 12, surface: "beach" as const, seed: i })),
     // Grass on the headland round the fort, sand on the skull rock's beach.
-    { x: B.fort.x0 - 6, z: fz, w: 16, d: 70, surface: "overgrowth", seed: 1 },
+    { x: B.fort.x0 - 6, z: fz, w: 16, d: 70, surface: "jungle", seed: 1 },
     { x: kx, z: B.skull.z1 - 10, w: 50, d: 22, surface: "wetsand", seed: 2 },
     { x: kx - 20, z: kz + 6, w: 26, d: 30, surface: "beach", seed: 3 },
     { x: kx + 22, z: kz - 10, w: 24, d: 28, surface: "wetsand", seed: 0 },
@@ -271,7 +295,14 @@ const world: World = { seals: [], exitSeals: [], flood: null, foam: [], foamMate
 export function buildPirateLevel(kit: ModelKit<PirateModel>): Entity {
   const root = new Entity("PirateLevel");
   const random = rng(1717);
-  const place: Place = (id, x, zz, yaw = 0, options = {}) => kit.spawn(id, x, zz, yaw, root, options);
+  // Palms lean, flags, banners and kelp flutter in the breeze (PirateFx).
+  const place: Place = (id, x, zz, yaw = 0, options = {}) => {
+    const e = kit.spawn(id, x, zz, yaw, root, options);
+    if (id.startsWith("palm")) sway(e, 2.6);
+    else if (id.startsWith("flag") || id.startsWith("banner")) sway(e, 7, true);
+    else if (id === "kelp" || id === "buoy") sway(e, id === "kelp" ? 9 : 5, true);
+    return e;
+  };
   const placeAll = (list: Placement[]) => { for (const [id, x, zz, yaw, options] of list) place(id, x, zz, yaw ?? 0, options); };
 
   /** An invisible wall from (ax, az) to (bx, bz). */
@@ -336,6 +367,8 @@ export function buildPirateLevel(kit: ModelKit<PirateModel>): Entity {
   buildFlagship(ctx);
   buildFoam(root);
   buildKraken(root);
+  buildColour(ctx);
+  buildSeaFx(kit.app, root, SHORELINES, SEA_POOLS.slice(0, 2).map((p) => ({ x: p.x, z: p.z, w: p.w, d: p.d, y: p.y ?? SEA_Y })));
   buildSeals(kit, root);
   return root;
 }
@@ -416,7 +449,6 @@ function buildCove({ place, placeAll, zoneEdges, laneZ, scatter, random }: Ctx):
     ["crate", -18, cz - 2, 10], ["crate", -17.2, cz - 1, 50], ["crateBottles", -19, cz - 0.4, 30], ["barrel", -20, cz + 4, 0], ["barrel", -21, cz + 5, 0],
     ["flagPirate", -14, cz + 6, 30], ["kegs", -26, b.z1 - 36, 90], ["bottleLarge", -8, cz - 3, 0], ["bottle", -11.5, cz - 8, 0],
     ["hole", -2, b.z0 + 14, 0], ["chest", -2, b.z0 + 14, 20, { y: -0.35 }], ["shovel", 0.5, b.z0 + 15, 30, { tiltX: 18 }],
-    ["sandPatchFoliage", -14, b.z1 - 12, 30], ["sandPatch", 6, cz + 8, 90],
   ]);
   // Boats pulled up on the sand, and out on the water; a sloop at anchor.
   placeAll([
@@ -508,7 +540,7 @@ function buildPier({ place, placeAll, wall, random }: Ctx): void {
 /* ------------------------------------------------------------------------------------------------
  * 5 THE BROKEN DECK (the galleon's bow half)
  * ---------------------------------------------------------------------------------------------- */
-function buildDeck({ place, placeAll, wall, blockBox, random }: Ctx): void {
+function buildDeck({ place, placeAll, wall, random }: Ctx): void {
   const b = B.deck, s = WRECK.s, X = WRECK.x, Z = WRECK.z;
   place("deckWreckBow", X, Z, 0, { scale: s, y: -2.1 * s - 0.04, noCollider: true });
   // Rails: the full-width waist, then the bow converging to the open tip (model z 1.7 -> 3.4).
@@ -524,9 +556,8 @@ function buildDeck({ place, placeAll, wall, blockBox, random }: Ctx): void {
   wall(X + GAP, b.z1 + 0.5, X + halfW, b.z1 + 0.5);
   wall(X - halfW, b.z0 - 0.5, X - GAP, b.z0 - 0.5);
   wall(X + GAP, b.z0 - 0.5, X + halfW, b.z0 - 0.5);
-  // The open hatch (a pit; shots fly over). The masts are gone (cut from the kit model: from the
-  // camera a mast is a pole through the middle of the fight).
-  blockBox(X, Z - 0.7 * s, 1.2 * s, 1.0 * s, true);
+  // The masts and the hatch are gone (cut from the kit model: from the camera they were walls
+  // through the middle of the fight); the deck is planked over.
   // Guns along both rails, facing out; powder, shot and lashed cargo; wreckage at the break.
   for (let zz = b.z1 - 4; zz > b.z0 + 3; zz -= 7.5) {
     place("cannon", X - halfW + 1.6, zz, -90);
@@ -721,7 +752,7 @@ function buildSkull({ place, placeAll, zoneEdges, wall, random }: Ctx): void {
 /* ------------------------------------------------------------------------------------------------
  * 10 THE GHOST FLAGSHIP (boss: the Captain)
  * ---------------------------------------------------------------------------------------------- */
-function buildFlagship({ place, placeAll, wall, blockBox, random }: Ctx): void {
+function buildFlagship({ place, placeAll, wall, random }: Ctx): void {
   const b = B.flagship, s = GHOST.s, X = GHOST.x, Z = GHOST.z;
   place("deckGhost", X, Z, 0, { scale: s, y: -2.1 * s - 0.04, noCollider: true });
   const halfW = 2.05 * s;
@@ -735,7 +766,6 @@ function buildFlagship({ place, placeAll, wall, blockBox, random }: Ctx): void {
   wall(X + GAP, b.z1 + 0.5, X + halfW, b.z1 + 0.5);
   // The quarterdeck's front wall (model z -1.9) closes the north.
   wall(X - halfW, b.z0 - 0.5, X + halfW, b.z0 - 0.5);
-  blockBox(X, Z - 0.7 * s, 1.2 * s, 1.0 * s, true);
   // Guns along the rails, the Captain's plunder by the quarterdeck, coffins of his drowned crew.
   for (let zz = b.z1 - 5; zz > b.z0 + 3; zz -= 8) {
     place("cannon", X - halfW + 1.6, zz, -90);
@@ -755,6 +785,110 @@ function buildFlagship({ place, placeAll, wall, blockBox, random }: Ctx): void {
     ["shipWreck", X + 50, Z + 50, 300, { noCollider: true, scale: 2.4, y: DEEP_Y - 1, tiltZ: 18 }],
   ]);
   for (let i = 0; i < 10; i++) place(random() < 0.5 ? "rocksA" : "rocksB", X + (random() < 0.5 ? -1 : 1) * (halfW + 14 + random() * 20), Z + 40 - random() * 90, random() * 360, { noCollider: true, y: DEEP_Y - 1.5, scale: 1 + random() });
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Colour: flora along the edges, shells and starfish on the sand, coral on the reef, flags and
+ * banners, buoys on the water - kept off the lanes and away from where the hero starts.
+ * ---------------------------------------------------------------------------------------------- */
+function buildColour({ place, placeAll, random }: Ctx): void {
+  const pick = <T,>(a: T[]) => a[Math.floor(random() * a.length)];
+  const sprinkle = (ids: PirateModel[], n: number, b: Box, lane: number | null, opts: () => SpawnOptions = () => ({})) => {
+    for (let i = 0; i < n; i++) {
+      const x = b.x0 + random() * (b.x1 - b.x0), zz = b.z0 + random() * (b.z1 - b.z0);
+      if (lane !== null && Math.abs(x - lane) < GAP + 1 && (zz > b.z1 - 10 || zz < b.z0 + 10)) continue;
+      place(pick(ids), x, zz, random() * 360, opts());
+    }
+  };
+  const shellsAndStars: PirateModel[] = ["starfish", "starfishRed", "starfishPurple", "shells", "conch", "shells"];
+  const flora: PirateModel[] = ["bushRed", "bushYellow", "bushPink", "fern", "fern", "grassPatchFoliage"];
+  // The beach: shells and starfish; a hedge of flowering bushes and ferns along the jungle side;
+  // tiki torches lining the walk; buoys and a raft on the water.
+  for (const id of ["cove", "shore"] as const) {
+    const b = B[id];
+    sprinkle(shellsAndStars, 70, b, EXITS[id].at, () => ({ scale: 1.2 + random() * 0.8 }));
+    for (let zz = b.z1; zz > b.z0; zz -= 3.2) {
+      place(pick(flora), b.x0 + 1 + random() * 5, zz + random() * 2, random() * 360, { scale: 0.9 + random() * 0.6 });
+      if (random() < 0.6) place(pick(flora), b.x0 - 3 - random() * 6, zz, random() * 360, { scale: 1 + random() * 0.6, noCollider: true });
+    }
+    for (let i = 0; i < 6; i++) place("buoy", 30 + random() * 26, b.z1 - random() * (b.z1 - b.z0), random() * 360, { y: SEA_Y - 0.35, noCollider: true });
+  }
+  for (const [x, zz] of TIKIS) place("tiki", x, zz, 0);
+  placeAll([
+    ["flagRed", -20, B.cove.z1 - 18, 30], ["flagYellow", -28, B.cove.z1 - 18, 60], ["bannerBlue", -24, B.cove.z1 - 19.6, 0, { noCollider: true, y: 0.6 }],
+    ["tent", -24, cz + 14, 70], ["sack", -21, cz + 12, 0], ["sack", -21.8, cz + 12.6, 40], ["bucket", -19.5, cz + 11, 0], ["crateOpen", -17, cz + 16, 20],
+    ["bottlesGreen", -16.4, cz + 15.6, 0], ["raft", 34, cz - 20, 30, { y: SEA_Y + 0.05, noCollider: true }],
+    ["flagBlue", -26, sz - 34, 0], ["flagRed", 10, sz + 34, 0], ["tent", -30, sz + 26, 110],
+  ]);
+  // The grotto: green and brown bottles, open crates of plunder, candles, a red and a gold banner.
+  sprinkle(["bottlesGreen", "bottlesBrown", "candles", "coinsSmall", "sack"], 26, B.grotto, 0);
+  placeAll([
+    ["crateOpen", -10, B.grotto.z0 + 6, 20], ["crateOpen", 12, B.grotto.z0 + 4, -30], ["bannerRed", -6, B.grotto.z0 - 1.6, 0, { noCollider: true, y: 1 }],
+    ["bannerYellow", 6, B.grotto.z0 - 1.6, 0, { noCollider: true, y: 1 }], ["lanternStanding", -12, 20, 0], ["lanternStanding", 12, 10, 0],
+  ]);
+  // The pier: buoys and floats along it, flags in red, blue and yellow on its posts, sacks and open crates.
+  const pb = B.pier;
+  for (let zz = pb.z1 - 4, i = 0; zz > pb.z0; zz -= 9, i++) {
+    place(["flagRed", "flagBlue", "flagYellow"][i % 3] as PirateModel, i % 2 ? pb.x1 + 0.4 : pb.x0 - 0.4, zz, i % 2 ? -90 : 90, { noCollider: true });
+    place("buoy", i % 2 ? pb.x0 - 4 - random() * 6 : pb.x1 + 4 + random() * 6, zz - 3, random() * 360, { y: SEA_Y - 0.35, noCollider: true });
+  }
+  sprinkle(["sack", "crateOpen", "bucket", "bottlesBrown", "barrel"], 18, { x0: pb.x0 + 1, z0: pb.z0 + 4, x1: pb.x1 - 1, z1: pb.z1 - 8 }, 6);
+  // The decks and the hold: cargo spilled, sacks, bottles; the ghost ship flies green banners.
+  sprinkle(["sack", "crateOpen", "bottlesGreen", "bucket", "shells"], 16, B.deck, 6);
+  sprinkle(["sack", "bottlesGreen", "bottlesBrown", "candles", "crateOpen"], 18, B.hold, null);
+  sprinkle(["bottlesGreen", "candles", "sack"], 12, B.flagship, GHOST.x);
+  // The shallows: coral, sea fans and kelp on the reef, starfish everywhere, lilies in the pools.
+  const sb = B.shallows;
+  sprinkle(["coralPink", "coralOrange", "seaFan", "kelp", "coralPink"], 46, sb, WEST_X, () => ({ scale: 0.9 + random() * 0.9 }));
+  sprinkle(shellsAndStars, 70, sb, WEST_X, () => ({ scale: 1.2 + random() * 0.8 }));
+  for (const p of SEA_POOLS) if (p.soft && !p.solid && p.z < sb.z1 && p.z > sb.z0) for (let k = 0; k < 4; k++) place(random() < 0.5 ? "waterlily" : "waterlily2", p.x + (random() - 0.5) * p.w * 0.6, p.z + (random() - 0.5) * p.d * 0.6, random() * 360, { y: 0.02 });
+  for (let i = 0; i < 18; i++) place(pick(["coralPink", "coralOrange", "seaFan", "kelp"] as PirateModel[]), sb.x1 + 3 + random() * 14, sb.z1 - random() * (sb.z1 - sb.z0), random() * 360, { y: SEA_Y - 0.4, noCollider: true, scale: 1 + random() });
+  // The fort: banners hung on its walls, flags on its towers, tents and stores in the yard.
+  const fb = B.fort;
+  for (let zz = fb.z1 - 8, i = 0; zz > fb.z0 + 4; zz -= 11, i++) place(["bannerRed", "bannerBlue", "bannerYellow"][i % 3] as PirateModel, fb.x0 - 0.2, zz, 90, { noCollider: true, y: 1.5, scale: 1.3 });
+  for (let xx = fb.x0 + 8, i = 0; xx < fb.x1 - 4; xx += 10, i++) if (Math.abs(xx - WEST_X) > 7) place(["bannerBlue", "bannerRed", "bannerWhite"][i % 3] as PirateModel, xx, fb.z0 - 1.2, 0, { noCollider: true, y: 1.5, scale: 1.3 });
+  placeAll([
+    ["flagRed", fb.x0 - 4, fb.z1 + 4, 0, { y: 12, noCollider: true, scale: 1.5 }], ["flagBlue", fb.x1 + 4, fb.z1 + 4, 0, { y: 12, noCollider: true, scale: 1.5 }],
+    ["tent", fb.x0 + 10, fb.z1 - 26, 90], ["tent", fb.x0 + 10, fb.z1 - 36, 90], ["sack", fb.x0 + 13, fb.z1 - 30, 0], ["sack", fb.x0 + 13.6, fb.z1 - 31, 50],
+  ]);
+  sprinkle(["sack", "bucket", "bottlesBrown", "crateOpen", "cannonBall"], 24, fb, WEST_X);
+  for (let zz = fb.z1; zz > fb.z0; zz -= 4) place(pick(flora), fb.x0 - 6 - random() * 8, zz, random() * 360, { noCollider: true, scale: 1 + random() * 0.6 });
+  // Skull rock: kelp, purple fans and starfish, lilies on the lagoon.
+  const kb = B.skull;
+  sprinkle(["kelp", "seaFan", "starfishPurple", "coralPink", "shells", "starfishPurple"], 50, kb, WEST_X, () => ({ scale: 1 + random() * 0.8 }));
+  for (let k = 0; k < 8; k++) place(random() < 0.5 ? "waterlily" : "waterlily2", WEST_X + (random() - 0.5) * 16, (kb.z0 + kb.z1) / 2 - 4 + (random() - 0.5) * 12, random() * 360, { y: 0.02 });
+  // Dense dressing: a jittered 4.5 m grid over the land zones, so every screen has colour in it.
+  const DRESS: Partial<Record<ZoneId, [PirateModel, number][]>> = {
+    cove: [["starfish", 3], ["starfishRed", 2], ["shells", 4], ["conch", 2], ["grassTuft", 3], ["grassPlant", 2], ["fern", 2], ["bushPink", 0.6], ["bushYellow", 0.6], ["rock", 1]],
+    shore: [["starfish", 3], ["starfishPurple", 2], ["shells", 4], ["conch", 2], ["grassTuft", 2], ["planks", 1], ["fern", 1.5], ["bushRed", 0.6], ["rock", 1], ["cannonBall", 0.6], ["bottle", 0.8]],
+    shallows: [["starfish", 3], ["starfishPurple", 2], ["shells", 3], ["coralPink", 1.4], ["coralOrange", 1.2], ["seaFan", 1], ["kelp", 1.2], ["waterplant", 1], ["rock", 1]],
+    fort: [["sack", 1], ["cannonBall", 1], ["grassTuft", 3], ["grassPlant", 2], ["bottlesBrown", 0.6], ["bucket", 0.5], ["fern", 0.8]],
+    skull: [["kelp", 2], ["starfishPurple", 3], ["shells", 2], ["seaFan", 1.2], ["coralPink", 0.8], ["grassTuft", 2], ["bonesB", 1], ["waterplant", 1]],
+    grotto: [["coinsSmall", 2], ["bottlesGreen", 1], ["bones", 1.5], ["rock", 2], ["candles", 0.8], ["skull", 0.5]],
+  };
+  for (const [id, list] of Object.entries(DRESS) as [ZoneId, [PirateModel, number][]][]) {
+    const b = B[id], total = list.reduce((k, [, w]) => k + w, 0), start = STARTS[id];
+    for (let x = b.x0 + 2; x < b.x1 - 1; x += 4.5) {
+      for (let zz = b.z0 + 2; zz < b.z1 - 1; zz += 4.5) {
+        if (random() < 0.25) continue;
+        const px = x + (random() - 0.5) * 3.6, pz = zz + (random() - 0.5) * 3.6;
+        if (Math.hypot(px - start.x, pz - start.z) < 3) continue;
+        let r = random() * total, choice = list[0][0];
+        for (const [m, w] of list) { r -= w; if (r <= 0) { choice = m; break; } }
+        const small = choice.startsWith("star") || choice === "shells" || choice === "conch";
+        place(choice, px, pz, random() * 360, { scale: small ? 1.6 + random() * 1 : 0.9 + random() * 0.5 });
+      }
+    }
+  }
+  // Palms on the beach itself (shade and cover), not only behind it.
+  for (const id of ["cove", "shore"] as const) {
+    const b = B[id];
+    for (let i = 0; i < 7; i++) {
+      const x = b.x0 + 8 + random() * 18, zz = b.z0 + 10 + random() * (b.z1 - b.z0 - 20);
+      if (Math.abs(x - EXITS[id].at) < GAP + 2) continue;
+      place(random() < 0.5 ? "palmBend" : "palmDetailedBend", x, zz, random() * 360, { scale: 0.9 + random() * 0.3 });
+    }
+  }
 }
 
 /* ------------------------------------------------------------------------------------------------
@@ -780,7 +914,7 @@ function buildFoam(root: Entity): void {
     world.foam.push({ entity: e, base: x, phase });
   };
   // The beach's sea edge (x 24) from the cave mouth to the pier's foot.
-  for (let zz = B.grotto.z0 - 20; zz > B.shore.z0 - 10; zz -= 12) strip(25.2, zz - 6, 1.6, 12.4, zz * 0.13);
+  for (let zz = B.grotto.z0 - 8; zz > B.shore.z0 - 10; zz -= 12) strip(22.7, zz - 6, 1.6, 12.4, zz * 0.13);
   // Round the shallows' bars and the fort's headland.
   for (let zz = B.shallows.z1 + 4; zz > B.skull.z0; zz -= 12) strip(B.fort.x1 + 7.2, zz - 6, 1.6, 12.4, zz * 0.13);
 }
@@ -948,12 +1082,12 @@ function onEdge(r: LevelBounds, x: number, zz: number): boolean {
 interface Mood { sun: [number, number, number]; sunI: number; clear: [number, number, number]; fog: [number, number]; ambient: [number, number, number] }
 const L = PIRATE_LIGHTING;
 const MOODS: Record<string, Mood> = {
-  grotto: { sun: [1.0, 0.72, 0.48], sunI: 1.3, clear: [0.12, 0.1, 0.09], fog: [16, 58], ambient: [0.5, 0.48, 0.5] },
+  grotto: { sun: [1.0, 0.76, 0.5], sunI: 1.6, clear: [0.14, 0.11, 0.1], fog: [18, 60], ambient: [0.62, 0.56, 0.6] },
   beach: { sun: L.sun.color as [number, number, number], sunI: L.sun.intensity, clear: L.clearColor as [number, number, number], fog: [L.fogStart, L.fogEnd], ambient: L.groundAmbient as [number, number, number] },
-  storm: { sun: [0.78, 0.84, 0.95], sunI: 1.7, clear: [0.3, 0.35, 0.4], fog: [24, 78], ambient: [0.62, 0.7, 0.82] },
-  hold: { sun: [0.6, 0.72, 0.8], sunI: 0.75, clear: [0.06, 0.08, 0.09], fog: [12, 42], ambient: [0.38, 0.45, 0.5] },
-  night: { sun: [0.78, 0.84, 1.0], sunI: 2.0, clear: [0.16, 0.2, 0.3], fog: [26, 84], ambient: [0.66, 0.72, 0.95] },
-  cursed: { sun: [0.72, 0.9, 0.84], sunI: 1.8, clear: [0.08, 0.17, 0.16], fog: [20, 68], ambient: [0.6, 0.78, 0.72] },
+  storm: { sun: [1.0, 0.92, 0.8], sunI: 2.3, clear: [0.36, 0.56, 0.66], fog: [28, 90], ambient: [0.78, 0.84, 0.95] },
+  hold: { sun: [0.95, 0.75, 0.55], sunI: 1.1, clear: [0.1, 0.09, 0.08], fog: [14, 48], ambient: [0.55, 0.5, 0.48] },
+  night: { sun: [1.0, 0.66, 0.5], sunI: 2.4, clear: [0.42, 0.3, 0.42], fog: [28, 92], ambient: [0.82, 0.72, 0.9] },
+  cursed: { sun: [0.72, 0.95, 0.9], sunI: 2.1, clear: [0.1, 0.28, 0.3], fog: [22, 74], ambient: [0.62, 0.86, 0.86] },
 };
 const ZONE_MOOD: Record<ZoneId, keyof typeof MOODS> = {
   grotto: "grotto", cove: "beach", shore: "beach", pier: "storm", deck: "storm", hold: "hold",
@@ -1051,7 +1185,8 @@ export const PIRATE_BIOME: Biome<PirateModel> = {
       const s = world.exitSeals[index];
       if (s && s.open < 0 && s.entity.enabled) s.open = 0;
     },
-    update(dt) {
+    update(dt, hero) {
+      updateSeaFx(dt, hero);
       for (const s of world.exitSeals) {
         if (s.open < 0 || !s.entity.enabled) continue;
         s.open = Math.min(1, s.open + dt / SEAL_OPEN_SECONDS);

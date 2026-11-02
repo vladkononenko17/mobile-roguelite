@@ -210,6 +210,11 @@ The last and largest chapter of the 3D game at `/playcanvas.html`: open it from 
 
 - **Moods**: each act has its own light — a gold sunset on the beach, a storm over the galleon, the cursed
   night at the skull rock — and the grotto and the hold are dark (`MOODS` in `PirateLevel.ts`).
+- **Sea and breeze** (`PirateFx.ts`): waves roll in and break on the beaches, sun glints drift on the
+  water, cloud shadows sail over the sand, palms lean and flags, banners and kelp flutter in the wind;
+  spray and palm leaves blow in off the sea.
+- **Colour**: flowering bushes, ferns, starfish, shells, coral, sea fans, kelp and buoys (modelled in
+  `scripts/build-pirate-decor.mjs`), banners and flags, tiki torches along the beach, rock pools.
 - **Enemies** (`src/playcanvas/gameplay/pirateConfig.ts`): the drowned (zombie bodies in sea-drowned skins),
   carrion crabs (swarm), skeleton boarders (fast), musketeers (ranged), powder monkeys (lob bombs, explode
   when killed), quartermasters (shield charge) and the barnacle brute (slam). Easy / Hard / Nightmare.
