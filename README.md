@@ -171,9 +171,9 @@ Rules are pure TypeScript — `hata/src/content.ts` (tools and levels, pay rates
 
 The game is made for the iPhone only: on a computer (no touch screen) `hata/src/main.ts` loads nothing heavy and shows a page with a QR code to open it on the phone; the game itself (`hata/src/game.ts`) is loaded only on touch devices. Controls (landscape): left part of the screen — walk (floating stick, push to the edge to jog), the rest — look, the big button — work (it changes to «Підняти», «Лізти», «Мити посуд»… when you aim at something to use, and offers the right tool when you aim at a surface it can't clean); washing up is done by rubbing the dish with a finger. Textures are 512 px to stay well within iPhone Safari's memory; if the tab ever dies in the first seconds of play, the next launch lowers the graphics one step by itself. Graphics quality (low/medium/high) is in the settings; medium by default. Adding the page to the Home Screen runs it full screen. Progress is saved on the device. For offline checks: open with `?still=1` (or `?dev=1`) and drive it from the console with `__hata.teleport(x, z, yaw, pitch)`, `__hata.setTool('washer')`, `__hata.simulate(seconds, holdAction, [strafe, forward], [lookX, lookY])`, `__hata.rows()`.
 
-## Dustline 3D — Chapter IV: The Dark Kingdom (medieval)
+## Dustline 3D — Chapter III: The Dark Kingdom (medieval)
 
-The 3D game at `/playcanvas.html` gains a fourth chapter: open it from the menu (chapter IV) or with
+The 3D game at `/playcanvas.html` gains a medieval chapter: open it from the menu (chapter III, before Hell, which is now chapter IV) or with
 `?level=medieval` (also `?level=kingdom`). A plague-struck realm where the dead rise, seven levels
 south to north (`src/playcanvas/world/level/MedievalLevel.ts`): the Burned Village, the Graveyard,
 the Abbey (boss: **the Mad Abbot**), the Bridge, the Outer Bailey, the Great Hall and the Throne Yard
@@ -189,3 +189,43 @@ the Abbey (boss: **the Mad Abbot**), the Bridge, the Outer Bailey, the Great Hal
   (creatures with their clips and colour skins, `scripts/build-medieval-creatures.mjs`). The raw packs
   stay local in `assets-src/medieval/` (git-ignored).
 - Tests: `tests/medieval.test.mjs`. Music for now reuses the Hell track.
+
+## Dustline 3D — Chapter V: The Black Tide (pirates)
+
+The last and largest chapter of the 3D game at `/playcanvas.html`: open it from the menu (chapter V) or with
+`?level=pirate` (also `?level=tide`, `?level=sea`). Cursed gold woke the drowned. Ten levels on one
+~90 × 820 m map, south to north (`src/playcanvas/world/level/PirateLevel.ts`):
+
+1. **The Treasure Grotto** — rock walls, chests of gold, an underground pool; out through the cave mouth.
+2. **Smugglers' Cove** — beach, palms, the smugglers' shack and boats; the sea to the east.
+3. **The Wreck Shore** — wrecks on the sand (boss: **the Bosun**, an anchor on his fist).
+4. **The Rotten Pier** — a long pier over the water between moored ships; the galleon ahead fires on it.
+5. **The Broken Deck** — the deck of a galleon broken in two on the reef: guns, cargo, the open hatch.
+6. **The Flooded Hold** — the stern half, its hull cut open; the water rises while you hold out; out by a breach.
+7. **The Reef Shallows** — sandbars and tide pools; the tide rolls in from the sea (a breaking wave).
+8. **The Cliff Fort** — curtain walls, towers and the batteries, which fire on their own yard.
+9. **Skull Rock** — a lagoon below the great skull (boss: **the Sea Hag**, who hovers and throws the sea at you).
+10. **The Ghost Flagship** — its deck in deep water (boss: **the Captain**; below a third of his health the
+    kraken wakes and its tentacles slam across the deck).
+
+- **Moods**: each act has its own light — a gold sunset on the beach, a storm over the galleon, the cursed
+  night at the skull rock — and the grotto and the hold are dark (`MOODS` in `PirateLevel.ts`).
+- **Sea and breeze** (`PirateFx.ts`): waves roll in and break on the beaches, sun glints drift on the
+  water, cloud shadows sail over the sand, palms lean and flags, banners and kelp flutter in the wind;
+  spray and palm leaves blow in off the sea.
+- **Colour**: flowering bushes, ferns, starfish, shells, coral, sea fans, kelp and buoys (modelled in
+  `scripts/build-pirate-decor.mjs`), banners and flags, tiki torches along the beach, rock pools.
+- **Enemies** (`src/playcanvas/gameplay/pirateConfig.ts`): the drowned (zombie bodies in sea-drowned skins),
+  carrion crabs (swarm), skeleton boarders (fast), musketeers (ranged), powder monkeys (lob bombs, explode
+  when killed), quartermasters (shield charge) and the barnacle brute (slam). Easy / Hard / Nightmare.
+- **New mechanics**: the `tentacle` boss attack (`BossBrain.ts`: lanes across the arena, a tentacle drawn
+  by the level slams along each), the `tide` trap (`Gameplay.ts`: rows of breaking waves from the sea side)
+  and water `splash` strikes and effects (`Hazards.ts`, `Effects.ts`); ground surfaces can be deck boards.
+- **Assets**: Kenney "Pirate Kit" 2.0 (CC0; fetched on the `pirate-assets` branch by
+  `.github/workflows/pirate-assets.yml`, since kenney.nl is not reachable from the dev sandbox) and KayKit
+  packs (CC0) merged by `scripts/build-pirate-kit.mjs` → `public/models/pirate/pirate-kit.glb` (the decks
+  and the hold are the Kenney hulls cut open in the script); the crew from KayKit Adventurers / Skeletons
+  with the crab, tricorn, musket, pistol and anchor modelled in code (`scripts/build-pirate-creatures.mjs`);
+  the sea texture is painted by `scripts/build-pirate-water.mjs`. Raw packs stay local in `assets-src/pirate/`
+  and `assets-src/medieval/` (git-ignored).
+- Tests: `tests/pirate.test.mjs`. Music for now reuses the Wasteland track.

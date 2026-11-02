@@ -131,6 +131,7 @@ export class Game {
         app.root.addChild(layout);
         this.collision.addStaticFrom(layout);
         this.ambient = new AmbientFx(app, biome.ambient);
+        biome.campaign?.attachWorld?.(app);
       },
       (error: unknown) => console.error("[Level] environment kit failed to load.", error),
     );

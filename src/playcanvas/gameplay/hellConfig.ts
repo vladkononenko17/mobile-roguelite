@@ -199,7 +199,11 @@ export type BossAttack =
   /** Summon: portals open around the boss, demons step out. */
   | { kind: "summon"; enemies: { type: EnemyId; count: number }[]; radius: number; portal: number }
   /** Flying dive at the player (the wyrm). */
-  | { kind: "dive"; telegraph: number; speed: number; distance: number; damage: number };
+  | { kind: "dive"; telegraph: number; speed: number; distance: number; damage: number }
+  /** Tentacles (the kraken under the Black Tide's flagship): `count` lanes across the arena, each
+   * through (near) the player, `gap` s apart; each shows for `telegraph` s, then a tentacle slams
+   * down along it. The level draws the tentacles (Campaign.tentacle). */
+  | { kind: "tentacle"; count: number; telegraph: number; length: number; width: number; damage: number; gap: number };
 
 export interface BossPhase {
   /** Phase starts when HP falls to this fraction (the first phase: 1). */

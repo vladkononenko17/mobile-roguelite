@@ -7,6 +7,7 @@ import { HELL_ENEMIES, HELL_SKINS, HELL_VISUALS, type HellEnemyId, type HellSkin
 import { SPACE_ENEMIES, SPACE_SKINS, SPACE_VISUALS, type SpaceEnemyId, type SpaceSkinId, type SpaceVisualId } from "./spaceConfig";
 import { WASTELAND_ENEMIES, WASTELAND_SKINS, WASTELAND_VISUALS, type WastelandEnemyId, type WastelandSkinId, type WastelandVisualId } from "./wastelandConfig";
 import { MEDIEVAL_ENEMIES, MEDIEVAL_SKINS, MEDIEVAL_VISUALS, type MedievalEnemyId, type MedievalSkinId, type MedievalVisualId } from "./medievalConfig";
+import { PIRATE_ENEMIES, PIRATE_SKINS, PIRATE_VISUALS, type PirateEnemyId, type PirateSkinId, type PirateVisualId } from "./pirateConfig";
 
 /* ------------------------------------------------------------------------------------------------
  * Player combat
@@ -125,7 +126,7 @@ export const WEAPON_CARDS: Partial<Record<WeaponId, { text: string; stats: strin
  * Enemies
  * ---------------------------------------------------------------------------------------------- */
 
-export type EnemyId = "walker" | "runner" | "thrower" | "brute" | "charger" | "tank" | HellEnemyId | SpaceEnemyId | WastelandEnemyId | MedievalEnemyId;
+export type EnemyId = "walker" | "runner" | "thrower" | "brute" | "charger" | "tank" | HellEnemyId | SpaceEnemyId | WastelandEnemyId | MedievalEnemyId | PirateEnemyId;
 /** chaser / charger / thrower / tank: melee walkers with specials; caster: keeps its distance and
  * fires bolts; flyer: flies over everything (orbits, bolts, dives); boss: driven by a BossScript. */
 export type EnemyBehavior = "chaser" | "charger" | "thrower" | "tank" | "caster" | "flyer" | "boss";
@@ -137,17 +138,18 @@ export type EnemyBehavior = "chaser" | "charger" | "thrower" | "tank" | "caster"
 export type EnemyVisualId =
   | "zombieMaleCasual" | "zombieMaleFarmer" | "zombieFemaleCasual" | "zombieFemaleOffice"
   | "zombieRunnerMale" | "zombieRunnerFemale" | "zombieThrower" | "zombieBrute"
-  | "vanguard" | HellVisualId | SpaceVisualId | WastelandVisualId | MedievalVisualId;
+  | "vanguard" | HellVisualId | SpaceVisualId | WastelandVisualId | MedievalVisualId | PirateVisualId;
 
 /** Zombie colour skins: recoloured copies of the zombie pack's swatch palette (one small texture
  * each, shared by every zombie model), built by scripts/build-zombies.mjs. */
-export type EnemySkinId = "green" | "darkgreen" | "purple" | "brown" | "toxic" | "brute" | HellSkinId | SpaceSkinId | WastelandSkinId | MedievalSkinId;
+export type EnemySkinId = "green" | "darkgreen" | "purple" | "brown" | "toxic" | "brute" | HellSkinId | SpaceSkinId | WastelandSkinId | MedievalSkinId | PirateSkinId;
 
 export const ENEMY_SKINS: Record<EnemySkinId, string> = {
   ...HELL_SKINS,
   ...SPACE_SKINS,
   ...WASTELAND_SKINS,
   ...MEDIEVAL_SKINS,
+  ...PIRATE_SKINS,
   green: "models/zombies/skins/green.webp",
   darkgreen: "models/zombies/skins/darkgreen.webp",
   purple: "models/zombies/skins/purple.webp",
@@ -219,6 +221,7 @@ export const ENEMY_VISUALS: Record<EnemyVisualId, EnemyVisual> = {
   ...SPACE_VISUALS,
   ...WASTELAND_VISUALS,
   ...MEDIEVAL_VISUALS,
+  ...PIRATE_VISUALS,
   zombieMaleCasual: zombie("zombie_male_casual", 0.98),
   zombieMaleFarmer: zombie("zombie_male_farmer", 1.04),
   zombieFemaleCasual: zombie("zombie_female_casual", 1.05),
@@ -305,6 +308,7 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
   ...SPACE_ENEMIES,
   ...WASTELAND_ENEMIES,
   ...MEDIEVAL_ENEMIES,
+  ...PIRATE_ENEMIES,
   // Hero is ~1.95 m (1.70 m model x 1.15); walkers are 0.9 - 1.0x of that, hunched.
   walker: {
     label: "Walker", visuals: WALKER_LOOKS, scale: 1.1, scaleJitter: 0.05, behavior: "chaser",
@@ -371,7 +375,7 @@ export const ENEMY_LIMITS = {
  * ---------------------------------------------------------------------------------------------- */
 
 /** Boss enemy types (a wave's `boss`); every other type can be in a wave's weights. */
-export type BossId = Extract<EnemyId, "brute" | "charger" | "tank" | "glutton" | "wyrm" | "archfiend" | "warden" | "broodmother" | "abomination" | "abbot" | "fallenKing">;
+export type BossId = Extract<EnemyId, "brute" | "charger" | "tank" | "glutton" | "wyrm" | "archfiend" | "warden" | "broodmother" | "abomination" | "abbot" | "fallenKing" | "bosun" | "seaHag" | "captain">;
 export type WaveEnemyId = Exclude<EnemyId, BossId>;
 
 /** One pacing step of a wave, in effect from `at` seconds until the next step. */
@@ -415,12 +419,13 @@ export interface WaveDef {
   /**
    * Traps sprung around the hero every `every` s (randomised): "cage" - a ring of eruptions with one
    * gap closes round him while the ground under him erupts; "sweep" - a line of eruptions cuts
-   * across his position; "tar" - brimstone pools that slow him. `damage` per hit (times damageScale).
+   * across his position; "tar" - brimstone pools that slow him; "tide" - a wave breaks across him
+   * from the sea side (water, no fire). `damage` per hit (times damageScale).
    */
   traps?: { every: number; kinds: TrapKind[]; damage: number };
 }
 
-export type TrapKind = "cage" | "sweep" | "tar";
+export type TrapKind = "cage" | "sweep" | "tar" | "tide";
 
 /**
  * A campaign difficulty: changes to the campaign's baseline levels (its "hard" setting) and the
@@ -479,6 +484,9 @@ export const TRAPS = {
   cage: { radius: 6.5, strikes: 10, gapDeg: 80, strikeRadius: 1.8, centreRadius: 3.4, delay: 1.7 },
   sweep: { strikes: 9, spacing: 2.3, strikeRadius: 1.5, delay: 1.25, ripple: 0.06, fire: 2.5 },
   tar: { pools: 3, radius: [2.2, 3.2] as [number, number], seconds: 9, near: [2.5, 8] as [number, number] },
+  /** The tide (Black Tide): a breaking wave rolls across the hero's position from the sea side,
+   * a band `strikes` wide; each crest breaks `ripple` s after the one before, nearest the sea first. */
+  tide: { strikes: 11, spacing: 2.2, rows: 2, rowGap: 2.4, strikeRadius: 1.7, delay: 1.5, ripple: 0.05, rowDelay: 0.32 },
   /** Speed multiplier while in tar. */
   tarSlow: 0.5,
 };

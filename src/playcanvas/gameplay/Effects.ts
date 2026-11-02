@@ -98,6 +98,8 @@ export class Effects {
   private readonly bolts: Pooled[] = [];
   private readonly rings: Ring[] = [];
   private readonly blasts: Blast[] = [];
+  private fireBlast!: StandardMaterial;
+  private waterBlast!: StandardMaterial;
   private nextDecal = 0;
   private readonly root = new Entity("Effects");
   private readonly tmp = new Vec3();
@@ -122,7 +124,8 @@ export class Effects {
     const flame = glow(new Color(1, 0.48, 0.12));
     const ice = glow(new Color(0.45, 0.75, 1));
     const bolt = glow(new Color(0.55, 0.8, 1));
-    const blast = glow(new Color(1, 0.55, 0.18));
+    const blast = (this.fireBlast = glow(new Color(1, 0.55, 0.18)));
+    this.waterBlast = glow(new Color(0.42, 0.7, 0.78));
     for (let i = 0; i < 36; i++) this.fire.push(this.bit("fire", "sphere", flame));
     for (let i = 0; i < 16; i++) this.frost.push(this.bit("frost", "sphere", ice));
     for (let i = 0; i < 36; i++) this.bolts.push(this.make("bolt", "box", bolt));
@@ -384,12 +387,29 @@ export class Effects {
   explosion(position: Vec3, radius: number): void {
     let b = this.blasts[0];
     for (const x of this.blasts) if (!x.entity.enabled || x.life < b.life) b = x;
+    b.entity.render!.material = this.fireBlast;
     b.entity.enabled = true;
     b.entity.setPosition(position.x, 0.6, position.z);
     b.life = b.total = 0.32;
     b.radius = radius * 0.8;
     this.ring(position, radius, false);
     for (let i = 0; i < 5; i++) this.flame(this.tmp.set(position.x + (Math.random() - 0.5) * radius, 0.3, position.z + (Math.random() - 0.5) * radius));
+  }
+
+  /** A wave breaking (tides, the kraken's slam): a pale swell, a blue ring and spray, no fire. */
+  splash(position: Vec3, radius: number): void {
+    let b = this.blasts[0];
+    for (const x of this.blasts) if (!x.entity.enabled || x.life < b.life) b = x;
+    b.entity.render!.material = this.waterBlast;
+    b.entity.enabled = true;
+    b.entity.setPosition(position.x, 0.3, position.z);
+    b.life = b.total = 0.38;
+    b.radius = radius * 0.75;
+    this.ring(position, radius, true);
+    for (let i = 0; i < 6; i++) {
+      this.tmp.set(position.x + (Math.random() - 0.5) * radius, 0.2, position.z + (Math.random() - 0.5) * radius);
+      this.launch(this.frost, this.tmp, (Math.random() - 0.5) * 2.2, 2.2 + Math.random() * 1.6, (Math.random() - 0.5) * 2.2, 0.55, 0.1, 9);
+    }
   }
 
   /** An expanding ring on the ground: fire (explosions) or electric blue (shock pulses). */

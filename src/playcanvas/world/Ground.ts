@@ -52,7 +52,7 @@ function rng(seed: number): () => number {
  * hand-painted low-poly ground rather than a photo texture.
  */
 function paintSurface(surface: GroundSurface, seed: number): HTMLCanvasElement {
-  const style = GROUND.surfaces[surface] as (typeof GROUND.surfaces)[GroundSurface] & { slabs?: number; seam?: string };
+  const style = GROUND.surfaces[surface] as (typeof GROUND.surfaces)[GroundSurface] & { slabs?: number; seam?: string; boards?: boolean };
   const size = 512;
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
@@ -78,7 +78,23 @@ function paintSurface(surface: GroundSurface, seed: number): HTMLCanvasElement {
     });
   }
   ctx.globalAlpha = 1;
-  if (style.slabs && style.seam) {
+  if (style.boards && style.slabs && style.seam) {
+    // Deck boards: long seams along one axis, staggered butt joints across each board.
+    const step = size / style.slabs;
+    ctx.strokeStyle = style.seam;
+    ctx.lineWidth = 2.5;
+    for (let i = 0; i <= style.slabs; i++) { ctx.beginPath(); ctx.moveTo(i * step, 0); ctx.lineTo(i * step, size); ctx.stroke(); }
+    ctx.lineWidth = 2;
+    for (let i = 0; i < style.slabs; i++) {
+      const y = random() * size;
+      for (const off of [0, size / 2]) { const yy = (y + off) % size; ctx.beginPath(); ctx.moveTo(i * step, yy); ctx.lineTo((i + 1) * step, yy); ctx.stroke(); }
+      // A darker or lighter board now and then.
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = random() < 0.5 ? style.dark : style.light;
+      ctx.fillRect(i * step + 1, 0, step - 2, size);
+      ctx.globalAlpha = 1;
+    }
+  } else if (style.slabs && style.seam) {
     // Slab seams, slightly irregular, plus a few hairline cracks.
     const step = size / style.slabs;
     ctx.strokeStyle = style.seam;

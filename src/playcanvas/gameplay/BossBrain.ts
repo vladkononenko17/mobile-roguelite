@@ -27,6 +27,8 @@ export interface BossState {
   travelled: number;
   marker: ReturnType<Hazards["ring"]>;
   hitDone: boolean;
+  /** Tentacle lanes in flight: start, direction, seconds since shown, telegraph marker. */
+  lanes: { x: number; z: number; dx: number; dz: number; t: number; marker: ReturnType<Hazards["lane"]> }[];
 }
 
 export interface BossSteer {
@@ -54,6 +56,10 @@ export class BossBrain {
   onPhase: (enemy: Enemy, phase: BossPhase, index: number) => void = () => {};
   onBlast: (position: Vec3, radius: number) => void = () => {};
   onSummon: (type: EnemyId, x: number, z: number) => void = () => {};
+  /** A tentacle lane is shown (start, unit direction, length, width, seconds until it slams). */
+  onTentacle: (x: number, z: number, dx: number, dz: number, length: number, width: number, seconds: number) => void = () => {};
+  /** A tentacle slams down along its lane. */
+  onTentacleSlam: (x: number, z: number, dx: number, dz: number, length: number) => void = () => {};
   private readonly out: BossSteer = { x: 0, z: 0, speed: 0, useNav: false };
   private readonly tmp = new Vec3();
 
@@ -63,7 +69,7 @@ export class BossBrain {
     const phases = BOSS_SCRIPTS[enemy.def.script!];
     return {
       phases, phase: 0, next: 0, attack: null, step: "idle", t: 0, wait: 2, count: 0,
-      dirX: 0, dirZ: 1, travelled: 0, marker: null, hitDone: false,
+      dirX: 0, dirZ: 1, travelled: 0, marker: null, hitDone: false, lanes: [],
     };
   }
 
@@ -196,6 +202,11 @@ export class BossBrain {
         break;
       case "summon":
         this.windup(enemy, "Roar", attack.portal);
+        break;
+      case "tentacle":
+        // The boss calls it up (a roar); the lanes appear one by one in run().
+        this.windup(enemy, "Roar", 0.4);
+        enemy.brain!.lanes.length = 0;
         break;
     }
   }
@@ -343,6 +354,42 @@ export class BossBrain {
         }
         break;
       }
+      case "tentacle": {
+        if (b.step === "windup" && b.t >= 0.4) {
+          b.step = "active";
+          b.t = a.gap;
+        }
+        if (b.step !== "active") break;
+        // A new lane every `gap` s: across the arena at a random angle, through a spot near the player.
+        if (b.count < a.count && b.t >= a.gap) {
+          b.t = 0;
+          b.count++;
+          const ang = Math.random() * Math.PI, dx = Math.sin(ang), dz = Math.cos(ang);
+          const off = (Math.random() - 0.5) * 2.4;
+          const cx = player.x - dz * off, cz = player.z + dx * off;
+          const x = cx - dx * a.length * 0.5, z = cz - dz * a.length * 0.5;
+          const marker = this.hazards.lane(x, z, dx, dz, a.length, a.width, a.telegraph);
+          b.lanes.push({ x, z, dx, dz, t: 0, marker });
+          this.onTentacle(x, z, dx, dz, a.length, a.width, a.telegraph);
+        }
+        let open = 0;
+        for (const lane of b.lanes) {
+          if (lane.t < 0) continue;
+          lane.t += dt;
+          if (lane.t < a.telegraph) { open++; continue; }
+          // Slam: hits the player if he is inside the lane.
+          this.hazards.clear(lane.marker);
+          lane.marker = null;
+          lane.t = -1;
+          const px = player.x - lane.x, pz = player.z - lane.z;
+          const along = px * lane.dx + pz * lane.dz, across = Math.abs(px * lane.dz - pz * lane.dx);
+          if (along >= -0.5 && along <= a.length + 0.5 && across <= a.width * 0.5 + 0.35) this.enemies.onPlayerHit(damage(a.damage), enemy);
+          this.onTentacleSlam(lane.x, lane.z, lane.dx, lane.dz, a.length);
+          for (let k = 2; k < a.length; k += 4) this.onBlast(this.tmp.set(lane.x + lane.dx * k, 0.1, lane.z + lane.dz * k), 1.4);
+        }
+        if (b.count >= a.count && open === 0) this.recover(enemy, 0.5);
+        break;
+      }
       case "summon": {
         if (b.step === "windup" && !b.hitDone) {
           b.hitDone = true;
@@ -391,6 +438,8 @@ export class BossBrain {
     const b = enemy.brain!;
     this.hazards.clear(b.marker);
     b.marker = null;
+    for (const lane of b.lanes) this.hazards.clear(lane.marker);
+    b.lanes.length = 0;
     b.attack = null;
   }
 

@@ -40,3 +40,5 @@ assets-src/raven/
 assets-src/audio/
 # KayKit medieval packs (CC0, github.com/KayKit-Game-Assets): raw files local only; built into public/models/medieval/
 assets-src/medieval
+# Kenney Pirate Kit (CC0, fetched by the pirate-assets workflow on its own branch): raw files local only; built into public/models/pirate/
+assets-src/pirate

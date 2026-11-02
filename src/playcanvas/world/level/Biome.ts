@@ -1,4 +1,4 @@
-import type { Entity } from "playcanvas";
+import type { AppBase, Entity } from "playcanvas";
 import type { GroundSurface, LightingSpec, WeaponId } from "../../config";
 import type { DifficultyDef } from "../../gameplay/config";
 import type { WaveDef } from "../../gameplay/config";
@@ -99,6 +99,13 @@ export interface Campaign {
   update?(dt: number, hero: { x: number; z: number }): void;
   /** Hands the world's lava to the campaign (boss-phase brightness). */
   attach?(lava: Lava): void;
+  /** Hands the app to the campaign once the level is built (per-zone lighting moods). */
+  attachWorld?(app: AppBase): void;
+  /** Draws a tentacle rising beside lane (x, z) + t (dx, dz), t in 0..length, slamming down along
+   * it after `seconds` (the kraken; BossBrain does the damage). */
+  tentacle?(x: number, z: number, dx: number, dz: number, length: number, width: number, seconds: number): void;
+  /** Where the tide comes from at (x, z): a unit vector pointing out to sea (else random). */
+  tideFrom?(x: number, z: number): [number, number] | null;
   /** The seals on `zone`'s way on (see Zone.exit), in a stable order. */
   exits?(zone: string): WayPoint[];
   /** Opens exit seal `index` of `zone` (it sinks away). */

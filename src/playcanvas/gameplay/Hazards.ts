@@ -47,6 +47,9 @@ interface Bolt {
   travelled: number;
 }
 
+/** meteor: an orb falls from the sky; eruption: the ground bursts; splash: a wave breaks (water, no fire). */
+export type StrikeKind = "meteor" | "eruption" | "splash";
+
 /** A delayed strike: a filling ring, then an impact (meteor from the sky / eruption from below). */
 interface Strike {
   /** The countdown ring; null while the strike is free. */
@@ -56,7 +59,7 @@ interface Strike {
   z: number;
   radius: number;
   damage: number;
-  kind: "meteor" | "eruption";
+  kind: StrikeKind;
   /** Fire zone left behind (seconds, damage per second); 0 = none. */
   burn: number;
   burnDps: number;
@@ -124,7 +127,7 @@ export class Hazards {
   /** Called each frame the player stands in fire: damage for this frame. */
   onBurn: (damage: number) => void = () => {};
   /** Visual hook for impacts (explosion / fire pillar). */
-  onBlast: (position: Vec3, radius: number, kind: "meteor" | "eruption" | "bolt") => void = () => {};
+  onBlast: (position: Vec3, radius: number, kind: StrikeKind | "bolt") => void = () => {};
 
   constructor(app: AppBase) {
     app.root.addChild(this.root);
@@ -147,7 +150,7 @@ export class Hazards {
       m.fill = f;
       this.rings.push(m);
     }
-    for (let i = 0; i < 4; i++) this.lanes.push(this.marker("lane", "box", lane));
+    for (let i = 0; i < 8; i++) this.lanes.push(this.marker("lane", "box", lane));
     for (let i = 0; i < 8; i++) {
       const entity = new Entity("projectile");
       entity.addComponent("render", { type: "sphere", castShadows: false, material: blob });
@@ -278,7 +281,7 @@ export class Hazards {
    * A meteor (an orb falls from the sky onto the ring) or an eruption (the ground bursts): a filling
    * ring for `delay` seconds, then the hit; `burn` seconds of fire (at `burnDps`) may stay behind.
    */
-  strike(x: number, z: number, radius: number, delay: number, damage: number, kind: "meteor" | "eruption", burn = 0, burnDps = 0): void {
+  strike(x: number, z: number, radius: number, delay: number, damage: number, kind: StrikeKind, burn = 0, burnDps = 0): void {
     const s = this.strikes.find((k) => !k.marker);
     if (!s) return;
     const marker = this.ring(x, z, radius, delay);
