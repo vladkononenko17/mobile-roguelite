@@ -159,12 +159,13 @@ const CSS = `
 @media (max-width: 360px) { #overlay .card.has-art { grid-template-columns: 104px minmax(0, 1fr); } #overlay .card.has-art .art { width: 104px; height: 52px; } #overlay .card.has-art .art img { width: 98px; height: 46px; } }
 /* Health bars over the enemies and the hero. */
 #hpbars { position: fixed; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
-#hpbars .hb { position: absolute; left: 0; top: 0; height: 5px; margin-left: calc(var(--w) / -2); width: var(--w); border-radius: 3px; background: rgba(10, 8, 6, 0.72); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55); will-change: transform; display: none; }
+#hpbars .hb { position: absolute; left: 0; top: 0; height: 6px; margin-left: calc(var(--w) / -2); width: var(--w); border-radius: 3px; background: rgba(10, 8, 6, 0.72); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55); will-change: transform; display: none; }
 #hpbars .hb i { display: block; height: 100%; border-radius: 3px; background: var(--c); transform-origin: left center; transition: transform 0.12s linear; }
 #hpbars .hb b { position: absolute; inset: 0; border-radius: 3px; background: rgba(255, 255, 255, 0.85); transform-origin: left center; opacity: 0; }
-#hpbars .hb.full { opacity: 0.55; }
-#hpbars .hb.elite { height: 6px; }
-#hpbars .hb.hero { height: 7px; border-radius: 4px; }
+#hpbars .hb.full { opacity: 0.7; }
+#hpbars .hb.elite { height: 7px; }
+#hpbars .hb.boss { height: 9px; }
+#hpbars .hb.hero { height: 8px; border-radius: 4px; }
 #hpbars .hb.hero i { border-radius: 4px; }
 /* Level-up: the game is paused underneath; a punchy title and big, touch-friendly cards. */
 #overlay .panel.levelup { width: min(420px, 100%); }

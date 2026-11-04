@@ -13,7 +13,7 @@ export interface BarTarget {
 
 /** Bar width (CSS px) by toughness; height above the feet per unit of aim height. */
 const BARS = {
-  width: { grunt: 30, elite: 44, boss: 72, hero: 54 },
+  width: { grunt: 38, elite: 54, boss: 86, hero: 60 },
   /** Max HP from which a foe counts as an elite (wider bar). */
   eliteHp: 200,
   /** Head top ~ 1.8 x the chest aim point, plus clearance (m). */
