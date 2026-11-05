@@ -139,6 +139,34 @@ const CSS = `
 #overlay .cards.compact .card b { font-size: 15px; }
 #overlay .cards.compact .card .tag { display: none; }
 #overlay .card.special { border-color: #9c3bd8; }
+/* Weapon cards: the weapon's picture on a lit plinth, name and note, stat bars. */
+#overlay .card.has-art { display: grid; grid-template-columns: 132px minmax(0, 1fr); column-gap: 12px; align-items: center; padding: 10px 12px; position: relative; overflow: hidden; }
+#overlay .cards.compact .card.has-art { grid-column: 1 / -1; min-height: 0; padding: 10px 12px; }
+#overlay .card.has-art .art { grid-row: 1 / span 3; width: 132px; height: 62px; border-radius: 8px; display: grid; place-items: center;
+  background: radial-gradient(ellipse at 50% 70%, rgba(232, 169, 47, 0.28), rgba(232, 169, 47, 0) 70%), linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.25)); border: 1px solid rgba(243, 231, 211, 0.14); }
+#overlay .card.has-art .art img { width: 124px; height: 57px; object-fit: contain; filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.6)); }
+#overlay .card.has-art b { margin: 0; font: 800 17px/1.1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.04em; text-transform: uppercase; }
+#overlay .card.has-art small { display: block; margin-top: 2px; font-size: 12px; line-height: 1.25; }
+#overlay .card.has-art .tag { position: absolute; top: 8px; right: 10px; float: none; display: block !important; }
+#overlay .card.has-art .bars { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 3px 6px; align-items: center; margin-top: 6px; font: 700 10px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.1em; }
+#overlay .card.has-art .bars span { opacity: 0.7; text-transform: uppercase; }
+#overlay .card.has-art .bars i { display: block; height: 5px; border-radius: 3px; background: rgba(243, 231, 211, 0.14); overflow: hidden; }
+#overlay .card.has-art .bars i::after { content: ""; display: block; height: 100%; width: var(--v); border-radius: 3px; background: linear-gradient(90deg, #c98a24, #f2c14e); }
+#overlay .card.has-art .bars em { font-style: normal; opacity: 0.85; font-variant-numeric: tabular-nums; text-align: right; min-width: 28px; }
+#overlay .card.has-art.equipped { border-color: #7fd37a; box-shadow: 0 0 0 1px #7fd37a inset; }
+#overlay .card.has-art.equipped .tag { color: #9be096; opacity: 1; }
+#overlay .hero-art { display: block; width: min(210px, 58%); height: auto; margin: 2px auto 6px; filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6)); }
+@media (max-width: 360px) { #overlay .card.has-art { grid-template-columns: 104px minmax(0, 1fr); } #overlay .card.has-art .art { width: 104px; height: 52px; } #overlay .card.has-art .art img { width: 98px; height: 46px; } }
+/* Health bars over the enemies and the hero. */
+#hpbars { position: fixed; inset: 0; pointer-events: none; z-index: 2; overflow: hidden; }
+#hpbars .hb { position: absolute; left: 0; top: 0; height: 6px; margin-left: calc(var(--w) / -2); width: var(--w); border-radius: 3px; background: rgba(10, 8, 6, 0.72); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55); will-change: transform; display: none; }
+#hpbars .hb i { display: block; height: 100%; border-radius: 3px; background: var(--c); transform-origin: left center; transition: transform 0.12s linear; }
+#hpbars .hb b { position: absolute; inset: 0; border-radius: 3px; background: rgba(255, 255, 255, 0.85); transform-origin: left center; opacity: 0; }
+#hpbars .hb.full { opacity: 0.7; }
+#hpbars .hb.elite { height: 7px; }
+#hpbars .hb.boss { height: 9px; }
+#hpbars .hb.hero { height: 8px; border-radius: 4px; }
+#hpbars .hb.hero i { border-radius: 4px; }
 /* Level-up: the game is paused underneath; a punchy title and big, touch-friendly cards. */
 #overlay .panel.levelup { width: min(420px, 100%); }
 #overlay .panel.levelup h2 { font: 800 38px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.12em; color: #efc55a; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7); animation: lvl-pop 0.4s ease-out; }
@@ -192,6 +220,12 @@ export interface Card {
   kind?: "weapon" | "player" | "special";
   /** Upgrade icon shown in a category-coloured disc. */
   icon?: UpgradeIcon;
+  /** A picture (the weapon) on the left of the card, with optional stat bars under the text. */
+  image?: string;
+  /** Stat bars: label, fill 0..1, value text. */
+  bars?: { label: string; value: number; text: string }[];
+  /** Highlighted (the equipped weapon). */
+  active?: boolean;
   disabled?: boolean;
 }
 
@@ -598,12 +632,19 @@ export class Hud {
   }
 
   /** Opens the modal with a title, text, optional cards (each a button) and optional actions. */
-  openModal(options: { title: string; text?: string; cards?: Card[]; compact?: boolean; levelUp?: boolean; onCard?: (index: number) => void; actions?: { label: string; onClick: () => void }[] }): void {
+  openModal(options: { title: string; text?: string; image?: string; cards?: Card[]; compact?: boolean; levelUp?: boolean; onCard?: (index: number) => void; actions?: { label: string; onClick: () => void }[] }): void {
     const panel = document.createElement("div");
     panel.className = options.levelUp ? "panel levelup" : "panel";
     const h = document.createElement("h2");
     h.textContent = options.title;
     panel.append(h);
+    if (options.image) {
+      const img = document.createElement("img");
+      img.className = "hero-art";
+      img.alt = "";
+      img.src = options.image;
+      panel.append(img);
+    }
     if (options.text) {
       const p = document.createElement("p");
       p.textContent = options.text;
@@ -615,9 +656,20 @@ export class Hud {
       options.cards.forEach((card, i) => {
         const b = document.createElement("button");
         b.type = "button";
-        b.className = `card ${card.kind ?? ""}`;
+        b.className = `card ${card.kind ?? ""}${card.image ? " has-art" : ""}${card.active ? " equipped" : ""}`;
         b.disabled = !!card.disabled;
-        b.innerHTML = `${card.icon ? `<span class="ci">${iconSvg(card.icon)}</span>` : ""}${card.tag ? `<span class="tag"></span>` : ""}<b></b><small></small>`;
+        if (card.image) {
+          b.innerHTML = `<span class="art"><img alt="" loading="lazy"></span>${card.tag ? `<span class="tag"></span>` : ""}<b></b><small></small>${card.bars?.length ? `<span class="bars"></span>` : ""}`;
+          b.querySelector("img")!.src = card.image;
+          const bars = b.querySelector(".bars");
+          for (const bar of card.bars ?? []) {
+            const label = document.createElement("span"), track = document.createElement("i"), value = document.createElement("em");
+            label.textContent = bar.label;
+            track.style.setProperty("--v", `${Math.round(Math.max(0.04, Math.min(1, bar.value)) * 100)}%`);
+            value.textContent = bar.text;
+            bars!.append(label, track, value);
+          }
+        } else b.innerHTML = `${card.icon ? `<span class="ci">${iconSvg(card.icon)}</span>` : ""}${card.tag ? `<span class="tag"></span>` : ""}<b></b><small></small>`;
         if (card.icon && card.kind) b.style.setProperty("--c", CATEGORY_COLORS[card.kind]);
         if (card.tag) b.querySelector(".tag")!.textContent = card.tag;
         b.querySelector("b")!.textContent = card.title;

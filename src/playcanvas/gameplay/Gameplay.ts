@@ -4,7 +4,9 @@ import { audio } from "../audio/Audio";
 import { BIOME_AUDIO, BOSS_MUSIC, COMMON_SOUNDS, footstepAt, footstepsOf, voiceOf, voiceRate } from "../audio/soundMap";
 import type { PlayerController } from "../player/PlayerController";
 import type { WeaponHolder } from "../player/WeaponHolder";
-import type { Hud } from "../ui/Hud";
+import type { Card, Hud } from "../ui/Hud";
+import { HealthBars } from "../ui/HealthBars";
+import type { UpgradeIcon } from "../ui/UpgradeIcons";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
 import type { Biome, Campaign, LevelBounds, WayPoint, Zone } from "../world/level/Biome";
 import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, shopPrice, TRAPS, ENEMY_PACE, WEAPON_CARDS, levelsAt, type DifficultyDef, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
@@ -92,6 +94,8 @@ export class Gameplay {
   private readonly params = new URLSearchParams(location.search);
   private readonly targetDebug = new TargetDebug();
   private readonly projector: ScreenProjector;
+  /** Health bars over the enemies and the hero. */
+  private readonly healthBars = new HealthBars();
   private readonly combat: Combat;
   private readonly drones: Drones;
   private readonly brain: BossBrain;
@@ -689,13 +693,17 @@ export class Gameplay {
       title: "SHOP",
       compact: true,
       text: `Cash: ${s.cash}$ · HP ${Math.ceil(s.hp)}/${s.maxHp} · ${WEAPONS.list[s.weapon]?.label ?? s.weapon}`,
-      cards: items.map((item) => ({
-        title: maxed(item) ? item.title : `${item.title} — ${this.shopPrice(item)}$`,
-        text: soldOut(item) ? note(item) : item.max !== undefined ? `${item.text} · ${count(item)}/${item.max}` : item.text,
-        tag: item.weapon ? "weapon" : "",
-        kind: item.weapon ? "weapon" : "player",
-        disabled: soldOut(item) || s.cash < this.shopPrice(item),
-      })),
+      image: weaponArt(s.weapon),
+      cards: items.map((item): Card => {
+        const title = maxed(item) || (item.weapon && s.owned.has(item.weapon)) ? item.title : `${item.title} — ${this.shopPrice(item)}$`;
+        const text = soldOut(item) ? note(item) : item.max !== undefined ? `${item.text} · ${count(item)}/${item.max}` : item.text;
+        const disabled = soldOut(item) || s.cash < this.shopPrice(item);
+        if (item.weapon) {
+          const stats = WEAPON_STATS[item.weapon]!;
+          return { title, text, tag: s.owned.has(item.weapon) ? "owned" : "weapon", kind: "weapon", image: weaponArt(item.weapon), bars: weaponBars(stats), disabled };
+        }
+        return { title, text, kind: "player", icon: SHOP_ICONS[item.id] ?? "star", disabled };
+      }),
       onCard: (i) => {
         const item = items[i];
         const price = this.shopPrice(item);
@@ -725,9 +733,12 @@ export class Gameplay {
         const count = s.modsFor(id).size;
         return {
           title: WEAPONS.list[id].label,
-          text: `${stats.damage.toFixed(stats.damage < 10 ? 1 : 0)} dmg · ${stats.fireRate.toFixed(1)}/s · ${stats.magazine} mag · ${stats.range.toFixed(1)} m`,
+          text: WEAPON_CARDS[id]?.text ?? (count ? `${count} module${count === 1 ? "" : "s"} fitted` : "Tap to fit modules"),
           tag: id === s.weapon ? "equipped" : count ? `${count} mod${count === 1 ? "" : "s"}` : "owned",
           kind: "weapon" as const,
+          image: weaponArt(id),
+          bars: weaponBars(stats),
+          active: id === s.weapon,
         };
       }),
       onCard: (i) => {
@@ -746,6 +757,7 @@ export class Gameplay {
     const occupied = new Set([...installed].map((id) => weaponMod(id).slot));
     this.hud.openModal({
       title: "WEAPON BENCH",
+      image: weaponArt(weapon),
       text: `${WEAPONS.list[weapon].label} · ${s.cash}$ · modules are fitted to this weapon for the run.`,
       cards: mods.map((mod) => {
         const owned = installed.has(mod.id);
@@ -873,7 +885,7 @@ export class Gameplay {
     this.hud.openModal({
       title: this.campaign?.run?.text?.armory?.[0] ?? "THE ARMORY",
       text: this.campaign?.run?.text?.armory?.[1] ?? "Take one new weapon - the other waits in the shop.",
-      cards: offers.map((id) => ({ title: WEAPONS.list[id].label, text: WEAPON_CARDS[id]?.text ?? "", tag: "weapon", kind: "weapon" })),
+      cards: offers.map((id): Card => ({ title: WEAPONS.list[id].label, text: WEAPON_CARDS[id]?.text ?? "", tag: "free", kind: "weapon", image: weaponArt(id), bars: weaponBars(WEAPON_STATS[id]!) })),
       onCard: (i) => {
         this.equip(offers[i]);
         this.openShop(next);
@@ -1190,6 +1202,8 @@ export class Gameplay {
       this.hud.setPointer(combatBoss?.position ?? null, combatBoss ? Math.hypot(combatBoss.position.x - hero.x, combatBoss.position.z - hero.z) : 0, "boss");
     }
     this.hud.update(dt, this.projector);
+    const barsOn = (this.phase === "combat" || this.phase === "cleared" || this.phase === "travel") && s.alive && !this.hud.modalOpen;
+    this.healthBars.update(dt, this.enemies.alive, { position: hero, hp: s.hp, maxHp: s.maxHp }, this.projector, barsOn);
     this.targetDebug.update(this.gun.debug);
   }
 }
@@ -1210,4 +1224,36 @@ function wayDistance(w: WayPoint, p: Vec3, out: Vec3): number {
   const z = alongX ? w.z : Math.min(w.z + half, Math.max(w.z - half, p.z));
   out.set(x, 0, z);
   return Math.hypot(p.x - x, p.z - z);
+}
+
+/** The weapon's picture (rendered by scripts/render-weapon-icons.mjs). */
+function weaponArt(id: WeaponId): string {
+  return `${import.meta.env.BASE_URL}ui/weapons/${id}.webp`;
+}
+
+/** Shop icons for the stat items. */
+const SHOP_ICONS: Record<string, UpgradeIcon> = { heal: "medkit", maxHp: "heart", armor: "shield", damage: "bullet", fireRate: "rapid" };
+
+/** The best value of each stat across the arsenal (bars are drawn against these). */
+const BAR_MAX = (() => {
+  const all = Object.values(WEAPON_STATS);
+  return {
+    dps: Math.max(...all.map((w) => w!.damage * w!.pellets * w!.fireRate)),
+    hit: Math.max(...all.map((w) => w!.damage * w!.pellets)),
+    rate: Math.max(...all.map((w) => w!.fireRate)),
+    range: Math.max(...all.map((w) => w!.range)),
+    mag: Math.max(...all.map((w) => w!.magazine)),
+  };
+})();
+
+/** Stat bars for a weapon card: damage per second and per shot, fire rate, range, magazine. */
+function weaponBars(w: { damage: number; pellets: number; fireRate: number; range: number; magazine: number }): NonNullable<Card["bars"]> {
+  const dps = w.damage * w.pellets * w.fireRate, hit = w.damage * w.pellets;
+  return [
+    { label: "DPS", value: dps / BAR_MAX.dps, text: dps.toFixed(0) },
+    { label: "Hit", value: hit / BAR_MAX.hit, text: w.pellets > 1 ? `${w.damage.toFixed(0)}×${w.pellets}` : hit.toFixed(hit < 10 ? 1 : 0) },
+    { label: "Rate", value: w.fireRate / BAR_MAX.rate, text: `${w.fireRate.toFixed(1)}/s` },
+    { label: "Range", value: w.range / BAR_MAX.range, text: `${w.range.toFixed(0)} m` },
+    { label: "Mag", value: w.magazine / BAR_MAX.mag, text: `${w.magazine}` },
+  ];
 }
