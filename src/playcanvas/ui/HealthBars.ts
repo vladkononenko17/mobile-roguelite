@@ -21,7 +21,8 @@ const BARS = {
   clearance: 0.32,
   heroHeight: 2.25,
   /** Fill colours: healthy, hurt, critical; the hero's own. */
-  colors: { high: "#62d26a", mid: "#e8c33e", low: "#e5483b", hero: "#4fd0ff", heroLow: "#ff5a48" },
+  /** Enemies red, the hero green: friend and foe read at a glance. */
+  colors: { enemy: "#e5403a", hero: "#5fd65a" },
 };
 
 interface Bar { el: HTMLElement; fill: HTMLElement; flash: HTMLElement; shown: boolean; frac: number; flashT: number; cls: string }
@@ -127,7 +128,7 @@ export class HealthBars {
       this.show(bar, onScreen);
       if (!onScreen) continue;
       const frac = e.hp / e.maxHp;
-      this.fill(bar, frac, frac > 0.6 ? BARS.colors.high : frac > 0.3 ? BARS.colors.mid : BARS.colors.low, dt);
+      this.fill(bar, frac, BARS.colors.enemy, dt);
     }
     // The hero.
     this.top.set(hero.position.x, BARS.heroHeight, hero.position.z);
@@ -135,7 +136,7 @@ export class HealthBars {
     this.show(this.hero, heroOn);
     if (heroOn) {
       const frac = hero.hp / Math.max(1, hero.maxHp);
-      this.fill(this.hero, frac, frac > 0.3 ? BARS.colors.hero : BARS.colors.heroLow, dt);
+      this.fill(this.hero, frac, BARS.colors.hero, dt);
     }
   }
 }

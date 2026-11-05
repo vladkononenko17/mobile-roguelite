@@ -236,6 +236,5 @@ The last and largest chapter of the 3D game at `/playcanvas.html`: open it from 
   hit, fire rate, range, magazine; drawn against the best weapon in the game). The pictures are rendered
   from `public/models/weapons/weapons.glb` by `scripts/render-weapon-icons.mjs` → `public/ui/weapons/<id>.webp`;
   the shop's stat items have icons.
-- **Health bars** (`src/playcanvas/ui/HealthBars.ts`) over every living enemy (green → yellow → red,
-  wider for elites and bosses, dimmed at full health, the lost part flashes white) and a blue one over
-  the hero.
+- **Health bars** (`src/playcanvas/ui/HealthBars.ts`): red over every living enemy (wider for elites
+  and bosses, dimmed at full health, the lost part flashes white) and green over the hero.
