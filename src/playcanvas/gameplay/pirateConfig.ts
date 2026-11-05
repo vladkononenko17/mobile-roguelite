@@ -9,6 +9,7 @@
 // scripts/build-pirate-creatures.mjs. All data, like medievalConfig.ts / hellConfig.ts.
 
 import type { BossPhase } from "./hellConfig";
+import { survivorsAs } from "./wastelandConfig.ts";
 import type { DifficultyDef, EnemyAttachment, EnemyClips, EnemyDef, EnemyVisual, WaveDef } from "./config";
 
 /* ------------------------------------------------------------------------------------------------
@@ -102,12 +103,12 @@ export type PirateEnemyId =
   | "drowned" | "crab" | "boarder" | "musketeer" | "powderMonkey" | "quartermaster" | "barnacle"
   | "bosun" | "seaHag" | "captain";
 
-const DROWNED_LOOKS = ["zombieWalker"] as const;
+
 
 export const PIRATE_ENEMIES: Record<PirateEnemyId, EnemyDef> = {
   // GRUNT: drowned sailors climbing out of the sea, slow, in numbers.
   drowned: {
-    label: "Drowned", visuals: [...DROWNED_LOOKS], scale: 1.08, scaleJitter: 0.06, behavior: "chaser",
+    label: "Drowned", visuals: ["drownedRotter", ...survivorsAs("Drowned")], scale: 1.08, scaleJitter: 0.06, behavior: "chaser",
     maxHp: 40, speed: 1.4, radius: 0.36, damage: 10, attackRange: 1.15, attackWindup: 0.42, attackCooldown: 1.2,
     cash: 1, xp: 11, drops: { cash: 0.4, health: 0.025, upgrade: 0.006 },
   },
@@ -178,7 +179,6 @@ export const PIRATE_ENEMIES: Record<PirateEnemyId, EnemyDef> = {
 
 /** Skins per enemy type (overriding the look's own list): the drowned wear the sea. */
 export const PIRATE_TYPE_SKINS: Partial<Record<PirateEnemyId, PirateSkinId[]>> = {
-  drowned: ["drowned_pale", "drowned_kelp", "drowned_blue"],
 };
 
 /* ------------------------------------------------------------------------------------------------

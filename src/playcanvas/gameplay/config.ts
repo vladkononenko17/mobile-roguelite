@@ -5,7 +5,7 @@ import type { WeaponId } from "../config";
 import type { UpgradeCategory, UpgradeIcon, UpgradeRarity } from "../ui/UpgradeIcons";
 import { HELL_ENEMIES, HELL_SKINS, HELL_VISUALS, type HellEnemyId, type HellSkinId, type HellVisualId } from "./hellConfig";
 import { SPACE_ENEMIES, SPACE_SKINS, SPACE_VISUALS, type SpaceEnemyId, type SpaceSkinId, type SpaceVisualId } from "./spaceConfig";
-import { WASTELAND_ENEMIES, WASTELAND_SKINS, WASTELAND_VISUALS, type WastelandEnemyId, type WastelandSkinId, type WastelandVisualId } from "./wastelandConfig";
+import { SURVIVOR_BODIES, survivorsAs, WASTELAND_ENEMIES, WASTELAND_SKINS, WASTELAND_VISUALS, type SurvivorBody, type SurvivorRole, type WastelandEnemyId, type WastelandSkinId, type WastelandVisualId } from "./wastelandConfig";
 import { MEDIEVAL_ENEMIES, MEDIEVAL_SKINS, MEDIEVAL_VISUALS, type MedievalEnemyId, type MedievalSkinId, type MedievalVisualId } from "./medievalConfig";
 import { PIRATE_ENEMIES, PIRATE_SKINS, PIRATE_VISUALS, type PirateEnemyId, type PirateSkinId, type PirateVisualId } from "./pirateConfig";
 
@@ -136,7 +136,8 @@ export type EnemyBehavior = "chaser" | "charger" | "thrower" | "tank" | "caster"
  * (Walker A / B / C...) and a model can be swapped without touching the AI. */
 
 export type EnemyVisualId =
-  | "zombieWalker" | "zombieRunner" | "zombieThrower" | "zombieBrute" | "zombieCharger" | "zombieTank" | HellVisualId | SpaceVisualId | WastelandVisualId | MedievalVisualId | PirateVisualId;
+  | "zombieWalker" | "zombieRunner" | "zombieThrower" | "zombieBrute" | "zombieCharger" | "zombieTank"
+  | "drownedRotter" | `${SurvivorBody}${SurvivorRole}` | HellVisualId | SpaceVisualId | WastelandVisualId | MedievalVisualId | PirateVisualId;
 
 /** Colour skins: per-model texture variants (see each chapter's config). */
 export type EnemySkinId = HellSkinId | SpaceSkinId | WastelandSkinId | MedievalSkinId | PirateSkinId;
@@ -198,12 +199,29 @@ export interface EnemyAttachment {
  * scripts/build-wasteland-creatures.mjs into models/infected/), dressed per role.
  */
 const ZK = WASTELAND_VISUALS;
+
+const RUN_ARMS = { move: "Run_Arms", moveSpeed: 3.8 };
+const SURVIVOR_ROLES: Record<SurvivorRole, (v: EnemyVisual) => EnemyVisual> = {
+  // Runners sprint arms-out.
+  Runner: (v) => ({ ...v, clips: { ...v.clips, move: RUN_ARMS.move }, moveSpeed: RUN_ARMS.moveSpeed, bulk: 0.92 }),
+  // ORION's crew: station jumpsuits.
+  Crew: (v) => ({ ...v, skins: ["zs_crewOrange", "zs_crewTeal"] }),
+  CrewRunner: (v) => ({ ...v, clips: { ...v.clips, move: RUN_ARMS.move }, moveSpeed: RUN_ARMS.moveSpeed, bulk: 0.92, skins: ["zs_crewOrange", "zs_crewTeal"] }),
+  // The Black Tide's drowned.
+  Drowned: (v) => ({ ...v, skins: ["zs_drownedKelp", "zs_drownedBlue"] }),
+};
+const SURVIVOR_VISUALS = Object.fromEntries(
+  SURVIVOR_BODIES.flatMap((body) => (Object.keys(SURVIVOR_ROLES) as SurvivorRole[]).map((role) => [`${body}${role}`, SURVIVOR_ROLES[role](ZK[body])])),
+) as Record<`${SurvivorBody}${SurvivorRole}`, EnemyVisual>;
 export const ENEMY_VISUALS: Record<EnemyVisualId, EnemyVisual> = {
   ...HELL_VISUALS,
   ...SPACE_VISUALS,
   ...WASTELAND_VISUALS,
   ...MEDIEVAL_VISUALS,
   ...PIRATE_VISUALS,
+  ...SURVIVOR_VISUALS,
+  // The rotter re-tinted for the sea (the four survivors have their own drowned skins).
+  drownedRotter: { ...ZK.zkRotter, skins: ["drowned_pale", "drowned_kelp", "drowned_blue"] },
   // Walker: the rotter in its three rot colours.
   zombieWalker: ZK.zkRotter,
   // Runner: the rotter sprinting, a little leaner.
@@ -278,7 +296,8 @@ export interface EnemyDef {
   glow?: [number, number, number];
 }
 
-const WALKER_LOOKS: EnemyVisualId[] = ["zombieWalker"];
+/** The horde: the rotter and the four turned survivors, each in four kinds of rot. */
+const WALKER_LOOKS: EnemyVisualId[] = ["zombieWalker", ...SURVIVOR_BODIES];
 
 export const ENEMIES: Record<EnemyId, EnemyDef> = {
   ...HELL_ENEMIES,
@@ -294,7 +313,7 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
   },
   // Runner: lean and ~0.95x the hero, sprinting.
   runner: {
-    label: "Runner", visuals: ["zombieRunner"], scale: 1.06, scaleJitter: 0.03, behavior: "chaser",
+    label: "Runner", visuals: ["zombieRunner", ...survivorsAs("Runner")], scale: 1.06, scaleJitter: 0.03, behavior: "chaser",
     maxHp: 22, speed: 3.9, radius: 0.34, damage: 7, attackRange: 1.1, attackWindup: 0.3, attackCooldown: 0.9,
     cash: 1, xp: 15, drops: { cash: 0.45, health: 0.03, upgrade: 0.008 },
   },

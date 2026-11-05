@@ -7,7 +7,7 @@ export const CREDITS: { group: string; lines: string[] }[] = [
     group: "Characters",
     lines: [
       "Hero: \"Zombie Apocalypse Survivor\" and \"3D Alien Monster\" by Codersan (Unity Asset Store licence)",
-      "Infected, aliens, mechs, monsters: Quaternius (quaternius.com), CC0; \"Bestiary - Dungeon Monsters\" under the Quaternius Asset Licence",
+      "Infected (Zombie Apocalypse Kit: zombies and survivors), aliens, mechs, monsters: Quaternius (quaternius.com), CC0; \"Bestiary - Dungeon Monsters\" under the Quaternius Asset Licence",
       "Knights, skeletons, pirates: KayKit by Kay Lousberg, CC0",
       "Small Hearth Studios monsters and dungeon: \"Assets created by Small Hearth Studios\"",
       "Raven: opengameart.org/content/raven-0, CC0",

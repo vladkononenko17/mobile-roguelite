@@ -247,7 +247,10 @@ The last and largest chapter of the 3D game at `/playcanvas.html`: open it from 
   ("This file will be played in the browser"), portrait viewport, e.g. 430 × 860, with fullscreen on.
 - **Licences**: every shipped model is CC0 or a free/store asset used under its terms; the credits are on
   the title screen (Credits button, `src/playcanvas/ui/credits.ts`) and in `CREDITS.md`. The chapter I
-  horde, the space crew and the drowned are Quaternius "Zombie Apocalypse Kit" bodies (CC0); all guns are
+  horde, the space crew and the drowned are Quaternius "Zombie Apocalypse Kit" bodies (CC0): the rotter
+  plus the kit's four survivors turned (`scripts/build-zombified-survivors.mjs`: zombie clips retargeted,
+  eight colour maps - four kinds of rot, two station jumpsuits, two drowned), so a horde mixes 5 bodies
+  x 4 looks; all guns are
   Pichuliru "Flat Guns East" (CC0; Plasma and Hellfire are recolours by `scripts/cc0-weapons.mjs`). Assets
   without a stated licence were removed: the Low-Poly Zombie pack, the "assetpack-free" guns, the AR_2 /
   AR_3 rifles and the axe. The Meshy AI characters (Vanguard, Brawler, Orc) are no longer shipped; animation

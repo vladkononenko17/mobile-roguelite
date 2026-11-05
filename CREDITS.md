@@ -4,7 +4,7 @@ Game by Neon Hollow. Third-party assets below; details and build steps in `asset
 
 ## Characters
 - Hero: "Zombie Apocalypse Survivor Male" by Codersan (Unity Asset Store, Standard EULA). "3D Alien Monster" by Codersan (same licence).
-- Infected (rotter, bloater, ripper, abomination, hound), aliens and mechs, Monster Pack Animated: Quaternius (quaternius.com), CC0. "Bestiary - Dungeon Monsters Kit": Quaternius Asset Licence.
+- Infected (rotter, bloater, ripper, abomination, hound, and the kit's four survivors re-skinned as the dead), aliens and mechs, Monster Pack Animated: Quaternius (quaternius.com), CC0. "Bestiary - Dungeon Monsters Kit": Quaternius Asset Licence.
 - Knights, skeletons and pirates: KayKit "Adventurers" and "Skeletons" by Kay Lousberg, CC0.
 - Monsters and dungeon pieces: "SHS Monsters Pack" and "SHS Dungeon Pack" - Assets created by Small Hearth Studios.
 - Raven: opengameart.org/content/raven-0, CC0.

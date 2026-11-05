@@ -4,6 +4,7 @@
 // infected crew are the Quaternius "Zombie Apocalypse Kit" rotters (CC0).
 
 import type { BossPhase } from "./hellConfig";
+import { survivorsAs } from "./wastelandConfig.ts";
 import type { DifficultyDef, EnemyClips, EnemyDef, EnemyVisual, WaveDef } from "./config";
 
 /* ------------------------------------------------------------------------------------------------
@@ -63,13 +64,13 @@ export type SpaceEnemyId =
 export const SPACE_ENEMIES: Record<SpaceEnemyId, EnemyDef> = {
   // GRUNT: infected crew, cold-skinned.
   infected: {
-    label: "Infected Crew", visuals: ["zombieWalker"], scale: 1.1, scaleJitter: 0.05, behavior: "chaser",
+    label: "Infected Crew", visuals: survivorsAs("Crew"), scale: 1.1, scaleJitter: 0.05, behavior: "chaser",
     maxHp: 55, speed: 1.6, radius: 0.36, damage: 10, attackRange: 1.15, attackWindup: 0.4, attackCooldown: 1.1,
     cash: 1, xp: 12, drops: { cash: 0.4, health: 0.025, upgrade: 0.006 },
   },
   // FAST: infected that run.
   sprinter: {
-    label: "Sprinter", visuals: ["zombieRunner"], scale: 1.06, scaleJitter: 0.03, behavior: "chaser",
+    label: "Sprinter", visuals: survivorsAs("CrewRunner"), scale: 1.06, scaleJitter: 0.03, behavior: "chaser",
     maxHp: 34, speed: 4.4, radius: 0.34, damage: 8, attackRange: 1.1, attackWindup: 0.28, attackCooldown: 0.85,
     cash: 1, xp: 14, drops: { cash: 0.35, health: 0.02, upgrade: 0.006 },
     cripple: { slow: 0.7, seconds: 0.9 },
