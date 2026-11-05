@@ -79,3 +79,16 @@ Raw packs in `assets-src/audio/` (git-ignored; re-download to rebuild). `scripts
 - "Zombie moans" by darsycho (opengameart.org/content/zombie-moans, CC0; seven moans cut from one take) and "Zombie pain" (opengameart.org/content/zombie-pain, offered under CC0): more walker groans, hits and deaths.
 - "Monster Sound Pack, Volume 1" (opengameart.org/content/monster-sound-pack-volume-1, CC0): demon voices (pitched down), alien and hound voices (pitched up), boss roars.
 - Music: Juhani Junkala "Post Apocalyptic Wastelands" (opengameart.org/content/horror-atmosphere) for the Wasteland, "Infestation in the Control Room" and "The Depths of Hell" from "Ambience Pack 1 - Sci Fi Horror" (opengameart.org/content/ambience-pack-1-sci-fi-horror) for ORION and Hell, Juhani Junkala "Epic Boss Battle" (opengameart.org/content/boss-battle-music) for bosses; loudness-normalised, mono.
+
+## Quaternius Ultimate Monsters (CC0)
+
+Quaternius "Ultimate Monsters" (quaternius.com/packs/ultimatemonsters.html, CC0; `License.txt` kept) in
+`assets-src/ultimate-monsters/` (git-ignored; mirrored at github.com/series-ai/jam-ready-assets,
+`quaternius-ultimate-monsters/`). `scripts/build-ultimate-monsters.mjs` builds ten of them into
+`public/models/monsters/` and paints eight colour maps over the pack's shared 50-colour atlas
+(`skins/um_*.webp`, each fits every model). Hell: the horned trident demon (imps, black for berserkers),
+the skull brute (hellhounds, the hellbrute), the masked shaman (with the husks), the skull wraith (with the
+hellbats) and the wyvern (with the drakes), in fire colours with ember eyes. ORION: a bee (skitters, void
+for voidlings), a spiky floater (spitters), a squid (glubs, void for rift glubs), the tentacle-horned alien
+(hulks, void for rift brutes) and a blob (test subjects). Mixed in as extra looks of existing enemies
+(`ownSkins` keeps their own colour maps where a type has TYPE_SKINS).

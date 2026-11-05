@@ -316,7 +316,7 @@ export class EnemyManager {
     enemy.brain = def.script && this.brain ? this.brain.create(enemy) : null;
     for (const a of enemy.attachments) a.entity.enabled = !a.only || a.only.includes(id);
     // Materials (per type) and animation clips.
-    const skins = (TYPE_SKINS[id] ?? visual.skins ?? []).filter((k) => this.skins.has(k));
+    const skins = ((visual.ownSkins ? undefined : TYPE_SKINS[id]) ?? visual.skins ?? []).filter((k) => this.skins.has(k));
     enemy.skin = skins.length ? skins[Math.floor(Math.random() * skins.length)] : null;
     const mats = this.materialsFor(id, pool.baseMaterial!, enemy.skin);
     enemy.normalMaterial = mats.normal;

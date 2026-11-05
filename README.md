@@ -255,3 +255,6 @@ The last and largest chapter of the 3D game at `/playcanvas.html`: open it from 
   without a stated licence were removed: the Low-Poly Zombie pack, the "assetpack-free" guns, the AR_2 /
   AR_3 rifles and the axe. The Meshy AI characters (Vanguard, Brawler, Orc) are no longer shipped; animation
   clips first generated with Meshy AI still drive the hero and several creatures (disclosed in the credits).
+- **Hell and ORION** mix ten Quaternius "Ultimate Monsters" (CC0, `scripts/build-ultimate-monsters.mjs`) into
+  their enemies as extra looks: a trident demon, a skull brute, a fire shaman, a skull wraith and a wyvern in
+  fire colours; a bee, a spiky floater, a squid, a tentacle-horned alien and a blob in alien and void colours.

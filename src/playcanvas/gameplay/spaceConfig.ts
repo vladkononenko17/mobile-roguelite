@@ -11,13 +11,16 @@ import type { DifficultyDef, EnemyClips, EnemyDef, EnemyVisual, WaveDef } from "
  * Looks
  * ---------------------------------------------------------------------------------------------- */
 
-export type SpaceVisualId = "skitter" | "spitter" | "glub" | "alienBrute" | "mech";
+export type SpaceVisualId =
+  | "skitter" | "spitter" | "glub" | "alienBrute" | "mech"
+  | "umBee" | "umVoidBee" | "umHywirl" | "umSquidle" | "umRiftSquidle" | "umHulk" | "umRiftHulk" | "umBlob";
 export type SpaceSkinId =
   | "skitter_green" | "skitter_violet" | "skitter_red" | "skitter_void"
   | "spitter_toxic" | "spitter_blue"
   | "glub_pink" | "glub_teal" | "glub_void"
   | "brute_green" | "brute_crimson" | "brood_queen" | "brute_void"
-  | "mech_security" | "mech_warden";
+  | "mech_security" | "mech_warden"
+  | "um_alien" | "um_alienToxic" | "um_alienCold" | "um_alienVoid";
 
 const skin = (id: SpaceSkinId) => `models/aliens/skins/${id}.webp`;
 export const SPACE_SKINS: Record<SpaceSkinId, string> = {
@@ -26,6 +29,9 @@ export const SPACE_SKINS: Record<SpaceSkinId, string> = {
   glub_pink: skin("glub_pink"), glub_teal: skin("glub_teal"), glub_void: skin("glub_void"),
   brute_green: skin("brute_green"), brute_crimson: skin("brute_crimson"), brood_queen: skin("brood_queen"), brute_void: skin("brute_void"),
   mech_security: skin("mech_security"), mech_warden: skin("mech_warden"),
+  // Quaternius Ultimate Monsters (one shared atlas: each map fits every monster model).
+  um_alien: "models/monsters/skins/um_alien.webp", um_alienToxic: "models/monsters/skins/um_alienToxic.webp",
+  um_alienCold: "models/monsters/skins/um_alienCold.webp", um_alienVoid: "models/monsters/skins/um_alienVoid.webp",
 };
 
 /** The hovering aliens share one clip set (they float: move = fast flying). */
@@ -46,6 +52,27 @@ export const SPACE_VISUALS: Record<SpaceVisualId, EnemyVisual> = {
     clips: { idle: "Idle", move: "Walk", attack: "Punch", hit: "HitReact", death: ["Death"], special: "Weapon", roar: "Wave", cast: "Weapon", slam: "Jump_Land" },
   },
   // Quaternius mech (the frog pilot's walker), ~3 units; grey for security, red for the Warden.
+  // Quaternius Ultimate Monsters (CC0, scripts/build-ultimate-monsters.mjs), joining the station's
+  // aliens: a striped bee with the skitter swarm, a spiky floater spitting with the spitters, a
+  // tentacled squid with the glubs, the tentacle-horned alien with the hulks, a hopping blob with the
+  // test subjects; the rift's versions in void violet.
+  umBee: { url: "models/monsters/umBee.glb", scale: 0.4, clips: HOVER_CLIPS, moveSpeed: 9, skins: ["um_alien", "um_alienToxic", "um_alienCold"], ownSkins: true },
+  umVoidBee: { url: "models/monsters/umBee.glb", scale: 0.4, clips: HOVER_CLIPS, moveSpeed: 9, skins: ["um_alienVoid"], ownSkins: true },
+  umHywirl: { url: "models/monsters/umHywirl.glb", scale: 0.5, clips: HOVER_CLIPS, moveSpeed: 4, skins: ["um_alien", "um_alienCold"], ownSkins: true },
+  umSquidle: { url: "models/monsters/umSquidle.glb", scale: 0.75, clips: HOVER_CLIPS, moveSpeed: 8, skins: ["um_alien", "um_alienCold"], ownSkins: true },
+  umRiftSquidle: { url: "models/monsters/umSquidle.glb", scale: 0.75, clips: HOVER_CLIPS, moveSpeed: 8, skins: ["um_alienVoid"], ownSkins: true },
+  umHulk: {
+    url: "models/monsters/umAlien.glb", scale: 0.76, moveSpeed: 2.3, skins: ["um_alien", "um_alienToxic"], ownSkins: true,
+    clips: { idle: "Idle", move: "Walk", attack: "Punch", hit: "HitReact", death: ["Death"], special: "Weapon", roar: "Wave", cast: "Weapon", slam: "Jump_Land" },
+  },
+  umRiftHulk: {
+    url: "models/monsters/umAlien.glb", scale: 0.76, moveSpeed: 2.3, skins: ["um_alienVoid"], ownSkins: true,
+    clips: { idle: "Idle", move: "Walk", attack: "Punch", hit: "HitReact", death: ["Death"], special: "Weapon", roar: "Wave", cast: "Weapon", slam: "Jump_Land" },
+  },
+  umBlob: {
+    url: "models/monsters/umBlob.glb", scale: 0.43, moveSpeed: 1.3, skins: ["um_alienToxic", "um_alien"], ownSkins: true,
+    clips: { idle: "Idle", move: "Walk", attack: "Bite_Front", hit: "HitRecieve", death: ["Death"], special: "Jump", cast: "Jump" },
+  },
   mech: {
     url: "models/aliens/mech.glb", scale: 0.78, moveSpeed: 2.6, skins: ["mech_security"],
     clips: { idle: "Idle", move: "Run", attack: "Kick", hit: "HitRecieve_1", death: ["Death"], special: "Shoot_Big", roar: "Shoot_Big", cast: "Shoot_Small", slam: "Jump_Landing" },
@@ -77,28 +104,28 @@ export const SPACE_ENEMIES: Record<SpaceEnemyId, EnemyDef> = {
   },
   // EXPERIMENT: a lab test subject, swollen with the hive's acid - lobs it in puddles.
   subject: {
-    label: "Test Subject", gore: "goo", visuals: ["zombieThrower"], scale: 1.14, behavior: "thrower",
+    label: "Test Subject", gore: "goo", visuals: ["zombieThrower", "umBlob"], scale: 1.14, behavior: "thrower",
     maxHp: 70, speed: 1.3, radius: 0.4, damage: 10, attackRange: 1.15, attackWindup: 0.45, attackCooldown: 1.3,
     cash: 2, xp: 24, drops: { cash: 0.6, health: 0.05, upgrade: 0.012 },
     projectile: { damage: 14, speed: 5.8, radius: 1.3, cooldown: 3.4, minRange: 5, maxRange: 11 },
   },
   // SWARM: tiny floating aliens, fast and weak, in packs.
   skitter: {
-    label: "Skitter", gore: "goo", visuals: ["skitter"], scale: 1.0, scaleJitter: 0.1, behavior: "flyer", aimHeight: 0.35,
+    label: "Skitter", gore: "goo", visuals: ["skitter", "umBee"], scale: 1.0, scaleJitter: 0.1, behavior: "flyer", aimHeight: 0.35,
     maxHp: 18, speed: 4.8, radius: 0.3, damage: 6, attackRange: 0.95, attackWindup: 0.2, attackCooldown: 0.8,
     cash: 0, xp: 5, drops: { cash: 0.12, health: 0.01, upgrade: 0.002 },
     fly: { height: 0.6, orbit: 0 },
   },
   // CASTER: keeps its distance and spits slow acid orbs - dodge sideways.
   spitter: {
-    label: "Spitter", gore: "goo", visuals: ["spitter"], scale: 1.0, behavior: "caster", aimHeight: 0.7,
+    label: "Spitter", gore: "goo", visuals: ["spitter", "umHywirl"], scale: 1.0, behavior: "caster", aimHeight: 0.7,
     maxHp: 60, speed: 1.9, radius: 0.4, damage: 8, attackRange: 1.1, attackWindup: 0.4, attackCooldown: 1.3,
     cash: 2, xp: 22, drops: { cash: 0.55, health: 0.04, upgrade: 0.01 },
     bolt: { damage: 12, speed: 6.2, radius: 0.32, cooldown: 2.9, minRange: 5.5, maxRange: 11, count: 1, spreadDeg: 0, windup: 0.5 },
   },
   // FLYER: drifts over walls and machines, spits, dives through.
   glub: {
-    label: "Glub", gore: "goo", visuals: ["glub"], scale: 1.0, behavior: "flyer", aimHeight: 0.5,
+    label: "Glub", gore: "goo", visuals: ["glub", "umSquidle"], scale: 1.0, behavior: "flyer", aimHeight: 0.5,
     maxHp: 80, speed: 3.1, radius: 0.5, damage: 12, attackRange: 1.3, attackWindup: 0.35, attackCooldown: 1.2,
     cash: 3, xp: 30, drops: { cash: 0.6, health: 0.04, upgrade: 0.012 },
     bolt: { damage: 13, speed: 7, radius: 0.34, cooldown: 3.2, minRange: 3, maxRange: 11, count: 1, spreadDeg: 0, windup: 0.45 },
@@ -106,7 +133,7 @@ export const SPACE_ENEMIES: Record<SpaceEnemyId, EnemyDef> = {
   },
   // TANK: the alien hulk - slow, huge, a knockback smash and a ground slam.
   hulk: {
-    label: "Alien Hulk", gore: "goo", visuals: ["alienBrute"], scale: 1.0, behavior: "chaser", armor: 0.15,
+    label: "Alien Hulk", gore: "goo", visuals: ["alienBrute", "umHulk"], scale: 1.0, behavior: "chaser", armor: 0.15,
     maxHp: 420, speed: 1.4, radius: 0.85, damage: 22, attackRange: 2.0, attackWindup: 0.7, attackCooldown: 1.6, knockback: 7,
     cash: 12, xp: 60, drops: { cash: 1, health: 0.3, upgrade: 0.05 },
     clips: { special: "Jump_Land" },
@@ -121,20 +148,20 @@ export const SPACE_ENEMIES: Record<SpaceEnemyId, EnemyDef> = {
   },
   // GATE CREATURES: what came through the portal - the hive's forms, dark and burning violet.
   voidling: {
-    label: "Voidling", gore: "goo", visuals: ["skitter"], scale: 1.1, scaleJitter: 0.1, behavior: "flyer", aimHeight: 0.35, glow: [0.9, 0.4, 1.6],
+    label: "Voidling", gore: "goo", visuals: ["skitter", "umVoidBee"], scale: 1.1, scaleJitter: 0.1, behavior: "flyer", aimHeight: 0.35, glow: [0.9, 0.4, 1.6],
     maxHp: 26, speed: 5.4, radius: 0.32, damage: 8, attackRange: 0.95, attackWindup: 0.18, attackCooldown: 0.75,
     cash: 0, xp: 7, drops: { cash: 0.14, health: 0.01, upgrade: 0.003 },
     fly: { height: 0.7, orbit: 0 },
   },
   riftglub: {
-    label: "Rift Glub", gore: "goo", visuals: ["glub"], scale: 1.1, behavior: "flyer", aimHeight: 0.5, glow: [0.9, 0.4, 1.6],
+    label: "Rift Glub", gore: "goo", visuals: ["glub", "umRiftSquidle"], scale: 1.1, behavior: "flyer", aimHeight: 0.5, glow: [0.9, 0.4, 1.6],
     maxHp: 120, speed: 3.4, radius: 0.55, damage: 14, attackRange: 1.3, attackWindup: 0.3, attackCooldown: 1.1,
     cash: 3, xp: 36, drops: { cash: 0.65, health: 0.05, upgrade: 0.014 },
     bolt: { damage: 15, speed: 7.5, radius: 0.36, cooldown: 2.8, minRange: 3, maxRange: 11, count: 2, spreadDeg: 16, windup: 0.45 },
     fly: { height: 2.2, orbit: 6, dive: { cooldown: 7.5, telegraph: 0.85, speed: 13.5, distance: 13, damage: 16 } },
   },
   riftbrute: {
-    label: "Rift Brute", gore: "goo", visuals: ["alienBrute"], scale: 1.15, behavior: "chaser", armor: 0.2, glow: [0.9, 0.4, 1.6],
+    label: "Rift Brute", gore: "goo", visuals: ["alienBrute", "umRiftHulk"], scale: 1.15, behavior: "chaser", armor: 0.2, glow: [0.9, 0.4, 1.6],
     maxHp: 620, speed: 1.6, radius: 0.95, damage: 26, attackRange: 2.2, attackWindup: 0.65, attackCooldown: 1.5, knockback: 8,
     cash: 16, xp: 80, drops: { cash: 1, health: 0.35, upgrade: 0.06 },
     clips: { special: "Jump_Land" },

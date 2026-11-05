@@ -176,6 +176,8 @@ export interface EnemyVisual {
   moveSpeed: number;
   /** Colour skins this model can wear (one is picked per spawn); none = its own texture. */
   skins?: EnemySkinId[];
+  /** The look keeps its own `skins` even where the enemy type has TYPE_SKINS (made for another model). */
+  ownSkins?: boolean;
   /** Width / depth factor on top of the scale: < 1 lean (runner), > 1 bulky (brute). */
   bulk?: number;
   /** Extra meshes on bones (a caster's fire orb, the archfiend's horns); `url` = a GLB (else a glowing orb). */
