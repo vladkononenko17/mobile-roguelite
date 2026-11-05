@@ -4,6 +4,7 @@ import { audio } from "../audio/Audio";
 import { BIOME_AUDIO } from "../audio/soundMap";
 import { ENEMIES } from "../gameplay/config";
 import { BIOMES, type BiomeId } from "../world/level/Biomes";
+import { showCredits } from "./credits";
 import { loadProgress } from "./progress";
 
 /** What the menu says about each chapter (the rest comes from the campaign data). */
@@ -72,7 +73,7 @@ const CSS = `
   background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent); animation: menu-shine 3.2s ease-in-out infinite; }
 @keyframes menu-shine { 0%, 55% { left: -60%; } 100% { left: 130%; } }
 #menu .play:active { transform: scale(0.98); }
-#menu .foot { margin-top: 10px; text-align: center; font: 500 11px/1.3 system-ui, sans-serif; opacity: 0.45; }
+#menu .foot { margin: 8px auto 0; padding: 6px 12px; border: 0; background: none; color: inherit; text-align: center; font: 500 12px/1.3 system-ui, sans-serif; opacity: 0.6; text-decoration: underline; text-underline-offset: 3px; }
 @media (min-height: 760px) { #menu .tab { height: 90px; } }
 `;
 
@@ -110,7 +111,7 @@ export function showMainMenu(): Promise<BiomeId> {
       <div class="chapter"></div>
       <div class="tabs">${CHAPTERS.map((c) => `<button type="button" class="tab" data-tab="${c.id}" style="background-image:url('${base}menu/${c.id}.webp')"><i>${c.numeral}</i><b>${c.name.replace(/^The /, "")}</b></button>`).join("")}</div>
       <button type="button" class="play">PLAY</button>
-      <div class="foot">Art, sound and music: CC0 (Kenney, Quaternius, OpenGameArt)</div>
+      <button type="button" class="foot">Credits · third-party art, sound and music</button>
     </div>`;
   document.body.append(root);
 
@@ -148,6 +149,10 @@ export function showMainMenu(): Promise<BiomeId> {
   select(index, false);
 
   root.querySelectorAll<HTMLElement>("[data-tab]").forEach((el, i) => el.addEventListener("click", () => select(i)));
+  root.querySelector(".foot")!.addEventListener("click", () => {
+    audio.play("ui");
+    showCredits();
+  });
   const soundButton = root.querySelector<HTMLElement>(".icon")!;
   soundButton.classList.toggle("off", audio.muted);
   soundButton.addEventListener("click", () => {

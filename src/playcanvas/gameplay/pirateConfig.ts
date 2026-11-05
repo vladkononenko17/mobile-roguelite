@@ -4,7 +4,7 @@
 // (world/level/PirateLevel.ts). The crew: drowned sailors, skeleton boarders, musketeers, powder
 // monkeys, carrion crabs, quartermasters and the barnacle brute; three bosses - the Bosun, the Sea
 // Hag and the Captain, with the kraken under his ship.
-// Bodies: KayKit "Adventurers" / "Skeletons" (CC0, Kay Lousberg) and the zombie pack in drowned
+// Bodies: KayKit "Adventurers" / "Skeletons" (CC0, Kay Lousberg) and the CC0 rotter in drowned
 // skins; the crab, the tricorn, the musket, the pistol and the anchor are modelled in
 // scripts/build-pirate-creatures.mjs. All data, like medievalConfig.ts / hellConfig.ts.
 
@@ -102,7 +102,7 @@ export type PirateEnemyId =
   | "drowned" | "crab" | "boarder" | "musketeer" | "powderMonkey" | "quartermaster" | "barnacle"
   | "bosun" | "seaHag" | "captain";
 
-const DROWNED_LOOKS = ["zombieMaleCasual", "zombieMaleFarmer", "zombieFemaleCasual", "zombieFemaleOffice"] as const;
+const DROWNED_LOOKS = ["zombieWalker"] as const;
 
 export const PIRATE_ENEMIES: Record<PirateEnemyId, EnemyDef> = {
   // GRUNT: drowned sailors climbing out of the sea, slow, in numbers.

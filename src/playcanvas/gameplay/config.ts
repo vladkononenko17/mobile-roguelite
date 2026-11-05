@@ -136,13 +136,10 @@ export type EnemyBehavior = "chaser" | "charger" | "thrower" | "tank" | "caster"
  * (Walker A / B / C...) and a model can be swapped without touching the AI. */
 
 export type EnemyVisualId =
-  | "zombieMaleCasual" | "zombieMaleFarmer" | "zombieFemaleCasual" | "zombieFemaleOffice"
-  | "zombieRunnerMale" | "zombieRunnerFemale" | "zombieThrower" | "zombieBrute"
-  | "vanguard" | HellVisualId | SpaceVisualId | WastelandVisualId | MedievalVisualId | PirateVisualId;
+  | "zombieWalker" | "zombieRunner" | "zombieThrower" | "zombieBrute" | "zombieCharger" | "zombieTank" | HellVisualId | SpaceVisualId | WastelandVisualId | MedievalVisualId | PirateVisualId;
 
-/** Zombie colour skins: recoloured copies of the zombie pack's swatch palette (one small texture
- * each, shared by every zombie model), built by scripts/build-zombies.mjs. */
-export type EnemySkinId = "green" | "darkgreen" | "purple" | "brown" | "toxic" | "brute" | HellSkinId | SpaceSkinId | WastelandSkinId | MedievalSkinId | PirateSkinId;
+/** Colour skins: per-model texture variants (see each chapter's config). */
+export type EnemySkinId = HellSkinId | SpaceSkinId | WastelandSkinId | MedievalSkinId | PirateSkinId;
 
 export const ENEMY_SKINS: Record<EnemySkinId, string> = {
   ...HELL_SKINS,
@@ -150,12 +147,6 @@ export const ENEMY_SKINS: Record<EnemySkinId, string> = {
   ...WASTELAND_SKINS,
   ...MEDIEVAL_SKINS,
   ...PIRATE_SKINS,
-  green: "models/zombies/skins/green.webp",
-  darkgreen: "models/zombies/skins/darkgreen.webp",
-  purple: "models/zombies/skins/purple.webp",
-  brown: "models/zombies/skins/brown.webp",
-  toxic: "models/zombies/skins/toxic.webp",
-  brute: "models/zombies/skins/brute.webp",
 };
 
 /** Clip names inside an enemy GLB. Several deaths: one is picked at random. */
@@ -202,43 +193,29 @@ export interface EnemyAttachment {
   only?: EnemyId[];
 }
 
-const ZOMBIE_CLIPS: EnemyClips = {
-  idle: "Zombie_Idle", move: "Zombie_Walk", attack: "Zombie_Attack", hit: "Zombie_Hit",
-  death: ["Zombie_Death", "Zombie_DeathForward"],
-};
-
-const HORDE_SKINS: EnemySkinId[] = ["green", "darkgreen", "purple", "brown"];
-
-/** Low-Poly Zombie Asset Pack bodies, built by scripts/build-zombies.mjs (see SOURCES.md). */
-const zombie = (file: string, scale: number, extra: Partial<EnemyVisual> = {}): EnemyVisual => ({
-  url: `models/zombies/${file}.glb`, scale, clips: ZOMBIE_CLIPS, moveSpeed: 1.35, skins: HORDE_SKINS, ...extra,
-});
-/** Sprinting: the retargeted run clip (feet match ~4.3 m/s at scale 1). */
-const RUNNER: Partial<EnemyVisual> = { clips: { ...ZOMBIE_CLIPS, move: "Zombie_Run" }, moveSpeed: 4.3, bulk: 0.88 };
-
+/**
+ * The first chapter's horde: the Quaternius "Zombie Apocalypse Kit" bodies (CC0, built by
+ * scripts/build-wasteland-creatures.mjs into models/infected/), dressed per role.
+ */
+const ZK = WASTELAND_VISUALS;
 export const ENEMY_VISUALS: Record<EnemyVisualId, EnemyVisual> = {
   ...HELL_VISUALS,
   ...SPACE_VISUALS,
   ...WASTELAND_VISUALS,
   ...MEDIEVAL_VISUALS,
   ...PIRATE_VISUALS,
-  zombieMaleCasual: zombie("zombie_male_casual", 0.98),
-  zombieMaleFarmer: zombie("zombie_male_farmer", 1.04),
-  zombieFemaleCasual: zombie("zombie_female_casual", 1.05),
-  zombieFemaleOffice: zombie("zombie_female_office", 1.08),
-  // Runner: the pack's lean sport bodies, sprinting.
-  zombieRunnerMale: zombie("zombie_male_sport", 1.0, RUNNER),
-  zombieRunnerFemale: zombie("zombie_female_sport", 1.12, RUNNER),
-  // Thrower: lab-coat zombie in a toxic yellow-green skin, a little swollen, lobbing with an overhand throw.
-  zombieThrower: zombie("zombie_male_scientist", 1.02, { skins: ["toxic"], bulk: 1.12, clips: { ...ZOMBIE_CLIPS, special: "Zombie_Throw" } }),
-  // Brute (boss): a big, bulked-out zombie in a dark bruised skin with a slow overhead smash.
-  zombieBrute: zombie("zombie_male_casual", 0.98, { skins: ["brute"], bulk: 1.28, clips: { ...ZOMBIE_CLIPS, attack: "Zombie_Smash", hit: undefined } }),
-  /** Boss rig (Meshy "Ironclad Vanguard", Mixamo clips). */
-  vanguard: {
-    url: "models/vanguard/Meshy_AI_Ironclad_Vanguard_All_Animations_2k.glb", scale: 1,
-    clips: { idle: "Idle_10", move: "Walking", attack: "Attack", death: ["dying_backwards"] },
-    moveSpeed: 1.3,
-  },
+  // Walker: the rotter in its three rot colours.
+  zombieWalker: ZK.zkRotter,
+  // Runner: the rotter sprinting, a little leaner.
+  zombieRunner: { ...ZK.zkRotter, clips: { ...ZK.zkRotter.clips, move: "Run" }, moveSpeed: 3.8, bulk: 0.9, skins: ["rotter_grey", "rotter_bruised"] },
+  // Thrower: the toxic bloater, lobbing bile.
+  zombieThrower: { ...ZK.zkBloater, skins: ["bloater_toxic"] },
+  // Brute (boss): a bulked-out bruised rotter with a heavy punch.
+  zombieBrute: { ...ZK.zkRotter, skins: ["rotter_bruised"], bulk: 1.3 },
+  // Charger (boss): the Abomination, rushing with its club arm.
+  zombieCharger: { ...ZK.zkAbomination, skins: ["abom_flesh"], clips: { ...ZK.zkAbomination.clips, special: "Run_Attack" } },
+  // Mutant Tank (boss): a huge bloater that slams and spits.
+  zombieTank: { ...ZK.zkBloater, skins: ["bloater_blue"], bulk: 1.15 },
 };
 
 export interface EnemyDef {
@@ -301,7 +278,7 @@ export interface EnemyDef {
   glow?: [number, number, number];
 }
 
-const WALKER_LOOKS: EnemyVisualId[] = ["zombieMaleCasual", "zombieMaleFarmer", "zombieFemaleCasual", "zombieFemaleOffice"];
+const WALKER_LOOKS: EnemyVisualId[] = ["zombieWalker"];
 
 export const ENEMIES: Record<EnemyId, EnemyDef> = {
   ...HELL_ENEMIES,
@@ -317,7 +294,7 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
   },
   // Runner: lean and ~0.95x the hero, sprinting.
   runner: {
-    label: "Runner", visuals: ["zombieRunnerMale", "zombieRunnerFemale"], scale: 1.06, scaleJitter: 0.03, behavior: "chaser",
+    label: "Runner", visuals: ["zombieRunner"], scale: 1.06, scaleJitter: 0.03, behavior: "chaser",
     maxHp: 22, speed: 3.9, radius: 0.34, damage: 7, attackRange: 1.1, attackWindup: 0.3, attackCooldown: 0.9,
     cash: 1, xp: 15, drops: { cash: 0.45, health: 0.03, upgrade: 0.008 },
   },
@@ -334,17 +311,17 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
     cash: 25, xp: 60, drops: { cash: 1, health: 1, upgrade: 0 },
   },
   charger: {
-    label: "Charger", visuals: ["vanguard"], scale: 1.55, tint: [0.95, 0.6, 0.45], behavior: "charger", boss: true,
+    label: "Charger", visuals: ["zombieCharger"], scale: 1.55, behavior: "charger", boss: true,
     maxHp: 420, speed: 1.6, radius: 0.62, damage: 18, attackRange: 1.8, attackWindup: 0.55, attackCooldown: 1.4,
     cash: 40, xp: 80, drops: { cash: 1, health: 1, upgrade: 0 },
-    clips: { special: "Rifle_Charge_inplace" },
+    clips: { special: "Run_Attack" },
     charge: { cooldown: 5, telegraph: 1.0, speed: 12, distance: 13, recover: 1.6, damage: 28 },
   },
   tank: {
-    label: "Mutant Tank", visuals: ["vanguard"], scale: 2.05, tint: [0.66, 0.55, 0.78], behavior: "tank", boss: true,
+    label: "Mutant Tank", visuals: ["zombieTank"], scale: 2.05, tint: [0.8, 0.72, 0.9], behavior: "tank", boss: true,
     maxHp: 900, speed: 0.95, radius: 0.85, damage: 30, attackRange: 2.2, attackWindup: 0.8, attackCooldown: 1.8,
     cash: 60, xp: 120, drops: { cash: 1, health: 1, upgrade: 0 },
-    clips: { special: "Charged_Ground_Slam" },
+    clips: { special: "Jump_Land" },
     projectile: { damage: 20, speed: 6, radius: 1.8, cooldown: 5.5, minRange: 4, maxRange: 13 },
     slam: { cooldown: 6, telegraph: 1.1, radius: 3.6, damage: 32, triggerRange: 3.4 },
   },

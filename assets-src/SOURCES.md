@@ -11,7 +11,7 @@
 | `monsters-glb/` | Birb, Cactoro, Wizard, GreenBlob as GLB (converted from the supplied glTF; texture embedded). 9 clips each: Idle, Walk, Bite_Front, HitRecieve, Death, Jump, Dance, Yes, No. Authored large (1.9-3.6 m tall), to be scaled down in game | no licence file supplied |
 | `monsters-fbx/` | Same creature family as FBX: Alien, Birb, Cactoro, GreenBlob, GreenSpikyBlob, Ninja, Wizard, plus their shared 32x32 palette `Atlas_Monsters.png` (extracted from the glTF). Alien, GreenSpikyBlob and Ninja exist only here | no licence file supplied |
 | `shs-monsters/` (git-ignored, local only) | "SHS Monsters Pack" by Small Hearth Studios: alien grunt/leader/undercover, minotaur, orc, skeleton, skeleton mage/warrior, werewolf (OBJ + gradient palette) | Free use incl. commercial; raw files must not be redistributed, so they stay out of the repo. Attribution appreciated: "Assets created by Small Hearth Studios" |
-| `zombies-lowpoly/` (git-ignored, local only) | "Low-Poly Zombie Asset Pack" (`models3` release, `Low-Poly.Zombie.Asset.Pack.rar`): 10 zombie characters (male casual / farmer / policeman / scientist / sport, female casual / office / nurse / sport / ...) on one Unity humanoid rig (T/A-pose, no clips, ~1.5k triangles each) with a shared 1408x768 colour-swatch palette. Male casual, male farmer, female casual, female office, the scientist and the two sport bodies are built into `public/models/zombies/*.glb` by `scripts/build-zombies.mjs` (FBX converted with FBX2glTF first; Vanguard clips retargeted plus a procedural zombie posture, attack and hit; the palette recoloured into zombie skins at a quarter size) | no licence file supplied; kept local like the other store packs |
+| `zombies-lowpoly/` (git-ignored, local only; **no longer shipped**) | "Low-Poly Zombie Asset Pack" (`models3` release, `Low-Poly.Zombie.Asset.Pack.rar`): 10 zombie characters (male casual / farmer / policeman / scientist / sport, female casual / office / nurse / sport / ...) on one Unity humanoid rig (T/A-pose, no clips, ~1.5k triangles each) with a shared 1408x768 colour-swatch palette. Male casual, male farmer, female casual, female office, the scientist and the two sport bodies were built into `public/models/zombies/` by a script since removed. Replaced by the Quaternius "Zombie Apocalypse Kit" (CC0) bodies for licensing | no licence file supplied: removed from the game |
 | `survivor-v3/` (git-ignored, local only) | "Zombie Apocalypse Survivor Male" by Codersan (Unity package plus the extracted FBX, texture and three Mixamo idles). Built into `public/models/survivor/survivor.glb` by `scripts/build-survivor.mjs` (FBX converted with FBX2glTF first) | Store asset: use in projects; raw files not redistributed |
 | `molten-scifi/` (git-ignored, local only) | "Molten Maps SciFi Asset Pack" v1 by Moltenbolt (`space` release, `Molten.Maps.SciFi.Asset.Pack.2.zip`; GLBs from `Assets/gtlf` in `glb/`): 136 modular sci-fi pieces on one gradient atlas (4 m walls, floors, cryo tubes, generator, consoles, monitors, hydroponics, bunks). A few machines, consoles, monitors, bunks and tables are built into `public/models/facility/facility-kit.glb` by `scripts/build-facility-kit.mjs` (vertex-colour bake, darker and cooler grade, self-lit screens, translucent glass) for the Chapter 2 ORION station | CC0 1.0 (credit optional: Moltenbolt, www.moltenbolt.com) |
 
@@ -21,9 +21,27 @@
 
 Planned use: weapon attachments, minigun and monsters as later unlocks / modifications based on level success.
 
-## Hell rifles (AR_2, AR_3)
+## Weapons (CC0 only)
 
-Two flat-colour assault rifles supplied in chat (`.gltf` + `.fbx`); raw files kept local in `assets-src/new-ars/` (git-ignored; licence not stated). `scripts/add-weapons.mjs` re-orients them (muzzle -Z, origin at the pistol grip), scales them (0.52 / 0.47), recolours the neutral parts (gunmetal / crimson iron) and puts the orange accent on an emissive material (cyan for the Plasma rifle), then appends them to `public/models/weapons/weapons.glb` as `Plasma_Rifle` and `Hellfire_Rifle` (~3.5k and ~3.2k triangles, 2 draw calls each).
+`public/models/weapons/weapons.glb` holds only Pichuliru "Flat Guns East" (pichuliru.itch.io, CC0): the
+10 guns merged by `scripts/build-weapons.mjs`, then `scripts/cc0-weapons.mjs` drops everything else and
+adds the Plasma (from `Rifle_Battle_East`: gunmetal, cyan glow) and Hellfire (from `Sniper_Rifle_East`:
+crimson iron, ember glow) rifles as static recolours. Removed for licensing: the "assetpack-free" guns
+(assault rifle, pistol, shotgun, sniper, knife, grenade; licence unknown), the AR_2 / AR_3 rifles supplied
+in chat (licence not stated) and the low poly axe. Shop pictures: `scripts/render-weapon-icons.mjs`.
+
+## Meshy AI
+
+The "Ironclad Vanguard", "Wasteland Brawler" and "Iron Shoulder Orc" characters (Meshy AI, meshy.ai) are no
+longer in `public/`. The Vanguard's animation clips (Meshy's library) were retargeted onto the hero
+(`scripts/build-survivor.mjs`) and the demons (`scripts/build-demons.mjs`) and stay in those GLBs; Meshy
+output from the free plan is CC BY 4.0, so the credits name Meshy and disclose the AI generation.
+
+## Hell flesh growths
+
+"Lowpoly alien buildings" (hell2 release; smoke-th.itch.io/lowpoly-alien-buldings): a free download with no
+licence text on its page. Credited to smoke_th; ask the author for written permission before a paid release,
+or replace the five `flesh*` props of the hell kit.
 
 ## Kenney Graveyard Kit 5.0 and Nature Kit (CC0)
 

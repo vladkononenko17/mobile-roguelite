@@ -215,7 +215,7 @@ The last and largest chapter of the 3D game at `/playcanvas.html`: open it from 
   spray and palm leaves blow in off the sea.
 - **Colour**: flowering bushes, ferns, starfish, shells, coral, sea fans, kelp and buoys (modelled in
   `scripts/build-pirate-decor.mjs`), banners and flags, tiki torches along the beach, rock pools.
-- **Enemies** (`src/playcanvas/gameplay/pirateConfig.ts`): the drowned (zombie bodies in sea-drowned skins),
+- **Enemies** (`src/playcanvas/gameplay/pirateConfig.ts`): the drowned (the CC0 rotter in sea-drowned skins),
   carrion crabs (swarm), skeleton boarders (fast), musketeers (ranged), powder monkeys (lob bombs, explode
   when killed), quartermasters (shield charge) and the barnacle brute (slam). Easy / Hard / Nightmare.
 - **New mechanics**: the `tentacle` boss attack (`BossBrain.ts`: lanes across the arena, a tentacle drawn
@@ -238,3 +238,17 @@ The last and largest chapter of the 3D game at `/playcanvas.html`: open it from 
   the shop's stat items have icons.
 - **Health bars** (`src/playcanvas/ui/HealthBars.ts`): red over every living enemy (wider for elites
   and bosses, dimmed at full health, the lost part flashes white) and green over the hero.
+
+## Dustline 3D — publishing build (itch.io and web portals)
+
+- `npm run build:itch` builds the 3D game alone with relative paths (`vite.itch.config.ts`), copies only
+  the folders it loads, adds `credits.txt` and writes `dustline-itch.zip` (~420 files, ~56 MB unpacked,
+  ~31 MB zipped; checked against itch.io's limits of 1000 files / 500 MB). Upload it as an HTML5 game
+  ("This file will be played in the browser"), portrait viewport, e.g. 430 × 860, with fullscreen on.
+- **Licences**: every shipped model is CC0 or a free/store asset used under its terms; the credits are on
+  the title screen (Credits button, `src/playcanvas/ui/credits.ts`) and in `CREDITS.md`. The chapter I
+  horde, the space crew and the drowned are Quaternius "Zombie Apocalypse Kit" bodies (CC0); all guns are
+  Pichuliru "Flat Guns East" (CC0; Plasma and Hellfire are recolours by `scripts/cc0-weapons.mjs`). Assets
+  without a stated licence were removed: the Low-Poly Zombie pack, the "assetpack-free" guns, the AR_2 /
+  AR_3 rifles and the axe. The Meshy AI characters (Vanguard, Brawler, Orc) are no longer shipped; animation
+  clips first generated with Meshy AI still drive the hero and several creatures (disclosed in the credits).

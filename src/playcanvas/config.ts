@@ -62,8 +62,8 @@ export interface WeaponGrip extends GripFrame {
 export const CHARACTERS = {
   survivor: {
     label: "Survivor (V3)",
-    // "Zombie Apocalypse Survivor" (Mixamo rig) built by scripts/build-survivor.mjs: its own three
-    // Mixamo idles plus every Vanguard clip retargeted onto it (same bone names, bone directions
+    // "Zombie Apocalypse Survivor" by Codersan (Mixamo rig) built by scripts/build-survivor.mjs: its
+    // own three Mixamo idles plus the clips of a Meshy AI-generated rig (Meshy, CC BY 4.0) retargeted onto it (same bone names, bone directions
     // matched, so the weapon poses carry over). Texture resized to 2048 WebP.
     url: "models/survivor/survivor.glb",
     // Vanguard's clips on ~3% longer legs.
@@ -83,49 +83,13 @@ export const CHARACTERS = {
     fingers: { rigid: true, curlAxis: [1, 0, 0], thickness: 0.011 },
     handRollDeg: { left: -237.0, right: -116.8 },
   },
-  vanguard: {
-    label: "Ironclad Vanguard",
-    // Unmodified mesh, rig and all 17 animations; textures resized to max 2048 and stored as WebP
-    // (22.6 MB -> 5.4 MB).
-    url: "models/vanguard/Meshy_AI_Ironclad_Vanguard_All_Animations_2k.glb",
-    walkNativeSpeed: 1.45,
-    runNativeSpeed: 4.6,
-    // Has a real idle, so no procedural breathing. The weapon clips (Run_and_Shoot,
-    // Rifle_Charge_inplace, Running_Reload, Axe_Spin_Attack, ...) are loaded but not used yet.
-    clips: { idle: "Idle_10" },
-    proceduralIdle: false,
-    // Sculpted fists (no finger bones). Palm frames derived from the rifle hold verified on this
-    // model (grip in the right fist, left fist under the handguard).
-    hands: {
-      right: { position: [0.036, 0.026, 0.023], axis: [-0.661, 0.464, 0.589], palm: [0.499, -0.314, 0.808] },
-      left: { position: [0.067, 0.071, 0.051], axis: [0.625, -0.026, 0.78], palm: [-0.775, -0.143, 0.616] },
-    },
-  },
-  brawler2k: {
-    label: "Brawler (2K tex)",
-    // Unmodified mesh, rig, animations and materials; only textures resized 4096 -> 2048.
-    url: "models/brawler/Meshy_AI_Wasteland_Brawler_All_Animations_2k.glb",
-    walkNativeSpeed: 1.2,
-    runNativeSpeed: 3.9,
-  },
-  brawler4k: {
-    label: "Brawler (original 4K)",
-    url: "models/brawler/Meshy_AI_Wasteland_Brawler_All_Animations.glb",
-    walkNativeSpeed: 1.2,
-    runNativeSpeed: 3.9,
-  },
-  orc: {
-    label: "Iron Shoulder Orc",
-    url: "models/orc/Meshy_AI_Iron_Shoulder_Orc_All_Animations.glb",
-    walkNativeSpeed: 1.3,
-    runNativeSpeed: 3.9,
-  },
 } satisfies Record<string, CharacterModel>;
 
 export type CharacterId = keyof typeof CHARACTERS;
 
 /**
- * Hand-held weapons ("assetpack-free", merged by scripts/build-weapons.mjs). The chosen weapon is
+ * Hand-held weapons (Pichuliru "Flat Guns East", CC0; merged by scripts/build-weapons.mjs, made
+ * CC0-only by scripts/cc0-weapons.mjs). The chosen weapon is
  * parented to the hero's right-hand bone. Weapons point their muzzle along -Z with the origin at
  * the grip; the Mixamo hand bone points its +Y along the fingers, so +90° about X lays the barrel
  * along the hand with the weapon's top facing the back of the hand. `rollDeg` then turns the weapon
@@ -151,48 +115,40 @@ export const WEAPONS = {
   // Grip frames below were measured on each model (weapon space: muzzle -Z, top +Y; metres). `stock`
   // is the centre of the butt plate (shoulder-held classes).
   list: {
-    // "assetpack-free" (textured)
-    // Pistol grip 4.2 cm wide, slanting back from (y 0, z 0.04) to (y -0.07, z 0.075); handguard a
-    // 3 x 7 cm slab (y 0.063-0.13) from z -0.32 to -0.14. Right palm on the right side of the pistol
-    // grip, left palm under and to the left of the handguard.
+    // Every gun is Pichuliru's "Flat Guns East" (CC0). The campaign's three base guns:
+    // AK-style rifle: pistol grip slanting back (y -0.07 at z ~0.13), handguard z -0.07..-0.23
+    // (bottom y -0.02); attachment bones line up with the CC0 Flat Gun Attachments.
     rifle: {
-      label: "Assault rifle", class: "rifle", node: "assault_rifle_2", position: [-0.0057, 0.0893, 0.0247], rotation: [80.8, -42.19, 13.56], rollDeg: 0, attack: null,
+      label: "Assault rifle", class: "rifle", node: "Rifle_Assault_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
-        right: { position: [0, -0.035, 0.058], axis: [0, 0.88, -0.47], palm: [0.85, 0.25, 0.47], radius: 0.021 },
-        left: { position: [0, 0.096, -0.23], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
+        right: { position: [0, -0.073, 0.09], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
+        left: { position: [0, -0.02, -0.15], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
       },
-      magazineNode: "ar_magazine_2",
+      magazineNode: "Magazine",
+      magazineAxis: "z",
       modMounts: {
-        suppressor: { position: [0, 0.0855, -0.614] },
-        reflex: { position: [0, 0.15, -0.12] },
-        foregrip: { position: [0, 0.035, -0.3] },
+        suppressor: { anchor: "Attach_Muzzle" }, reflex: { anchor: "Attach_Scope" }, foregrip: { anchor: "Attach_Rail.Bottom" },
       },
     },
-    // 86 cm pump gun: pistol grip y -0.08..-0.01 (z 0.05-0.13, top further back), pump / fore-end
-    // under the barrel z -0.26..-0.09 (y 0-0.05), butt plate at z 0.29.
+    // Straight-stock pump gun (no pistol grip): the right hand takes the stock's wrist at z ~0.2;
+    // pump z -0.29..-0.08 under the barrel; butt z 0.42, low (y -0.045).
     shotgun: {
-      label: "Shotgun", class: "shotgun", node: "shotgun_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      label: "Shotgun", class: "shotgun", node: "Shotgun_Pump_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
-        right: { position: [0, -0.04, 0.083], axis: [0, 0.864, 0.504], palm: [0.85, -0.26, 0.45], radius: 0.02 },
-        left: { position: [0, 0.025, -0.15], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
+        right: { position: [0, -0.02, 0.2], axis: [0, 0.97, 0.24], palm: [0.85, -0.13, 0.5], radius: 0.02 },
+        left: { position: [0, 0, -0.12], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
       },
-      stock: [0, 0.005, 0.28],
+      stock: [0, -0.045, 0.42],
     },
-    sniper: { label: "Sniper rifle", class: "rifle", node: "sniper_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
-    // Grip y -0.06..0, z ~0.03-0.09, 2.8 cm wide; slide above it. Two-handed support grip: the left
-    // palm sits on the FRONT-LEFT of the grip, a little low (under the trigger guard), over the right
-    // hand's fingers, facing back-right into the grip; its fingers point forward-right and wrap around
-    // the front of the shooting hand. (A support palm flat on the grip's left side left the fingers
-    // sticking straight forward past the gun: an open hand floating beside it from the top camera.)
+    // Grip y -0.11..-0.03 at z ~0.06. Two-handed support grip: the left palm sits on the FRONT-LEFT
+    // of the grip, a little low, over the right hand's fingers, facing back-right into the grip.
     pistol: {
-      label: "Pistol", class: "pistol", node: "pistol_1", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      label: "Pistol", class: "pistol", node: "Pistol_Full_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
-        right: { position: [0, -0.03, 0.06], axis: [0, 0.96, -0.28], palm: [0.9, 0.08, 0.28], radius: 0.016 },
-        left: { position: [0, -0.045, 0.05], axis: [0, 0.96, -0.28], palm: [-0.7, -0.05, -0.7], radius: 0.045, rollRangeDeg: 15 },
+        right: { position: [0, -0.07, 0.06], axis: [0, 0.98, -0.21], palm: [0.9, 0.09, 0.42], radius: 0.016 },
+        left: { position: [0, -0.085, 0.055], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.045, rollRangeDeg: 15 },
       },
     },
-    knife: { label: "Knife", class: "axe", node: "tactical_knife", position: [0, 0.08, 0.01], rotation: [90, 0, 0], rollDeg: 0, attack: "Attack" },
-    grenade: { label: "Grenade", class: "axe", node: "frag_grenade", position: [0, 0.09, -0.01], rotation: [90, 0, 0], rollDeg: 0, attack: null },
     // "Flat Guns East" (flat colours)
     eastRifle: { label: "Rifle (East)", class: "rifle", node: "Rifle_Assault_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
     eastBattleRifle: { label: "Battle rifle (East)", class: "rifle", node: "Rifle_Battle_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
@@ -259,29 +215,22 @@ export const WEAPONS = {
         left: { position: [0, -0.07, 0.025], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.045, rollRangeDeg: 15 },
       },
     },
-    // Low poly axe (handle along -Y, head at the top, blade toward -X), held ~0.62 m down the handle
-    // with the legacy placement: that carry keeps the head away from the body in idle and run, while a
-    // grip-fitted hold swung the head up by the character's head. Locomotion and attack clips move it.
-    axe: { label: "Axe", class: "axe", node: "low_poly_axe", position: [0, 0.08, 0.62], rotation: [90, 0, 0], rollDeg: 0, attack: "Axe_Spin_Attack" },
-    // Hell-chapter rifles (AR_2 / AR_3, added by scripts/add-weapons.mjs): origin at the pistol grip
-    // centre, accents on their own emissive material.
-    // Plasma: 78 cm bullpup; the support hand takes the fore-grip under the thumb hole (z -0.21).
+    // Hell-chapter rifles (scripts/cc0-weapons.mjs): static recolours of two East rifles, their
+    // detail parts on an emissive material. Plasma = the battle rifle in gunmetal with cyan light
+    // (grip y -0.07 at z ~0.165, handguard z -0.05..-0.235); Hellfire = the long rifle in crimson
+    // iron with ember light (grip at z ~0.18, a thin handguard z -0.04..-0.32).
     plasma: {
-      // Bullpup: the hand goes through the thumb-hole round the strut behind it, so the model is scaled
-      // up (the hole must fit the fingers) and the grip sits mid-strut, not at its foot.
-      label: "Plasma rifle", class: "rifle", node: "Plasma_Rifle", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null, scale: 1.3,
+      label: "Plasma rifle", class: "rifle", node: "Plasma_Rifle", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
-        right: { position: [0, 0.022, 0.006], axis: [0, 0.94, -0.34], palm: [0.85, 0.18, 0.49], radius: 0.02 },
-        left: { position: [0, 0.004, -0.214], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.022, rollRangeDeg: 35 },
+        right: { position: [0, -0.073, 0.122], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
+        left: { position: [0, -0.015, -0.17], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
       },
     },
-    // Hellfire: 72 cm, slanted pistol grip; box magazine ahead of it; the support hand under the
-    // front of the receiver (z -0.27).
     hellfire: {
       label: "Hellfire rifle", class: "rifle", node: "Hellfire_Rifle", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
-        right: { position: [0, 0, 0], axis: [0, 0.905, -0.425], palm: [0.85, 0.22, 0.47], radius: 0.02 },
-        left: { position: [0, 0.056, -0.273], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.02, rollRangeDeg: 35 },
+        right: { position: [0, -0.073, 0.137], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
+        left: { position: [0, -0.005, -0.2], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.022, rollRangeDeg: 35 },
       },
     },
   },

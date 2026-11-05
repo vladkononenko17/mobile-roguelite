@@ -1,5 +1,7 @@
 node_modules/
 dist/
+dist-itch/
+dustline-itch.zip
 *.png
 .DS_Store
 !public/hata/*.png

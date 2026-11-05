@@ -5,7 +5,7 @@
 //   re-tinted (salt-bleached bones, sea-rotted coats, barnacle crust) at 256 px WebP;
 // - gear modelled here in code: a tricorn hat, a musket, the bosun's anchor (EnemyVisual.attachments);
 // - the carrion crab, modelled and animated here in code (node animation, no skin);
-// - "drowned" skins for the zombie pack's bodies (re-tints of models/zombies/skins/*.webp).
+// - "drowned" skins for the CC0 rotter (re-tints of models/infected/skins/rotter_*.webp).
 //
 //   node scripts/build-pirate-creatures.mjs
 // Not part of the normal build. Needs (npm i --no-save): @gltf-transform/core@4,
@@ -400,13 +400,13 @@ function mulQ(a, b) {
 await crab();
 
 /* ------------------------------------------------------------------------------------------------
- * Drowned skins for the zombie pack (shared swatch palette): pale, sea-green, bloated blue.
+ * Drowned skins for the rotter (Quaternius Zombie_Basic, CC0): pale, sea-green, bloated blue.
  * ---------------------------------------------------------------------------------------------- */
-const ZSKINS = path.join(ROOT, "public/models/zombies/skins");
+const ZSKINS = path.join(ROOT, "public/models/infected/skins");
 for (const [id, src, k] of [
-  ["drowned_pale", "green", { saturation: 0.35, brightness: 0.95, tint: "#a9c3bd" }],
-  ["drowned_kelp", "darkgreen", { saturation: 0.6, brightness: 0.9, tint: "#8fb79a" }],
-  ["drowned_blue", "purple", { saturation: 0.45, brightness: 0.85, tint: "#8ea7c2" }],
+  ["drowned_pale", "rotter_grey", { saturation: 0.4, brightness: 1.1, tint: "#a9c3bd" }],
+  ["drowned_kelp", "rotter_green", { saturation: 0.7, brightness: 1.0, tint: "#8fb79a" }],
+  ["drowned_blue", "rotter_bruised", { saturation: 0.5, brightness: 1.0, tint: "#8ea7c2" }],
 ]) {
   let img = sharp(path.join(ZSKINS, `${src}.webp`)).modulate({ saturation: k.saturation, brightness: k.brightness });
   img = sharp(await img.png().toBuffer()).tint(k.tint);

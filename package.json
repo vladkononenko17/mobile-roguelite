@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build && node scripts/build-sw.mjs",
+    "build:itch": "tsc --noEmit && vite build -c vite.itch.config.ts && node scripts/package-itch.mjs",
     "test": "node --test tests/*.test.mjs",
     "preview": "vite preview",
     "voices": "node scripts/gen-voices.mjs",
