@@ -319,7 +319,7 @@ export const MEDIEVAL_LEVELS: WaveDef[] = [
 
 /** A run in the Dark Kingdom: a rifle, a little cash, level 1. */
 export const MEDIEVAL_RUN = {
-  startWeapon: "pistol" as const,
+  startWeapon: "handCannon" as const,
   startCash: 110,
   tierBoost: 1,
   startPicks: 0,

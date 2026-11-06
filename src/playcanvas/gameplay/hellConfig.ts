@@ -435,7 +435,7 @@ export const HELL_LEVELS: WaveDef[] = [
  * Pact before Act III and a final warning before the last level.
  */
 export const HELL_RUN = {
-  startWeapon: "pistol" as const,
+  startWeapon: "mp5" as const,
   startCash: 120,
   tierBoost: 2,
   /** Level-up choices offered at the start (0: none; the run starts at level 1). */

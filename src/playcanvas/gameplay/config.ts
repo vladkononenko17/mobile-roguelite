@@ -95,10 +95,10 @@ export interface WeaponFx {
  * (pierce, pellets, splash, burn), so a dearer gun is a real step up.
  */
 export const WEAPON_STATS: Partial<Record<WeaponId, WeaponStats>> = {
-  pistol: { damage: 14, fireRate: 3.2, range: 11, spreadDeg: 1.5, pellets: 1, penetration: 0, magazine: 12, reloadSeconds: 1.1, knockback: 0.12 },
+  pistol: { damage: 17, fireRate: 3.6, range: 11, spreadDeg: 1.5, pellets: 1, penetration: 0, magazine: 14, reloadSeconds: 0.95, knockback: 0.14 },
   // Tier 1: a heavy revolver-class pistol (pierces) or the pump gun.
   handCannon: {
-    damage: 34, fireRate: 1.7, range: 13, spreadDeg: 1, pellets: 1, penetration: 1, magazine: 6, reloadSeconds: 1.4, knockback: 0.32,
+    damage: 40, fireRate: 1.8, range: 13, spreadDeg: 1, pellets: 1, penetration: 1, magazine: 7, reloadSeconds: 1.3, knockback: 0.32,
     audio: { id: "shot_pistol", volume: 1.25, rate: 0.78 },
   },
   shotgun: { damage: 9, fireRate: 1.25, range: 7, spreadDeg: 11, pellets: 7, penetration: 0, magazine: 6, reloadSeconds: 1.6, knockback: 0.35 },
@@ -149,7 +149,7 @@ export const WEAPON_STATS: Partial<Record<WeaponId, WeaponStats>> = {
 
 /** The NEW WEAPON card per weapon (Hud.showWeapon): one line of identity, stat chips, accent colour. */
 export const WEAPON_CARDS: Partial<Record<WeaponId, { text: string; stats: string[]; color: string }>> = {
-  handCannon: { text: "Six heavy rounds that punch through the first in line.", stats: ["34 DMG", "PIERCE", "6 MAG"], color: "#d8b070" },
+  handCannon: { text: "Six heavy rounds that punch through the first in line.", stats: ["40 DMG", "PIERCE", "7 MAG"], color: "#d8b070" },
   shotgun: { text: "Seven pellets. Let them come close.", stats: ["7 PELLETS", "KNOCKBACK"], color: "#d88a4a" },
   mp5: { text: "Fast, controllable automatic fire for the dead streets.", stats: ["11 SHOTS/S", "30 MAG", "FAST RELOAD"], color: "#e6b24a" },
   dualUzi: { text: "Two compact SMGs. Huge close-range output, wider spread.", stats: ["15 SHOTS/S", "40 MAG", "DUAL WIELD"], color: "#f07c42" },
@@ -189,10 +189,22 @@ export const weaponTier = (id: WeaponId): number => {
 };
 
 /**
- * Global balance on top of every chapter's levels: enemies hit harder, take more killing and come
- * thicker (tuned against the playtest bot: chapter I on Hard was a stroll once builds formed).
+ * Global balance on top of every chapter's levels, ramped over the chapter: the first level is gentle
+ * (the run starts with a pistol), the last ones hit harder, take more killing and come thicker than
+ * the chapter configs alone (tuned with the playtest bot: chapter I on Hard was a stroll once builds
+ * formed). `BALANCE` holds the current level's values; the spawn director sets them per level.
  */
-export const BALANCE = { enemyHp: 1.12, enemyDamage: 1.22, density: 1.12 };
+export const BALANCE_RAMP = { enemyHp: [0.75, 1.3], enemyDamage: [0.9, 1.4], density: [0.85, 1.25] } as const;
+export const BALANCE = { enemyHp: 1, enemyDamage: 1, density: 1 };
+
+/** Sets `BALANCE` for level `index` of `count` (later endless loops stay at the top). */
+export function setBalanceFor(index: number, count: number): void {
+  const t = count > 1 ? Math.min(1, index / (count - 1)) : 1;
+  for (const key of ["enemyHp", "enemyDamage", "density"] as const) {
+    const [a, b] = BALANCE_RAMP[key];
+    BALANCE[key] = a + (b - a) * t;
+  }
+}
 
 /**
  * The economy's extra levers (beyond drops and prices): interest on unspent cash at a level's end

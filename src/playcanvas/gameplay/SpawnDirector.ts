@@ -1,6 +1,6 @@
 import { Vec3 } from "playcanvas";
 import type { ScreenProjector } from "../camera/ScreenProjector";
-import { BALANCE, SPAWNING, type EnemyId, type WaveDef, type WaveEnemyId, type WavePhase } from "./config";
+import { BALANCE, setBalanceFor, SPAWNING, type EnemyId, type WaveDef, type WaveEnemyId, type WavePhase } from "./config";
 import { isAlive, type Enemy, type EnemyManager } from "./EnemyManager";
 import type { NavField } from "./NavField";
 
@@ -52,6 +52,7 @@ export class SpawnDirector {
   start(waveIndex: number): void {
     this.waveIndex = waveIndex;
     this.wave = this.levels[waveIndex];
+    setBalanceFor(waveIndex, this.levels.length);
     this.time = 0;
     this.phase = "waves";
     this.boss = null;

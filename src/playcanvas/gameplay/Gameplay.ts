@@ -431,6 +431,8 @@ export class Gameplay {
     const kit = this.campaign?.run;
     const requested = DEV_MODE ? this.params.get("weapon") : null;
     this.weapons.setMods([], false);
+    // Later chapters start one rung up the arsenal ladder; the pistol stays in the loadout.
+    if (kit?.startWeapon) s.owned.add(kit.startWeapon);
     this.equip(requested && requested in WEAPON_STATS ? (requested as WeaponId) : kit?.startWeapon ?? "pistol");
     this.pendingLevelUps = 0;
     if (kit) {
