@@ -215,7 +215,7 @@ The last and largest chapter of the 3D game at `/playcanvas.html`: open it from 
   spray and palm leaves blow in off the sea.
 - **Colour**: flowering bushes, ferns, starfish, shells, coral, sea fans, kelp and buoys (modelled in
   `scripts/build-pirate-decor.mjs`), banners and flags, tiki torches along the beach, rock pools.
-- **Enemies** (`src/playcanvas/gameplay/pirateConfig.ts`): the drowned (zombie bodies in sea-drowned skins),
+- **Enemies** (`src/playcanvas/gameplay/pirateConfig.ts`): the drowned (the CC0 rotter in sea-drowned skins),
   carrion crabs (swarm), skeleton boarders (fast), musketeers (ranged), powder monkeys (lob bombs, explode
   when killed), quartermasters (shield charge) and the barnacle brute (slam). Easy / Hard / Nightmare.
 - **New mechanics**: the `tentacle` boss attack (`BossBrain.ts`: lanes across the arena, a tentacle drawn
@@ -238,3 +238,44 @@ The last and largest chapter of the 3D game at `/playcanvas.html`: open it from 
   the shop's stat items have icons.
 - **Health bars** (`src/playcanvas/ui/HealthBars.ts`): red over every living enemy (wider for elites
   and bosses, dimmed at full health, the lost part flashes white) and green over the hero.
+
+## Dustline 3D — publishing build (itch.io and web portals)
+
+- `npm run build:itch` builds the 3D game alone with relative paths (`vite.itch.config.ts`), copies only
+  the folders it loads, adds `credits.txt` and writes `dustline-itch.zip` (~420 files, ~56 MB unpacked,
+  ~31 MB zipped; checked against itch.io's limits of 1000 files / 500 MB). Upload it as an HTML5 game
+  ("This file will be played in the browser"), portrait viewport, e.g. 430 × 860, with fullscreen on.
+- **Licences**: every shipped model is CC0 or a free/store asset used under its terms; the credits are on
+  the title screen (Credits button, `src/playcanvas/ui/credits.ts`) and in `CREDITS.md`. The chapter I
+  horde, the space crew and the drowned are Quaternius "Zombie Apocalypse Kit" bodies (CC0): the rotter
+  plus the kit's four survivors turned (`scripts/build-zombified-survivors.mjs`: zombie clips retargeted,
+  eight colour maps - four kinds of rot, two station jumpsuits, two drowned), so a horde mixes 5 bodies
+  x 4 looks; all guns are
+  Pichuliru "Flat Guns East" (CC0; Plasma and Hellfire are recolours by `scripts/cc0-weapons.mjs`). Assets
+  without a stated licence were removed: the Low-Poly Zombie pack, the "assetpack-free" guns, the AR_2 /
+  AR_3 rifles and the axe. The Meshy AI characters (Vanguard, Brawler, Orc) are no longer shipped; animation
+  clips first generated with Meshy AI still drive the hero and several creatures (disclosed in the credits).
+- **Hell and ORION** mix ten Quaternius "Ultimate Monsters" (CC0, `scripts/build-ultimate-monsters.mjs`) into
+  their enemies as extra looks: a trident demon, a skull brute, a fire shaman, a skull wraith and a wyvern in
+  fire colours; a bee, a spiky floater, a squid, a tentacle-horned alien and a blob in alien and void colours.
+
+## Dustline 3D — run and meta systems
+
+- **Meta-progression** (`gameplay/meta.ts`, `ui/MetaShop.ts`): every run, won or lost, pays ◆ Dust
+  (kills, levels, bosses, champions, a win; x0.7 Easy, x1.5 Nightmare). The title screen's UPGRADES
+  button spends it on permanent ranks: Vitality, Power, Trigger Discipline, Plating, Magnetism, Greed,
+  Wisdom (XP), Luck (rarer upgrades, bigger chests), Second Opinion (rerolls) and Second Wind (one revive).
+- **Act checkpoints** (`gameplay/checkpoint.ts`): the build is saved at the start of each new act and of
+  the final level; after a death, "Continue from <level>" restores it (at least half HP). Not on Nightmare.
+- **Level-ups**: front-loaded XP curve (`XP.toNext`): ~8-10 picks in chapter I. Cards are rolled by
+  rarity (`XP.rarityWeight`, raised by Luck); evolutions: Dragon's Breath (fire), Deadeye Rounds
+  (precision: Headhunter 3 + Piercing), Storm Grid (tech: Chain Lightning 2 + Drone); Magnet upgrade.
+- **Shop** (Brotato-style, `SHOP`, `SHOP_RULES`): the Medkit plus 4 rolled offers from a 20-item pool;
+  reroll for cash (dearer each time), lock an offer for the next visit; late, dear items from level 3-4
+  (Hollow Points, Hair Trigger, Exo Frame, Drone Bay) and the Upgrade Crate soak up late cash.
+- **Loadout everywhere**: bought guns stay in the loadout; choose one before each level in any chapter.
+- **Champions** (`ELITES`): every ~40 s a gold-glowing elite (x4 HP, x1.3 size) drops a chest: 1-3
+  upgrades flip in plus cash.
+- **Run summary** after a death or a win: time, kills, level, cleared levels, cash, damage taken, damage
+  by source, Dust earned, the build. **Endless mode** after a cleared chapter: its last levels and boss
+  fights loop, each loop tougher.

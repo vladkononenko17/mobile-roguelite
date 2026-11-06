@@ -165,6 +165,30 @@ const CSS = `
 #hpbars .hb.full { opacity: 0.7; }
 #hpbars .hb.elite { height: 7px; }
 #hpbars .hb.boss { height: 9px; }
+#hpbars .hb.champion { height: 8px; box-shadow: 0 0 0 1px #f2c14e, 0 0 8px rgba(242, 193, 78, 0.7); }
+#hpbars .hb.champion.full { opacity: 1; }
+#overlay .card.off { opacity: 0.45; }
+#overlay .card .lock { position: absolute; right: 6px; bottom: 6px; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 4px; border: 1px solid rgba(243, 231, 211, 0.3); background: rgba(0, 0, 0, 0.35); font: 700 13px system-ui; opacity: 1; }
+#overlay .card .lock.on { border-color: #f2c14e; color: #f2c14e; background: rgba(242, 193, 78, 0.15); }
+#overlay .card { position: relative; }
+#overlay .actions button.minor { background: rgba(243, 231, 211, 0.12); color: inherit; }
+/* Treasure chest: cards flip in one after another. */
+#overlay .panel.chest h2 { font: 800 34px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.12em; color: #f2c14e; text-shadow: 0 0 18px rgba(242, 193, 78, 0.6); animation: lvl-pop 0.4s ease-out; }
+#overlay .panel.chest .card { animation: chest-in 0.55s cubic-bezier(0.2, 1.4, 0.4, 1) backwards; border-color: #f2c14e; }
+#overlay .panel.chest .card:nth-child(2) { animation-delay: 0.45s; }
+#overlay .panel.chest .card:nth-child(3) { animation-delay: 0.9s; }
+@keyframes chest-in { from { transform: rotateY(90deg) scale(0.7); opacity: 0; } to { transform: none; opacity: 1; } }
+/* Run summary. */
+#overlay .panel.summary .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 12px; }
+#overlay .panel.summary .grid div { background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(243, 231, 211, 0.15); border-radius: 8px; padding: 8px 4px; }
+#overlay .panel.summary .grid b { display: block; font: 800 22px/1 "Barlow Condensed", system-ui, sans-serif; }
+#overlay .panel.summary .grid small { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.7; }
+#overlay .panel.summary .dmg { text-align: left; margin: 0 0 12px; }
+#overlay .panel.summary .dmg div { display: grid; grid-template-columns: 82px 1fr 48px; gap: 8px; align-items: center; font-size: 12px; margin: 4px 0; }
+#overlay .panel.summary .dmg i { height: 8px; border-radius: 4px; background: var(--c); width: var(--v); }
+#overlay .panel.summary .dmg em { font-style: normal; text-align: right; opacity: 0.8; }
+#overlay .panel.summary .dust { font: 800 20px "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.08em; color: #8fd8ff; margin: 0 0 10px; }
+#overlay .panel.summary .ups { font-size: 12px; opacity: 0.75; margin: 0 0 12px; }
 #hpbars .hb.hero { height: 8px; border-radius: 4px; }
 #hpbars .hb.hero i { border-radius: 4px; }
 /* Level-up: the game is paused underneath; a punchy title and big, touch-friendly cards. */
@@ -227,6 +251,23 @@ export interface Card {
   /** Highlighted (the equipped weapon). */
   active?: boolean;
   disabled?: boolean;
+  /** Greyed out but still tappable (its lock stays usable); the click handler decides. */
+  off?: boolean;
+  /** A lock toggle in the corner (shop offers kept for the next visit). */
+  lock?: { on: boolean; onToggle: () => void };
+}
+
+/** The end-of-run screen. */
+export interface RunSummary {
+  title: string;
+  subtitle: string;
+  stats: { label: string; value: string }[];
+  /** Damage by source, largest first. */
+  damage: { label: string; value: number; color: string }[];
+  /** "+42 ◆ Dust" line (empty: none). */
+  dust: string;
+  upgrades: string;
+  actions: { label: string; onClick: () => void; minor?: boolean }[];
 }
 
 /** What the upgrade toast shows (an UpgradeDef fits). */
@@ -632,9 +673,9 @@ export class Hud {
   }
 
   /** Opens the modal with a title, text, optional cards (each a button) and optional actions. */
-  openModal(options: { title: string; text?: string; image?: string; cards?: Card[]; compact?: boolean; levelUp?: boolean; onCard?: (index: number) => void; actions?: { label: string; onClick: () => void }[] }): void {
+  openModal(options: { title: string; text?: string; image?: string; cards?: Card[]; compact?: boolean; levelUp?: boolean; className?: string; onCard?: (index: number) => void; actions?: { label: string; onClick: () => void; minor?: boolean }[] }): void {
     const panel = document.createElement("div");
-    panel.className = options.levelUp ? "panel levelup" : "panel";
+    panel.className = options.levelUp ? "panel levelup" : `panel${options.className ? ` ${options.className}` : ""}`;
     const h = document.createElement("h2");
     h.textContent = options.title;
     panel.append(h);
@@ -656,7 +697,7 @@ export class Hud {
       options.cards.forEach((card, i) => {
         const b = document.createElement("button");
         b.type = "button";
-        b.className = `card ${card.kind ?? ""}${card.image ? " has-art" : ""}${card.active ? " equipped" : ""}`;
+        b.className = `card ${card.kind ?? ""}${card.image ? " has-art" : ""}${card.active ? " equipped" : ""}${card.off ? " off" : ""}`;
         b.disabled = !!card.disabled;
         if (card.image) {
           b.innerHTML = `<span class="art"><img alt="" loading="lazy"></span>${card.tag ? `<span class="tag"></span>` : ""}<b></b><small></small>${card.bars?.length ? `<span class="bars"></span>` : ""}`;
@@ -675,6 +716,20 @@ export class Hud {
         b.querySelector("b")!.textContent = card.title;
         b.querySelector("small")!.textContent = card.text;
         b.addEventListener("click", () => options.onCard?.(i));
+        if (card.lock) {
+          const lock = document.createElement("span");
+          lock.className = `lock${card.lock.on ? " on" : ""}`;
+          lock.setAttribute("role", "button");
+          lock.setAttribute("aria-label", card.lock.on ? "unlock" : "lock");
+          lock.textContent = card.lock.on ? "🔒" : "🔓";
+          const toggle = card.lock.onToggle;
+          lock.addEventListener("click", (e) => {
+            e.stopPropagation();
+            audio.play("ui");
+            toggle();
+          });
+          b.append(lock);
+        }
         cards.append(b);
       });
       panel.append(cards);
@@ -685,7 +740,7 @@ export class Hud {
       for (const a of options.actions) {
         const b = document.createElement("button");
         b.type = "button";
-        b.className = "primary";
+        b.className = a.minor ? "primary minor" : "primary";
         b.textContent = a.label;
         b.addEventListener("click", a.onClick);
         actions.append(b);
@@ -730,6 +785,31 @@ export class Hud {
     reroll.disabled = o.rerolls <= 0;
     reroll.addEventListener("click", () => o.onReroll());
     if (o.banishes <= 0) panel.querySelector<HTMLElement>(".banish-left")!.style.display = "none";
+    this.overlay.replaceChildren(panel);
+    this.overlay.classList.add("open");
+  }
+
+  /** The end-of-run screen: headline numbers, damage by source, Dust earned, the build, actions. */
+  openSummary(o: RunSummary): void {
+    const panel = document.createElement("div");
+    panel.className = "panel summary";
+    const esc = (t: string) => t.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+    const top = Math.max(1, ...o.damage.map((d) => d.value));
+    panel.innerHTML = `<h2>${esc(o.title)}</h2><p>${esc(o.subtitle)}</p>
+      <div class="grid">${o.stats.map((s) => `<div><b>${esc(s.value)}</b><small>${esc(s.label)}</small></div>`).join("")}</div>
+      ${o.damage.length ? `<div class="dmg">${o.damage.map((d) => `<div style="--c:${d.color};--v:${Math.max(2, Math.round((100 * d.value) / top))}%"><span>${esc(d.label)}</span><i></i><em>${d.value >= 10000 ? `${(d.value / 1000).toFixed(0)}k` : Math.round(d.value)}</em></div>`).join("")}</div>` : ""}
+      ${o.dust ? `<div class="dust">${esc(o.dust)}</div>` : ""}
+      ${o.upgrades ? `<div class="ups">${esc(o.upgrades)}</div>` : ""}
+      <div class="actions"></div>`;
+    const actions = panel.querySelector(".actions")!;
+    for (const a of o.actions) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = a.minor ? "primary minor" : "primary";
+      b.textContent = a.label;
+      b.addEventListener("click", a.onClick);
+      actions.append(b);
+    }
     this.overlay.replaceChildren(panel);
     this.overlay.classList.add("open");
   }

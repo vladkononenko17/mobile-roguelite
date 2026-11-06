@@ -10,12 +10,15 @@ import type { DifficultyDef, EnemyClips, EnemyDef, EnemyId, EnemyVisual, WaveDef
  * Looks
  * ---------------------------------------------------------------------------------------------- */
 
-export type HellVisualId = "imp" | "puglin" | "fiend" | "drake" | "hellbat" | "husk";
+export type HellVisualId =
+  | "imp" | "puglin" | "fiend" | "drake" | "hellbat" | "husk"
+  | "umImp" | "umBerserker" | "umSkullHound" | "umSkullBrute" | "umShaman" | "umWraith" | "umWyvern";
 export type HellSkinId =
   | "imp_red" | "imp_crimson" | "imp_black" | "imp_obsidian"
   | "pug_ember" | "pug_ash" | "pug_hide" | "pug_glutton"
   | "fiend_obsidian" | "fiend_archfiend"
-  | "drake_crimson" | "drake_wyrm" | "bat_blood" | "husk_charred";
+  | "drake_crimson" | "drake_wyrm" | "bat_blood" | "husk_charred"
+  | "um_hellRed" | "um_hellAsh" | "um_hellObsidian" | "um_hellEmber";
 
 const skin = (id: HellSkinId) => `models/demons/skins/${id}.webp`;
 export const HELL_SKINS: Record<HellSkinId, string> = {
@@ -23,7 +26,21 @@ export const HELL_SKINS: Record<HellSkinId, string> = {
   pug_ember: skin("pug_ember"), pug_ash: skin("pug_ash"), pug_hide: skin("pug_hide"), pug_glutton: skin("pug_glutton"),
   fiend_obsidian: skin("fiend_obsidian"), fiend_archfiend: skin("fiend_archfiend"),
   drake_crimson: skin("drake_crimson"), drake_wyrm: skin("drake_wyrm"), bat_blood: skin("bat_blood"), husk_charred: skin("husk_charred"),
+  // Quaternius Ultimate Monsters (one shared atlas: each map fits every monster model).
+  um_hellRed: "models/monsters/skins/um_hellRed.webp", um_hellAsh: "models/monsters/skins/um_hellAsh.webp",
+  um_hellObsidian: "models/monsters/skins/um_hellObsidian.webp", um_hellEmber: "models/monsters/skins/um_hellEmber.webp",
 };
+
+/** Quaternius "Ultimate Monsters" clips (scripts/build-ultimate-monsters.mjs). */
+const UM_BIG_CLIPS: EnemyClips = {
+  idle: "Idle", move: "Walk", attack: "Punch", hit: "HitReact", death: ["Death"], special: "Weapon", roar: "Wave", cast: "Weapon", slam: "Jump_Land",
+};
+const UM_FLY_CLIPS: EnemyClips = {
+  idle: "Flying_Idle", move: "Fast_Flying", attack: "Punch", hit: "HitReact", death: ["Death"], special: "Headbutt", cast: "Headbutt",
+};
+/** A Big monster (~3.1-3.9 units) at `scale`; walks ~3 units/s. */
+const umBig = (file: string, scale: number, skins: HellSkinId[], extra: Partial<EnemyVisual> = {}): EnemyVisual =>
+  ({ url: `models/monsters/${file}.glb`, scale, clips: UM_BIG_CLIPS, moveSpeed: 3.05 * scale, skins, ownSkins: true, ...extra });
 
 /** Retargeted demon clips (scripts/build-demons.mjs). */
 const DEMON_CLIPS: EnemyClips = {
@@ -63,6 +80,18 @@ export const HELL_VISUALS: Record<HellVisualId, EnemyVisual> = {
     clips: { idle: "Skeleton_Idle", move: "Skeleton_Running", attack: "Skeleton_Attack", death: ["Skeleton_Death"], special: "Skeleton_Attack" },
     attachments: [{ bone: "R.DownLeg.001", color: [1.6, 0.55, 0.12], position: [0, 0.012, 0], scale: 0.006 }],
   },
+  // Quaternius Ultimate Monsters (CC0), recoloured for Hell, ember eyes. The horned trident demon:
+  // the imps' cousin (~1.75 m), and black for the berserker.
+  umImp: umBig("umDemon", 0.56, ["um_hellRed", "um_hellEmber"]),
+  umBerserker: umBig("umDemon", 0.56, ["um_hellObsidian"]),
+  // The skull-faced brute with a spiked fist: running with the hounds, and huge for the hellbrute.
+  umSkullHound: umBig("umSkull", 0.53, ["um_hellAsh", "um_hellRed"], { clips: { ...UM_BIG_CLIPS, move: "Run" }, moveSpeed: 3.4 }),
+  umSkullBrute: umBig("umSkull", 0.36, ["um_hellObsidian"], { bulk: 1.1 }),
+  // The masked fire shaman: the husks' caster cousin.
+  umShaman: umBig("umTribal", 0.48, ["um_hellRed", "um_hellEmber"]),
+  // A winged skull wraith with the hellbats; a horned wyvern with the drakes.
+  umWraith: { url: "models/monsters/umWraith.glb", scale: 0.39, clips: UM_FLY_CLIPS, moveSpeed: 10, skins: ["um_hellObsidian", "um_hellAsh"], ownSkins: true },
+  umWyvern: { url: "models/monsters/umWyvern.glb", scale: 0.45, clips: UM_FLY_CLIPS, moveSpeed: 6.5, skins: ["um_hellRed", "um_hellEmber"], ownSkins: true },
 };
 
 /* ------------------------------------------------------------------------------------------------
@@ -80,13 +109,13 @@ const EMBER = "ember" as const;
 export const HELL_ENEMIES: Record<HellEnemyId, EnemyDef> = {
   // GRUNT: the basic demon. Medium speed, a mace swing; more HP than any zombie.
   imp: {
-    label: "Imp", visuals: ["imp"], scale: 1.0, scaleJitter: 0.05, behavior: "chaser", deathFx: EMBER,
+    label: "Imp", visuals: ["imp", "umImp"], scale: 1.0, scaleJitter: 0.05, behavior: "chaser", deathFx: EMBER,
     maxHp: 70, speed: 1.9, radius: 0.38, damage: 12, attackRange: 1.25, attackWindup: 0.4, attackCooldown: 1.1,
     cash: 2, xp: 14, drops: { cash: 0.45, health: 0.02, upgrade: 0.006 },
   },
   // HOUND: small, very fast, weak; comes in packs and punishes standing still.
   hound: {
-    label: "Hellhound", visuals: ["puglin"], scale: 1.1, scaleJitter: 0.06, behavior: "chaser", deathFx: EMBER,
+    label: "Hellhound", visuals: ["puglin", "umSkullHound"], scale: 1.1, scaleJitter: 0.06, behavior: "chaser", deathFx: EMBER,
     maxHp: 36, speed: 5.0, radius: 0.34, damage: 9, attackRange: 1.05, attackWindup: 0.22, attackCooldown: 0.8,
     // Its bite cripples: running away from a pack gets harder.
     cripple: { slow: 0.65, seconds: 1.1 },
@@ -94,14 +123,14 @@ export const HELL_ENEMIES: Record<HellEnemyId, EnemyDef> = {
   },
   // SPITTER / CASTER: keeps 6-11 m away and throws slow fire bolts - dodge sideways.
   husk: {
-    label: "Burning Husk", visuals: ["husk"], scale: 1.0, behavior: "caster", deathFx: EMBER,
+    label: "Burning Husk", visuals: ["husk", "umShaman"], scale: 1.0, behavior: "caster", deathFx: EMBER,
     maxHp: 55, speed: 1.7, radius: 0.36, damage: 8, attackRange: 1.1, attackWindup: 0.4, attackCooldown: 1.3,
     cash: 2, xp: 22, drops: { cash: 0.55, health: 0.04, upgrade: 0.01 },
     bolt: { damage: 12, speed: 6.0, radius: 0.32, cooldown: 3.0, minRange: 5.5, maxRange: 11, count: 1, spreadDeg: 0, windup: 0.55 },
   },
   // FLYING DEMON: circles above everything (lava, walls), spits fire, sometimes dives through.
   drake: {
-    label: "Hell Drake", visuals: ["drake"], scale: 1.0, behavior: "flyer", deathFx: EMBER, aimHeight: 0.4,
+    label: "Hell Drake", visuals: ["drake", "umWyvern"], scale: 1.0, behavior: "flyer", deathFx: EMBER, aimHeight: 0.4,
     maxHp: 80, speed: 3.2, radius: 0.5, damage: 12, attackRange: 1.3, attackWindup: 0.35, attackCooldown: 1.2,
     cash: 3, xp: 30, drops: { cash: 0.6, health: 0.04, upgrade: 0.012 },
     bolt: { damage: 14, speed: 7, radius: 0.34, cooldown: 3.0, minRange: 3, maxRange: 11, count: 1, spreadDeg: 0, windup: 0.45 },
@@ -109,14 +138,14 @@ export const HELL_ENEMIES: Record<HellEnemyId, EnemyDef> = {
   },
   // Swarm: weak, fast, low flyers - dangerous in numbers.
   hellbat: {
-    label: "Hellbat", visuals: ["hellbat"], scale: 1.0, scaleJitter: 0.08, behavior: "flyer", deathFx: EMBER, aimHeight: 0.3,
+    label: "Hellbat", visuals: ["hellbat", "umWraith"], scale: 1.0, scaleJitter: 0.08, behavior: "flyer", deathFx: EMBER, aimHeight: 0.3,
     maxHp: 16, speed: 4.6, radius: 0.3, damage: 6, attackRange: 0.95, attackWindup: 0.2, attackCooldown: 0.9,
     cash: 0, xp: 5, drops: { cash: 0.1, health: 0.01, upgrade: 0.002 },
     fly: { height: 1.3, orbit: 0 },
   },
   // BERSERKER: a black imp, fast and relentless; enrages at half HP.
   berserker: {
-    label: "Berserker", visuals: ["imp"], scale: 1.08, behavior: "chaser", deathFx: EMBER, glow: [2.2, 0.5, 0.2],
+    label: "Berserker", visuals: ["imp", "umBerserker"], scale: 1.08, behavior: "chaser", deathFx: EMBER, glow: [2.2, 0.5, 0.2],
     maxHp: 115, speed: 3.1, radius: 0.4, damage: 15, attackRange: 1.25, attackWindup: 0.25, attackCooldown: 0.55,
     cash: 3, xp: 32, drops: { cash: 0.6, health: 0.05, upgrade: 0.012 },
     clips: { move: "D_Run", attack: "D_AttackFast" },
@@ -124,7 +153,7 @@ export const HELL_ENEMIES: Record<HellEnemyId, EnemyDef> = {
   },
   // BRUTE: huge and wide, slow, a heavy smash that throws the hero back, and a ground slam.
   hellbrute: {
-    label: "Hellbrute", visuals: ["puglin"], scale: 2.2, behavior: "chaser", deathFx: EMBER, armor: 0.15,
+    label: "Hellbrute", visuals: ["puglin", "umSkullBrute"], scale: 2.2, behavior: "chaser", deathFx: EMBER, armor: 0.15,
     maxHp: 420, speed: 1.3, radius: 0.85, damage: 26, attackRange: 2.1, attackWindup: 0.7, attackCooldown: 1.7, knockback: 7,
     cash: 8, xp: 70, drops: { cash: 1, health: 0.25, upgrade: 0.04 },
     clips: { move: "D_Walk", attack: "D_Smash", special: "D_Slam", hit: undefined },

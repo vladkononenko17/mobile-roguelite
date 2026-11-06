@@ -5,7 +5,7 @@ import type { WeaponId } from "../config";
 import type { UpgradeCategory, UpgradeIcon, UpgradeRarity } from "../ui/UpgradeIcons";
 import { HELL_ENEMIES, HELL_SKINS, HELL_VISUALS, type HellEnemyId, type HellSkinId, type HellVisualId } from "./hellConfig";
 import { SPACE_ENEMIES, SPACE_SKINS, SPACE_VISUALS, type SpaceEnemyId, type SpaceSkinId, type SpaceVisualId } from "./spaceConfig";
-import { WASTELAND_ENEMIES, WASTELAND_SKINS, WASTELAND_VISUALS, type WastelandEnemyId, type WastelandSkinId, type WastelandVisualId } from "./wastelandConfig";
+import { SURVIVOR_BODIES, survivorsAs, WASTELAND_ENEMIES, WASTELAND_SKINS, WASTELAND_VISUALS, type SurvivorBody, type SurvivorRole, type WastelandEnemyId, type WastelandSkinId, type WastelandVisualId } from "./wastelandConfig";
 import { MEDIEVAL_ENEMIES, MEDIEVAL_SKINS, MEDIEVAL_VISUALS, type MedievalEnemyId, type MedievalSkinId, type MedievalVisualId } from "./medievalConfig";
 import { PIRATE_ENEMIES, PIRATE_SKINS, PIRATE_VISUALS, type PirateEnemyId, type PirateSkinId, type PirateVisualId } from "./pirateConfig";
 
@@ -136,13 +136,11 @@ export type EnemyBehavior = "chaser" | "charger" | "thrower" | "tank" | "caster"
  * (Walker A / B / C...) and a model can be swapped without touching the AI. */
 
 export type EnemyVisualId =
-  | "zombieMaleCasual" | "zombieMaleFarmer" | "zombieFemaleCasual" | "zombieFemaleOffice"
-  | "zombieRunnerMale" | "zombieRunnerFemale" | "zombieThrower" | "zombieBrute"
-  | "vanguard" | HellVisualId | SpaceVisualId | WastelandVisualId | MedievalVisualId | PirateVisualId;
+  | "zombieWalker" | "zombieRunner" | "zombieThrower" | "zombieBrute" | "zombieCharger" | "zombieTank"
+  | "drownedRotter" | `${SurvivorBody}${SurvivorRole}` | HellVisualId | SpaceVisualId | WastelandVisualId | MedievalVisualId | PirateVisualId;
 
-/** Zombie colour skins: recoloured copies of the zombie pack's swatch palette (one small texture
- * each, shared by every zombie model), built by scripts/build-zombies.mjs. */
-export type EnemySkinId = "green" | "darkgreen" | "purple" | "brown" | "toxic" | "brute" | HellSkinId | SpaceSkinId | WastelandSkinId | MedievalSkinId | PirateSkinId;
+/** Colour skins: per-model texture variants (see each chapter's config). */
+export type EnemySkinId = HellSkinId | SpaceSkinId | WastelandSkinId | MedievalSkinId | PirateSkinId;
 
 export const ENEMY_SKINS: Record<EnemySkinId, string> = {
   ...HELL_SKINS,
@@ -150,12 +148,6 @@ export const ENEMY_SKINS: Record<EnemySkinId, string> = {
   ...WASTELAND_SKINS,
   ...MEDIEVAL_SKINS,
   ...PIRATE_SKINS,
-  green: "models/zombies/skins/green.webp",
-  darkgreen: "models/zombies/skins/darkgreen.webp",
-  purple: "models/zombies/skins/purple.webp",
-  brown: "models/zombies/skins/brown.webp",
-  toxic: "models/zombies/skins/toxic.webp",
-  brute: "models/zombies/skins/brute.webp",
 };
 
 /** Clip names inside an enemy GLB. Several deaths: one is picked at random. */
@@ -184,6 +176,8 @@ export interface EnemyVisual {
   moveSpeed: number;
   /** Colour skins this model can wear (one is picked per spawn); none = its own texture. */
   skins?: EnemySkinId[];
+  /** The look keeps its own `skins` even where the enemy type has TYPE_SKINS (made for another model). */
+  ownSkins?: boolean;
   /** Width / depth factor on top of the scale: < 1 lean (runner), > 1 bulky (brute). */
   bulk?: number;
   /** Extra meshes on bones (a caster's fire orb, the archfiend's horns); `url` = a GLB (else a glowing orb). */
@@ -202,43 +196,46 @@ export interface EnemyAttachment {
   only?: EnemyId[];
 }
 
-const ZOMBIE_CLIPS: EnemyClips = {
-  idle: "Zombie_Idle", move: "Zombie_Walk", attack: "Zombie_Attack", hit: "Zombie_Hit",
-  death: ["Zombie_Death", "Zombie_DeathForward"],
+/**
+ * The first chapter's horde: the Quaternius "Zombie Apocalypse Kit" bodies (CC0, built by
+ * scripts/build-wasteland-creatures.mjs into models/infected/), dressed per role.
+ */
+const ZK = WASTELAND_VISUALS;
+
+const RUN_ARMS = { move: "Run_Arms", moveSpeed: 3.8 };
+const SURVIVOR_ROLES: Record<SurvivorRole, (v: EnemyVisual) => EnemyVisual> = {
+  // Runners sprint arms-out.
+  Runner: (v) => ({ ...v, clips: { ...v.clips, move: RUN_ARMS.move }, moveSpeed: RUN_ARMS.moveSpeed, bulk: 0.92 }),
+  // ORION's crew: station jumpsuits.
+  Crew: (v) => ({ ...v, skins: ["zs_crewOrange", "zs_crewTeal"] }),
+  CrewRunner: (v) => ({ ...v, clips: { ...v.clips, move: RUN_ARMS.move }, moveSpeed: RUN_ARMS.moveSpeed, bulk: 0.92, skins: ["zs_crewOrange", "zs_crewTeal"] }),
+  // The Black Tide's drowned.
+  Drowned: (v) => ({ ...v, skins: ["zs_drownedKelp", "zs_drownedBlue"] }),
 };
-
-const HORDE_SKINS: EnemySkinId[] = ["green", "darkgreen", "purple", "brown"];
-
-/** Low-Poly Zombie Asset Pack bodies, built by scripts/build-zombies.mjs (see SOURCES.md). */
-const zombie = (file: string, scale: number, extra: Partial<EnemyVisual> = {}): EnemyVisual => ({
-  url: `models/zombies/${file}.glb`, scale, clips: ZOMBIE_CLIPS, moveSpeed: 1.35, skins: HORDE_SKINS, ...extra,
-});
-/** Sprinting: the retargeted run clip (feet match ~4.3 m/s at scale 1). */
-const RUNNER: Partial<EnemyVisual> = { clips: { ...ZOMBIE_CLIPS, move: "Zombie_Run" }, moveSpeed: 4.3, bulk: 0.88 };
-
+const SURVIVOR_VISUALS = Object.fromEntries(
+  SURVIVOR_BODIES.flatMap((body) => (Object.keys(SURVIVOR_ROLES) as SurvivorRole[]).map((role) => [`${body}${role}`, SURVIVOR_ROLES[role](ZK[body])])),
+) as Record<`${SurvivorBody}${SurvivorRole}`, EnemyVisual>;
 export const ENEMY_VISUALS: Record<EnemyVisualId, EnemyVisual> = {
   ...HELL_VISUALS,
   ...SPACE_VISUALS,
   ...WASTELAND_VISUALS,
   ...MEDIEVAL_VISUALS,
   ...PIRATE_VISUALS,
-  zombieMaleCasual: zombie("zombie_male_casual", 0.98),
-  zombieMaleFarmer: zombie("zombie_male_farmer", 1.04),
-  zombieFemaleCasual: zombie("zombie_female_casual", 1.05),
-  zombieFemaleOffice: zombie("zombie_female_office", 1.08),
-  // Runner: the pack's lean sport bodies, sprinting.
-  zombieRunnerMale: zombie("zombie_male_sport", 1.0, RUNNER),
-  zombieRunnerFemale: zombie("zombie_female_sport", 1.12, RUNNER),
-  // Thrower: lab-coat zombie in a toxic yellow-green skin, a little swollen, lobbing with an overhand throw.
-  zombieThrower: zombie("zombie_male_scientist", 1.02, { skins: ["toxic"], bulk: 1.12, clips: { ...ZOMBIE_CLIPS, special: "Zombie_Throw" } }),
-  // Brute (boss): a big, bulked-out zombie in a dark bruised skin with a slow overhead smash.
-  zombieBrute: zombie("zombie_male_casual", 0.98, { skins: ["brute"], bulk: 1.28, clips: { ...ZOMBIE_CLIPS, attack: "Zombie_Smash", hit: undefined } }),
-  /** Boss rig (Meshy "Ironclad Vanguard", Mixamo clips). */
-  vanguard: {
-    url: "models/vanguard/Meshy_AI_Ironclad_Vanguard_All_Animations_2k.glb", scale: 1,
-    clips: { idle: "Idle_10", move: "Walking", attack: "Attack", death: ["dying_backwards"] },
-    moveSpeed: 1.3,
-  },
+  ...SURVIVOR_VISUALS,
+  // The rotter re-tinted for the sea (the four survivors have their own drowned skins).
+  drownedRotter: { ...ZK.zkRotter, skins: ["drowned_pale", "drowned_kelp", "drowned_blue"] },
+  // Walker: the rotter in its three rot colours.
+  zombieWalker: ZK.zkRotter,
+  // Runner: the rotter sprinting, a little leaner.
+  zombieRunner: { ...ZK.zkRotter, clips: { ...ZK.zkRotter.clips, move: "Run" }, moveSpeed: 3.8, bulk: 0.9, skins: ["rotter_grey", "rotter_bruised"] },
+  // Thrower: the toxic bloater, lobbing bile.
+  zombieThrower: { ...ZK.zkBloater, skins: ["bloater_toxic"] },
+  // Brute (boss): a bulked-out bruised rotter with a heavy punch.
+  zombieBrute: { ...ZK.zkRotter, skins: ["rotter_bruised"], bulk: 1.3 },
+  // Charger (boss): the Abomination, rushing with its club arm.
+  zombieCharger: { ...ZK.zkAbomination, skins: ["abom_flesh"], clips: { ...ZK.zkAbomination.clips, special: "Run_Attack" } },
+  // Mutant Tank (boss): a huge bloater that slams and spits.
+  zombieTank: { ...ZK.zkBloater, skins: ["bloater_blue"], bulk: 1.15 },
 };
 
 export interface EnemyDef {
@@ -301,7 +298,8 @@ export interface EnemyDef {
   glow?: [number, number, number];
 }
 
-const WALKER_LOOKS: EnemyVisualId[] = ["zombieMaleCasual", "zombieMaleFarmer", "zombieFemaleCasual", "zombieFemaleOffice"];
+/** The horde: the rotter and the four turned survivors, each in four kinds of rot. */
+const WALKER_LOOKS: EnemyVisualId[] = ["zombieWalker", ...SURVIVOR_BODIES];
 
 export const ENEMIES: Record<EnemyId, EnemyDef> = {
   ...HELL_ENEMIES,
@@ -317,7 +315,7 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
   },
   // Runner: lean and ~0.95x the hero, sprinting.
   runner: {
-    label: "Runner", visuals: ["zombieRunnerMale", "zombieRunnerFemale"], scale: 1.06, scaleJitter: 0.03, behavior: "chaser",
+    label: "Runner", visuals: ["zombieRunner", ...survivorsAs("Runner")], scale: 1.06, scaleJitter: 0.03, behavior: "chaser",
     maxHp: 22, speed: 3.9, radius: 0.34, damage: 7, attackRange: 1.1, attackWindup: 0.3, attackCooldown: 0.9,
     cash: 1, xp: 15, drops: { cash: 0.45, health: 0.03, upgrade: 0.008 },
   },
@@ -334,17 +332,17 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
     cash: 25, xp: 60, drops: { cash: 1, health: 1, upgrade: 0 },
   },
   charger: {
-    label: "Charger", visuals: ["vanguard"], scale: 1.55, tint: [0.95, 0.6, 0.45], behavior: "charger", boss: true,
+    label: "Charger", visuals: ["zombieCharger"], scale: 1.55, behavior: "charger", boss: true,
     maxHp: 420, speed: 1.6, radius: 0.62, damage: 18, attackRange: 1.8, attackWindup: 0.55, attackCooldown: 1.4,
     cash: 40, xp: 80, drops: { cash: 1, health: 1, upgrade: 0 },
-    clips: { special: "Rifle_Charge_inplace" },
+    clips: { special: "Run_Attack" },
     charge: { cooldown: 5, telegraph: 1.0, speed: 12, distance: 13, recover: 1.6, damage: 28 },
   },
   tank: {
-    label: "Mutant Tank", visuals: ["vanguard"], scale: 2.05, tint: [0.66, 0.55, 0.78], behavior: "tank", boss: true,
+    label: "Mutant Tank", visuals: ["zombieTank"], scale: 2.05, tint: [0.8, 0.72, 0.9], behavior: "tank", boss: true,
     maxHp: 900, speed: 0.95, radius: 0.85, damage: 30, attackRange: 2.2, attackWindup: 0.8, attackCooldown: 1.8,
     cash: 60, xp: 120, drops: { cash: 1, health: 1, upgrade: 0 },
-    clips: { special: "Charged_Ground_Slam" },
+    clips: { special: "Jump_Land" },
     projectile: { damage: 20, speed: 6, radius: 1.8, cooldown: 5.5, minRange: 4, maxRange: 13 },
     slam: { cooldown: 6, telegraph: 1.1, radius: 3.6, damage: 32, triggerRange: 3.4 },
   },
@@ -540,14 +538,17 @@ export const WAVES: WaveDef[] = [
 /**
  * Character XP and levels (independent of waves): kills give XP (EnemyDef.xp); each level-up offers a
  * choice of 3 upgrades. `toNext[i]` = XP from level i + 1 to i + 2; past the table each level needs
- * `growth` more than the one before. Paced (measured in a kiting simulation) so the first level-up
- * comes ~25-30 s into wave 1, two in wave 1 and two to three in wave 2: upgrades stay an event.
+ * `growth` more than the one before. Front-loaded like the genre's best: the first pick comes after
+ * ~6 walkers (~15 s), chapter I gives 7-9 picks so a build (and a synergy tier) forms in the first
+ * chapter; a long campaign still ends around level 25.
  */
 export const XP = {
-  toNext: [150, 230, 320, 420, 540],
-  growth: 120,
+  toNext: [70, 130, 200, 270, 350, 430, 510, 590],
+  growth: 110,
   /** Upgrade cards offered per level-up. */
   choices: 3,
+  /** Relative odds of an upgrade by rarity when cards are rolled (luck raises rare and epic). */
+  rarityWeight: { common: 1, rare: 0.55, epic: 0.25 } as Record<"common" | "rare" | "epic", number>,
 };
 
 /** XP needed to go from `level` to `level + 1`. */
@@ -593,7 +594,7 @@ export const DROPS = {
 export type UpgradeId =
   | "rapidFire" | "heavyRounds" | "extendedMag" | "vitality" | "quickHands" | "piercing" | "adrenaline"
   | "incendiary" | "volatile" | "ricochet" | "splitShot" | "headhunter" | "chainLightning" | "drone" | "cryo" | "shockReload" | "bloodthirst"
-  | "dragonsBreath"
+  | "dragonsBreath" | "deadeye" | "stormGrid" | "magnet"
   | "armor" | "crit" | "medkit" | "fifthShot" | "vampire"
   | "pactFury" | "pactIron" | "pactSwift" | "pactRuin" | "pactEye" | "pactStorm";
 
@@ -603,7 +604,7 @@ export type UpgradeStat =
   | "critChance" | "critMult" | "critPierce" | "armor" | "maxHp" | "fifthShot" | "vampireChance" | "healOnKill"
   | "burnDps" | "burnVulnerability" | "fireSpread" | "explodeChance" | "explodeDamage" | "explosionsIgnite"
   | "ricochet" | "extraBullets"
-  | "chainChance" | "chainTargets" | "drones" | "techDamageMult" | "slowPct" | "shockDamage";
+  | "chainChance" | "chainTargets" | "drones" | "techDamageMult" | "slowPct" | "shockDamage" | "magnetMult";
 
 /**
  * One effect: `add` or `mul` a stat (clamped to `max` / `min`); `heal` restores HP (absolute) and
@@ -682,12 +683,20 @@ export const UPGRADES: UpgradeDef[] = [
     effects: [{ stat: "slowPct", op: "add", value: 0.15, max: 0.6 }] },
   { id: "shockReload", name: "Shock Reload", stat: "Reloading Blasts Nearby", value: "+25 damage", icon: "pulse", category: "special", rarity: "rare", maxStacks: 2, tags: ["tech"],
     effects: [{ stat: "shockDamage", op: "add", value: 25 }] },
+  { id: "magnet", name: "Magnet", stat: "Pickup Radius", value: "+40%", icon: "magnet", category: "player", rarity: "common", maxStacks: 3,
+    effects: [{ stat: "magnetMult", op: "mul", value: 1.4 }] },
   { id: "bloodthirst", name: "Bloodthirst", stat: "Heal on Kill", value: "+1 HP", icon: "drop", category: "player", rarity: "common", maxStacks: 3,
     effects: [{ stat: "healOnKill", op: "add", value: 1 }] },
   // ---- Evolution (offered once its requirements are met).
   { id: "dragonsBreath", name: "Dragon's Breath", stat: "Kills Explode in Flames ·", value: "Burn x2", icon: "flame", category: "special", rarity: "epic", maxStacks: 1, pools: ["levelUp"], tags: ["fire"],
     requires: [{ id: "incendiary", stacks: 3 }, { id: "volatile", stacks: 1 }],
     effects: [{ stat: "burnDps", op: "mul", value: 2 }, { stat: "explodeChance", op: "add", value: 1, max: 1 }, { stat: "explosionsIgnite", op: "add", value: 1, max: 1 }, { stat: "explodeDamage", op: "add", value: 10 }] },
+  { id: "deadeye", name: "Deadeye Rounds", stat: "Crit +15% · Crit Damage +100% ·", value: "Crits pierce +1", icon: "target", category: "weapon", rarity: "epic", maxStacks: 1, pools: ["levelUp"], tags: ["precision"],
+    requires: [{ id: "headhunter", stacks: 3 }, { id: "piercing", stacks: 1 }],
+    effects: [{ stat: "critChance", op: "add", value: 0.15, max: 0.9 }, { stat: "critMult", op: "add", value: 1 }, { stat: "critPierce", op: "add", value: 1 }] },
+  { id: "stormGrid", name: "Storm Grid", stat: "Arcs +35% · +2 targets ·", value: "Tech +40%", icon: "drone", category: "special", rarity: "epic", maxStacks: 1, pools: ["levelUp"], tags: ["tech"],
+    requires: [{ id: "chainLightning", stacks: 2 }, { id: "drone", stacks: 1 }],
+    effects: [{ stat: "chainChance", op: "add", value: 0.35, max: 1 }, { stat: "chainTargets", op: "add", value: 2 }, { stat: "techDamageMult", op: "mul", value: 1.4 }] },
   // ---- Rare world pickups only.
   { id: "armor", name: "Scrap Plating", stat: "Damage Resistance", value: "+10%", icon: "shield", category: "player", rarity: "common", maxStacks: 5, pools: ["drop"],
     effects: [{ stat: "armor", op: "add", value: 0.1, max: 0.6 }] },
@@ -778,14 +787,17 @@ export const COMBAT_FX = {
 /** "Damage Resistance +10%" */
 export const upgradeText = (u: UpgradeDef): string => `${u.stat} ${u.value}`;
 
-export type ShopItemId = "heal" | "maxHp" | "armor" | "damage" | "fireRate" | "shotgun" | "rifle" | "mp5" | "dualUzi" | "plasma" | "hellfire";
+export type ShopItemId =
+  | "heal" | "maxHp" | "armor" | "damage" | "fireRate" | "magnet" | "boots" | "ammo" | "scope" | "loader"
+  | "hollowPoints" | "hairTrigger" | "exoFrame" | "crate" | "droneBay"
+  | "shotgun" | "rifle" | "mp5" | "dualUzi" | "plasma" | "hellfire";
 
 export interface ShopItem {
   id: ShopItemId;
   title: string;
   text: string;
   cost: number;
-  /** Weapon purchases equip that weapon (and can be bought once). */
+  /** Weapon purchases add that weapon to the loadout and equip it (and can be bought once). */
   weapon?: WeaponId;
   /** Only sold in campaigns (Hell) once the run has seen its armory. */
   campaign?: boolean;
@@ -795,24 +807,63 @@ export interface ShopItem {
   growth?: number;
   /** Purchases allowed per run (stat items; the shop can't carry a build on its own). */
   max?: number;
+  /** Offered from this level index on (late, dear items). */
+  from?: number;
+  /** Relative odds among the offers (default 1). */
+  weight?: number;
 }
 
 /** Price of `item` after `bought` purchases this run. */
 export const shopPrice = (item: ShopItem, bought: number): number => Math.round(item.cost * (item.growth ?? 1) ** bought);
 
+/**
+ * The shop (Brotato-style): the Medkit is always on the shelf; `SHOP_RULES.offers` other items are
+ * rolled per visit from the rest (weighted, never a maxed or owned one). Offers can be rerolled for
+ * cash (dearer each time in a visit) and locked to keep them for the next visit. Stat items get dearer
+ * and are capped; the late, dear items (from level 3-4) and the Upgrade Crate soak up a long run's cash.
+ */
+export const SHOP_RULES = {
+  offers: 4,
+  /** Reroll price: base + perLevel x level index, + step per reroll already made this visit. */
+  reroll: { base: 4, perLevel: 2, step: 4 },
+};
+
 export const SHOP: ShopItem[] = [
-  // Stat items get dearer with every purchase and are capped per run: cash tops a build up, the
-  // level-up upgrades make it.
-  // Maxing everything (~980$) takes most of a whole campaign's cash: choose what to invest in.
   { id: "heal", title: "Medkit", text: "Heal to full", cost: 20, growth: 1.3 },
   { id: "maxHp", title: "Vest", text: "+25 max HP", cost: 30, growth: 1.6, max: 4 },
   { id: "armor", title: "Plating", text: "+10% damage resistance", cost: 35, growth: 1.6, max: 3 },
   { id: "damage", title: "Gun Oil", text: "+10% weapon damage", cost: 28, growth: 1.6, max: 4 },
   { id: "fireRate", title: "Spring Kit", text: "+10% fire rate", cost: 28, growth: 1.6, max: 4 },
+  { id: "magnet", title: "Magnet Coil", text: "+30% pickup radius", cost: 22, growth: 1.5, max: 3 },
+  { id: "boots", title: "Running Shoes", text: "+8% move speed", cost: 30, growth: 1.6, max: 3 },
+  { id: "ammo", title: "Drum Mag", text: "+4 rounds per magazine", cost: 24, growth: 1.5, max: 3 },
+  { id: "scope", title: "Red Dot", text: "+6% critical chance", cost: 32, growth: 1.6, max: 3 },
+  { id: "loader", title: "Speed Loader", text: "-15% reload time", cost: 26, growth: 1.5, max: 3 },
+  // Late and dear: what a long run's cash is for.
+  { id: "crate", title: "Upgrade Crate", text: "A random level-up upgrade", cost: 70, growth: 1.35, from: 2, weight: 1.4 },
+  { id: "hollowPoints", title: "Hollow Points", text: "+25% weapon damage", cost: 120, growth: 1.5, max: 2, from: 3 },
+  { id: "hairTrigger", title: "Hair Trigger", text: "+20% fire rate", cost: 120, growth: 1.5, max: 2, from: 3 },
+  { id: "exoFrame", title: "Exo Frame", text: "+50 max HP · +8% resistance", cost: 150, growth: 1.6, max: 2, from: 4 },
+  { id: "droneBay", title: "Drone Bay", text: "+1 sentry drone", cost: 160, max: 1, from: 4, weight: 0.7 },
+  // Weapons join the loadout (switch between levels).
   { id: "shotgun", title: "Shotgun", text: "7 pellets, brutal up close", cost: 30, weapon: "shotgun" },
   { id: "rifle", title: "Assault Rifle", text: "Fast, long range, pierces", cost: 45, weapon: "rifle" },
-  { id: "mp5", title: "MP5 SMG", text: "11 shots/s, stable and quick to reload", cost: 55, weapon: "mp5", biomes: ["outpost"] },
-  { id: "dualUzi", title: "Dual Uzis", text: "15 shots/s, 40 rounds, wide close-range spray", cost: 75, weapon: "dualUzi", biomes: ["outpost"] },
+  { id: "mp5", title: "MP5 SMG", text: "11 shots/s, stable and quick to reload", cost: 38, weapon: "mp5", biomes: ["outpost"] },
+  { id: "dualUzi", title: "Dual Uzis", text: "15 shots/s, 40 rounds, wide close-range spray", cost: 50, weapon: "dualUzi", biomes: ["outpost"] },
   { id: "plasma", title: "Plasma Rifle", text: "12 bolts a second, pierces", cost: 110, weapon: "plasma", campaign: true },
   { id: "hellfire", title: "Hellfire Rifle", text: "Heavy rounds: pierce, splash, burn", cost: 110, weapon: "hellfire", campaign: true },
 ];
+
+/** Elite champions: a glowing, bigger, tougher foe now and then; it drops a treasure chest. */
+export const ELITES = {
+  /** Seconds between elites in a level (randomised x0.75..1.25); the first comes after `first` s. */
+  every: 38,
+  first: 22,
+  hp: 4,
+  scale: 1.3,
+  damage: 1.35,
+  /** Chest size odds: 1, 2 or 3 upgrades (luck shifts toward bigger chests). */
+  chest: [0.6, 0.3, 0.1],
+  /** Cash in the chest on top of the upgrades. */
+  cash: 15,
+};

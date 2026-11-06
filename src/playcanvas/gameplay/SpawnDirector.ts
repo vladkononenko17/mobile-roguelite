@@ -72,7 +72,7 @@ export class SpawnDirector {
   }
 
   /** The pacing step in effect. */
-  private get step(): WavePhase {
+  get step(): WavePhase {
     const phases = this.wave.phases;
     const t = this.time / this.durationScale;
     let current = phases[0];
@@ -162,6 +162,11 @@ export class SpawnDirector {
   }
 
   /** Moves a stranded enemy (a boss) to a fresh spawn point. */
+  /** A reachable spawn point just outside the view (null: none found this frame). */
+  offscreenSpot(player: Vec3, camera: ScreenProjector): { x: number; z: number } | null {
+    return this.findSpot(player, camera, SPAWNING.extra);
+  }
+
   relocate(enemy: Enemy, player: Vec3, camera: ScreenProjector): void {
     const spot = this.findSpot(player, camera, SPAWNING.extra);
     if (spot) enemy.position.set(spot.x, 0, spot.z);

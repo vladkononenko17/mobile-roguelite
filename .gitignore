@@ -1,5 +1,7 @@
 node_modules/
 dist/
+dist-itch/
+dustline-itch.zip
 *.png
 .DS_Store
 !public/hata/*.png
@@ -33,6 +35,7 @@ assets-src/quaternius-scifi/
 assets-src/hallwaypack/
 # Quaternius Zombie Apocalypse Kit (CC0) and Majadroid LowPoly Apocalyptic Buildings (CC0): raw files local only; built into outpost-kit.glb / public/models/infected/
 assets-src/zombie-kit/
+assets-src/ultimate-monsters/
 assets-src/ruined-city/
 # CC0 raven (OpenGameArt): raw .blend and its Blender export local only; built into public/models/raven/
 assets-src/raven/
