@@ -54,6 +54,16 @@ export class PlayerStats {
   /** Chance per kill to heal `vampireHeal`. */
   vampireChance = 0;
   vampireHeal = 5;
+  /** Pickup attraction radius multiplier. */
+  magnetMult = 1;
+  /** XP gain multiplier (meta upgrades). */
+  xpMult = 1;
+  /** Raises the odds of rare and epic upgrades and of bigger chests (0 = base). */
+  luck = 0;
+  /** Revives left this run (meta upgrade "Second Wind"). */
+  revives = 0;
+  /** Shop offers kept for the next visit. */
+  readonly lockedShop = new Set<string>();
   weapon: WeaponId = "pistol";
   readonly owned = new Set<WeaponId>(["pistol"]);
   /** Run-scoped attachments, kept separately for every owned weapon. */
@@ -80,7 +90,7 @@ export class PlayerStats {
 
   /** Adds XP; returns how many levels were gained. */
   gainXp(amount: number): number {
-    this.xp += amount;
+    this.xp += amount * this.xpMult;
     let gained = 0;
     while (this.xp >= this.xpNeeded) {
       this.xp -= this.xpNeeded;

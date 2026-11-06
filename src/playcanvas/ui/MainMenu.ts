@@ -5,6 +5,8 @@ import { BIOME_AUDIO } from "../audio/soundMap";
 import { ENEMIES } from "../gameplay/config";
 import { BIOMES, type BiomeId } from "../world/level/Biomes";
 import { showCredits } from "./credits";
+import { showMetaShop } from "./MetaShop";
+import { loadMeta } from "../gameplay/meta";
 import { loadProgress } from "./progress";
 
 /** What the menu says about each chapter (the rest comes from the campaign data). */
@@ -66,6 +68,12 @@ const CSS = `
 #menu .tab b { position: absolute; left: 8px; right: 8px; bottom: 6px; z-index: 1; text-align: left; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
 #menu .tab i { position: absolute; top: 5px; left: 8px; z-index: 1; font-style: normal; font-size: 11px; letter-spacing: 0.2em; opacity: 0.8; }
 #menu .tab.on { filter: none; border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); }
+#menu .go { display: grid; grid-template-columns: 96px 1fr; gap: 8px; }
+#menu .meta { height: 62px; border: 1px solid rgba(143, 216, 255, 0.55); border-radius: 12px; background: rgba(10, 18, 24, 0.6); color: #8fd8ff;
+  display: grid; grid-template-columns: auto auto; justify-content: center; align-items: center; column-gap: 4px; padding: 0; font: 800 18px/1 "Barlow Condensed", system-ui, sans-serif; }
+#menu .meta i { font-style: normal; font-size: 15px; }
+#menu .meta small { grid-column: 1 / -1; font-size: 11px; letter-spacing: 0.16em; color: #ece3cf; opacity: 0.75; margin-top: 3px; }
+#menu .meta.fresh { box-shadow: 0 0 14px rgba(143, 216, 255, 0.45); }
 #menu .play { position: relative; width: 100%; height: 62px; border: 0; border-radius: 12px; background: var(--accent); color: #140f0b;
   font: 800 24px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.3em; text-indent: 0.3em; overflow: hidden;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55), inset 0 -3px 0 rgba(0, 0, 0, 0.2); transition: background 0.5s, transform 0.1s; }
@@ -110,7 +118,7 @@ export function showMainMenu(): Promise<BiomeId> {
       <div class="grow"></div>
       <div class="chapter"></div>
       <div class="tabs">${CHAPTERS.map((c) => `<button type="button" class="tab" data-tab="${c.id}" style="background-image:url('${base}menu/${c.id}.webp')"><i>${c.numeral}</i><b>${c.name.replace(/^The /, "")}</b></button>`).join("")}</div>
-      <button type="button" class="play">PLAY</button>
+      <div class="go"><button type="button" class="meta"><i>◆</i><b></b><small>UPGRADES</small></button><button type="button" class="play">PLAY</button></div>
       <button type="button" class="foot">Credits · third-party art, sound and music</button>
     </div>`;
   document.body.append(root);
@@ -149,6 +157,17 @@ export function showMainMenu(): Promise<BiomeId> {
   select(index, false);
 
   root.querySelectorAll<HTMLElement>("[data-tab]").forEach((el, i) => el.addEventListener("click", () => select(i)));
+  const metaButton = root.querySelector<HTMLElement>(".meta")!;
+  const showDust = () => {
+    const m = loadMeta();
+    metaButton.querySelector("b")!.textContent = String(m.dust);
+    metaButton.classList.toggle("fresh", m.dust >= 15);
+  };
+  showDust();
+  metaButton.addEventListener("click", () => {
+    audio.play("ui");
+    showMetaShop(showDust);
+  });
   root.querySelector(".foot")!.addEventListener("click", () => {
     audio.play("ui");
     showCredits();

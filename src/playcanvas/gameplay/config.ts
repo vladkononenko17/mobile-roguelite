@@ -538,14 +538,17 @@ export const WAVES: WaveDef[] = [
 /**
  * Character XP and levels (independent of waves): kills give XP (EnemyDef.xp); each level-up offers a
  * choice of 3 upgrades. `toNext[i]` = XP from level i + 1 to i + 2; past the table each level needs
- * `growth` more than the one before. Paced (measured in a kiting simulation) so the first level-up
- * comes ~25-30 s into wave 1, two in wave 1 and two to three in wave 2: upgrades stay an event.
+ * `growth` more than the one before. Front-loaded like the genre's best: the first pick comes after
+ * ~6 walkers (~15 s), chapter I gives 7-9 picks so a build (and a synergy tier) forms in the first
+ * chapter; a long campaign still ends around level 25.
  */
 export const XP = {
-  toNext: [150, 230, 320, 420, 540],
-  growth: 120,
+  toNext: [70, 130, 200, 270, 350, 430, 510, 590],
+  growth: 110,
   /** Upgrade cards offered per level-up. */
   choices: 3,
+  /** Relative odds of an upgrade by rarity when cards are rolled (luck raises rare and epic). */
+  rarityWeight: { common: 1, rare: 0.55, epic: 0.25 } as Record<"common" | "rare" | "epic", number>,
 };
 
 /** XP needed to go from `level` to `level + 1`. */
@@ -591,7 +594,7 @@ export const DROPS = {
 export type UpgradeId =
   | "rapidFire" | "heavyRounds" | "extendedMag" | "vitality" | "quickHands" | "piercing" | "adrenaline"
   | "incendiary" | "volatile" | "ricochet" | "splitShot" | "headhunter" | "chainLightning" | "drone" | "cryo" | "shockReload" | "bloodthirst"
-  | "dragonsBreath"
+  | "dragonsBreath" | "deadeye" | "stormGrid" | "magnet"
   | "armor" | "crit" | "medkit" | "fifthShot" | "vampire"
   | "pactFury" | "pactIron" | "pactSwift" | "pactRuin" | "pactEye" | "pactStorm";
 
@@ -601,7 +604,7 @@ export type UpgradeStat =
   | "critChance" | "critMult" | "critPierce" | "armor" | "maxHp" | "fifthShot" | "vampireChance" | "healOnKill"
   | "burnDps" | "burnVulnerability" | "fireSpread" | "explodeChance" | "explodeDamage" | "explosionsIgnite"
   | "ricochet" | "extraBullets"
-  | "chainChance" | "chainTargets" | "drones" | "techDamageMult" | "slowPct" | "shockDamage";
+  | "chainChance" | "chainTargets" | "drones" | "techDamageMult" | "slowPct" | "shockDamage" | "magnetMult";
 
 /**
  * One effect: `add` or `mul` a stat (clamped to `max` / `min`); `heal` restores HP (absolute) and
@@ -680,12 +683,20 @@ export const UPGRADES: UpgradeDef[] = [
     effects: [{ stat: "slowPct", op: "add", value: 0.15, max: 0.6 }] },
   { id: "shockReload", name: "Shock Reload", stat: "Reloading Blasts Nearby", value: "+25 damage", icon: "pulse", category: "special", rarity: "rare", maxStacks: 2, tags: ["tech"],
     effects: [{ stat: "shockDamage", op: "add", value: 25 }] },
+  { id: "magnet", name: "Magnet", stat: "Pickup Radius", value: "+40%", icon: "magnet", category: "player", rarity: "common", maxStacks: 3,
+    effects: [{ stat: "magnetMult", op: "mul", value: 1.4 }] },
   { id: "bloodthirst", name: "Bloodthirst", stat: "Heal on Kill", value: "+1 HP", icon: "drop", category: "player", rarity: "common", maxStacks: 3,
     effects: [{ stat: "healOnKill", op: "add", value: 1 }] },
   // ---- Evolution (offered once its requirements are met).
   { id: "dragonsBreath", name: "Dragon's Breath", stat: "Kills Explode in Flames ·", value: "Burn x2", icon: "flame", category: "special", rarity: "epic", maxStacks: 1, pools: ["levelUp"], tags: ["fire"],
     requires: [{ id: "incendiary", stacks: 3 }, { id: "volatile", stacks: 1 }],
     effects: [{ stat: "burnDps", op: "mul", value: 2 }, { stat: "explodeChance", op: "add", value: 1, max: 1 }, { stat: "explosionsIgnite", op: "add", value: 1, max: 1 }, { stat: "explodeDamage", op: "add", value: 10 }] },
+  { id: "deadeye", name: "Deadeye Rounds", stat: "Crit +15% · Crit Damage +100% ·", value: "Crits pierce +1", icon: "target", category: "weapon", rarity: "epic", maxStacks: 1, pools: ["levelUp"], tags: ["precision"],
+    requires: [{ id: "headhunter", stacks: 3 }, { id: "piercing", stacks: 1 }],
+    effects: [{ stat: "critChance", op: "add", value: 0.15, max: 0.9 }, { stat: "critMult", op: "add", value: 1 }, { stat: "critPierce", op: "add", value: 1 }] },
+  { id: "stormGrid", name: "Storm Grid", stat: "Arcs +35% · +2 targets ·", value: "Tech +40%", icon: "drone", category: "special", rarity: "epic", maxStacks: 1, pools: ["levelUp"], tags: ["tech"],
+    requires: [{ id: "chainLightning", stacks: 2 }, { id: "drone", stacks: 1 }],
+    effects: [{ stat: "chainChance", op: "add", value: 0.35, max: 1 }, { stat: "chainTargets", op: "add", value: 2 }, { stat: "techDamageMult", op: "mul", value: 1.4 }] },
   // ---- Rare world pickups only.
   { id: "armor", name: "Scrap Plating", stat: "Damage Resistance", value: "+10%", icon: "shield", category: "player", rarity: "common", maxStacks: 5, pools: ["drop"],
     effects: [{ stat: "armor", op: "add", value: 0.1, max: 0.6 }] },
@@ -776,14 +787,17 @@ export const COMBAT_FX = {
 /** "Damage Resistance +10%" */
 export const upgradeText = (u: UpgradeDef): string => `${u.stat} ${u.value}`;
 
-export type ShopItemId = "heal" | "maxHp" | "armor" | "damage" | "fireRate" | "shotgun" | "rifle" | "mp5" | "dualUzi" | "plasma" | "hellfire";
+export type ShopItemId =
+  | "heal" | "maxHp" | "armor" | "damage" | "fireRate" | "magnet" | "boots" | "ammo" | "scope" | "loader"
+  | "hollowPoints" | "hairTrigger" | "exoFrame" | "crate" | "droneBay"
+  | "shotgun" | "rifle" | "mp5" | "dualUzi" | "plasma" | "hellfire";
 
 export interface ShopItem {
   id: ShopItemId;
   title: string;
   text: string;
   cost: number;
-  /** Weapon purchases equip that weapon (and can be bought once). */
+  /** Weapon purchases add that weapon to the loadout and equip it (and can be bought once). */
   weapon?: WeaponId;
   /** Only sold in campaigns (Hell) once the run has seen its armory. */
   campaign?: boolean;
@@ -793,24 +807,63 @@ export interface ShopItem {
   growth?: number;
   /** Purchases allowed per run (stat items; the shop can't carry a build on its own). */
   max?: number;
+  /** Offered from this level index on (late, dear items). */
+  from?: number;
+  /** Relative odds among the offers (default 1). */
+  weight?: number;
 }
 
 /** Price of `item` after `bought` purchases this run. */
 export const shopPrice = (item: ShopItem, bought: number): number => Math.round(item.cost * (item.growth ?? 1) ** bought);
 
+/**
+ * The shop (Brotato-style): the Medkit is always on the shelf; `SHOP_RULES.offers` other items are
+ * rolled per visit from the rest (weighted, never a maxed or owned one). Offers can be rerolled for
+ * cash (dearer each time in a visit) and locked to keep them for the next visit. Stat items get dearer
+ * and are capped; the late, dear items (from level 3-4) and the Upgrade Crate soak up a long run's cash.
+ */
+export const SHOP_RULES = {
+  offers: 4,
+  /** Reroll price: base + perLevel x level index, + step per reroll already made this visit. */
+  reroll: { base: 4, perLevel: 2, step: 4 },
+};
+
 export const SHOP: ShopItem[] = [
-  // Stat items get dearer with every purchase and are capped per run: cash tops a build up, the
-  // level-up upgrades make it.
-  // Maxing everything (~980$) takes most of a whole campaign's cash: choose what to invest in.
   { id: "heal", title: "Medkit", text: "Heal to full", cost: 20, growth: 1.3 },
   { id: "maxHp", title: "Vest", text: "+25 max HP", cost: 30, growth: 1.6, max: 4 },
   { id: "armor", title: "Plating", text: "+10% damage resistance", cost: 35, growth: 1.6, max: 3 },
   { id: "damage", title: "Gun Oil", text: "+10% weapon damage", cost: 28, growth: 1.6, max: 4 },
   { id: "fireRate", title: "Spring Kit", text: "+10% fire rate", cost: 28, growth: 1.6, max: 4 },
+  { id: "magnet", title: "Magnet Coil", text: "+30% pickup radius", cost: 22, growth: 1.5, max: 3 },
+  { id: "boots", title: "Running Shoes", text: "+8% move speed", cost: 30, growth: 1.6, max: 3 },
+  { id: "ammo", title: "Drum Mag", text: "+4 rounds per magazine", cost: 24, growth: 1.5, max: 3 },
+  { id: "scope", title: "Red Dot", text: "+6% critical chance", cost: 32, growth: 1.6, max: 3 },
+  { id: "loader", title: "Speed Loader", text: "-15% reload time", cost: 26, growth: 1.5, max: 3 },
+  // Late and dear: what a long run's cash is for.
+  { id: "crate", title: "Upgrade Crate", text: "A random level-up upgrade", cost: 70, growth: 1.35, from: 2, weight: 1.4 },
+  { id: "hollowPoints", title: "Hollow Points", text: "+25% weapon damage", cost: 120, growth: 1.5, max: 2, from: 3 },
+  { id: "hairTrigger", title: "Hair Trigger", text: "+20% fire rate", cost: 120, growth: 1.5, max: 2, from: 3 },
+  { id: "exoFrame", title: "Exo Frame", text: "+50 max HP · +8% resistance", cost: 150, growth: 1.6, max: 2, from: 4 },
+  { id: "droneBay", title: "Drone Bay", text: "+1 sentry drone", cost: 160, max: 1, from: 4, weight: 0.7 },
+  // Weapons join the loadout (switch between levels).
   { id: "shotgun", title: "Shotgun", text: "7 pellets, brutal up close", cost: 30, weapon: "shotgun" },
   { id: "rifle", title: "Assault Rifle", text: "Fast, long range, pierces", cost: 45, weapon: "rifle" },
-  { id: "mp5", title: "MP5 SMG", text: "11 shots/s, stable and quick to reload", cost: 55, weapon: "mp5", biomes: ["outpost"] },
-  { id: "dualUzi", title: "Dual Uzis", text: "15 shots/s, 40 rounds, wide close-range spray", cost: 75, weapon: "dualUzi", biomes: ["outpost"] },
+  { id: "mp5", title: "MP5 SMG", text: "11 shots/s, stable and quick to reload", cost: 38, weapon: "mp5", biomes: ["outpost"] },
+  { id: "dualUzi", title: "Dual Uzis", text: "15 shots/s, 40 rounds, wide close-range spray", cost: 50, weapon: "dualUzi", biomes: ["outpost"] },
   { id: "plasma", title: "Plasma Rifle", text: "12 bolts a second, pierces", cost: 110, weapon: "plasma", campaign: true },
   { id: "hellfire", title: "Hellfire Rifle", text: "Heavy rounds: pierce, splash, burn", cost: 110, weapon: "hellfire", campaign: true },
 ];
+
+/** Elite champions: a glowing, bigger, tougher foe now and then; it drops a treasure chest. */
+export const ELITES = {
+  /** Seconds between elites in a level (randomised x0.75..1.25); the first comes after `first` s. */
+  every: 38,
+  first: 22,
+  hp: 4,
+  scale: 1.3,
+  damage: 1.35,
+  /** Chest size odds: 1, 2 or 3 upgrades (luck shifts toward bigger chests). */
+  chest: [0.6, 0.3, 0.1],
+  /** Cash in the chest on top of the upgrades. */
+  cash: 15,
+};

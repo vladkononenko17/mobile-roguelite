@@ -258,3 +258,24 @@ The last and largest chapter of the 3D game at `/playcanvas.html`: open it from 
 - **Hell and ORION** mix ten Quaternius "Ultimate Monsters" (CC0, `scripts/build-ultimate-monsters.mjs`) into
   their enemies as extra looks: a trident demon, a skull brute, a fire shaman, a skull wraith and a wyvern in
   fire colours; a bee, a spiky floater, a squid, a tentacle-horned alien and a blob in alien and void colours.
+
+## Dustline 3D — run and meta systems
+
+- **Meta-progression** (`gameplay/meta.ts`, `ui/MetaShop.ts`): every run, won or lost, pays ◆ Dust
+  (kills, levels, bosses, champions, a win; x0.7 Easy, x1.5 Nightmare). The title screen's UPGRADES
+  button spends it on permanent ranks: Vitality, Power, Trigger Discipline, Plating, Magnetism, Greed,
+  Wisdom (XP), Luck (rarer upgrades, bigger chests), Second Opinion (rerolls) and Second Wind (one revive).
+- **Act checkpoints** (`gameplay/checkpoint.ts`): the build is saved at the start of each new act and of
+  the final level; after a death, "Continue from <level>" restores it (at least half HP). Not on Nightmare.
+- **Level-ups**: front-loaded XP curve (`XP.toNext`): ~8-10 picks in chapter I. Cards are rolled by
+  rarity (`XP.rarityWeight`, raised by Luck); evolutions: Dragon's Breath (fire), Deadeye Rounds
+  (precision: Headhunter 3 + Piercing), Storm Grid (tech: Chain Lightning 2 + Drone); Magnet upgrade.
+- **Shop** (Brotato-style, `SHOP`, `SHOP_RULES`): the Medkit plus 4 rolled offers from a 20-item pool;
+  reroll for cash (dearer each time), lock an offer for the next visit; late, dear items from level 3-4
+  (Hollow Points, Hair Trigger, Exo Frame, Drone Bay) and the Upgrade Crate soak up late cash.
+- **Loadout everywhere**: bought guns stay in the loadout; choose one before each level in any chapter.
+- **Champions** (`ELITES`): every ~40 s a gold-glowing elite (x4 HP, x1.3 size) drops a chest: 1-3
+  upgrades flip in plus cash.
+- **Run summary** after a death or a win: time, kills, level, cleared levels, cash, damage taken, damage
+  by source, Dust earned, the build. **Endless mode** after a cleared chapter: its last levels and boss
+  fights loop, each loop tougher.

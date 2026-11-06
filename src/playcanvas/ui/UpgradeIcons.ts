@@ -5,7 +5,7 @@
  */
 export type UpgradeIcon =
   | "shield" | "heart" | "medkit" | "bullet" | "rapid" | "magazine" | "reload" | "boot" | "target" | "pierce" | "star" | "drop"
-  | "flame" | "burst" | "ricochet" | "split" | "bullets" | "drone" | "snowflake" | "pulse";
+  | "flame" | "burst" | "ricochet" | "split" | "bullets" | "drone" | "snowflake" | "pulse" | "magnet" | "chest";
 
 export type UpgradeCategory = "weapon" | "player" | "special";
 export type UpgradeRarity = "common" | "rare" | "epic";
@@ -25,6 +25,8 @@ const snowflake = (() => {
 })();
 
 export const ICON_PATHS: Record<UpgradeIcon, string> = {
+  magnet: "M4 3H9V12C9 13.7 10.3 15 12 15C13.7 15 15 13.7 15 12V3H20V12C20 16.4 16.4 20 12 20C7.6 20 4 16.4 4 12Z M4 5.5H9 M15 5.5H20",
+  chest: "M3 10H21V20H3Z M4 9C4 5.7 6.7 3.5 12 3.5C17.3 3.5 20 5.7 20 9Z M10.5 12H13.5V16H10.5Z",
   shield: "M12 1.8L20.5 5V11C20.5 16.6 16.9 20.8 12 22.3C7.1 20.8 3.5 16.6 3.5 11V5Z M12 5.2L7 7.1V11C7 14.4 9 17.3 12 18.6Z",
   heart: "M12 21.3S2.5 14.9 2.5 8.6C2.5 5.4 5 3.2 7.8 3.2C9.7 3.2 11.2 4.2 12 5.6C12.8 4.2 14.3 3.2 16.2 3.2C19 3.2 21.5 5.4 21.5 8.6C21.5 14.9 12 21.3 12 21.3Z",
   medkit: "M8.8 2.5H15.2V8.8H21.5V15.2H15.2V21.5H8.8V15.2H2.5V8.8H8.8Z",

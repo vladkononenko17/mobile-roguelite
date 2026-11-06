@@ -9,11 +9,12 @@ export interface BarTarget {
   scale: number;
   lift: number;
   def: { boss?: boolean; aimHeight?: number };
+  elite?: boolean;
 }
 
 /** Bar width (CSS px) by toughness; height above the feet per unit of aim height. */
 const BARS = {
-  width: { grunt: 38, elite: 54, boss: 86, hero: 60 },
+  width: { grunt: 38, elite: 54, champion: 62, boss: 86, hero: 60 },
   /** Max HP from which a foe counts as an elite (wider bar). */
   eliteHp: 200,
   /** Head top ~ 1.8 x the chest aim point, plus clearance (m). */
@@ -115,7 +116,7 @@ export class HealthBars {
         bar = this.free.pop() ?? this.make();
         this.owners.set(e, bar);
       }
-      const kind = e.def.boss ? "boss" : e.maxHp >= BARS.eliteHp ? "elite" : "grunt";
+      const kind = e.def.boss ? "boss" : e.elite ? "champion" : e.maxHp >= BARS.eliteHp ? "elite" : "grunt";
       if (bar.cls !== kind) {
         if (bar.cls && bar.cls !== "grunt") bar.el.classList.remove(bar.cls);
         if (kind !== "grunt") bar.el.classList.add(kind);

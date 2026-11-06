@@ -9,7 +9,7 @@ import { HealthBars } from "../ui/HealthBars";
 import type { UpgradeIcon } from "../ui/UpgradeIcons";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
 import type { Biome, Campaign, LevelBounds, WayPoint, Zone } from "../world/level/Biome";
-import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, shopPrice, TRAPS, ENEMY_PACE, WEAPON_CARDS, levelsAt, type DifficultyDef, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
+import { DROPS, ELITES, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SHOP_RULES, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, shopPrice, type ShopItemId, type WaveEnemyId, TRAPS, ENEMY_PACE, WEAPON_CARDS, levelsAt, type DifficultyDef, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
 import { BossBrain } from "./BossBrain";
 import { BOSS_SCRIPTS, TYPE_SKINS } from "./campaigns";
 import { Effects } from "./Effects";
@@ -22,10 +22,12 @@ import { PlayerStats } from "./PlayerStats";
 import { SpawnDirector } from "./SpawnDirector";
 import { TargetDebug } from "../ui/TargetDebug";
 import { clearedCampaign, menuUrl, reachedLevel } from "../ui/progress";
-import { Combat } from "./Combat";
+import { Combat, type HitSource } from "./Combat";
+import { addDust, applyMeta, dustFor, loadMeta } from "./meta";
+import { restoreStats, snapshotStats, type StatsSnapshot } from "./checkpoint";
 import { Drones } from "./Drones";
 import { ScreenProjector } from "../camera/ScreenProjector";
-import { applyUpgrade, availableUpgrades, rollUpgrades, tagCounts, upgradeStacks, type SynergyReached } from "./Upgrades";
+import { applyUpgrade, availableUpgrades, rollUpgrades, tagCounts, upgradeDef, upgradeStacks, type SynergyReached } from "./Upgrades";
 import { modsForWeapon, weaponMod } from "../weaponMods";
 import { DEV_MODE } from "../devMode";
 
@@ -126,6 +128,20 @@ export class Gameplay {
   private readonly lastStep = new Vec3();
   /** A boss is up: its theme plays (the chapter's music resumes when it falls). */
   private bossMusic = false;
+  /** This attempt (run start or the last checkpoint) for the summary and Dust. */
+  private log = newRunLog();
+  /** Dust banked this run (all attempts). */
+  private dustRun = 0;
+  /** The last act checkpoint (continue from it after a death). */
+  private checkpoint: { index: number; stats: StatsSnapshot; armorySeen: boolean } | null = null;
+  /** This visit's shop offers (rolled once per level; rerolls replace them). */
+  private shopRoll: { level: number; offers: ShopItemId[]; rerolls: number } | null = null;
+  /** Seconds to the next elite champion. */
+  private eliteTimer = 0;
+  /** Endless loops played (0: the campaign proper). */
+  private endless = 0;
+  /** How many levels the campaign has (endless levels are appended after them). */
+  private baseCount = 0;
 
   constructor(
     private readonly app: AppBase,
@@ -141,7 +157,7 @@ export class Gameplay {
     const bounds = biome.bounds;
     this.campaign = biome.campaign ?? null;
     // A copy for campaigns: the chosen difficulty rewrites it in place (the director shares it).
-    this.levels = this.campaign ? [...this.campaign.levels] : WAVES;
+    this.levels = this.campaign ? [...this.campaign.levels] : [...WAVES];
     this.region = bounds;
     this.effects = new Effects(app);
     this.hazards = new Hazards(app);
@@ -158,6 +174,7 @@ export class Gameplay {
     this.enemies.brain = this.brain;
     this.projector = new ScreenProjector(camera.camera!);
     this.combat = new Combat(this.enemies, this.effects, this.stats);
+    this.combat.onDealt = (source, amount) => { this.log.dealt[source] = (this.log.dealt[source] ?? 0) + amount; };
     this.combat.onHit = (position, amount, style, enemy) => {
       this.hud.damageNumber(position, String(amount), style);
       if (style !== "burn") audio.voice(voiceOf(enemy.id, enemy.def), "hit", { x: position.x, z: position.z, rate: voiceRate(enemy.scale) });
@@ -277,8 +294,8 @@ export class Gameplay {
       actions: [
         { label: "Resume", onClick: () => this.resume() },
         ...(DEV_MODE ? [{ label: "Dev tools", onClick: () => { document.body.classList.toggle("debug-on"); this.resume(); } }] : []),
-        { label: "Restart run", onClick: () => this.startRun() },
-        MAIN_MENU,
+        { label: "Restart run", onClick: () => { this.bankDust(false); this.startRun(); } },
+        { label: "Main menu", onClick: () => { this.bankDust(false); MAIN_MENU.onClick(); } },
       ],
     });
   }
@@ -398,8 +415,17 @@ export class Gameplay {
     s.owned.add("pistol");
     s.weaponMods.clear();
     s.upgrades.clear();
+    // Permanent upgrades (meta-progression) on top of a fresh hero.
+    applyMeta(s);
     this.unlocked = null;
     this.armorySeen = false;
+    this.log = newRunLog();
+    this.dustRun = 0;
+    this.checkpoint = null;
+    this.shopRoll = null;
+    this.endless = 0;
+    if (!this.baseCount) this.baseCount = this.levels.length;
+    this.levels.splice(this.baseCount);
     const kit = this.campaign?.run;
     const requested = DEV_MODE ? this.params.get("weapon") : null;
     this.weapons.setMods([], false);
@@ -407,7 +433,7 @@ export class Gameplay {
     this.pendingLevelUps = 0;
     if (kit) {
       // A veteran: cash for the first shop, and the first upgrades picked before the first demon.
-      s.cash = kit.startCash;
+      s.cash += kit.startCash;
       s.level += kit.startPicks;
       this.pendingLevelUps = kit.startPicks;
     }
@@ -468,6 +494,13 @@ export class Gameplay {
     this.nav.build(here.x, here.z);
     this.hazards.reset();
     this.combat.reset();
+    // Act checkpoints: the build at the start of each new act (and of the final level).
+    const prev = this.levels[index - 1];
+    if (index > 0 && !this.endless && (this.levels[index].act !== prev?.act || index === this.campaign?.run?.finalLevel)) {
+      this.checkpoint = { index, stats: snapshotStats(this.stats), armorySeen: this.armorySeen };
+      if (index > 0) this.hud.showBanner("Checkpoint", 1.6);
+    }
+    this.eliteTimer = ELITES.first * (0.8 + Math.random() * 0.4);
     if (index > 0) this.stats.rerolls += LEVEL_UP.rerollsPerWave;
     this.director.start(index);
     this.gun.reset();
@@ -528,6 +561,7 @@ export class Gameplay {
     if (this.phase !== "combat") return false;
     const taken = this.stats.hurt(damage);
     if (taken <= 0) return false;
+    this.log.taken += taken;
     audio.play("hurt");
     this.hud.flashHurt();
     this.onShake(Math.min(0.45, 0.12 + taken / 80));
@@ -539,24 +573,98 @@ export class Gameplay {
   }
 
   private die(): void {
+    const s = this.stats;
+    // Second Wind (meta upgrade): back on his feet once, with a blast that clears the space around him.
+    if (s.revives > 0) {
+      s.revives--;
+      s.hp = Math.round(s.maxHp * 0.5);
+      s.invulnerable = 2.5;
+      const p = this.player.entity.getPosition();
+      this.combat.blast(p.x, p.z, 6.5, 120 * this.director.wave.hpScale);
+      this.onShake(0.6);
+      audio.play("levelup");
+      this.hud.showBanner("SECOND WIND", 2.2);
+      return;
+    }
     this.phase = "dead";
     audio.play("die");
     this.player.controlsEnabled = false;
     this.player.aimYawDeg = null;
-    this.hud.openModal({
-      title: "YOU DIED",
-      text: `${this.difficultyTag}${this.director.wave.label} · Level ${this.stats.level} · ${this.stats.kills} kills · ${this.stats.cash}$`,
-      actions: [
-        { label: "Restart run", onClick: () => this.startRun() },
-        ...(this.difficulty ? [{ label: "Change difficulty", onClick: () => { this.difficulty = null; this.params.delete("difficulty"); this.startRun(); } }] : []),
-        MAIN_MENU,
+    const dust = this.bankDust(false);
+    const cp = this.checkpoint;
+    const canContinue = !!cp && this.difficultyId !== "nightmare" && !this.endless;
+    this.showSummary("YOU DIED", `${this.difficultyTag}${this.director.wave.label}`, dust, [
+      ...(canContinue ? [{ label: `Continue from ${this.levels[cp!.index].label}`, onClick: () => this.continueFromCheckpoint() }] : []),
+      { label: "Restart run", onClick: () => this.startRun(), minor: canContinue },
+      ...(this.difficulty ? [{ label: "Change difficulty", onClick: () => { this.difficulty = null; this.params.delete("difficulty"); this.startRun(); }, minor: true }] : []),
+      { ...MAIN_MENU, minor: true },
+    ]);
+  }
+
+  /** Back to the last act checkpoint with the build from then (at least half health). */
+  private continueFromCheckpoint(): void {
+    const cp = this.checkpoint;
+    if (!cp) return this.startRun();
+    const s = this.stats;
+    restoreStats(s, cp.stats);
+    s.hp = Math.max(s.hp, Math.round(s.maxHp * 0.5));
+    s.invulnerable = 0;
+    this.armorySeen = cp.armorySeen;
+    this.unlocked = null;
+    this.pendingLevelUps = 0;
+    this.choosing = false;
+    this.paused = false;
+    this.slowMo = 0;
+    this.app.timeScale = 1;
+    this.shopRoll = null;
+    this.log = newRunLog();
+    this.weapons.setMods(s.modsFor(s.weapon), false);
+    this.weapons.equip(s.weapon);
+    this.gun.reset();
+    this.startWave(cp.index);
+  }
+
+  /** Banks this attempt's Dust (difficulty-scaled) and starts a new tally; returns what was earned. */
+  private bankDust(won: boolean): number {
+    const mult = this.difficultyId === "easy" ? 0.7 : this.difficultyId === "nightmare" ? 1.5 : 1;
+    const amount = dustFor({ ...this.log, won }, mult);
+    if (amount > 0) addDust(amount);
+    this.dustRun += amount;
+    this.log.kills = this.log.levels = this.log.bosses = this.log.elites = 0;
+    return amount;
+  }
+
+  /** The end-of-run screen for this attempt. */
+  private showSummary(title: string, subtitle: string, dust: number, actions: { label: string; onClick: () => void; minor?: boolean }[]): void {
+    const s = this.stats, l = this.log;
+    const mm = Math.floor(l.time / 60), ss = Math.floor(l.time % 60);
+    const damage = (Object.entries(l.dealt) as [HitSource, number][])
+      .filter(([, v]) => v > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, v]) => ({ label: SOURCE_LOOK[k].label, value: v, color: SOURCE_LOOK[k].color }));
+    const ups = [...s.upgrades.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id, n]) => `${upgradeDef(id).name}${n > 1 ? ` ${n}` : ""}`).join(" · ");
+    this.hud.openSummary({
+      title,
+      subtitle,
+      stats: [
+        { label: "Time", value: `${mm}:${String(ss).padStart(2, "0")}` },
+        { label: "Kills", value: String(l.totalKills) },
+        { label: "Level", value: String(s.level) },
+        { label: "Cleared", value: this.endless ? `+${this.endless} endless` : `${Math.min(this.baseCount, this.director.waveIndex + (this.phase === "complete" ? 1 : 0))}/${this.baseCount}` },
+        { label: "Cash earned", value: `${l.cash}$` },
+        { label: "Damage taken", value: String(Math.round(l.taken)) },
       ],
+      damage,
+      dust: dust > 0 ? `+${dust} ◆ DUST · ${loadMeta().dust} to spend on the title screen` : "",
+      upgrades: ups ? `Build: ${ups}` : "",
+      actions,
     });
   }
 
   /** The wave is over: the rest of the horde drops (no rewards), leftover pickups fly to the hero. */
   private waveComplete(): void {
     this.phase = "cleared";
+    this.log.levels++;
     this.enemies.killAll();
     this.hazards.reset();
     this.clearTimer = 2.8;
@@ -567,6 +675,7 @@ export class Gameplay {
   /** After the short "wave complete": the shop, then the next wave (or the end of the run). */
   private afterWave(): void {
     const next = this.director.waveIndex + 1;
+    if (this.endless && next >= this.levels.length) this.pushEndless();
     if (next < this.levels.length) {
       const run = this.campaign?.run;
       if (run && this.director.waveIndex === run.pactAfter) this.openPact(next);
@@ -579,10 +688,44 @@ export class Gameplay {
     this.player.aimYawDeg = null;
     const victory = this.campaign?.victory ?? { title: "RUN COMPLETE", text: "The outpost is quiet." };
     clearedCampaign(this.biome.id, this.difficulty?.label ?? "Normal");
-    this.hud.openModal({
-      title: victory.title,
-      text: `${victory.text} ${this.difficultyTag}Level ${this.stats.level} · ${this.stats.kills} kills · ${this.stats.cash}$ left.`,
-      actions: [{ label: "New run", onClick: () => this.startRun() }, MAIN_MENU],
+    const dust = this.bankDust(true);
+    this.showSummary(victory.title, `${this.difficultyTag}${victory.text}`, dust, [
+      { label: "Endless mode", onClick: () => this.startEndless() },
+      { label: "New run", onClick: () => this.startRun(), minor: true },
+      { ...MAIN_MENU, minor: true },
+    ]);
+  }
+
+  /** After a cleared campaign: the build carries on through ever harder loops of its levels. */
+  private startEndless(): void {
+    this.endless = 0;
+    this.pushEndless();
+    this.openShop(this.levels.length - 1);
+  }
+
+  /**
+   * Appends the next endless level: the campaign's last regular levels (and every third loop one of its
+   * boss fights) in their own zones, each loop tougher (HP x1.15, damage x1.07, bosses x1.2 per loop).
+   */
+  private pushEndless(): void {
+    this.endless++;
+    const n = this.endless;
+    const originals = this.levels.slice(0, this.baseCount);
+    const regular = originals.filter((l) => !l.boss);
+    const bosses = originals.filter((l) => l.boss);
+    const top = originals.reduce((a, l) => (l.hpScale > a.hpScale ? l : a));
+    const boss = n % 3 === 0 && bosses.length > 0;
+    const src = boss ? bosses[Math.floor(Math.random() * bosses.length)] : regular[Math.max(0, regular.length - 1 - (n % Math.min(2, regular.length)))] ?? top;
+    this.levels.push({
+      ...src,
+      label: `Endless ${n}`,
+      act: "Endless",
+      subtitle: src.subtitle,
+      duration: boss ? src.duration : Math.max(src.duration, 75),
+      hpScale: top.hpScale * 1.15 ** n,
+      damageScale: top.damageScale * 1.07 ** n,
+      bossHpScale: (src.bossHpScale ?? 1) * 1.2 ** n,
+      phases: src.phases.map((p) => ({ ...p, maxAlive: Math.round(p.maxAlive * Math.min(1.5, 1 + 0.05 * n)) })),
     });
   }
 
@@ -678,31 +821,78 @@ export class Gameplay {
     }
   }
 
-  /** Between waves: spend cash. */
+  /** Items the shop may offer before level `next` (never the Medkit, a maxed item or an owned weapon). */
+  private shopPool(next: number): ShopItem[] {
+    const s = this.stats;
+    return SHOP.filter((item) =>
+      item.id !== "heal" &&
+      (!item.weapon || (WEAPON_STATS[item.weapon] && !s.owned.has(item.weapon))) &&
+      (!item.campaign || this.armorySeen) &&
+      (!item.biomes || item.biomes.includes(this.biome.id)) &&
+      (item.from === undefined || next >= item.from) &&
+      !(item.max !== undefined && (s.bought.get(item.id) ?? 0) >= item.max),
+    );
+  }
+
+  /** Rolls this visit's offers: locked ones stay, the rest are drawn by weight. */
+  private rollShop(next: number): ShopItemId[] {
+    const pool = this.shopPool(next);
+    const kept = pool.filter((i) => this.stats.lockedShop.has(i.id)).map((i) => i.id);
+    const rest = pool.filter((i) => !kept.includes(i.id));
+    const out = [...kept];
+    while (out.length < SHOP_RULES.offers && rest.length) {
+      const total = rest.reduce((t, i) => t + (i.weight ?? 1), 0);
+      let r = Math.random() * total, k = 0;
+      while (k < rest.length - 1 && (r -= rest[k].weight ?? 1) > 0) k++;
+      out.push(rest.splice(k, 1)[0].id);
+    }
+    return out;
+  }
+
+  /** What a reroll costs now. */
+  private rerollPrice(next: number): number {
+    const r = SHOP_RULES.reroll;
+    return r.base + r.perLevel * Math.min(next, 12) + r.step * (this.shopRoll?.rerolls ?? 0);
+  }
+
+  /**
+   * Between levels: the Medkit plus this visit's rolled offers (Brotato-style): reroll them for cash,
+   * lock any to keep it for the next visit; then the loadout (with more than one gun) or the next level.
+   */
   private openShop(next: number): void {
     this.phase = "shop";
     const s = this.stats;
-    const items = SHOP.filter((item) =>
-      (!item.weapon || WEAPON_STATS[item.weapon]) && (!item.campaign || this.armorySeen) && (!item.biomes || item.biomes.includes(this.biome.id)),
-    );
+    if (!this.shopRoll || this.shopRoll.level !== next) this.shopRoll = { level: next, offers: this.rollShop(next), rerolls: 0 };
+    const roll = this.shopRoll;
+    const items = [SHOP.find((i) => i.id === "heal")!, ...roll.offers.map((id) => SHOP.find((i) => i.id === id)!)];
     const count = (item: ShopItem) => s.bought.get(item.id) ?? 0;
     const maxed = (item: ShopItem) => item.max !== undefined && count(item) >= item.max;
     const soldOut = (item: ShopItem) => (item.weapon ? s.owned.has(item.weapon) : false) || (item.id === "heal" && s.hp >= s.maxHp) || maxed(item);
-    const note = (item: ShopItem) => item.weapon ? "Owned" : maxed(item) ? `Maxed ${count(item)}/${item.max}` : "HP full";
+    const note = (item: ShopItem) => item.weapon ? "In your loadout" : maxed(item) ? `Maxed ${count(item)}/${item.max}` : "HP full";
+    const reroll = this.rerollPrice(next);
+    const guns = [...s.owned].filter((id) => !!WEAPON_STATS[id]);
     this.hud.openModal({
       title: "SHOP",
       compact: true,
-      text: `Cash: ${s.cash}$ · HP ${Math.ceil(s.hp)}/${s.maxHp} · ${WEAPONS.list[s.weapon]?.label ?? s.weapon}`,
+      text: `Cash: ${s.cash}$ · HP ${Math.ceil(s.hp)}/${s.maxHp} · ${WEAPONS.list[s.weapon]?.label ?? s.weapon} · 🔓 locks an offer for the next shop`,
       image: weaponArt(s.weapon),
-      cards: items.map((item): Card => {
-        const title = maxed(item) || (item.weapon && s.owned.has(item.weapon)) ? item.title : `${item.title} — ${this.shopPrice(item)}$`;
+      cards: items.map((item, i): Card => {
+        const title = soldOut(item) && item.id !== "heal" ? item.title : `${item.title} — ${this.shopPrice(item)}$`;
         const text = soldOut(item) ? note(item) : item.max !== undefined ? `${item.text} · ${count(item)}/${item.max}` : item.text;
-        const disabled = soldOut(item) || s.cash < this.shopPrice(item);
+        const off = soldOut(item) || s.cash < this.shopPrice(item);
+        const lock = i === 0 || soldOut(item) ? undefined : {
+          on: s.lockedShop.has(item.id),
+          onToggle: () => {
+            if (s.lockedShop.has(item.id)) s.lockedShop.delete(item.id);
+            else s.lockedShop.add(item.id);
+            this.openShop(next);
+          },
+        };
         if (item.weapon) {
           const stats = WEAPON_STATS[item.weapon]!;
-          return { title, text, tag: s.owned.has(item.weapon) ? "owned" : "weapon", kind: "weapon", image: weaponArt(item.weapon), bars: weaponBars(stats), disabled };
+          return { title, text, tag: s.owned.has(item.weapon) ? "owned" : "weapon", kind: "weapon", image: weaponArt(item.weapon), bars: weaponBars(stats), off, lock };
         }
-        return { title, text, kind: "player", icon: SHOP_ICONS[item.id] ?? "star", disabled };
+        return { title, text, tag: item.from !== undefined ? "rare" : undefined, kind: item.from !== undefined ? "special" : "player", icon: SHOP_ICONS[item.id] ?? "star", off, lock };
       }),
       onCard: (i) => {
         const item = items[i];
@@ -710,17 +900,29 @@ export class Gameplay {
         if (s.cash < price || soldOut(item)) return;
         s.cash -= price;
         s.bought.set(item.id, count(item) + 1);
+        s.lockedShop.delete(item.id);
         this.buy(item);
         this.openShop(next);
       },
-      actions: [{
-        label: this.biome.id === "outpost" ? "Choose loadout" : `${this.wayOn(next) ? "On to" : "Start"} ${this.levels[next].label}`,
-        onClick: () => this.biome.id === "outpost" ? this.openLoadout(next) : this.beforeLevel(next),
-      }],
+      actions: [
+        {
+          label: `↻ Reroll · ${reroll}$`, minor: true,
+          onClick: () => {
+            if (s.cash < reroll) return;
+            s.cash -= reroll;
+            roll.rerolls++;
+            roll.offers = this.rollShop(next);
+            this.openShop(next);
+          },
+        },
+        guns.length > 1 || modsForWeapon(s.weapon).length > 0
+          ? { label: "Choose loadout", onClick: () => this.openLoadout(next) }
+          : { label: `${this.wayOn(next) && !this.endless ? "On to" : "Start"} ${this.levels[next].label}`, onClick: () => this.beforeLevel(next) },
+      ],
     });
   }
 
-  /** Wasteland-only test: choose any owned weapon before the next level, then tune it at the bench. */
+  /** Choose any owned weapon before the next level; weapons with modules open the bench. */
   private openLoadout(next: number): void {
     this.phase = "shop";
     const s = this.stats;
@@ -743,7 +945,8 @@ export class Gameplay {
       }),
       onCard: (i) => {
         this.equip(weapons[i]);
-        this.openWeaponBench(next, weapons[i]);
+        if (modsForWeapon(weapons[i]).length) this.openWeaponBench(next, weapons[i]);
+        else this.openLoadout(next);
       },
       actions: [{ label: `Continue with ${WEAPONS.list[s.weapon].label}`, onClick: () => this.beforeLevel(next) }],
     });
@@ -812,7 +1015,7 @@ export class Gameplay {
 
   /** Next level: walk there over the map when the zone has a way on, else start it in place. */
   private proceed(next: number): void {
-    const way = this.wayOn(next);
+    const way = this.endless ? null : this.wayOn(next);
     const exits = way ? this.campaign!.exits!(way.zone) : [];
     if (!way || !exits.length) {
       this.startWave(next);
@@ -901,6 +1104,20 @@ export class Gameplay {
       case "armor": s.armor = Math.min(0.6, s.armor + 0.1); break;
       case "damage": s.damageMult *= 1.1; break;
       case "fireRate": s.fireRateMult *= 1.1; break;
+      case "magnet": s.magnetMult *= 1.3; break;
+      case "boots": s.moveSpeedMult *= 1.08; break;
+      case "ammo": s.magazineBonus += 4; break;
+      case "scope": s.critChance = Math.min(0.9, s.critChance + 0.06); break;
+      case "loader": s.reloadTimeMult *= 0.85; break;
+      case "hollowPoints": s.damageMult *= 1.25; break;
+      case "hairTrigger": s.fireRateMult *= 1.2; break;
+      case "exoFrame": s.maxHp += 50; s.heal(50); s.armor = Math.min(0.6, s.armor + 0.08); break;
+      case "droneBay": s.drones += 1; break;
+      case "crate": {
+        const [u] = rollUpgrades(s, 1, "levelUp");
+        if (u) this.announce(applyUpgrade(s, u.id));
+        break;
+      }
       default: if (item.weapon) this.equip(item.weapon);
     }
   }
@@ -908,6 +1125,9 @@ export class Gameplay {
   /** Called exactly once per enemy death (EnemyManager.die): XP, heal-on-kill, drops. */
   private onEnemyDeath(enemy: Enemy): void {
     this.stats.kills++;
+    this.log.kills++;
+    this.log.totalKills++;
+    if (enemy.def.boss) this.log.bosses++;
     if (this.stats.healOnKill > 0) this.killHeal(this.stats.healOnKill);
     this.pendingLevelUps += this.stats.gainXp(enemy.def.xp);
     if (this.stats.vampireChance > 0 && Math.random() < this.stats.vampireChance) this.killHeal(this.stats.vampireHeal);
@@ -954,6 +1174,15 @@ export class Gameplay {
       this.effects.bloodDecal(x, z, enemy.scale * (enemy.def.boss ? 1.8 : 1.1), enemy.def.gore);
     } else this.effects.bloodDecal(x, z, enemy.scale * (enemy.def.boss ? 1.6 : 1));
     const drops = enemy.def.drops;
+    if (enemy.elite) {
+      // A champion's chest: 1-3 upgrades (luck shifts the odds up) and some cash.
+      this.log.elites++;
+      const odds = ELITES.chest, luck = this.stats.luck;
+      const r = Math.random() * (1 + luck);
+      const size = r > odds[0] + odds[1] ? 3 : r > odds[0] ? 2 : 1;
+      this.pickups.drop("chest", x, z, size);
+      this.hud.showBanner("Champion down: a chest!", 1.8);
+    }
     if (enemy.def.boss) {
       const pieces = DROPS.bossCashPieces;
       for (let i = 0; i < pieces; i++) this.pickups.drop("cash", x, z, Math.ceil(enemy.def.cash / pieces));
@@ -968,19 +1197,73 @@ export class Gameplay {
 
   private collect(kind: PickupKind, value: number, upgrade: UpgradeId | null): void {
     const s = this.stats;
-    audio.play(kind === "cash" ? "cash" : kind === "health" ? "heal" : "upgrade");
-    if (kind === "cash") s.cash += value;
+    audio.play(kind === "cash" ? "cash" : kind === "health" ? "heal" : kind === "chest" ? "levelup" : "upgrade");
+    if (kind === "cash") {
+      s.cash += value;
+      this.log.cash += value;
+    } else if (kind === "chest") this.openChest(value);
     else if (kind === "health") {
       const before = s.hp;
       s.heal(Math.min(s.maxHp * DROPS.healthFraction, this.rules?.pickupHealMax ?? Infinity));
       const p = this.player.entity.getPosition();
       this.tmp.set(p.x, 2.1 * this.characterScale(), p.z);
       this.hud.damageNumber(this.tmp, `+${Math.round(s.hp - before)} HP`, "heal");
-    } else {
+    } else if (kind === "upgrade") {
       // The pickup carries the upgrade it shows; reroll if that one got maxed out meanwhile.
       const pick = upgrade && availableUpgrades(s, "drop").some((u) => u.id === upgrade) ? upgrade : rollUpgrades(s, 1, "drop")[0]?.id;
       if (pick) this.announce(applyUpgrade(s, pick));
     }
+  }
+
+  /**
+   * A champion's chest: the game pauses, its cash and `size` upgrades flip in one after another
+   * (rolled from the level-up pool, rarity-weighted), then all are taken at once.
+   */
+  private openChest(size: number): void {
+    const s = this.stats;
+    const ups = rollUpgrades(s, Math.max(1, Math.min(3, size)), "levelUp");
+    const cash = ELITES.cash * size;
+    this.choosing = true;
+    this.app.timeScale = 0;
+    this.hud.openModal({
+      title: size >= 3 ? "LEGENDARY CHEST" : size === 2 ? "GOLDEN CHEST" : "CHAMPION'S CHEST",
+      text: `+${cash}$ and ${ups.length} upgrade${ups.length === 1 ? "" : "s"}`,
+      className: "chest",
+      cards: ups.map((u) => ({ title: u.name, text: upgradeText(u), icon: u.icon, kind: u.category, tag: u.rarity === "common" ? "" : u.rarity })),
+      onCard: () => {},
+      actions: [{
+        label: "Take all",
+        onClick: () => {
+          s.cash += cash;
+          this.log.cash += cash;
+          for (const u of ups) this.announce(applyUpgrade(s, u.id));
+          this.hud.closeModal();
+          this.choosing = false;
+          this.app.timeScale = 1;
+        },
+      }],
+    });
+  }
+
+  /** An elite champion now and then while a level's waves run: a gold-glowing, tougher regular foe. */
+  private updateElites(dt: number, hero: Vec3): void {
+    if (this.director.phase !== "waves") return;
+    this.eliteTimer -= dt;
+    if (this.eliteTimer > 0) return;
+    this.eliteTimer = ELITES.every * (0.75 + Math.random() * 0.5);
+    const weights = Object.entries(this.director.step.weights) as [WaveEnemyId, number][];
+    const total = weights.reduce((t, [, w]) => t + w, 0);
+    if (!total) return;
+    let r = Math.random() * total, type = weights[0][0];
+    for (const [id, w] of weights) if ((r -= w) <= 0) { type = id; break; }
+    const spot = this.director.offscreenSpot(hero, this.projector);
+    if (!spot) return;
+    const w = this.director.wave;
+    const e = this.enemies.spawn(type, spot.x, spot.z, w.hpScale, w.damageScale);
+    if (!e) return;
+    this.enemies.makeElite(e, ELITES.hp, ELITES.scale, ELITES.damage);
+    this.hud.showBanner(`A champion ${e.def.label.toLowerCase()} approaches`, 2);
+    audio.voice(voiceOf(e.id, e.def), "attack", { x: spot.x, z: spot.z, rate: 0.8, volume: 1.3 });
   }
 
   /** Starts loading the sounds this run can play: the map's, the weapons', its enemies' voices. */
@@ -1133,7 +1416,9 @@ export class Gameplay {
       this.enemies.pace = (this.director.wave.speedScale ?? 1) * (1 + (this.rules?.followHero ?? ENEMY_PACE.followHero) * (this.stats.moveSpeedMult - 1));
       const rate = this.rules?.killHealPerSecond;
       if (rate !== undefined) this.killHealBudget = Math.min(rate * 2, this.killHealBudget + rate * dt);
+      this.log.time += dt;
       this.director.update(dt, position, this.projector);
+      this.updateElites(dt, position);
       this.enemies.update(dt, position, this.stats.alive);
       this.combat.update(dt);
       this.hazards.update(dt, position, this.player.radius);
@@ -1148,7 +1433,7 @@ export class Gameplay {
     }
     this.gun.update(dt, this.player, this.weapons, this.characterScale(), combat && this.stats.alive);
     this.drones.update(dt, position, this.stats.drones, this.characterScale(), combat && this.stats.alive);
-    if (combat || this.phase === "cleared") this.pickups.update(dt, position, this.characterScale(), this.phase === "cleared");
+    if (combat || this.phase === "cleared") this.pickups.update(dt, position, this.characterScale(), this.phase === "cleared", this.stats.magnetMult);
     this.effects.update(dt);
     this.campaign?.update?.(dt, position);
     if (this.pops.length) this.updatePops(dt, position);
@@ -1232,7 +1517,39 @@ function weaponArt(id: WeaponId): string {
 }
 
 /** Shop icons for the stat items. */
-const SHOP_ICONS: Record<string, UpgradeIcon> = { heal: "medkit", maxHp: "heart", armor: "shield", damage: "bullet", fireRate: "rapid" };
+const SHOP_ICONS: Record<string, UpgradeIcon> = {
+  heal: "medkit", maxHp: "heart", armor: "shield", damage: "bullet", fireRate: "rapid", magnet: "magnet", boots: "boot", ammo: "magazine",
+  scope: "target", loader: "reload", crate: "chest", hollowPoints: "bullet", hairTrigger: "rapid", exoFrame: "shield", droneBay: "drone",
+};
+
+/** One attempt's tally (run summary and Dust). */
+interface RunLog {
+  time: number;
+  /** Since the last Dust payout; `totalKills` for the whole attempt. */
+  kills: number;
+  totalKills: number;
+  levels: number;
+  bosses: number;
+  elites: number;
+  cash: number;
+  taken: number;
+  dealt: Partial<Record<HitSource, number>>;
+}
+
+function newRunLog(): RunLog {
+  return { time: 0, kills: 0, totalKills: 0, levels: 0, bosses: 0, elites: 0, cash: 0, taken: 0, dealt: {} };
+}
+
+/** Damage sources on the summary. */
+const SOURCE_LOOK: Record<HitSource, { label: string; color: string }> = {
+  bullet: { label: "Gun", color: "#e8c35a" },
+  ricochet: { label: "Ricochet", color: "#d9b26a" },
+  chain: { label: "Lightning", color: "#4fb8ff" },
+  explosion: { label: "Explosions", color: "#ff8a3a" },
+  burn: { label: "Fire", color: "#e8653a" },
+  drone: { label: "Drones", color: "#7fd0ff" },
+  shock: { label: "Shock", color: "#9fe0ff" },
+};
 
 /** The best value of each stat across the arsenal (bars are drawn against these). */
 const BAR_MAX = (() => {
