@@ -9,7 +9,7 @@ import { HealthBars } from "../ui/HealthBars";
 import type { UpgradeIcon } from "../ui/UpgradeIcons";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
 import type { Biome, Campaign, LevelBounds, WayPoint, Zone } from "../world/level/Biome";
-import { DROPS, ELITES, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SHOP_RULES, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, shopPrice, type ShopItemId, type WaveEnemyId, TRAPS, ENEMY_PACE, WEAPON_CARDS, levelsAt, type DifficultyDef, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
+import { ARSENAL, DROPS, ECONOMY, ELITES, weaponTier, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SHOP_RULES, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, shopPrice, type ShopItemId, type WaveEnemyId, TRAPS, ENEMY_PACE, WEAPON_CARDS, levelsAt, type DifficultyDef, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
 import { BossBrain } from "./BossBrain";
 import { BOSS_SCRIPTS, TYPE_SKINS } from "./campaigns";
 import { Effects } from "./Effects";
@@ -135,9 +135,11 @@ export class Gameplay {
   /** The last act checkpoint (continue from it after a death). */
   private checkpoint: { index: number; stats: StatsSnapshot; armorySeen: boolean } | null = null;
   /** This visit's shop offers (rolled once per level; rerolls replace them). */
-  private shopRoll: { level: number; offers: ShopItemId[]; rerolls: number } | null = null;
+  private shopRoll: { level: number; offers: ShopItemId[]; sale: ShopItemId | null; rerolls: number } | null = null;
   /** Seconds to the next elite champion. */
   private eliteTimer = 0;
+  /** This level's bounty contract. */
+  private bounty: Bounty | null = null;
   /** Endless loops played (0: the campaign proper). */
   private endless = 0;
   /** How many levels the campaign has (endless levels are appended after them). */
@@ -501,6 +503,8 @@ export class Gameplay {
       if (index > 0) this.hud.showBanner("Checkpoint", 1.6);
     }
     this.eliteTimer = ELITES.first * (0.8 + Math.random() * 0.4);
+    this.bounty = this.rollBounty(index);
+    this.showBounty();
     if (index > 0) this.stats.rerolls += LEVEL_UP.rerollsPerWave;
     this.director.start(index);
     this.gun.reset();
@@ -562,6 +566,12 @@ export class Gameplay {
     const taken = this.stats.hurt(damage);
     if (taken <= 0) return false;
     this.log.taken += taken;
+    const b = this.bounty;
+    if (b?.kind === "untouchable" && !b.done && !b.failed) {
+      b.progress += taken;
+      if (b.progress >= b.target) b.failed = true;
+      this.showBounty();
+    }
     audio.play("hurt");
     this.hud.flashHurt();
     this.onShake(Math.min(0.45, 0.12 + taken / 80));
@@ -665,11 +675,67 @@ export class Gameplay {
   private waveComplete(): void {
     this.phase = "cleared";
     this.log.levels++;
+    const s = this.stats;
+    // Untouchable bounties pay when the level ends unbroken; interest on the cash he kept.
+    if (this.bounty?.kind === "untouchable" && !this.bounty.failed) this.payBounty();
+    const i = ECONOMY.interest, interest = Math.min(i.capBase + i.capPerLevel * this.director.waveIndex, Math.floor(s.cash * i.rate));
+    if (interest > 0) {
+      s.cash += interest;
+      this.log.cash += interest;
+    }
     this.enemies.killAll();
     this.hazards.reset();
     this.clearTimer = 2.8;
     this.player.aimYawDeg = null;
-    this.hud.showBanner(`${this.director.wave.label} complete`, 2.4);
+    this.hud.showBanner(`${this.director.wave.label} complete${interest > 0 ? ` · interest +${interest}$` : ""}`, 2.4);
+  }
+
+  /**
+   * One contract per level, paid in cash: hunt N of the level's commonest foe, slay a champion, or
+   * end the level having lost less than a third of max HP.
+   */
+  private rollBounty(index: number): Bounty | null {
+    const w = this.levels[index];
+    if (!w) return null;
+    const reward = ECONOMY.bounty.base + ECONOMY.bounty.perLevel * Math.min(index, 12);
+    const totals = new Map<WaveEnemyId, number>();
+    for (const p of w.phases) {
+      const sum = Object.values(p.weights).reduce((a, b) => a + (b ?? 0), 0) || 1;
+      for (const [id, v] of Object.entries(p.weights) as [WaveEnemyId, number][]) totals.set(id, (totals.get(id) ?? 0) + v / sum);
+    }
+    const kinds: Bounty["kind"][] = ["untouchable"];
+    if (totals.size) kinds.push("hunt", "hunt");
+    if (w.duration >= 40 && !w.boss) kinds.push("champion");
+    const kind = kinds[Math.floor(Math.random() * kinds.length)];
+    if (kind === "hunt") {
+      const [type, share] = [...totals].sort((a, b) => b[1] - a[1])[0];
+      const target = Math.max(8, Math.min(40, Math.round(w.duration * 0.35 * (share / w.phases.length))));
+      return { kind, type, target, progress: 0, reward, done: false, failed: false };
+    }
+    if (kind === "champion") return { kind, target: 1, progress: 0, reward: Math.round(reward * 1.2), done: false, failed: false };
+    return { kind, target: Math.round(this.stats.maxHp * 0.35), progress: 0, reward: Math.round(reward * 1.3), done: false, failed: false };
+  }
+
+  private bountyText(b: Bounty): string {
+    if (b.kind === "hunt") return `Kill ${b.target} ${ENEMIES[b.type!].label}s · ${Math.min(b.progress, b.target)}/${b.target}`;
+    if (b.kind === "champion") return b.done ? "Champion slain" : "Slay a champion";
+    return `Take under ${b.target} damage · ${Math.round(b.progress)}`;
+  }
+
+  private showBounty(): void {
+    const b = this.bounty;
+    this.hud.setBounty(b ? { text: this.bountyText(b), reward: b.reward, state: b.done ? "done" : b.failed ? "failed" : "on" } : null);
+  }
+
+  private payBounty(): void {
+    const b = this.bounty;
+    if (!b || b.done || b.failed) return;
+    b.done = true;
+    this.stats.cash += b.reward;
+    this.log.cash += b.reward;
+    audio.play("cash");
+    this.hud.showBanner(`Bounty paid +${b.reward}$`, 1.8);
+    this.showBounty();
   }
 
   /** After the short "wave complete": the shop, then the next wave (or the end of the run). */
@@ -821,32 +887,49 @@ export class Gameplay {
     }
   }
 
-  /** Items the shop may offer before level `next` (never the Medkit, a maxed item or an owned weapon). */
+  /** The level index a weapon first shows up in the shop at (its tier, lowered by the chapter's boost). */
+  private weaponFrom(id: WeaponId): number {
+    const tier = weaponTier(id);
+    return Math.max(tier > 0 ? 1 : 0, ARSENAL.tiers[tier].from - (this.campaign?.run?.tierBoost ?? 0));
+  }
+
+  /** Items the shop may offer before level `next` (never the Medkit / Gunsmith, a maxed item or an owned gun). */
   private shopPool(next: number): ShopItem[] {
     const s = this.stats;
     return SHOP.filter((item) =>
-      item.id !== "heal" &&
-      (!item.weapon || (WEAPON_STATS[item.weapon] && !s.owned.has(item.weapon))) &&
-      (!item.campaign || this.armorySeen) &&
+      item.id !== "heal" && item.id !== "mk" &&
+      (!item.weapon || (WEAPON_STATS[item.weapon] && !s.owned.has(item.weapon) && next >= this.weaponFrom(item.weapon))) &&
       (!item.biomes || item.biomes.includes(this.biome.id)) &&
       (item.from === undefined || next >= item.from) &&
       !(item.max !== undefined && (s.bought.get(item.id) ?? 0) >= item.max),
     );
   }
 
-  /** Rolls this visit's offers: locked ones stay, the rest are drawn by weight. */
-  private rollShop(next: number): ShopItemId[] {
+  /**
+   * Rolls this visit's offers: locked ones stay; one gun from the unlocked tiers (newest tier most
+   * likely) when the locks leave room, then the rest by weight; one offer goes on sale.
+   */
+  private rollShop(next: number): { offers: ShopItemId[]; sale: ShopItemId | null } {
     const pool = this.shopPool(next);
     const kept = pool.filter((i) => this.stats.lockedShop.has(i.id)).map((i) => i.id);
-    const rest = pool.filter((i) => !kept.includes(i.id));
     const out = [...kept];
+    const guns = pool.filter((i) => i.weapon && !kept.includes(i.id));
+    if (guns.length && !out.some((id) => SHOP.find((i) => i.id === id)?.weapon)) {
+      const top = Math.max(...guns.map((g) => weaponTier(g.weapon!)));
+      const weighted = guns.map((g) => ({ g, w: weaponTier(g.weapon!) === top ? 3 : 1 }));
+      let r = Math.random() * weighted.reduce((t, x) => t + x.w, 0);
+      const pick = weighted.find((x) => (r -= x.w) <= 0) ?? weighted[0];
+      out.push(pick.g.id);
+    }
+    const rest = pool.filter((i) => !i.weapon && !out.includes(i.id));
     while (out.length < SHOP_RULES.offers && rest.length) {
       const total = rest.reduce((t, i) => t + (i.weight ?? 1), 0);
       let r = Math.random() * total, k = 0;
       while (k < rest.length - 1 && (r -= rest[k].weight ?? 1) > 0) k++;
       out.push(rest.splice(k, 1)[0].id);
     }
-    return out;
+    const saleable = out.filter((id) => !kept.includes(id));
+    return { offers: out, sale: saleable.length ? saleable[Math.floor(Math.random() * saleable.length)] : null };
   }
 
   /** What a reroll costs now. */
@@ -862,24 +945,30 @@ export class Gameplay {
   private openShop(next: number): void {
     this.phase = "shop";
     const s = this.stats;
-    if (!this.shopRoll || this.shopRoll.level !== next) this.shopRoll = { level: next, offers: this.rollShop(next), rerolls: 0 };
+    if (!this.shopRoll || this.shopRoll.level !== next) this.shopRoll = { level: next, ...this.rollShop(next), rerolls: 0 };
     const roll = this.shopRoll;
-    const items = [SHOP.find((i) => i.id === "heal")!, ...roll.offers.map((id) => SHOP.find((i) => i.id === id)!)];
+    const items = [SHOP.find((i) => i.id === "heal")!, SHOP.find((i) => i.id === "mk")!, ...roll.offers.map((id) => SHOP.find((i) => i.id === id)!)];
     const count = (item: ShopItem) => s.bought.get(item.id) ?? 0;
-    const maxed = (item: ShopItem) => item.max !== undefined && count(item) >= item.max;
+    const mkLevel = s.weaponLevel.get(s.weapon) ?? 0;
+    const maxed = (item: ShopItem) => (item.max !== undefined && count(item) >= item.max) || (item.id === "mk" && mkLevel >= ARSENAL.mk.max);
     const soldOut = (item: ShopItem) => (item.weapon ? s.owned.has(item.weapon) : false) || (item.id === "heal" && s.hp >= s.maxHp) || maxed(item);
-    const note = (item: ShopItem) => item.weapon ? "In your loadout" : maxed(item) ? `Maxed ${count(item)}/${item.max}` : "HP full";
+    const note = (item: ShopItem) => item.weapon ? "In your loadout" : item.id === "mk" ? `${this.gunName()} is Mk V` : maxed(item) ? `Maxed ${count(item)}/${item.max}` : "HP full";
     const reroll = this.rerollPrice(next);
     const guns = [...s.owned].filter((id) => !!WEAPON_STATS[id]);
     this.hud.openModal({
       title: "SHOP",
       compact: true,
-      text: `Cash: ${s.cash}$ · HP ${Math.ceil(s.hp)}/${s.maxHp} · ${WEAPONS.list[s.weapon]?.label ?? s.weapon} · 🔓 locks an offer for the next shop`,
+      text: `Cash: ${s.cash}$ · HP ${Math.ceil(s.hp)}/${s.maxHp} · ${this.gunName()} · 🔓 keeps an offer for the next shop`,
       image: weaponArt(s.weapon),
       cards: items.map((item, i): Card => {
-        const title = soldOut(item) && item.id !== "heal" ? item.title : `${item.title} — ${this.shopPrice(item)}$`;
-        const text = soldOut(item) ? note(item) : item.max !== undefined ? `${item.text} · ${count(item)}/${item.max}` : item.text;
+        const sale = roll.sale === item.id && !soldOut(item);
+        const name = item.id === "mk" ? `${this.gunName()} Mk ${MK_NAMES[mkLevel + 1] ?? "V"}` : item.title;
+        const title = soldOut(item) && item.id !== "heal" ? name : `${name} — ${this.shopPrice(item)}$${sale ? " (SALE)" : ""}`;
+        const text = soldOut(item) ? note(item)
+          : item.id === "mk" ? `+${Math.round(ARSENAL.mk.damage * 100)}% damage · +${Math.round(ARSENAL.mk.fireRate * 100)}% fire rate · +${Math.round(ARSENAL.mk.magazine * 100)}% magazine`
+          : item.max !== undefined ? `${item.text} · ${count(item)}/${item.max}` : item.text;
         const off = soldOut(item) || s.cash < this.shopPrice(item);
+        if (item.id === "mk") return { title, text, tag: "gunsmith", kind: "weapon", icon: "bullet", off };
         const lock = i === 0 || soldOut(item) ? undefined : {
           on: s.lockedShop.has(item.id),
           onToggle: () => {
@@ -890,9 +979,10 @@ export class Gameplay {
         };
         if (item.weapon) {
           const stats = WEAPON_STATS[item.weapon]!;
-          return { title, text, tag: s.owned.has(item.weapon) ? "owned" : "weapon", kind: "weapon", image: weaponArt(item.weapon), bars: weaponBars(stats), off, lock };
+          const tier = weaponTier(item.weapon);
+          return { title, text, tag: sale ? "sale" : s.owned.has(item.weapon) ? "owned" : `tier ${tier}`, kind: "weapon", image: weaponArt(item.weapon), bars: weaponBars(stats), off, lock };
         }
-        return { title, text, tag: item.from !== undefined ? "rare" : undefined, kind: item.from !== undefined ? "special" : "player", icon: SHOP_ICONS[item.id] ?? "star", off, lock };
+        return { title, text, tag: sale ? "sale" : item.from !== undefined ? "rare" : undefined, kind: item.from !== undefined ? "special" : "player", icon: SHOP_ICONS[item.id] ?? "star", off, lock };
       }),
       onCard: (i) => {
         const item = items[i];
@@ -901,6 +991,7 @@ export class Gameplay {
         s.cash -= price;
         s.bought.set(item.id, count(item) + 1);
         s.lockedShop.delete(item.id);
+        if (roll.sale === item.id) roll.sale = null;
         this.buy(item);
         this.openShop(next);
       },
@@ -911,7 +1002,7 @@ export class Gameplay {
             if (s.cash < reroll) return;
             s.cash -= reroll;
             roll.rerolls++;
-            roll.offers = this.rollShop(next);
+            Object.assign(roll, this.rollShop(next));
             this.openShop(next);
           },
         },
@@ -990,7 +1081,19 @@ export class Gameplay {
 
   /** What `item` costs now (its price grows with each purchase this run). */
   shopPrice(item: ShopItem): number {
-    return shopPrice(item, this.stats.bought.get(item.id) ?? 0);
+    const s = this.stats;
+    if (item.id === "mk") {
+      const p = ARSENAL.mkPrice;
+      return Math.round(p.base[weaponTier(s.weapon)] * p.growth ** (s.weaponLevel.get(s.weapon) ?? 0));
+    }
+    const full = shopPrice(item, s.bought.get(item.id) ?? 0);
+    return this.shopRoll?.sale === item.id ? Math.round(full * (1 - ECONOMY.sale.discount)) : full;
+  }
+
+  /** The equipped gun's name with its Mk ("MP5 SMG Mk III"). */
+  private gunName(weapon = this.stats.weapon): string {
+    const mk = this.stats.weaponLevel.get(weapon) ?? 0;
+    return `${WEAPONS.list[weapon]?.label ?? weapon}${mk ? ` Mk ${MK_NAMES[mk]}` : ""}`;
   }
 
   /** The last level gets a warning first: this is the final encounter. */
@@ -1105,6 +1208,7 @@ export class Gameplay {
       case "damage": s.damageMult *= 1.1; break;
       case "fireRate": s.fireRateMult *= 1.1; break;
       case "magnet": s.magnetMult *= 1.3; break;
+      case "mk": s.weaponLevel.set(s.weapon, (s.weaponLevel.get(s.weapon) ?? 0) + 1); this.hud.showBanner(`${this.gunName()}`, 1.4); break;
       case "boots": s.moveSpeedMult *= 1.08; break;
       case "ammo": s.magazineBonus += 4; break;
       case "scope": s.critChance = Math.min(0.9, s.critChance + 0.06); break;
@@ -1128,6 +1232,14 @@ export class Gameplay {
     this.log.kills++;
     this.log.totalKills++;
     if (enemy.def.boss) this.log.bosses++;
+    const b = this.bounty;
+    if (b && !b.done && !b.failed) {
+      if ((b.kind === "hunt" && enemy.id === b.type) || (b.kind === "champion" && enemy.elite)) {
+        b.progress++;
+        if (b.progress >= b.target) this.payBounty();
+        else this.showBounty();
+      }
+    }
     if (this.stats.healOnKill > 0) this.killHeal(this.stats.healOnKill);
     this.pendingLevelUps += this.stats.gainXp(enemy.def.xp);
     if (this.stats.vampireChance > 0 && Math.random() < this.stats.vampireChance) this.killHeal(this.stats.vampireHeal);
@@ -1516,11 +1628,27 @@ function weaponArt(id: WeaponId): string {
   return `${import.meta.env.BASE_URL}ui/weapons/${id}.webp`;
 }
 
+/** Mk levels as numerals (index = Mk upgrades bought; 0 = Mk I). */
+const MK_NAMES = ["I", "II", "III", "IV", "V"];
+
 /** Shop icons for the stat items. */
 const SHOP_ICONS: Record<string, UpgradeIcon> = {
   heal: "medkit", maxHp: "heart", armor: "shield", damage: "bullet", fireRate: "rapid", magnet: "magnet", boots: "boot", ammo: "magazine",
   scope: "target", loader: "reload", crate: "chest", hollowPoints: "bullet", hairTrigger: "rapid", exoFrame: "shield", droneBay: "drone",
 };
+
+/** A level's bounty contract. */
+interface Bounty {
+  kind: "hunt" | "champion" | "untouchable";
+  /** Hunt: the enemy to kill. */
+  type?: WaveEnemyId;
+  /** Kills needed, or (untouchable) the damage ceiling. */
+  target: number;
+  progress: number;
+  reward: number;
+  done: boolean;
+  failed: boolean;
+}
 
 /** One attempt's tally (run summary and Dust). */
 interface RunLog {

@@ -340,8 +340,9 @@ export const SPACE_LEVELS: WaveDef[] = [
 
 /** A run on the ORION: the hero comes from the outpost with a rifle and a little cash, at level 1. */
 export const SPACE_RUN = {
-  startWeapon: "rifle" as const,
-  startCash: 120,
+  startWeapon: "pistol" as const,
+  startCash: 110,
+  tierBoost: 1,
   startPicks: 0,
   /** After this level (index) the pact is offered. */
   pactAfter: 4,

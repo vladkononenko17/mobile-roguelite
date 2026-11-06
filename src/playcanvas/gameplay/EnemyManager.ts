@@ -1,5 +1,5 @@
 import { BLEND_ADDITIVE, Color, Entity, StandardMaterial, Vec3, type AnimTrack, type Texture, type AppBase, type ContainerResource, type MeshInstance, type RenderComponent } from "playcanvas";
-import { ENEMIES, ENEMY_LIMITS, ENEMY_VISUALS, TARGETING, type EnemyClips, type EnemyDef, type EnemyId, type EnemySkinId, type EnemyVisualId } from "./config";
+import { BALANCE, ENEMIES, ENEMY_LIMITS, ENEMY_VISUALS, TARGETING, type EnemyClips, type EnemyDef, type EnemyId, type EnemySkinId, type EnemyVisualId } from "./config";
 import { TYPE_SKINS } from "./campaigns";
 import type { BossBrain, BossState } from "./BossBrain";
 import type { Hazards } from "./Hazards";
@@ -295,8 +295,8 @@ export class EnemyManager {
     enemy.def = def;
     enemy.clips = def.clips ? { ...visual.clips, ...def.clips } : visual.clips;
     enemy.scale = def.scale * visual.scale * (1 + (Math.random() * 2 - 1) * (def.scaleJitter ?? 0));
-    enemy.maxHp = enemy.hp = Math.round(def.maxHp * hpScale);
-    enemy.damageScale = damageScale;
+    enemy.maxHp = enemy.hp = Math.round(def.maxHp * hpScale * BALANCE.enemyHp);
+    enemy.damageScale = damageScale * BALANCE.enemyDamage;
     enemy.active = true;
     enemy.position.set(x, 0, z);
     enemy.push.set(0, 0, 0);

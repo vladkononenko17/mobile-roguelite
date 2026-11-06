@@ -31,7 +31,8 @@ export interface WeaponModDef {
   };
 }
 
-const TEST_WEAPONS = ["rifle", "mp5", "dualUzi"] as const satisfies readonly WeaponId[];
+/** Guns with the Flat Gun Attachment anchors (the static recolours and the pump gun have none). */
+const TEST_WEAPONS = ["rifle", "mp5", "dualUzi", "handCannon", "battleRifle", "marksman"] as const satisfies readonly WeaponId[];
 
 // Vite emits these already-versioned source GLBs as hashed production assets. Keeping the source
 // pack as the single copy avoids checking the same binary into both assets-src/ and public/.
@@ -82,7 +83,7 @@ export const WEAPON_MODS: readonly WeaponModDef[] = [
     slot: "underbarrel",
     cost: 30,
     text: "-30% spread · +5% fire rate",
-    weapons: ["rifle", "mp5"],
+    weapons: ["rifle", "mp5", "battleRifle", "marksman", "autoShotgun"],
     visual: { url: FOREGRIP_URL, mount: "Attach_Rail.Bottom" },
     stats: { spread: 0.7, fireRate: 1.05 },
   },

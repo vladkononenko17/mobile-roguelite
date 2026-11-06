@@ -11,7 +11,7 @@ Game by Neon Hollow. Third-party assets below; details and build steps in `asset
 - AI disclosure: some character animation clips (retargeted onto the hero and several creatures) were generated with Meshy AI (meshy.ai); used under CC BY 4.0.
 
 ## Weapons
-- "Flat Guns East" and "Flat Gun Attachments" by Pichuliru (pichuliru.itch.io), CC0. The Plasma and Hellfire rifles are recoloured East rifles.
+- "Flat Guns East" and "Flat Gun Attachments" by Pichuliru (pichuliru.itch.io), CC0. The Plasma and Hellfire rifles, the Pulse SMG and the Railgun are recoloured East guns.
 
 ## Worlds
 - Kenney (kenney.nl): Pirate Kit, Graveyard Kit, Nature Kit, Space Station Kit, Space Kit, CC0.

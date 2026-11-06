@@ -9,7 +9,7 @@ import { buildSync } from "esbuild";
 // Upgrades.ts imports without extensions, so bundle it (data and pure logic only, no engine).
 const { outputFiles } = buildSync({
   stdin: {
-    contents: `export { PlayerStats } from "./gameplay/PlayerStats.ts"; export { applyUpgrade, rollUpgrades, availableUpgrades } from "./gameplay/Upgrades.ts"; export { snapshotStats, restoreStats } from "./gameplay/checkpoint.ts"; export { dustFor, META } from "./gameplay/meta.ts"; export { XP, xpToNext, SHOP, UPGRADES } from "./gameplay/config.ts";`,
+    contents: `export { PlayerStats } from "./gameplay/PlayerStats.ts"; export { applyUpgrade, rollUpgrades, availableUpgrades } from "./gameplay/Upgrades.ts"; export { snapshotStats, restoreStats } from "./gameplay/checkpoint.ts"; export { dustFor, META } from "./gameplay/meta.ts"; export { XP, xpToNext, SHOP, UPGRADES, ARSENAL, WEAPON_STATS, weaponTier } from "./gameplay/config.ts";`,
     resolveDir: new URL("../src/playcanvas/", import.meta.url).pathname,
     loader: "ts",
   },
@@ -21,7 +21,7 @@ const { outputFiles } = buildSync({
 });
 const bundle = join(mkdtempSync(join(tmpdir(), "upgrades-")), "upgrades.mjs");
 writeFileSync(bundle, outputFiles[0].text);
-const { PlayerStats, applyUpgrade, rollUpgrades, availableUpgrades, snapshotStats, restoreStats, dustFor, META, XP, xpToNext, SHOP, UPGRADES } = await import(pathToFileURL(bundle).href);
+const { PlayerStats, applyUpgrade, rollUpgrades, availableUpgrades, snapshotStats, restoreStats, dustFor, META, XP, xpToNext, SHOP, UPGRADES, ARSENAL, WEAPON_STATS, weaponTier } = await import(pathToFileURL(bundle).href);
 
 test("a capped upgrade never lowers a stat that another source already raised past its cap", () => {
   const crit = new PlayerStats();
@@ -113,9 +113,39 @@ test("dust: every run pays, a win pays more", () => {
 
 test("shop: every item has a price and stat items a cap; late items come later", () => {
   for (const item of SHOP) {
-    assert.ok(item.cost > 0, item.id);
-    if (!item.weapon && item.id !== "heal" && item.id !== "crate") assert.ok(item.max, `${item.id} is capped`);
+    if (item.id !== "mk") assert.ok(item.cost > 0, item.id);
+    if (!item.weapon && !["heal", "crate", "mk"].includes(item.id)) assert.ok(item.max, `${item.id} is capped`);
   }
   assert.ok(SHOP.filter((i) => i.from).every((i) => i.cost >= 70));
   assert.ok(UPGRADES.some((u) => u.id === "magnet"));
+});
+
+test("arsenal: every tier's guns can fire, are sold, and a higher tier costs more and hits harder", () => {
+  const sustained = (w) => { const s = WEAPON_STATS[w]; const shots = s.magazine / s.fireRate; return (s.damage * s.pellets * s.fireRate * shots) / (shots + s.reloadSeconds); };
+  let lastPrice = 0, lastDps = 0;
+  for (const [i, tier] of ARSENAL.tiers.entries()) {
+    const prices = [], dps = [];
+    for (const w of tier.weapons) {
+      assert.ok(WEAPON_STATS[w], `${w} has stats`);
+      assert.equal(weaponTier(w), i);
+      const item = SHOP.find((x) => x.weapon === w);
+      if (i > 0) { assert.ok(item, `${w} is sold`); prices.push(item.cost); }
+      dps.push(sustained(w));
+    }
+    if (i > 0) {
+      assert.ok(Math.min(...prices) >= lastPrice * 0.95, `tier ${i} prices climb`);
+      lastPrice = Math.min(...prices);
+    }
+    assert.ok(Math.max(...dps) > lastDps, `tier ${i} has a stronger gun (${Math.max(...dps).toFixed(0)})`);
+    lastDps = Math.max(...dps);
+  }
+});
+
+test("gunsmith Mk levels raise the equipped gun only", () => {
+  const s = new PlayerStats();
+  s.owned.add("rifle");
+  const before = s.weaponStatsFor("rifle").damage;
+  s.weaponLevel.set("rifle", 2);
+  assert.ok(Math.abs(s.weaponStatsFor("rifle").damage / before - (1 + 2 * ARSENAL.mk.damage)) < 1e-9);
+  assert.equal(s.weaponStatsFor("pistol").damage, new PlayerStats().weaponStatsFor("pistol").damage);
 });

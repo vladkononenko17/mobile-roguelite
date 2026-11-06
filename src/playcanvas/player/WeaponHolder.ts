@@ -49,13 +49,22 @@ export class WeaponHolder {
     });
     const root = (asset.resource as ContainerResource).instantiateRenderEntity();
     this.prepareModel(root);
+    // Several ids share one model (Hand Cannon / compact pistol...): the first takes the top node out
+    // of the scene, the others clone it (a fresh search would only find the inner mesh of that name).
+    const taken = new Map<string, Entity>();
     for (const [id, weapon] of Object.entries(WEAPONS.list) as [WeaponId, (typeof WEAPONS.list)[WeaponId]][]) {
-      const node = root.findByName(weapon.node) as Entity | null;
+      const shared = taken.get(weapon.node);
+      if (shared) {
+        this.templates.set(id, shared.clone() as Entity);
+        continue;
+      }
+      const node = ((root.children.find((c) => c.name === weapon.node) as Entity | undefined) ?? (root.findByName(weapon.node) as Entity | null));
       if (!node) {
         console.warn(`[Weapons] ${weapon.node} is missing from ${url}`);
         continue;
       }
       node.parent?.removeChild(node);
+      taken.set(weapon.node, node);
       this.templates.set(id, node);
     }
     // The three tiny CC0 attachment files are loaded once and cloned onto the chosen weapon.

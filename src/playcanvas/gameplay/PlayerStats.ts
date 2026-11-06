@@ -1,4 +1,4 @@
-import { LEVEL_UP, PLAYER_COMBAT, WEAPON_STATS, xpToNext, type UpgradeId, type UpgradeTag, type WeaponStats } from "./config";
+import { ARSENAL, LEVEL_UP, PLAYER_COMBAT, WEAPON_STATS, xpToNext, type UpgradeId, type UpgradeTag, type WeaponStats } from "./config";
 import type { WeaponId } from "../config";
 import { applyWeaponMods, weaponMod, type WeaponModId } from "../weaponMods";
 
@@ -62,6 +62,8 @@ export class PlayerStats {
   luck = 0;
   /** Revives left this run (meta upgrade "Second Wind"). */
   revives = 0;
+  /** Mk upgrades bought per weapon (0 = Mk I). */
+  readonly weaponLevel = new Map<string, number>();
   /** Shop offers kept for the next visit. */
   readonly lockedShop = new Set<string>();
   weapon: WeaponId = "pistol";
@@ -125,12 +127,13 @@ export class PlayerStats {
     const base = WEAPON_STATS[weapon];
     if (!base) return null;
     const modified = applyWeaponMods(base, this.modsFor(weapon), `shot_${weapon}`);
+    const mk = this.weaponLevel.get(weapon) ?? 0;
     return {
       ...modified,
-      damage: modified.damage * this.damageMult,
-      fireRate: modified.fireRate * this.fireRateMult,
+      damage: modified.damage * this.damageMult * (1 + ARSENAL.mk.damage * mk),
+      fireRate: modified.fireRate * this.fireRateMult * (1 + ARSENAL.mk.fireRate * mk),
       reloadSeconds: modified.reloadSeconds * this.reloadTimeMult,
-      magazine: modified.magazine + this.magazineBonus,
+      magazine: Math.round(modified.magazine * (1 + ARSENAL.mk.magazine * mk)) + this.magazineBonus,
       penetration: modified.penetration + this.penetration,
     };
   }

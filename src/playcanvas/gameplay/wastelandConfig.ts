@@ -184,8 +184,9 @@ export const WASTELAND_LEVELS: WaveDef[] = [
 
 /** A Wasteland run: the hero's first chapter - a rifle, a little cash, level 1. */
 export const WASTELAND_RUN = {
-  startWeapon: "rifle" as const,
+  startWeapon: "pistol" as const,
   startCash: 60,
+  tierBoost: 0,
   startPicks: 0,
   /** No pact in the first chapter. */
   pactAfter: -1,

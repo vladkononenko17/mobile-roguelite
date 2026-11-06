@@ -9,7 +9,7 @@ import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
 import { dedup, prune } from "@gltf-transform/functions";
 
 const FILE = "public/models/weapons/weapons.glb";
-const DROP = ["assault_rifle_2", "frag_grenade", "pistol_1", "shotgun_2", "sniper_2", "tactical_knife", "low_poly_axe", "Plasma_Rifle", "Hellfire_Rifle"];
+const DROP = ["assault_rifle_2", "frag_grenade", "pistol_1", "shotgun_2", "sniper_2", "tactical_knife", "low_poly_axe", "Plasma_Rifle", "Hellfire_Rifle", "Pulse_SMG", "Railgun"];
 
 // East palette (linear grey levels) -> new colour; "glow" moves the part onto the emissive material.
 const VARIANTS = [
@@ -20,6 +20,15 @@ const VARIANTS = [
   {
     name: "Hellfire_Rifle", from: "Sniper_Rifle_East", glowColor: [1, 0.42, 0.08], emissive: [1, 0.36, 0.04],
     colors: { 0.004: [0.005, 0.004, 0.004], 0.008: [0.01, 0.006, 0.005], 0.031: [0.05, 0.009, 0.006], 0.071: [0.1, 0.014, 0.009], 0.212: "glow", 0.784: "glow", red: "glow" },
+  },
+  {
+    // Space guns: white polymer, graphite, a teal / violet energy glow.
+    name: "Pulse_SMG", from: "SMG_Full_East", glowColor: [0.3, 1, 0.75], emissive: [0.25, 1, 0.7],
+    colors: { 0.004: [0.008, 0.01, 0.012], 0.008: [0.016, 0.02, 0.024], 0.031: [0.42, 0.45, 0.47], 0.071: [0.09, 0.1, 0.12], 0.212: "glow", 0.784: "glow", red: "glow" },
+  },
+  {
+    name: "Railgun", from: "Sniper_Material_East", glowColor: [0.6, 0.62, 1], emissive: [0.5, 0.55, 1],
+    colors: { 0.004: [0.006, 0.006, 0.01], 0.008: [0.014, 0.014, 0.02], 0.031: [0.46, 0.48, 0.52], 0.071: [0.03, 0.035, 0.05], 0.212: "glow", 0.784: "glow", red: "glow" },
   },
 ];
 

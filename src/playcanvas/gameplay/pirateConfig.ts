@@ -380,8 +380,9 @@ export const PIRATE_LEVELS: WaveDef[] = [
 
 /** A run on the Black Tide: a rifle, a little cash, level 1. */
 export const PIRATE_RUN = {
-  startWeapon: "rifle" as const,
+  startWeapon: "pistol" as const,
   startCash: 120,
+  tierBoost: 2,
   startPicks: 0,
   /** After this level (index) the pact is offered. */
   pactAfter: 6,

@@ -87,25 +87,58 @@ export interface WeaponFx {
   burn?: number;
 }
 
-/** Combat stats per weapon (weapons missing here cannot be fired). */
+/**
+ * Combat stats per weapon (weapons missing here cannot be fired). The arsenal climbs in tiers (see
+ * ARSENAL): pistol -> hand cannon / pump shotgun -> SMGs / auto shotgun -> assault, battle and
+ * marksman rifles -> space guns (plasma, pulse SMG, railgun) and the Hellfire. Sustained DPS
+ * (one target, reloads included): ~34 / 40-60 / 54-72 / 62-71 / 66-75, and each tier adds a trick
+ * (pierce, pellets, splash, burn), so a dearer gun is a real step up.
+ */
 export const WEAPON_STATS: Partial<Record<WeaponId, WeaponStats>> = {
   pistol: { damage: 14, fireRate: 3.2, range: 11, spreadDeg: 1.5, pellets: 1, penetration: 0, magazine: 12, reloadSeconds: 1.1, knockback: 0.12 },
+  // Tier 1: a heavy revolver-class pistol (pierces) or the pump gun.
+  handCannon: {
+    damage: 34, fireRate: 1.7, range: 13, spreadDeg: 1, pellets: 1, penetration: 1, magazine: 6, reloadSeconds: 1.4, knockback: 0.32,
+    audio: { id: "shot_pistol", volume: 1.25, rate: 0.78 },
+  },
   shotgun: { damage: 9, fireRate: 1.25, range: 7, spreadDeg: 11, pellets: 7, penetration: 0, magazine: 6, reloadSeconds: 1.6, knockback: 0.35 },
-  rifle: { damage: 10, fireRate: 7.5, range: 14, spreadDeg: 3, pellets: 1, penetration: 1, magazine: 30, reloadSeconds: 1.8, knockback: 0.08 },
-  // Wasteland test weapons: the MP5 is accurate and quick to reload; the two Uzis trade range and
-  // control for the highest raw close-range output. Their muzzles alternate visually.
+  // Tier 2: the SMGs and the box-magazine auto shotgun.
   mp5: {
     damage: 7.5, fireRate: 11, range: 11.5, spreadDeg: 4.2, pellets: 1, penetration: 0, magazine: 30, reloadSeconds: 1.45, knockback: 0.055,
     audio: { id: "shot_rifle", volume: 0.72, rate: 1.13 },
   },
   dualUzi: {
-    damage: 6.2, fireRate: 15, range: 8.5, spreadDeg: 7, pellets: 1, penetration: 0, magazine: 40, reloadSeconds: 2, knockback: 0.045,
+    damage: 6.8, fireRate: 15, range: 8.5, spreadDeg: 7, pellets: 1, penetration: 0, magazine: 40, reloadSeconds: 2, knockback: 0.045,
     audio: { id: "shot_pistol", volume: 0.62, rate: 1.18 },
   },
-  // Hell rifles. Plasma: a hose of small energy bolts (fire rate and crit builds).
+  autoShotgun: {
+    damage: 6.5, fireRate: 3, range: 7.5, spreadDeg: 13, pellets: 6, penetration: 0, magazine: 8, reloadSeconds: 2, knockback: 0.3,
+    audio: { id: "shot_shotgun", volume: 0.85, rate: 1.12 },
+  },
+  // Tier 3: rifles. Assault (all-round, pierces), battle (heavier, pierce 2), marksman (long, pierce 3).
+  rifle: { damage: 12, fireRate: 7.5, range: 14, spreadDeg: 3, pellets: 1, penetration: 1, magazine: 30, reloadSeconds: 1.8, knockback: 0.08 },
+  battleRifle: {
+    damage: 24, fireRate: 4.2, range: 15, spreadDeg: 2.2, pellets: 1, penetration: 2, magazine: 20, reloadSeconds: 2, knockback: 0.16,
+    audio: { id: "shot_rifle", volume: 1.05, rate: 0.84 },
+  },
+  marksman: {
+    damage: 40, fireRate: 2.4, range: 18, spreadDeg: 0.8, pellets: 1, penetration: 3, magazine: 10, reloadSeconds: 1.9, knockback: 0.25,
+    audio: { id: "shot_rifle", volume: 1.2, rate: 0.7 },
+  },
+  // Tier 4: space guns. Plasma: a hose of bolts; Pulse SMG: splashing pulses; Railgun: one slug through a line.
   plasma: {
-    damage: 7, fireRate: 12, range: 14, spreadDeg: 2.2, pellets: 1, penetration: 1, magazine: 44, reloadSeconds: 1.6, knockback: 0.04,
+    damage: 9, fireRate: 12, range: 14, spreadDeg: 2.2, pellets: 1, penetration: 1, magazine: 44, reloadSeconds: 1.6, knockback: 0.04,
     fx: { tracer: [0.35, 0.85, 1], tracerWidth: 0.05, tracerLife: 0.06, muzzle: [0.4, 0.85, 1], muzzleSize: 0.18, shot: { speed: 60, size: 0.1, color: [0.45, 0.9, 1] } },
+  },
+  pulseSmg: {
+    damage: 6, fireRate: 18, range: 12, spreadDeg: 3.5, pellets: 1, penetration: 0, magazine: 54, reloadSeconds: 1.5, knockback: 0.04,
+    audio: { id: "shot_plasma", volume: 0.8, rate: 1.25 },
+    fx: { tracer: [0.3, 1, 0.75], tracerWidth: 0.045, tracerLife: 0.05, muzzle: [0.35, 1, 0.75], muzzleSize: 0.16, shot: { speed: 55, size: 0.09, color: [0.35, 1, 0.75] }, splash: { radius: 0.9, fraction: 0.4 } },
+  },
+  railgun: {
+    damage: 110, fireRate: 0.9, range: 22, spreadDeg: 0.3, pellets: 1, penetration: 8, magazine: 4, reloadSeconds: 2.2, knockback: 0.5,
+    audio: { id: "shot_hellfire", volume: 0.9, rate: 1.35 },
+    fx: { tracer: [0.6, 0.65, 1], tracerWidth: 0.16, tracerLife: 0.22, muzzle: [0.65, 0.7, 1], muzzleSize: 0.4, shot: { speed: 120, size: 0.16, color: [0.75, 0.8, 1] } },
   },
   // Hellfire: slow, heavy soul rounds that pierce, burst and burn (damage and fire builds).
   hellfire: {
@@ -116,10 +149,59 @@ export const WEAPON_STATS: Partial<Record<WeaponId, WeaponStats>> = {
 
 /** The NEW WEAPON card per weapon (Hud.showWeapon): one line of identity, stat chips, accent colour. */
 export const WEAPON_CARDS: Partial<Record<WeaponId, { text: string; stats: string[]; color: string }>> = {
+  handCannon: { text: "Six heavy rounds that punch through the first in line.", stats: ["34 DMG", "PIERCE", "6 MAG"], color: "#d8b070" },
+  shotgun: { text: "Seven pellets. Let them come close.", stats: ["7 PELLETS", "KNOCKBACK"], color: "#d88a4a" },
   mp5: { text: "Fast, controllable automatic fire for the dead streets.", stats: ["11 SHOTS/S", "30 MAG", "FAST RELOAD"], color: "#e6b24a" },
   dualUzi: { text: "Two compact SMGs. Huge close-range output, wider spread.", stats: ["15 SHOTS/S", "40 MAG", "DUAL WIELD"], color: "#f07c42" },
+  autoShotgun: { text: "A box-fed shotgun that never stops pumping.", stats: ["6 PELLETS", "3 SHOTS/S", "8 MAG"], color: "#e07040" },
+  rifle: { text: "The all-rounder: fast, long reach, pierces.", stats: ["7.5 SHOTS/S", "PIERCE", "30 MAG"], color: "#c9b27a" },
+  battleRifle: { text: "Heavier rounds through two bodies at once.", stats: ["24 DMG", "PIERCE 2", "20 MAG"], color: "#b9a46a" },
+  marksman: { text: "Long reach, three bodies per shot.", stats: ["40 DMG", "PIERCE 3", "RANGE 18"], color: "#a8b38a" },
   plasma: { text: "A hose of plasma bolts. Loves fire rate and crits.", stats: ["12 SHOTS/S", "44 MAG", "PIERCE"], color: "#4fd8ff" },
+  pulseSmg: { text: "Splashing energy pulses, eighteen a second.", stats: ["18 SHOTS/S", "SPLASH", "54 MAG"], color: "#4fffbf" },
+  railgun: { text: "One slug through a whole line of them.", stats: ["110 DMG", "PIERCE 8", "RANGE 22"], color: "#9aa8ff" },
   hellfire: { text: "Heavy soul rounds that pierce, burst and burn.", stats: ["36 DMG", "PIERCE 2", "SPLASH", "BURN"], color: "#ff7a2e" },
+};
+
+/**
+ * The arsenal: every run starts with the pistol; the shop offers the next guns by tier (`from`: the
+ * level index a tier first shows up at, lowered by a chapter's `tierBoost`), and the equipped gun can
+ * be upgraded Mk II..V for cash (damage, fire rate, magazine), its price set by the gun's tier.
+ */
+export const ARSENAL = {
+  tiers: [
+    { from: 0, weapons: ["pistol"] },
+    { from: 1, weapons: ["handCannon", "shotgun"] },
+    { from: 1, weapons: ["mp5", "dualUzi", "autoShotgun"] },
+    { from: 2, weapons: ["rifle", "battleRifle", "marksman"] },
+    { from: 4, weapons: ["plasma", "pulseSmg", "railgun", "hellfire"] },
+  ] as { from: number; weapons: WeaponId[] }[],
+  /** Per Mk level: damage, fire rate, magazine. */
+  mk: { damage: 0.18, fireRate: 0.05, magazine: 0.1, max: 4 },
+  /** Mk upgrade price: base[tier] x growth^level. */
+  mkPrice: { base: [16, 24, 30, 38, 48], growth: 1.5 },
+};
+
+/** The weapon's tier (0..4); unknown weapons count as tier 2. */
+export const weaponTier = (id: WeaponId): number => {
+  const i = ARSENAL.tiers.findIndex((t) => t.weapons.includes(id));
+  return i < 0 ? 2 : i;
+};
+
+/**
+ * Global balance on top of every chapter's levels: enemies hit harder, take more killing and come
+ * thicker (tuned against the playtest bot: chapter I on Hard was a stroll once builds formed).
+ */
+export const BALANCE = { enemyHp: 1.12, enemyDamage: 1.22, density: 1.12 };
+
+/**
+ * The economy's extra levers (beyond drops and prices): interest on unspent cash at a level's end
+ * (Brotato), one discounted shop offer per visit, and a bounty contract per level.
+ */
+export const ECONOMY = {
+  interest: { rate: 0.1, capBase: 6, capPerLevel: 3 },
+  sale: { discount: 0.35 },
+  bounty: { base: 18, perLevel: 7 },
 };
 
 /* ------------------------------------------------------------------------------------------------
@@ -789,8 +871,9 @@ export const upgradeText = (u: UpgradeDef): string => `${u.stat} ${u.value}`;
 
 export type ShopItemId =
   | "heal" | "maxHp" | "armor" | "damage" | "fireRate" | "magnet" | "boots" | "ammo" | "scope" | "loader"
-  | "hollowPoints" | "hairTrigger" | "exoFrame" | "crate" | "droneBay"
-  | "shotgun" | "rifle" | "mp5" | "dualUzi" | "plasma" | "hellfire";
+  | "hollowPoints" | "hairTrigger" | "exoFrame" | "crate" | "droneBay" | "mk"
+  | "handCannon" | "shotgun" | "mp5" | "dualUzi" | "autoShotgun" | "rifle" | "battleRifle" | "marksman"
+  | "plasma" | "pulseSmg" | "railgun" | "hellfire";
 
 export interface ShopItem {
   id: ShopItemId;
@@ -830,6 +913,8 @@ export const SHOP_RULES = {
 
 export const SHOP: ShopItem[] = [
   { id: "heal", title: "Medkit", text: "Heal to full", cost: 20, growth: 1.3 },
+  // The equipped gun's next Mk (price from ARSENAL.mkPrice; always on the shelf while not maxed).
+  { id: "mk", title: "Gunsmith", text: "Next Mk for your gun", cost: 0 },
   { id: "maxHp", title: "Vest", text: "+25 max HP", cost: 30, growth: 1.6, max: 4 },
   { id: "armor", title: "Plating", text: "+10% damage resistance", cost: 35, growth: 1.6, max: 3 },
   { id: "damage", title: "Gun Oil", text: "+10% weapon damage", cost: 28, growth: 1.6, max: 4 },
@@ -845,20 +930,26 @@ export const SHOP: ShopItem[] = [
   { id: "hairTrigger", title: "Hair Trigger", text: "+20% fire rate", cost: 120, growth: 1.5, max: 2, from: 3 },
   { id: "exoFrame", title: "Exo Frame", text: "+50 max HP · +8% resistance", cost: 150, growth: 1.6, max: 2, from: 4 },
   { id: "droneBay", title: "Drone Bay", text: "+1 sentry drone", cost: 160, max: 1, from: 4, weight: 0.7 },
-  // Weapons join the loadout (switch between levels).
-  { id: "shotgun", title: "Shotgun", text: "7 pellets, brutal up close", cost: 30, weapon: "shotgun" },
-  { id: "rifle", title: "Assault Rifle", text: "Fast, long range, pierces", cost: 45, weapon: "rifle" },
-  { id: "mp5", title: "MP5 SMG", text: "11 shots/s, stable and quick to reload", cost: 38, weapon: "mp5", biomes: ["outpost"] },
-  { id: "dualUzi", title: "Dual Uzis", text: "15 shots/s, 40 rounds, wide close-range spray", cost: 50, weapon: "dualUzi", biomes: ["outpost"] },
-  { id: "plasma", title: "Plasma Rifle", text: "12 bolts a second, pierces", cost: 110, weapon: "plasma", campaign: true },
-  { id: "hellfire", title: "Hellfire Rifle", text: "Heavy rounds: pierce, splash, burn", cost: 110, weapon: "hellfire", campaign: true },
+  // Weapons: one weapon offer per visit from the unlocked tiers (ARSENAL); prices climb with the tier.
+  { id: "handCannon", title: "Hand Cannon", text: "Heavy pistol, pierces", cost: 32, weapon: "handCannon" },
+  { id: "shotgun", title: "Pump Shotgun", text: "7 pellets, brutal up close", cost: 30, weapon: "shotgun" },
+  { id: "mp5", title: "MP5 SMG", text: "11 shots/s, quick reload", cost: 45, weapon: "mp5" },
+  { id: "dualUzi", title: "Dual Uzis", text: "15 shots/s, wide close-range spray", cost: 52, weapon: "dualUzi" },
+  { id: "autoShotgun", title: "Auto Shotgun", text: "6 pellets, 3 shots/s", cost: 58, weapon: "autoShotgun" },
+  { id: "rifle", title: "Assault Rifle", text: "Fast, long range, pierces", cost: 75, weapon: "rifle" },
+  { id: "battleRifle", title: "Battle Rifle", text: "Heavy rounds, pierce 2", cost: 88, weapon: "battleRifle" },
+  { id: "marksman", title: "Marksman Rifle", text: "Long reach, pierce 3", cost: 85, weapon: "marksman" },
+  { id: "plasma", title: "Plasma Rifle", text: "12 bolts a second, pierces", cost: 125, weapon: "plasma" },
+  { id: "pulseSmg", title: "Pulse SMG", text: "18 splashing pulses a second", cost: 115, weapon: "pulseSmg" },
+  { id: "railgun", title: "Railgun", text: "110 damage, pierces 8", cost: 150, weapon: "railgun" },
+  { id: "hellfire", title: "Hellfire Rifle", text: "Pierce, splash, burn", cost: 140, weapon: "hellfire" },
 ];
 
 /** Elite champions: a glowing, bigger, tougher foe now and then; it drops a treasure chest. */
 export const ELITES = {
   /** Seconds between elites in a level (randomised x0.75..1.25); the first comes after `first` s. */
-  every: 38,
-  first: 22,
+  every: 32,
+  first: 20,
   hp: 4,
   scale: 1.3,
   damage: 1.35,

@@ -82,6 +82,8 @@ export interface Campaign {
   /** How a run starts (a veteran's weapon, cash, upgrade picks) and its special beats. */
   run?: {
     startWeapon: WeaponId; startCash: number; startPicks: number; pactAfter: number; finalLevel: number;
+    /** Lowers the level index each arsenal tier first shows up at (later chapters climb faster). */
+    tierBoost?: number;
     armory?: { after: number; weapons: readonly WeaponId[] };
     /** Screen text: the armory, the pact (build-defining upgrades before the last act) and the final warning. */
     text?: { armory?: [string, string]; pact?: [string, string]; finalWarning?: [string, string] };

@@ -215,6 +215,62 @@ export const WEAPONS = {
         left: { position: [0, -0.07, 0.025], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.045, rollRangeDeg: 15 },
       },
     },
+    // The arsenal's other guns (gameplay ids; the east* entries above are the raw models).
+    handCannon: {
+      label: "Hand Cannon", class: "pistol", node: "Pistol_Compact_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.055, 0.03], axis: [0, 0.98, -0.21], palm: [0.9, 0.09, 0.42], radius: 0.016 },
+        left: { position: [0, -0.07, 0.025], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.045, rollRangeDeg: 15 },
+      },
+      magazineNode: "Magazine", magazineAxis: "z",
+      modMounts: { suppressor: { anchor: "Attach_Muzzle" }, reflex: { anchor: "Attach_Scope" } },
+    },
+    autoShotgun: {
+      label: "Auto Shotgun", class: "shotgun", node: "Shotgun_Auto_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.07, 0.205], axis: [0, 0.98, -0.2], palm: [0.85, 0.1, 0.5], radius: 0.02 },
+        left: { position: [0, 0.02, -0.11], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
+      },
+      stock: [0, 0, 0.39],
+      magazineNode: "Magazine", magazineAxis: "z",
+      modMounts: { reflex: { anchor: "Attach_Scope" }, foregrip: { anchor: "Attach_Rail.Bottom" } },
+    },
+    // Battle rifle: grip y -0.07 at z ~0.165, handguard z -0.05..-0.235 (the plasma's frame).
+    battleRifle: {
+      label: "Battle Rifle", class: "rifle", node: "Rifle_Battle_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.073, 0.122], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
+        left: { position: [0, -0.015, -0.17], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+      },
+      magazineNode: "Magazine", magazineAxis: "z",
+      modMounts: { suppressor: { anchor: "Attach_Muzzle" }, reflex: { anchor: "Attach_Scope" }, foregrip: { anchor: "Attach_Rail.Bottom" } },
+    },
+    // Bullpup marksman rifle: the pistol grip forward (y -0.07 at z ~0), the magazine behind it,
+    // handguard z -0.12..-0.28 (bottom y -0.015).
+    marksman: {
+      label: "Marksman Rifle", class: "rifle", node: "Sniper_Material_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.073, -0.048], axis: [0, 0.97, -0.24], palm: [0.86, 0.14, 0.49], radius: 0.019 },
+        left: { position: [0, -0.02, -0.2], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+      },
+      magazineNode: "Magazine", magazineAxis: "z",
+      modMounts: { suppressor: { anchor: "Attach_Muzzle" }, reflex: { anchor: "Attach_Scope" }, foregrip: { anchor: "Attach_Rail.Bottom" } },
+    },
+    // Space guns (recolours by scripts/cc0-weapons.mjs, static meshes): the MP5's and the marksman's frames.
+    pulseSmg: {
+      label: "Pulse SMG", class: "rifle", node: "Pulse_SMG", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.073, 0.073], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
+        left: { position: [0, -0.006, -0.115], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.026, rollRangeDeg: 35 },
+      },
+    },
+    railgun: {
+      label: "Railgun", class: "rifle", node: "Railgun", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.073, -0.048], axis: [0, 0.97, -0.24], palm: [0.86, 0.14, 0.49], radius: 0.019 },
+        left: { position: [0, -0.02, -0.2], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+      },
+    },
     // Hell-chapter rifles (scripts/cc0-weapons.mjs): static recolours of two East rifles, their
     // detail parts on an emissive material. Plasma = the battle rifle in gunmetal with cyan light
     // (grip y -0.07 at z ~0.165, handguard z -0.05..-0.235); Hellfire = the long rifle in crimson

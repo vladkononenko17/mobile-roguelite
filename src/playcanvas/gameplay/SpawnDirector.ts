@@ -1,6 +1,6 @@
 import { Vec3 } from "playcanvas";
 import type { ScreenProjector } from "../camera/ScreenProjector";
-import { SPAWNING, type EnemyId, type WaveDef, type WaveEnemyId, type WavePhase } from "./config";
+import { BALANCE, SPAWNING, type EnemyId, type WaveDef, type WaveEnemyId, type WavePhase } from "./config";
 import { isAlive, type Enemy, type EnemyManager } from "./EnemyManager";
 import type { NavField } from "./NavField";
 
@@ -104,7 +104,7 @@ export class SpawnDirector {
     this.nextGroup -= dt;
     if (this.nextGroup > 0) return;
     this.nextGroup = interval;
-    const room = step.maxAlive - this.enemies.livingCount;
+    const room = Math.round(step.maxAlive * BALANCE.density) - this.enemies.livingCount;
     if (room <= 0) return;
     const size = step.group[0] + Math.floor(Math.random() * (step.group[1] - step.group[0] + 1));
     this.spawnGroup(Math.min(size, room), step, player, camera);

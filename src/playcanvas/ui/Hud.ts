@@ -51,6 +51,13 @@ const CSS = `
 #hud .snd.off .wave { display: none; }
 #hud .snd:not(.off) .mute { display: none; }
 /* Money: note icon + amount; pops, flashes and floats "+N" when cash comes in. */
+#hud .bounty { display: grid; justify-items: end; padding: 3px 8px 4px; max-width: 170px; text-align: right; }
+#hud .bounty .cap { color: var(--amber); font-size: 9px; }
+#hud .bounty b { font-size: 12px; font-weight: 700; line-height: 1.15; }
+#hud .bounty.done { box-shadow: inset 0 0 0 1px var(--green); }
+#hud .bounty.done .cap { color: var(--green); }
+#hud .bounty.failed { opacity: 0.5; }
+#hud .bounty.failed b { text-decoration: line-through; }
 #hud .money { display: flex; align-items: center; gap: 6px; padding: 4px 9px 4px 7px; transform-origin: 100% 50%; }
 #hud .money svg { width: 19px; height: 13px; fill: var(--green); }
 #hud .money b { font-size: 19px; font-weight: 800; color: #b6c99a; min-width: 1ch; text-align: right; }
@@ -383,6 +390,7 @@ export class Hud {
       <div class="corner tr">
         <div class="plate money">${NOTE_SVG}<b></b><span class="gain"></span></div>
         <div class="plate health"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICON_PATHS.heart}"/></svg><b></b><div class="hpbar"><i></i></div></div>
+        <div class="plate bounty" style="display:none"><span class="cap"></span><b></b></div>
       </div>
       <div class="plate boss"><span class="cap"></span><div class="bar"><i></i></div></div>
       <div class="banner"></div>
@@ -536,6 +544,21 @@ export class Hud {
     this.pointerDistance = distance;
     this.pointer.classList.toggle("way", kind === "way");
     if (!target) this.pointer.style.display = "none";
+  }
+
+  /** The level's bounty contract under the health plate (null hides it). */
+  setBounty(b: { text: string; reward: number; state: "on" | "done" | "failed" } | null): void {
+    const el = this.root.querySelector<HTMLElement>(".bounty")!;
+    if (!b) {
+      el.style.display = "none";
+      return;
+    }
+    el.style.display = "grid";
+    el.className = `plate bounty ${b.state}`;
+    const cap = b.state === "done" ? `BOUNTY PAID +${b.reward}$` : b.state === "failed" ? "BOUNTY LOST" : `BOUNTY · ${b.reward}$`;
+    const capEl = el.querySelector(".cap")!, text = el.querySelector("b")!;
+    if (capEl.textContent !== cap) capEl.textContent = cap;
+    if (text.textContent !== b.text) text.textContent = b.text;
   }
 
   showBanner(text: string, seconds = 2): void {

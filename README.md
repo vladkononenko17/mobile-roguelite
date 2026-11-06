@@ -251,7 +251,7 @@ The last and largest chapter of the 3D game at `/playcanvas.html`: open it from 
   plus the kit's four survivors turned (`scripts/build-zombified-survivors.mjs`: zombie clips retargeted,
   eight colour maps - four kinds of rot, two station jumpsuits, two drowned), so a horde mixes 5 bodies
   x 4 looks; all guns are
-  Pichuliru "Flat Guns East" (CC0; Plasma and Hellfire are recolours by `scripts/cc0-weapons.mjs`). Assets
+  Pichuliru "Flat Guns East" (CC0; Plasma, Hellfire, Pulse SMG and Railgun are recolours by `scripts/cc0-weapons.mjs`). Assets
   without a stated licence were removed: the Low-Poly Zombie pack, the "assetpack-free" guns, the AR_2 /
   AR_3 rifles and the axe. The Meshy AI characters (Vanguard, Brawler, Orc) are no longer shipped; animation
   clips first generated with Meshy AI still drive the hero and several creatures (disclosed in the credits).
@@ -270,11 +270,22 @@ The last and largest chapter of the 3D game at `/playcanvas.html`: open it from 
 - **Level-ups**: front-loaded XP curve (`XP.toNext`): ~8-10 picks in chapter I. Cards are rolled by
   rarity (`XP.rarityWeight`, raised by Luck); evolutions: Dragon's Breath (fire), Deadeye Rounds
   (precision: Headhunter 3 + Piercing), Storm Grid (tech: Chain Lightning 2 + Drone); Magnet upgrade.
-- **Shop** (Brotato-style, `SHOP`, `SHOP_RULES`): the Medkit plus 4 rolled offers from a 20-item pool;
+- **Arsenal ladder** (`ARSENAL`): every chapter starts with the pistol; the shop sells the next tier as
+  the chapter goes on (later chapters start further up the ladder via `run.tierBoost`):
+  I pistol → II Hand Cannon, pump shotgun → III MP5, Dual Uzis, Auto Shotgun → IV assault rifle,
+  Battle Rifle, Marksman → V (energy) Plasma, Pulse SMG, Railgun, Hellfire. One gun per shelf, the
+  newest tier weighted up.
+- **Gunsmith**: a permanent shop card that upgrades the held gun Mk I → Mk V (+18% damage, +5% fire
+  rate, +10% magazine per Mk; price by gun tier, x1.5 per Mk); Mk is kept per gun.
+- **Economy** (`ECONOMY`): 10% interest on unspent cash after each level (capped, cap grows per
+  level); one random SALE (-35%) per shelf; a **bounty** per level (kill N of an enemy type, slay a
+  champion, or finish without losing 35% HP) pays extra cash.
+- **Difficulty** (`BALANCE`): enemies +12% HP, +22% damage, +12% more on screen; champions every 32 s.
+- **Shop** (Brotato-style, `SHOP`, `SHOP_RULES`): the Medkit, the Gunsmith plus 4 rolled offers;
   reroll for cash (dearer each time), lock an offer for the next visit; late, dear items from level 3-4
   (Hollow Points, Hair Trigger, Exo Frame, Drone Bay) and the Upgrade Crate soak up late cash.
 - **Loadout everywhere**: bought guns stay in the loadout; choose one before each level in any chapter.
-- **Champions** (`ELITES`): every ~40 s a gold-glowing elite (x4 HP, x1.3 size) drops a chest: 1-3
+- **Champions** (`ELITES`): every ~32 s a gold-glowing elite (x4 HP, x1.3 size) drops a chest: 1-3
   upgrades flip in plus cash.
 - **Run summary** after a death or a win: time, kills, level, cleared levels, cash, damage taken, damage
   by source, Dust earned, the build. **Endless mode** after a cleared chapter: its last levels and boss

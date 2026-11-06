@@ -435,8 +435,9 @@ export const HELL_LEVELS: WaveDef[] = [
  * Pact before Act III and a final warning before the last level.
  */
 export const HELL_RUN = {
-  startWeapon: "rifle" as const,
+  startWeapon: "pistol" as const,
   startCash: 120,
+  tierBoost: 2,
   /** Level-up choices offered at the start (0: none; the run starts at level 1). */
   startPicks: 0,
   /** After this level (index) the Infernal Pact is offered (one build-defining upgrade). */
