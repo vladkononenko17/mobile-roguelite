@@ -14,7 +14,7 @@ import type { DifficultyDef, EnemyClips, EnemyDef, EnemyVisual, WaveDef } from "
 export const SURVIVOR_BODIES = ["zsLis", "zsMatt", "zsSam", "zsShaun"] as const;
 export type SurvivorBody = (typeof SURVIVOR_BODIES)[number];
 /** Their roles beyond the horde's walker (the body itself); the looks are made in config.ts. */
-export type SurvivorRole = "Runner" | "Crew" | "CrewRunner" | "Drowned";
+export type SurvivorRole = "Runner" | "Crew" | "CrewRunner" | "Drowned" | "Frozen" | "FrozenRunner";
 /** Visual ids of every survivor body in one role. */
 export const survivorsAs = (role: SurvivorRole) => SURVIVOR_BODIES.map((b) => `${b}${role}` as const);
 export type WastelandVisualId = "zkRotter" | "zkBloater" | "zkRipper" | "zkHound" | "zkAbomination" | SurvivorBody;

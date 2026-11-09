@@ -6,7 +6,7 @@ import { HEROES, type HeroId } from "./heroes";
  * seeded from it too, so shops, upgrades and drops start out alike. Scored, with a best per day and a
  * share card.
  */
-export const DAILY_CHAPTERS = ["outpost", "facility", "medieval", "hell", "pirate"] as const;
+export const DAILY_CHAPTERS = ["outpost", "facility", "medieval", "hell", "pirate", "winter"] as const;
 const SESSION_KEY = "dustline.daily";
 
 /** Today's date in the player's time zone, YYYY-MM-DD. */

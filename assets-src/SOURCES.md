@@ -100,3 +100,7 @@ Funch (github.com/ffunch/vrm-avatar-maker; code MIT, every avatar asset CC0: Mak
 skins, hair, eyebrows and clothes, see its ASSETS.md) from `scripts/hero-recipes.json` by
 `scripts/export-avatars.mjs` (the maker served locally, driven headless), then rebound onto the V3
 Survivor's skeleton by `scripts/build-heroes.mjs` into `public/models/heroes/`.
+
+## Whiteout (chapter VI): Kenney Holiday, City Suburban, City Roads, Car and Survival kits (CC0)
+
+By Kenney (www.kenney.nl), Creative Commons Zero (`License.txt` kept per pack). The GLB folders were taken from the CC0 mirror github.com/series-ai/jam-ready-assets (`kenney-holiday-kit`, `kenney-city-kit-suburban`, `kenney-city-kit-roads`, `kenney-car-kit`, `kenney-survival-kit`) into `winter-kenney/<pack>/` (git-ignored). `scripts/build-winter-kit.mjs` bakes the used models into `public/models/winter/winter-kit.glb` at life size, adds snow caps on every up-facing face and soot-dark variants of some cars (the burnt-out wrecks).

@@ -515,6 +515,16 @@ export const GROUND = {
     ghostdeck: { base: "#4a5a50", dark: "#3e4c44", light: "#56675c", speckDark: "#2a342e", speckLight: "#7fbf9a", specks: 600, slabs: 8, seam: "#1f2823", boards: true },
     /** Black Tide: the fort's worn stone and the skull rock's ledges. */
     fortstone: { base: "#a09380", dark: "#938672", light: "#ad9f8c", speckDark: "#7a6e5e", speckLight: "#c4b7a2", specks: 600, slabs: 5, seam: "#7d715f" },
+    /** Whiteout: fresh snow, blue-white with faint drift ridges. */
+    snow: { base: "#c9d1dc", dark: "#b7c0cd", light: "#dbe2ea", speckDark: "#a5afbe", speckLight: "#eef2f7", specks: 600 },
+    /** Whiteout: trodden snow and frozen mud on tracks and yards. */
+    snowpack: { base: "#9ea5ad", dark: "#8c939b", light: "#acb3ba", speckDark: "#6c6a66", speckLight: "#c3c9cf", specks: 800 },
+    /** Whiteout: grey slush over the town's asphalt, tyre-dark seams. */
+    slush: { base: "#6f747b", dark: "#62676e", light: "#7d8289", speckDark: "#4d5157", speckLight: "#a9b0b8", specks: 700, slabs: 3, seam: "#53575d" },
+    /** Whiteout: black ice on the pond and the frozen puddles. */
+    ice: { base: "#5c6f80", dark: "#526373", light: "#687c8e", speckDark: "#435260", speckLight: "#a8c0d4", specks: 300 },
+    /** Whiteout: snow soaked dark red where the dead fed. */
+    bloodsnow: { base: "#7a3b3e", dark: "#652f32", light: "#8d4a4b", speckDark: "#4a2224", speckLight: "#b9a9ad", specks: 900 },
     /** Oil, soot and dried blood trodden into the facility floor. */
     grime: { base: "#48463f", dark: "#3d3b35", light: "#524f47", speckDark: "#2e2926", speckLight: "#5e3a33", specks: 700 },
   },
@@ -916,6 +926,40 @@ export const PIRATE_LIGHTING: LightingSpec = {
 export const PIRATE = {
   url: "models/pirate/pirate-kit.glb",
   brightness: 1.05,
+  batchCellMetres: 14,
+};
+
+/**
+ * Whiteout (the winter chapter): a cold blue dusk going to night, low pale moon for long shadows,
+ * thick snow haze that swallows everything past ~30 m. Each zone darkens (WINTER moods in
+ * WinterLevel.ts); fires, street lamps and the hero's flashlight are the warm points in it.
+ */
+export const WINTER_LIGHTING: LightingSpec = {
+  sun: {
+    color: [0.62, 0.72, 1.0],
+    intensity: 1.5,
+    elevationDeg: 30,
+    azimuthDeg: 320,
+    shadowResolution: 1024,
+    shadowDistance: 38,
+    shadowBias: 0.2,
+    normalOffsetBias: 0.04,
+    shadowIntensity: 0.85,
+  },
+  fill: { color: [0.45, 0.55, 0.9], intensity: 0.35, elevationDeg: 25, azimuthDeg: 140 },
+  rim: { color: [1.0, 0.7, 0.45], intensity: 1.1, elevationDeg: 30, azimuthDeg: 190 },
+  environment: { zenith: [0.14, 0.17, 0.27], horizon: [0.42, 0.46, 0.58], ground: [0.5, 0.54, 0.62], intensity: 0.5 },
+  exposure: 1.0,
+  groundAmbient: [0.5, 0.58, 0.78],
+  clearColor: [0.22, 0.25, 0.32],
+  fogStart: 14,
+  fogEnd: 46,
+};
+
+/** The winter chapter's kit: Kenney CC0 packs merged (with snow caps) by scripts/build-winter-kit.mjs. */
+export const WINTER = {
+  url: "models/winter/winter-kit.glb",
+  brightness: 0.95,
   batchCellMetres: 14,
 };
 

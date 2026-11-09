@@ -4,6 +4,7 @@ import { HELL_BIOME } from "./HellLevel";
 import { OUTPOST_BIOME } from "./OutpostLevel";
 import { MEDIEVAL_BIOME } from "./MedievalLevel";
 import { PIRATE_BIOME } from "./PirateLevel";
+import { WINTER_BIOME } from "./WinterLevel";
 
 /** Every playable map, in chapter order. */
 export const BIOMES = {
@@ -12,6 +13,7 @@ export const BIOMES = {
   medieval: MEDIEVAL_BIOME as Biome,
   hell: HELL_BIOME as Biome,
   pirate: PIRATE_BIOME as Biome,
+  winter: WINTER_BIOME as Biome,
 };
 
 export type BiomeId = keyof typeof BIOMES;
@@ -19,7 +21,7 @@ export type BiomeId = keyof typeof BIOMES;
 export const isBiomeId = (value: string | null): value is BiomeId => value !== null && value in BIOMES;
 
 /** Short names accepted in the URL besides the ids. */
-const ALIASES: Record<string, BiomeId> = { space: "facility", orion: "facility", desert: "outpost", pit: "hell", inferno: "hell", kingdom: "medieval", castle: "medieval", tide: "pirate", blacktide: "pirate", pirates: "pirate", sea: "pirate" };
+const ALIASES: Record<string, BiomeId> = { space: "facility", orion: "facility", desert: "outpost", pit: "hell", inferno: "hell", kingdom: "medieval", castle: "medieval", tide: "pirate", blacktide: "pirate", pirates: "pirate", sea: "pirate", snow: "winter", whiteout: "winter", re6: "winter", ashford: "winter" };
 
 /**
  * The map comes from the URL only, so each map has its own link and the plain link is always

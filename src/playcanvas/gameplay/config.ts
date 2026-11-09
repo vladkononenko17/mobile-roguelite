@@ -7,6 +7,7 @@ import { HELL_ENEMIES, HELL_SKINS, HELL_VISUALS, type HellEnemyId, type HellSkin
 import { SPACE_ENEMIES, SPACE_SKINS, SPACE_VISUALS, type SpaceEnemyId, type SpaceSkinId, type SpaceVisualId } from "./spaceConfig";
 import { SURVIVOR_BODIES, survivorsAs, WASTELAND_ENEMIES, WASTELAND_SKINS, WASTELAND_VISUALS, type SurvivorBody, type SurvivorRole, type WastelandEnemyId, type WastelandSkinId, type WastelandVisualId } from "./wastelandConfig";
 import { MEDIEVAL_ENEMIES, MEDIEVAL_SKINS, MEDIEVAL_VISUALS, type MedievalEnemyId, type MedievalSkinId, type MedievalVisualId } from "./medievalConfig";
+import { WINTER_ENEMIES, type WinterEnemyId } from "./winterConfig";
 import { PIRATE_ENEMIES, PIRATE_SKINS, PIRATE_VISUALS, type PirateEnemyId, type PirateSkinId, type PirateVisualId } from "./pirateConfig";
 
 /* ------------------------------------------------------------------------------------------------
@@ -220,7 +221,7 @@ export const ECONOMY = {
  * Enemies
  * ---------------------------------------------------------------------------------------------- */
 
-export type EnemyId = "walker" | "runner" | "thrower" | "brute" | "charger" | "tank" | HellEnemyId | SpaceEnemyId | WastelandEnemyId | MedievalEnemyId | PirateEnemyId;
+export type EnemyId = "walker" | "runner" | "thrower" | "brute" | "charger" | "tank" | HellEnemyId | SpaceEnemyId | WastelandEnemyId | MedievalEnemyId | PirateEnemyId | WinterEnemyId;
 /** chaser / charger / thrower / tank: melee walkers with specials; caster: keeps its distance and
  * fires bolts; flyer: flies over everything (orbits, bolts, dives); boss: driven by a BossScript. */
 export type EnemyBehavior = "chaser" | "charger" | "thrower" | "tank" | "caster" | "flyer" | "boss";
@@ -305,6 +306,9 @@ const SURVIVOR_ROLES: Record<SurvivorRole, (v: EnemyVisual) => EnemyVisual> = {
   CrewRunner: (v) => ({ ...v, clips: { ...v.clips, move: RUN_ARMS.move }, moveSpeed: RUN_ARMS.moveSpeed, bulk: 0.92, skins: ["zs_crewOrange", "zs_crewTeal"] }),
   // The Black Tide's drowned.
   Drowned: (v) => ({ ...v, skins: ["zs_drownedKelp", "zs_drownedBlue"] }),
+  // Whiteout's frozen dead: frost-pale and frost-blue.
+  Frozen: (v) => ({ ...v, skins: ["zs_pale", "zs_drownedBlue"] }),
+  FrozenRunner: (v) => ({ ...v, clips: { ...v.clips, move: RUN_ARMS.move }, moveSpeed: RUN_ARMS.moveSpeed, bulk: 0.92, skins: ["zs_pale", "zs_drownedBlue"] }),
 };
 const SURVIVOR_VISUALS = Object.fromEntries(
   SURVIVOR_BODIES.flatMap((body) => (Object.keys(SURVIVOR_ROLES) as SurvivorRole[]).map((role) => [`${body}${role}`, SURVIVOR_ROLES[role](ZK[body])])),
@@ -401,6 +405,7 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
   ...WASTELAND_ENEMIES,
   ...MEDIEVAL_ENEMIES,
   ...PIRATE_ENEMIES,
+  ...WINTER_ENEMIES,
   // Hero is ~1.95 m (1.70 m model x 1.15); walkers are 0.9 - 1.0x of that, hunched.
   walker: {
     label: "Walker", visuals: WALKER_LOOKS, scale: 1.1, scaleJitter: 0.05, behavior: "chaser",
@@ -467,7 +472,7 @@ export const ENEMY_LIMITS = {
  * ---------------------------------------------------------------------------------------------- */
 
 /** Boss enemy types (a wave's `boss`); every other type can be in a wave's weights. */
-export type BossId = Extract<EnemyId, "brute" | "charger" | "tank" | "glutton" | "wyrm" | "archfiend" | "warden" | "broodmother" | "abomination" | "abbot" | "fallenKing" | "bosun" | "seaHag" | "captain">;
+export type BossId = Extract<EnemyId, "brute" | "charger" | "tank" | "glutton" | "wyrm" | "archfiend" | "warden" | "broodmother" | "abomination" | "abbot" | "fallenKing" | "bosun" | "seaHag" | "captain" | "ravager">;
 export type WaveEnemyId = Exclude<EnemyId, BossId>;
 
 /** One pacing step of a wave, in effect from `at` seconds until the next step. */

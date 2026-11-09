@@ -139,6 +139,7 @@ export const QUESTS: QuestDef[] = [
   { id: "winMedieval", name: "Kingslayer", text: "Win Chapter III", icon: "star", progress: won("medieval"), reward: { dust: 120 } },
   { id: "winHell", name: "Back from Hell", text: "Win Chapter IV", icon: "star", progress: won("hell"), reward: { dust: 150 } },
   { id: "winPirate", name: "Tide Turned", text: "Win Chapter V", icon: "star", progress: won("pirate"), reward: { dust: 150 } },
+  { id: "winWinter", name: "Morning Comes", text: "Win Chapter VI", icon: "star", progress: won("winter"), reward: { dust: 180 } },
   { id: "mk5", name: "Gunsmith's Pride", text: "Bring a gun to Mk V", icon: "bullet", progress: tally("maxMk", 4), reward: { dust: 60 } },
   { id: "bosses3", name: "Giant Killer", text: "Defeat 3 bosses", icon: "shield", progress: tally("bosses", 3), reward: { dust: 60 } },
   { id: "cash2500", name: "Deep Pockets", text: "Earn 2,500$ in total", icon: "magnet", progress: tally("cash", 2500), reward: { dust: 60 } },

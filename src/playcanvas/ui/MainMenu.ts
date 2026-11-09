@@ -23,6 +23,7 @@ const CHAPTERS: { id: BiomeId; numeral: string; name: string; tagline: string; a
   { id: "medieval", numeral: "III", name: "The Dark Kingdom", tagline: "A plague-struck realm where the dead rise. Cross the graveyard and the abbey, storm the castle, and face the Fallen King.", accent: "#c9a25a" },
   { id: "hell", numeral: "IV", name: "Hell", tagline: "Nine circles of fire and ash. Descend past the Citadel to the Archfiend's throne.", accent: "#ff6a2e" },
   { id: "pirate", numeral: "V", name: "The Black Tide", tagline: "Cursed gold woke the drowned. Escape the treasure grotto, cross the wrecks and the reef, and sink the ghost flagship.", accent: "#3fc7b0" },
+  { id: "winter", numeral: "VI", name: "Whiteout", tagline: "One night of snow and the dead. Cross the black pines and a farm in the blizzard, walk the dark suburb, and survive the burning town of Ashford.", accent: "#9fc4ff" },
 ];
 
 const LAST_KEY = "dustline3d.chapter";

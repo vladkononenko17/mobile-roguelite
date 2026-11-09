@@ -230,6 +230,26 @@ The last and largest chapter of the 3D game at `/playcanvas.html`: open it from 
   and `assets-src/medieval/` (git-ignored).
 - Tests: `tests/pirate.test.mjs`. Music for now reuses the Wasteland track.
 
+## Dustline 3D — Chapter VI: Whiteout (snow horror)
+
+`?level=winter` (also `?level=snow`, `?level=whiteout`). One night of snow, four levels south to north
+(`src/playcanvas/world/level/WinterLevel.ts`): **The Black Pines** (a forest road, a crashed patrol car
+strobing in the trees, the hunters' camp), **Hollow Farm** (a farmhouse, a roofless barn, a field in a
+blizzard; something lives in the barn), **Maple Lane** (a suburban street at night, failing street lamps,
+a police block, one house burning) and **Ashford, Burning** (the town square on fire, wrecks everywhere:
+the Ravager).
+- **Scary by design**: each zone has its own light (blue dusk, whiteout, black night, a fire-lit sky),
+  the snow haze closes in at ~30 m, a vignette darkens the screen's edges, snow falls round the hero, and
+  the hero carries a flashlight (a spot along his facing that stutters now and then).
+- **Enemies** (`src/playcanvas/gameplay/winterConfig.ts`): the Frostbitten (the four turned survivors in
+  frost skins; their grip numbs), Stalkers (sprinting out of the white), infected hound packs, bloaters,
+  rippers, a Charger in the barn and **the Ravager** (a giant Abomination with three phases: it throws
+  burning wreckage and finally calls the whole town).
+- **Assets**: Kenney Holiday Kit, City Kit Suburban, City Kit Roads, Car Kit and Survival Kit (CC0)
+  merged by `scripts/build-winter-kit.mjs` → `public/models/winter/winter-kit.glb` with snow caps baked on
+  every up-facing face and soot-dark burnt-out cars. New ground surfaces: snow, snowpack, slush, ice, blood
+  on snow. Tests: `tests/winter.test.mjs`.
+
 ## Dustline 3D — weapon pictures and health bars
 
 - **Shop, loadout, weapon bench and armory** show each weapon's picture with stat bars (DPS, damage per
