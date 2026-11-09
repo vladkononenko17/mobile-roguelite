@@ -6,8 +6,8 @@
   "body": {
    "gender": 0,
    "age": 0.5,
-   "muscle": 0.62,
-   "weight": 0.45,
+   "muscle": 0.66,
+   "weight": 0.56,
    "race": {
     "african": 0.1,
     "asian": 0.1,

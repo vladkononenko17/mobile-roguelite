@@ -49,6 +49,31 @@ function mixamoFor(role) {
   return m ? `${["Shoulder", "Arm", "ForeArm", "Hand", "UpLeg", "Leg", "Foot", "ToeBase"].includes(m) ? side : ""}${m}` : null;
 }
 
+/**
+ * Figure shaping per hero (the maker has no bust / hip sliders): amounts are fractions, landmarks are
+ * shares of the hips-to-neck height. Wider hips and fuller glutes, a narrower waist, a fuller bust.
+ */
+const SHAPES = {
+  medic: { hips: 0.13, glutes: 0.2, waist: -0.09, bust: 0.035 },
+};
+
+/** A smooth deformation of the T-posed body (facing +Z) by SHAPES; arms (|x| beyond the torso) untouched. */
+function shaper(d, hipsY, neckY) {
+  const span = neckY - hipsY;
+  const g = (y, at, sigma) => Math.exp(-(((y - (hipsY + at * span)) / (sigma * span)) ** 2));
+  return (v) => {
+    const torso = Math.exp(-((Math.max(0, Math.abs(v.x) - 0.17) / 0.05) ** 2)); // falls off past the torso's side
+    const hip = g(v.y, -0.02, 0.22) * torso, waist = g(v.y, 0.4, 0.12) * torso, bust = g(v.y, 0.68, 0.1) * torso;
+    const sx = 1 + d.hips * hip + d.waist * waist;
+    const sz = 1 + d.waist * waist * 0.8;
+    v.x *= sx;
+    v.z *= sz;
+    if (v.z < 0) v.z *= 1 + d.glutes * g(v.y, -0.05, 0.16) * torso;
+    if (v.z > 0) v.z += d.bust * bust * Math.min(1, v.z / 0.06) * Math.exp(-(((Math.abs(v.x) - 0.08) / 0.07) ** 2));
+    return v;
+  };
+}
+
 /** Spine, Spine1, Spine2 as shares of the Survivor's hips-to-neck height (1.133 -> 1.679 m). */
 const SPINE = [(1.242 - 1.133) / 0.546, (1.369 - 1.133) / 0.546, (1.515 - 1.133) / 0.546];
 
@@ -72,15 +97,32 @@ async function build(name, vrmPath) {
   const sJoints = sSkin.listJoints();
   const sIndex = new Map(sJoints.map((j, i) => [j.getName(), i]));
   const vJoints = vSkin.listJoints();
+  const shapeDef = SHAPES[name];
 
   // The avatar's bind pose (its mesh nodes are identity: vertices are world positions).
   const ibm = vSkin.getInverseBindMatrices();
   const vWorld = vJoints.map((_, i) => new THREE.Matrix4().fromArray(ibm.getElement(i, new Array(16))).invert());
-  const P = (role) => {
+  const rawP = (role) => {
     const i = vJoints.findIndex((j) => roleOf.get(j.getName()) === role);
     if (i < 0) throw new Error(`${name}: no ${role}`);
     return new THREE.Vector3().setFromMatrixPosition(vWorld[i]);
   };
+  // Optional figure shaping (SHAPES): one smooth field over body, clothes and joints alike.
+  const field = shapeDef ? shaper(shapeDef, rawP("hips").y, rawP("neck").y) : null;
+  const P = (role) => (field ? field(rawP(role)) : rawP(role));
+  if (field) {
+    for (const n of r.listNodes().filter((x) => x.getSkin() === vSkin)) {
+      for (const prim of n.getMesh().listPrimitives()) {
+        const pos = prim.getAttribute("POSITION");
+        const a = pos.getArray().slice(), v = new THREE.Vector3();
+        for (let i = 0; i < a.length; i += 3) {
+          field(v.set(a[i], a[i + 1], a[i + 2]));
+          a[i] = v.x; a[i + 1] = v.y; a[i + 2] = v.z;
+        }
+        prim.setAttribute("POSITION", doc.createAccessor().setType("VEC3").setArray(a).setBuffer(r.listBuffers()[0]));
+      }
+    }
+  }
 
   // Where each Mixamo bone goes.
   // The spine bones at the Survivor's share of the hips-to-neck height (MakeHuman's upper chest sits
