@@ -34,6 +34,11 @@ const bundle = join(mkdtempSync(join(tmpdir(), "roguelite-")), "roguelite.mjs");
 writeFileSync(bundle, outputFiles[0].text);
 const m = await import(pathToFileURL(bundle).href);
 
+test("three heroes, the Survivor free", () => {
+  assert.equal(m.HEROES.length, 3);
+  assert.equal(m.HEROES[0].id, "survivor");
+});
+
 test("every hero applies cleanly, keeps the hero alive and has a real trade-off", () => {
   for (const h of m.HEROES) {
     const s = new m.PlayerStats();
@@ -43,7 +48,7 @@ test("every hero applies cleanly, keeps the hero alive and has a real trade-off"
   }
   assert.equal(m.heroDef("nope").id, "survivor");
   const t = new m.PlayerStats();
-  m.heroDef("tinkerer").apply(t);
+  m.heroDef("demolitionist").apply(t);
   assert.equal(t.gadgetSlots, 3);
 });
 

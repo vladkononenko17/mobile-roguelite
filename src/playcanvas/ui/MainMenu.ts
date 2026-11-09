@@ -8,6 +8,8 @@ import { showCredits } from "./credits";
 import { showMetaShop } from "./MetaShop";
 import { loadMeta } from "../gameplay/meta";
 import { loadProgress } from "./progress";
+import { iconSvg } from "./UpgradeIcons";
+import { CHARACTERS } from "../config";
 import { showHeroes, showQuests } from "./ProfileScreens";
 import { checkQuests, chooseDanger, chosenDanger, currentHero, dangerUnlocked, profile, QUESTS } from "../gameplay/profile";
 import { dangerMods, dangerSummary } from "../gameplay/danger";
@@ -201,7 +203,7 @@ export function showMainMenu(): Promise<BiomeId> {
   const dailyButton = root.querySelector<HTMLElement>(".daily")!;
   const showProfile = () => {
     const h = heroDef(currentHero());
-    heroButton.innerHTML = `<img class="face" alt="" src="${base}ui/heroes/${h.id}.webp"><small>${h.name.toUpperCase()}</small>`;
+    heroButton.innerHTML = `${h.id in CHARACTERS ? `<img class="face" alt="" src="${base}ui/heroes/${h.id}.webp">` : iconSvg(h.icon)}<small>${h.name.toUpperCase()}</small>`;
     heroButton.style.color = h.color;
     const p = profile();
     questButton.innerHTML = `<b>${p.quests.length}/${QUESTS.length}</b><small>QUESTS</small>`;

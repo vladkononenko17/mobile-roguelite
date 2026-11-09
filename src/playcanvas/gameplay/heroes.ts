@@ -3,11 +3,11 @@ import type { GadgetId } from "./gadgets";
 import type { PlayerStats } from "./PlayerStats";
 
 /**
- * Playable heroes (Brotato / Vampire Survivors style kits): each changes the run's starting numbers
- * with a perk and a trade-off, some start with a gadget or a better gun. All share the Survivor's
- * model. The Survivor is free; the others are unlocked by quests (gameplay/profile.ts).
+ * Playable heroes (Brotato / Vampire Survivors style kits): three, each changing the run's starting
+ * numbers with a perk and a trade-off. The Survivor is free; the Medic and the Demolitionist are
+ * unlocked by quests (gameplay/profile.ts). Each has its own model (config.ts CHARACTERS, same id).
  */
-export type HeroId = "survivor" | "medic" | "gunslinger" | "demolitionist" | "scavenger" | "juggernaut" | "tinkerer";
+export type HeroId = "survivor" | "medic" | "demolitionist";
 
 export interface HeroDef {
   id: HeroId;
@@ -29,28 +29,12 @@ export const HEROES: HeroDef[] = [
     apply: () => {},
   },
   {
-    id: "medic", name: "Medic", role: "Field medic", perk: "+2 HP per kill · +20 max HP · all healing +50%", drawback: "-12% weapon damage", icon: "medkit", color: "#7fd07a",
-    apply: (s) => { s.healOnKill += 2; s.maxHp += 20; s.hp = s.maxHp; s.healMult *= 1.5; s.damageMult *= 0.88; },
+    id: "medic", name: "Medic", role: "Field medic, quick on her feet", perk: "+2 HP per kill · all healing +50% · +10% move speed", drawback: "-12% weapon damage", icon: "medkit", color: "#7fd07a",
+    apply: (s) => { s.healOnKill += 2; s.healMult *= 1.5; s.moveSpeedMult *= 1.1; s.damageMult *= 0.88; },
   },
   {
-    id: "gunslinger", name: "Gunslinger", role: "Fast hands", perk: "+15% fire rate · +8% crit · pistol starts at Mk II", drawback: "-20 max HP", icon: "rapid", color: "#e8c35a",
-    apply: (s) => { s.fireRateMult *= 1.15; s.critChance += 0.08; s.weaponLevel.set("pistol", 1); s.maxHp -= 20; s.hp = s.maxHp; },
-  },
-  {
-    id: "demolitionist", name: "Demolitionist", role: "Loud solutions", perk: "Kills explode (15%) · starts with a Grenade Belt", drawback: "-15 max HP · -10% fire rate", icon: "burst", color: "#ff8a3a", gadget: "grenade",
-    apply: (s) => { s.explodeChance += 0.15; s.explodeDamage += 8; s.maxHp -= 15; s.hp = s.maxHp; s.fireRateMult *= 0.9; },
-  },
-  {
-    id: "scavenger", name: "Scavenger", role: "Knows where the cash is", perk: "+25% cash · +40$ to start · +30% pickup radius", drawback: "-10% weapon damage", icon: "magnet", color: "#8fae6a",
-    apply: (s) => { s.cashMult *= 1.25; s.cash += 40; s.magnetMult *= 1.3; s.damageMult *= 0.9; },
-  },
-  {
-    id: "juggernaut", name: "Juggernaut", role: "Walks through it", perk: "+60 max HP · +12% damage resistance", drawback: "-12% move speed · -10% fire rate", icon: "shield", color: "#c26a52",
-    apply: (s) => { s.maxHp += 60; s.hp = s.maxHp; s.armor += 0.12; s.moveSpeedMult *= 0.88; s.fireRateMult *= 0.9; },
-  },
-  {
-    id: "tinkerer", name: "Tinkerer", role: "Brings toys", perk: "3 gadget slots · tech damage +25% · starts with a Tesla Coil", drawback: "-15% weapon damage", icon: "drone", color: "#4fb8ff", gadget: "tesla",
-    apply: (s) => { s.gadgetSlots = 3; s.techDamageMult *= 1.25; s.damageMult *= 0.85; },
+    id: "demolitionist", name: "Demolitionist", role: "Heavy, loud and hard to kill", perk: "+40 max HP · kills explode (15%) · Grenade Belt · 3 gadget slots", drawback: "-10% fire rate · -8% move speed", icon: "burst", color: "#ff8a3a", gadget: "grenade",
+    apply: (s) => { s.maxHp += 40; s.hp = s.maxHp; s.explodeChance += 0.15; s.explodeDamage += 8; s.gadgetSlots = 3; s.fireRateMult *= 0.9; s.moveSpeedMult *= 0.92; },
   },
 ];
 

@@ -287,13 +287,10 @@ The last and largest chapter of the 3D game at `/playcanvas.html`: open it from 
 - **Loadout everywhere**: bought guns stay in the loadout; choose one before each level in any chapter.
 - **Champions** (`ELITES`): every ~32 s a gold-glowing elite (x4 HP, x1.3 size) drops a chest: 1-3
   upgrades flip in plus cash.
-- **Heroes** (`gameplay/heroes.ts`): Survivor, Medic, Gunslinger, Demolitionist, Scavenger, Juggernaut,
-  Tinkerer: each a perk and a drawback, some start with a gadget. Picked on the title screen (HERO, with
-  portraits). Each plays as its own body: the V3 Survivor, or one of Quaternius' "Zombie Apocalypse Kit"
-  survivors (CC0) rebound onto the Survivor's Mixamo skeleton by `scripts/build-heroes.mjs` (same bones,
-  clips, hand grips and IK; kit proportions, smaller hands, recoloured looks for the Medic, Juggernaut and
-  Tinkerer; `CharacterModel.posture` lifts the big heads clear of the gun). The street horde no longer
-  wears the zombified kit survivors (they remain as the ORION crew and the drowned).
+- **Heroes** (`gameplay/heroes.ts`): Survivor (free), Medic (healing, speed) and Demolitionist (HP,
+  explosions, Grenade Belt, 3 gadget slots), each a perk and a drawback; picked on the title screen
+  (HERO). The Medic and Demolitionist use the Survivor model until their own realistic models arrive
+  (`CHARACTERS` entries with the hero's id; `CharacterModel.posture` is there for big-headed bodies).
 - **Quests** (`gameplay/profile.ts`, title screen QUESTS): 20 lifetime goals (kills, bosses, champions,
   cash, bounties, Mk V, evolutions, gadgets, dashes, chapter wins, danger) that unlock heroes, the Saw
   Blades and Molotov gadgets, or pay Dust. The profile (tallies, unlocks, choices) lives in this browser.

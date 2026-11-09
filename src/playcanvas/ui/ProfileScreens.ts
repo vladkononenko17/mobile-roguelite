@@ -3,6 +3,7 @@ import { GADGETS } from "../gameplay/gadgets";
 import { HEROES } from "../gameplay/heroes";
 import { chooseHero, currentHero, heroUnlocked, profile, QUESTS, rewardText } from "../gameplay/profile";
 import { iconSvg } from "./UpgradeIcons";
+import { CHARACTERS } from "../config";
 
 const CSS = `
 #sheet { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(8, 6, 4, 0.86);
@@ -20,6 +21,8 @@ const CSS = `
 #sheet .row.hero { grid-template-columns: 64px 1fr auto; }
 #sheet .row .face { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; background: #2a211a; box-shadow: 0 0 0 2px var(--c, #d6a23c); }
 #sheet .row.locked .face { filter: grayscale(1) brightness(0.45); }
+#sheet .row .face.ic { display: grid; place-items: center; }
+#sheet .row .face.ic svg { width: 30px; height: 30px; }
 #sheet .row b { font: 800 18px "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.04em; }
 #sheet .row small { display: block; opacity: 0.8; }
 #sheet .row .minus { color: #e69a7a; }
@@ -90,7 +93,8 @@ export function showHeroes(onClose: () => void = () => {}): void {
       row.type = "button";
       row.className = `row hero${h.id === chosen ? " on" : ""}${open ? "" : " locked"}`;
       row.style.setProperty("--c", h.color);
-      row.innerHTML = `<img class="face" alt="" src="${import.meta.env.BASE_URL}ui/heroes/${h.id}.webp"><span><b>${esc(h.name)}</b> <small>${esc(h.role)}</small>
+      const face = h.id in CHARACTERS ? `<img class="face" alt="" src="${import.meta.env.BASE_URL}ui/heroes/${h.id}.webp">` : `<span class="face ic">${iconSvg(h.icon)}</span>`;
+      row.innerHTML = `${face}<span><b>${esc(h.name)}</b> <small>${esc(h.role)}</small>
         <small>${open ? `${esc(h.perk)}<br><span class="minus">${esc(h.drawback)}</span>` : `🔒 ${esc(quest ? `${quest.name}: ${quest.text}` : "Locked")}`}</small></span>
         <span class="tag">${h.id === chosen ? "CHOSEN" : open ? "PICK" : "LOCKED"}</span>`;
       row.addEventListener("click", () => {
