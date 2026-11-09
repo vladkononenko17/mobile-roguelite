@@ -26,6 +26,7 @@ import { NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
 import { dedup, mergeDocuments, prune, textureCompress, unpartition } from "@gltf-transform/functions";
 import sharp from "sharp";
+import { addGear, GEAR } from "./hero-gear.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SURVIVOR = path.join(ROOT, "public/models/survivor/survivor.glb");
@@ -219,6 +220,12 @@ async function build(name, vrmPath) {
     n.setSkin(sSkin);
     n.listParents().forEach((p) => p !== r && p.removeChild?.(n));
     sceneRoot.addChild(n);
+  }
+  // Tactical gear (scripts/hero-gear.mjs), skinned like the body.
+  if (GEAR[base]) {
+    const prims = sceneRoot.listChildren().filter((n) => n.getSkin() === sSkin && n.getMesh()).flatMap((n) => n.getMesh().listPrimitives());
+    addGear(doc, { prims, skin: sSkin, parent: sceneRoot, def: GEAR[base],
+      L: { hips: hipsP, neck: neckP, leftArm: P("leftUpperArm"), rightArm: P("rightUpperArm"), rightUpLeg: P("rightUpperLeg") } });
   }
   // Drop the avatar's skeleton and scene.
   vSkin.dispose();
