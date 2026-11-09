@@ -61,10 +61,30 @@ export class GadgetSystem {
     steel.gloss = 0.7;
     steel.emissive = new Color(0.12, 0.12, 0.12);
     steel.update();
+    const hub = new StandardMaterial();
+    hub.diffuse = new Color(0.12, 0.12, 0.13);
+    hub.emissive = new Color(0.9, 0.35, 0.08);
+    hub.update();
+    // A steel disc with a glowing hub and eight teeth: reads as a saw from the high camera.
     for (let i = 0; i < MAX_BLADES; i++) {
       const e = new Entity("saw");
-      e.addComponent("render", { type: "cylinder", material: steel, castShadows: false });
-      e.setLocalScale(0.55, 0.03, 0.55);
+      const disc = new Entity("disc");
+      disc.addComponent("render", { type: "cylinder", material: steel, castShadows: false });
+      disc.setLocalScale(0.62, 0.035, 0.62);
+      e.addChild(disc);
+      const core = new Entity("hub");
+      core.addComponent("render", { type: "cylinder", material: hub, castShadows: false });
+      core.setLocalScale(0.2, 0.06, 0.2);
+      e.addChild(core);
+      for (let t = 0; t < 8; t++) {
+        const tooth = new Entity("tooth");
+        tooth.addComponent("render", { type: "box", material: steel, castShadows: false });
+        const a = (t / 8) * Math.PI * 2;
+        tooth.setLocalPosition(Math.cos(a) * 0.33, 0, Math.sin(a) * 0.33);
+        tooth.setLocalEulerAngles(0, (-a * 180) / Math.PI + 45, 0);
+        tooth.setLocalScale(0.11, 0.03, 0.11);
+        e.addChild(tooth);
+      }
       e.enabled = false;
       this.root.addChild(e);
       this.blades.push(e);
