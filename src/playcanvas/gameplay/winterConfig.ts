@@ -103,7 +103,7 @@ export const WINTER_LEVELS: WaveDef[] = [
     phases: [
       { at: 0, spawnInterval: 2.3, group: [3, 5], maxAlive: 17, weights: { frostbitten: 1, stalker: 0.55, ripper: 0.4, rotter: 0.5 } },
       { at: 32, spawnInterval: 2.0, group: [4, 6], maxAlive: 21, weights: { frostbitten: 1, stalker: 0.7, ripper: 0.5, thrower: 0.2, bloater: 0.15 } },
-      { at: 64, spawnInterval: 1.75, group: [4, 7], maxAlive: 24, weights: { frostbitten: 1, stalker: 0.8, ripper: 0.6, thrower: 0.25, bloater: 0.2 } },
+      { at: 64, spawnInterval: 1.85, group: [4, 6], maxAlive: 22, weights: { frostbitten: 1, stalker: 0.8, ripper: 0.6, thrower: 0.25, bloater: 0.2 } },
     ],
   },
   {
