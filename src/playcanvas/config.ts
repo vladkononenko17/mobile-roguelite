@@ -71,6 +71,11 @@ export interface WeaponGrip extends GripFrame {
  * the Survivor's skeleton, so it shares his clips, hand rig and grips. Its hips sit lower or higher
  * than his, so the walk / run clips' native speeds scale with the hips height.
  */
+/**
+ * `reach`: arm length / his; `palm`: palm-surface offset factor; `fingerK`: finger thickness factor for
+ * the grip's contact test (negative: the probe at the short finger chain's tip has to pass into the
+ * handle before it counts as touching, because these realistic fingers reach well past it).
+ */
 function avatarHero(label: string, url: string, hipsY: number, knuckle: number, reach: number, palm = 1, fingerK = 1): CharacterModel {
   const s = CHARACTERS_BASE.survivor;
   const k = hipsY / 1.133;
@@ -114,8 +119,8 @@ const CHARACTERS_BASE = {
 
 export const CHARACTERS = {
   ...CHARACTERS_BASE,
-  medic: avatarHero("Medic", "models/heroes/medic.glb", 0.831, 0.093, 0.826),
-  demolitionist: avatarHero("Demolitionist", "models/heroes/demolitionist.glb", 0.947, 0.111, 0.955),
+  medic: avatarHero("Medic", "models/heroes/medic.glb", 0.831, 0.093, 0.826, 1, -1.4),
+  demolitionist: avatarHero("Demolitionist", "models/heroes/demolitionist.glb", 0.947, 0.111, 0.955, 1, -1.4),
 } satisfies Record<string, CharacterModel>;
 
 export type CharacterId = keyof typeof CHARACTERS;

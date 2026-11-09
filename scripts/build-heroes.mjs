@@ -49,6 +49,9 @@ function mixamoFor(role) {
   return m ? `${["Shoulder", "Arm", "ForeArm", "Hand", "UpLeg", "Leg", "Foot", "ToeBase"].includes(m) ? side : ""}${m}` : null;
 }
 
+/** Spine, Spine1, Spine2 as shares of the Survivor's hips-to-neck height (1.133 -> 1.679 m). */
+const SPINE = [(1.242 - 1.133) / 0.546, (1.369 - 1.133) / 0.546, (1.515 - 1.133) / 0.546];
+
 /** Clothing materials get grime: darker, a touch brown and less saturated (the Survivor is filthy). */
 const CLEAN = /^(body|eyes|eyebrow|eyelashes)/;
 
@@ -80,7 +83,11 @@ async function build(name, vrmPath) {
   };
 
   // Where each Mixamo bone goes.
-  const want = new Map([["Hips", P("hips")], ["Spine", P("spine")], ["Spine1", P("chest")], ["Spine2", P("upperChest")], ["Neck", P("neck")], ["Head", P("head")]]);
+  // The spine bones at the Survivor's share of the hips-to-neck height (MakeHuman's upper chest sits
+  // far lower than Mixamo's Spine2, and the weapon stances hang off that bone).
+  const hipsP = P("hips"), neckP = P("neck");
+  const spineAt = (f) => hipsP.clone().lerp(neckP, f);
+  const want = new Map([["Hips", hipsP], ["Spine", spineAt(SPINE[0])], ["Spine1", spineAt(SPINE[1])], ["Spine2", spineAt(SPINE[2])], ["Neck", neckP], ["Head", P("head")]]);
   for (const [side, s] of [["Left", "left"], ["Right", "right"]]) {
     want.set(`${side}Shoulder`, P(`${s}Shoulder`));
     want.set(`${side}Arm`, P(`${s}UpperArm`));
