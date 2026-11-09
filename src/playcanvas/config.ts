@@ -35,6 +35,11 @@ export interface CharacterModel {
    * relative to the Vanguard's hand, which those transforms were authored on (degrees).
    */
   handRollDeg?: { left: number; right: number };
+  /**
+   * Posture on top of the clips (degrees, tilting back about the hero's own right axis): big-headed
+   * bodies lift the chest and head so the head clears the gun in the aiming and running poses.
+   */
+  posture?: { chestLiftDeg: number; headLiftDeg: number };
 }
 
 export type Vec3Tuple = [number, number, number];
@@ -56,6 +61,30 @@ export interface WeaponGrip extends GripFrame {
   radius: number;
   /** The left hand may roll around the handle axis by up to this much to follow the animated wrist. */
   rollRangeDeg?: number;
+}
+
+/**
+ * The playable heroes' bodies: Quaternius "Zombie Apocalypse Kit" survivors (CC0) rebound onto the
+ * Survivor's skeleton by scripts/build-heroes.mjs (same bones, clips and hand rig; their own
+ * proportions: shorter legs, so the walk / run clips' native speeds scale with the hips height).
+ */
+function kitHero(label: string, url: string, hipsY: number): CharacterModel {
+  const k = hipsY / 1.133;
+  return {
+    label, url,
+    walkNativeSpeed: 1.49 * k,
+    runNativeSpeed: 4.72 * k,
+    clips: { idle: "Survivor_Idle" },
+    proceduralIdle: false,
+    // Chunky kit hands: the palm is longer and thicker than the Survivor's.
+    hands: {
+      right: { position: [0.005, 0.08, 0.04], axis: [0.966, 0.259, 0], palm: [0, 0, -1] },
+      left: { position: [-0.005, 0.08, 0.04], axis: [-0.966, 0.259, 0], palm: [0, 0, -1] },
+    },
+    fingers: { rigid: true, curlAxis: [1, 0, 0], thickness: 0.016 },
+    handRollDeg: { left: -237.0, right: -116.8 },
+    posture: { chestLiftDeg: 12, headLiftDeg: 22 },
+  };
 }
 
 /** Character GLBs selectable from the tune panel. All use a Mixamo-style rig with Walking / Running clips. */
@@ -83,6 +112,12 @@ export const CHARACTERS = {
     fingers: { rigid: true, curlAxis: [1, 0, 0], thickness: 0.011 },
     handRollDeg: { left: -237.0, right: -116.8 },
   },
+  medic: kitHero("Medic", "models/heroes/lis_medic.glb", 0.499),
+  gunslinger: kitHero("Gunslinger", "models/heroes/shaun.glb", 0.559),
+  demolitionist: kitHero("Demolitionist", "models/heroes/matt.glb", 0.568),
+  scavenger: kitHero("Scavenger", "models/heroes/sam.glb", 0.56),
+  juggernaut: kitHero("Juggernaut", "models/heroes/matt_juggernaut.glb", 0.568),
+  tinkerer: kitHero("Tinkerer", "models/heroes/sam_tinkerer.glb", 0.56),
 } satisfies Record<string, CharacterModel>;
 
 export type CharacterId = keyof typeof CHARACTERS;

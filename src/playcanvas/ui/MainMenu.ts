@@ -13,7 +13,6 @@ import { checkQuests, chooseDanger, chosenDanger, currentHero, dangerUnlocked, p
 import { dangerMods, dangerSummary } from "../gameplay/danger";
 import { heroDef } from "../gameplay/heroes";
 import { clearDaily, dailySetup, markDaily, todayKey } from "../gameplay/daily";
-import { iconSvg } from "./UpgradeIcons";
 
 /** What the menu says about each chapter (the rest comes from the campaign data). */
 const CHAPTERS: { id: BiomeId; numeral: string; name: string; tagline: string; accent: string }[] = [
@@ -80,6 +79,7 @@ const CSS = `
   display: grid; place-items: center; align-content: center; gap: 2px; font: 800 15px/1 "Barlow Condensed", system-ui, sans-serif; }
 #menu .mini small { font-size: 10px; letter-spacing: 0.16em; opacity: 0.75; }
 #menu .mini svg { width: 18px; height: 18px; fill: currentColor; }
+#menu .mini .face { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 2px currentColor; }
 #menu .mini .dot { position: absolute; top: 5px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: #8fd8ff; box-shadow: 0 0 6px #8fd8ff; }
 #menu .mini.daily { border-color: rgba(214, 162, 60, 0.7); color: #f2c66b; }
 #menu .danger { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
@@ -201,7 +201,7 @@ export function showMainMenu(): Promise<BiomeId> {
   const dailyButton = root.querySelector<HTMLElement>(".daily")!;
   const showProfile = () => {
     const h = heroDef(currentHero());
-    heroButton.innerHTML = `${iconSvg(h.icon)}<small>${h.name.toUpperCase()}</small>`;
+    heroButton.innerHTML = `<img class="face" alt="" src="${base}ui/heroes/${h.id}.webp"><small>${h.name.toUpperCase()}</small>`;
     heroButton.style.color = h.color;
     const p = profile();
     questButton.innerHTML = `<b>${p.quests.length}/${QUESTS.length}</b><small>QUESTS</small>`;

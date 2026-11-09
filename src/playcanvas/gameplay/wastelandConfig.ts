@@ -77,7 +77,7 @@ export type WastelandEnemyId = "rotter" | "bloater" | "ripper" | "stray" | "abom
 export const WASTELAND_ENEMIES: Record<WastelandEnemyId, EnemyDef> = {
   // GRUNT: the city's dead, in numbers.
   rotter: {
-    label: "Rotter", visuals: ["zkRotter", ...SURVIVOR_BODIES], scale: 1, scaleJitter: 0.06, behavior: "chaser",
+    label: "Rotter", visuals: ["zkRotter"], scale: 1, scaleJitter: 0.06, behavior: "chaser",
     maxHp: 42, speed: 1.45, radius: 0.36, damage: 10, attackRange: 1.15, attackWindup: 0.42, attackCooldown: 1.15,
     cash: 1, xp: 11, drops: { cash: 0.4, health: 0.025, upgrade: 0.006 },
   },

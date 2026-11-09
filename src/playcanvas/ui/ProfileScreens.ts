@@ -17,6 +17,9 @@ const CSS = `
 #sheet .row > span:nth-child(2) { min-width: 0; }
 #sheet .row .ic { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--c, #d6a23c); color: #140f0b; }
 #sheet .row .ic svg { width: 22px; height: 22px; fill: currentColor; }
+#sheet .row.hero { grid-template-columns: 64px 1fr auto; }
+#sheet .row .face { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; background: #2a211a; box-shadow: 0 0 0 2px var(--c, #d6a23c); }
+#sheet .row.locked .face { filter: grayscale(1) brightness(0.45); }
 #sheet .row b { font: 800 18px "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.04em; }
 #sheet .row small { display: block; opacity: 0.8; }
 #sheet .row .minus { color: #e69a7a; }
@@ -85,9 +88,9 @@ export function showHeroes(onClose: () => void = () => {}): void {
       const quest = QUESTS.find((q) => "hero" in q.reward && q.reward.hero === h.id);
       const row = document.createElement("button");
       row.type = "button";
-      row.className = `row${h.id === chosen ? " on" : ""}${open ? "" : " locked"}`;
+      row.className = `row hero${h.id === chosen ? " on" : ""}${open ? "" : " locked"}`;
       row.style.setProperty("--c", h.color);
-      row.innerHTML = `<span class="ic">${iconSvg(h.icon)}</span><span><b>${esc(h.name)}</b> <small>${esc(h.role)}</small>
+      row.innerHTML = `<img class="face" alt="" src="${import.meta.env.BASE_URL}ui/heroes/${h.id}.webp"><span><b>${esc(h.name)}</b> <small>${esc(h.role)}</small>
         <small>${open ? `${esc(h.perk)}<br><span class="minus">${esc(h.drawback)}</span>` : `🔒 ${esc(quest ? `${quest.name}: ${quest.text}` : "Locked")}`}</small></span>
         <span class="tag">${h.id === chosen ? "CHOSEN" : open ? "PICK" : "LOCKED"}</span>`;
       row.addEventListener("click", () => {

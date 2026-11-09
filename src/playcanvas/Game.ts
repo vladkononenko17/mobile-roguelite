@@ -8,6 +8,10 @@ import {
   TONEMAP_NEUTRAL,
   FOG_LINEAR,
   FOG_NONE,
+  Quat,
+  Vec3,
+  math,
+  type GraphNode,
   type RenderComponent,
 } from "playcanvas";
 import { audio } from "./audio/Audio";
@@ -63,6 +67,10 @@ export class Game {
   private input!: MoveInputSource;
   private model!: Entity;
   private aimTwist: AimTwist | null = null;
+  /** CharacterModel.posture: the chest and head bones it lifts, and the angles. */
+  private posture: { chest: GraphNode | null; head: GraphNode | null; chestDeg: number; headDeg: number } | null = null;
+  private readonly postureQ = new Quat();
+  private readonly postureAxis = new Vec3();
   private legTurn: LegTurn | null = null;
   private weaponHands: WeaponHands | null = null;
   private weaponTuner: WeaponTuner | null = null;
@@ -207,6 +215,8 @@ export class Game {
     const rig: CharacterModel = characterModel;
     this.weapons.attachTo(character.model, rig);
     this.aimTwist = new AimTwist(character.model);
+    const posture = (characterModel as CharacterModel).posture;
+    this.posture = posture ? { chest: character.model.findByName("mixamorig:Spine2"), head: character.model.findByName("mixamorig:Head"), chestDeg: posture.chestLiftDeg, headDeg: posture.headLiftDeg } : null;
     this.legTurn = new LegTurn(character.model);
     this.weaponHands = new WeaponHands(app, character.model, rig);
     this.weaponHands.debug = DEBUG.DEBUG_GRIPS || new URLSearchParams(location.search).get("grips") === "1";
@@ -259,6 +269,7 @@ export class Game {
     // away from the facing; the animation reverses the cycle from the next frame.
     const backward = this.legTurn?.update(this.player.velocity, this.player.yawDeg, dt) ?? false;
     this.animation.update(this.player.speed, dt, backward);
+    this.applyPosture(this.weapons.profile?.hold === "clip" ? this.animation.upperBodyWeight : 0, Math.min(1, this.player.speed / PLAYER.runSpeed));
     // After the anim system has posed the skeleton this frame: turn the chest so the gun points
     // where the hero faces (the weapon follows the right hand's WeaponSocket), then left-arm IK onto
     // the weapon's LeftHandGrip and the finger grip on both hands.
@@ -303,6 +314,23 @@ export class Game {
   }
 
   /** Scales the GLB root uniformly; camera pivot and stride matching follow the new size. */
+  /** Tilts the chest and head back about the hero's right axis (after the clips, before aim and IK). */
+  private applyPosture(aimClip: number, run: number): void {
+    const p = this.posture;
+    if (!p) return;
+    // Only the clip-aimed (rifle) stance and running bend the big head into the gun.
+    const k = Math.max(aimClip, run);
+    if (k <= 0.01) return;
+    const yaw = this.player.yawDeg * math.DEG_TO_RAD;
+    // Facing (sin, 0, cos): its right is (-cos, 0, sin); a positive turn about it tips the top back.
+    this.postureAxis.set(-Math.cos(yaw), 0, Math.sin(yaw));
+    for (const [node, deg] of [[p.chest, p.chestDeg * k + 10 * run], [p.head, p.headDeg * k]] as const) {
+      if (!node || !deg) continue;
+      this.postureQ.setFromAxisAngle(this.postureAxis, deg);
+      node.setRotation(this.postureQ.mul(node.getRotation()));
+    }
+  }
+
   private setCharacterScale(scale: number): void {
     this.characterScale = scale;
     this.model.setLocalScale(scale, scale, scale);

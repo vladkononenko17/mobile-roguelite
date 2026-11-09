@@ -5,7 +5,7 @@ import type { WeaponId } from "../config";
 import type { UpgradeCategory, UpgradeIcon, UpgradeRarity } from "../ui/UpgradeIcons";
 import { HELL_ENEMIES, HELL_SKINS, HELL_VISUALS, type HellEnemyId, type HellSkinId, type HellVisualId } from "./hellConfig";
 import { SPACE_ENEMIES, SPACE_SKINS, SPACE_VISUALS, type SpaceEnemyId, type SpaceSkinId, type SpaceVisualId } from "./spaceConfig";
-import { SURVIVOR_BODIES, survivorsAs, WASTELAND_ENEMIES, WASTELAND_SKINS, WASTELAND_VISUALS, type SurvivorBody, type SurvivorRole, type WastelandEnemyId, type WastelandSkinId, type WastelandVisualId } from "./wastelandConfig";
+import { SURVIVOR_BODIES, WASTELAND_ENEMIES, WASTELAND_SKINS, WASTELAND_VISUALS, type SurvivorBody, type SurvivorRole, type WastelandEnemyId, type WastelandSkinId, type WastelandVisualId } from "./wastelandConfig";
 import { MEDIEVAL_ENEMIES, MEDIEVAL_SKINS, MEDIEVAL_VISUALS, type MedievalEnemyId, type MedievalSkinId, type MedievalVisualId } from "./medievalConfig";
 import { PIRATE_ENEMIES, PIRATE_SKINS, PIRATE_VISUALS, type PirateEnemyId, type PirateSkinId, type PirateVisualId } from "./pirateConfig";
 
@@ -393,7 +393,9 @@ export interface EnemyDef {
 }
 
 /** The horde: the rotter and the four turned survivors, each in four kinds of rot. */
-const WALKER_LOOKS: EnemyVisualId[] = ["zombieWalker", ...SURVIVOR_BODIES];
+// The kit survivors are the playable heroes now (scripts/build-heroes.mjs): the street horde no longer
+// wears their zombified bodies (they stay as the ORION crew and the drowned, in other clothes).
+const WALKER_LOOKS: EnemyVisualId[] = ["zombieWalker"];
 
 export const ENEMIES: Record<EnemyId, EnemyDef> = {
   ...HELL_ENEMIES,
@@ -409,7 +411,7 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
   },
   // Runner: lean and ~0.95x the hero, sprinting.
   runner: {
-    label: "Runner", visuals: ["zombieRunner", ...survivorsAs("Runner")], scale: 1.06, scaleJitter: 0.03, behavior: "chaser",
+    label: "Runner", visuals: ["zombieRunner"], scale: 1.06, scaleJitter: 0.03, behavior: "chaser",
     maxHp: 22, speed: 3.9, radius: 0.34, damage: 7, attackRange: 1.1, attackWindup: 0.3, attackCooldown: 0.9,
     cash: 1, xp: 15, drops: { cash: 0.45, health: 0.03, upgrade: 0.008 },
   },
