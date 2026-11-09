@@ -121,6 +121,7 @@ export const CHARACTERS = {
   ...CHARACTERS_BASE,
   medic: avatarHero("Medic", "models/heroes/medic.glb", 0.831, 0.093, 0.826, 1, -1.4),
   demolitionist: avatarHero("Demolitionist", "models/heroes/demolitionist.glb", 0.947, 0.111, 0.955, 1, -1.4),
+  drifter: avatarHero("Drifter", "models/heroes/drifter.glb", 0.933, 0.109, 0.94, 1, -1.4),
 } satisfies Record<string, CharacterModel>;
 
 export type CharacterId = keyof typeof CHARACTERS;

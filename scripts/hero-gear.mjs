@@ -13,6 +13,11 @@ const TORSO_JOINTS = /^mixamorig:(Hips|Spine|Spine1|Spine2)$/;
 const lin = (c) => ((c / 255) <= 0.04045 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
 
 export const GEAR = {
+  // A winter parka's trim (the puffer itself is the inflated sweater, build-heroes.mjs PUFF).
+  drifter: {
+    kind: "parka",
+    colors: { fur: [112, 98, 80], hood: [70, 76, 52], pocket: [62, 68, 46], zip: [28, 28, 28], webbing: [40, 40, 38] },
+  },
   medic: {
     colors: { carrier: [40, 41, 38], webbing: [30, 30, 29], pouch: [58, 60, 48], patch: [222, 220, 212], cross: [178, 34, 34], radio: [22, 22, 22] },
   },
@@ -33,7 +38,7 @@ export function addGear(doc, { prims, skin, parent, L, def }) {
   const pool = [];
   for (const p of prims) {
     const name = p.getMaterial()?.getName() ?? "";
-    if (!/^(body|toigo_keyhole|cortu|toigo_.*top|.*shorts)/.test(name)) continue;
+    if (!/^(body|toigo_(?!ankle)|cortu)/.test(name)) continue;
     const P = p.getAttribute("POSITION"), J = p.getAttribute("JOINTS_0"), W = p.getAttribute("WEIGHTS_0");
     const v = [0, 0, 0], j = [0, 0, 0, 0], w = [0, 0, 0, 0];
     for (let i = 0; i < P.getCount(); i++) {
@@ -125,6 +130,8 @@ export function addGear(doc, { prims, skin, parent, L, def }) {
     p.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
   };
 
+  if (def.kind === "parka") parkaParts({ pool, torso, zcAt, part, quad, L, span });
+  else {
   // Outer shell (shared vertices so it shades smooth) and the rim walls.
   const shell = part("carrier"), rim = part("webbing");
   const ids = new Map();
@@ -234,6 +241,8 @@ export function addGear(doc, { prims, skin, parent, L, def }) {
     for (const yy of [y - 0.05, y + 0.04]) for (let k = 0; k < NR; k++) quad(strap, rp(k, yy, 0.007, -0.012), rp(k + 1, yy, 0.007, -0.012), rp(k + 1, yy, 0.007, 0.012), rp(k, yy, 0.007, 0.012));
   }
 
+  }
+
   // ---- Skin weights and primitives, one per material.
   const nearest = (x, y, z, set) => {
     let best = null, bd = Infinity;
@@ -298,4 +307,70 @@ export function addGear(doc, { prims, skin, parent, L, def }) {
   const n = doc.createNode("gear").setMesh(mesh).setSkin(skin);
   parent.addChild(n);
   return n;
+}
+
+/**
+ * Parka trim: a fur ruff round the collar, the hood bunched down the back of the neck, a zip down the
+ * front, two flap pockets on the chest. All on the inflated garment's surface.
+ */
+function parkaParts({ pool, torso, zcAt, part, quad, L, span }) {
+  const front = (x, y, w = 0.02) => {
+    let z = -Infinity;
+    for (const p of torso) if (Math.abs(p.x - x) < w && Math.abs(p.y - y) < 0.015) z = Math.max(z, p.z);
+    return z;
+  };
+  const back = (y) => {
+    let z = Infinity;
+    for (const p of torso) if (Math.abs(p.x) < 0.03 && Math.abs(p.y - y) < 0.015) z = Math.min(z, p.z);
+    return z;
+  };
+  const box = (mat, cx, cy, cz, sx, sy, sz, rigidAt = new THREE.Vector3(cx, cy, cz)) => {
+    const p = part(mat, rigidAt);
+    p.geom = new THREE.BoxGeometry(sx, sy, sz).translate(cx, cy, cz);
+    return p;
+  };
+  // Collar ring: the garment's radius round the neck base, a fat band of fur outside it.
+  const yc = L.neck.y - 0.045;
+  const NR = 36, rr = new Float32Array(NR), zc = zcAt(yc);
+  for (const p of pool) {
+    if (Math.abs(p.y - yc) > 0.025 || Math.abs(p.x) > 0.16) continue;
+    let t = Math.atan2(p.x, p.z - zc);
+    if (t < 0) t += 2 * Math.PI;
+    const k = Math.round(t / ((2 * Math.PI) / NR)) % NR;
+    rr[k] = Math.max(rr[k], Math.hypot(p.x, p.z - zc));
+  }
+  const mean = rr.reduce((a, b) => a + b, 0) / Math.max(1, rr.filter(Boolean).length);
+  for (let k = 0; k < NR; k++) if (!rr[k]) rr[k] = mean;
+  // A rounded tube of fur (a smooth grid: shared vertices shade soft).
+  const fur = part("fur", new THREE.Vector3(0, yc, back(yc)));
+  const NS = 8, R = 0.022;
+  for (let k = 0; k <= NR; k++) {
+    const t = (k % NR) * ((2 * Math.PI) / NR), r = rr[k % NR] + R * 0.6;
+    for (let q = 0; q <= NS; q++) {
+      const a = -Math.PI / 2 + (q / NS) * Math.PI * 1.25; // from under the ruff, round the outside, over the top
+      const rad = r + Math.cos(a) * R, y = yc + 0.01 + Math.sin(a) * R * 1.2;
+      fur.pos.push(rad * Math.sin(t), y, zc + rad * Math.cos(t));
+    }
+  }
+  for (let k = 0; k < NR; k++) for (let q = 0; q < NS; q++) {
+    const a = k * (NS + 1) + q, b = (k + 1) * (NS + 1) + q;
+    fur.idx.push(a, b, b + 1, a, b + 1, a + 1);
+  }
+  // The hood, folded down the back: a squashed dome over the shoulder blades.
+  const yh = L.neck.y - 0.1, zb = back(yh);
+  const hood = part("hood", new THREE.Vector3(0, yh, zb));
+  hood.geom = new THREE.SphereGeometry(1, 14, 8).scale(0.15, 0.085, 0.075).translate(0, yh, zb - 0.035);
+  // Zip down the front, from the collar to the hem.
+  const yTop = yc - 0.03, yBot = L.hips.y - 0.06;
+  for (let y = yBot; y < yTop; y += 0.03) {
+    const z = front(0, y);
+    if (Number.isFinite(z)) box("zip", 0, y + 0.015, z + 0.003, 0.016, 0.032, 0.008, new THREE.Vector3(0, Math.max(y, L.hips.y + 0.03), z - 0.03));
+  }
+  // Chest pockets with flaps.
+  for (const x of [0.085, -0.085]) {
+    const y = L.hips.y + 0.6 * span, z = front(x, y, 0.03);
+    if (!Number.isFinite(z)) continue;
+    box("pocket", x, y, z + 0.006, 0.085, 0.08, 0.016, new THREE.Vector3(x, y, z - 0.03));
+    box("hood", x, y + 0.045, z + 0.012, 0.09, 0.028, 0.018, new THREE.Vector3(x, y, z - 0.03));
+  }
 }

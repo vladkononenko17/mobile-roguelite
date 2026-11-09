@@ -11,7 +11,7 @@ import { loadProgress } from "./progress";
 import { iconSvg } from "./UpgradeIcons";
 import { CHARACTERS } from "../config";
 import { showHeroes, showQuests } from "./ProfileScreens";
-import { checkQuests, chooseDanger, chosenDanger, currentHero, dangerUnlocked, profile, QUESTS } from "../gameplay/profile";
+import { checkQuests, chooseDanger, chosenDanger, heroFor, dangerUnlocked, profile, QUESTS } from "../gameplay/profile";
 import { dangerMods, dangerSummary } from "../gameplay/danger";
 import { heroDef } from "../gameplay/heroes";
 import { clearDaily, dailySetup, markDaily, todayKey } from "../gameplay/daily";
@@ -153,8 +153,10 @@ export function showMainMenu(): Promise<BiomeId> {
     /* storage unavailable */
   }
 
+  let heroRefresh = () => {};
   const select = (i: number, sound = true) => {
     index = (i + CHAPTERS.length) % CHAPTERS.length;
+    heroRefresh();
     const c = CHAPTERS[index];
     root.style.setProperty("--accent", c.accent);
     root.querySelectorAll<HTMLElement>("[data-art]").forEach((el) => el.classList.toggle("on", el.dataset.art === c.id));
@@ -203,7 +205,7 @@ export function showMainMenu(): Promise<BiomeId> {
   const questButton = root.querySelector<HTMLElement>(".quests")!;
   const dailyButton = root.querySelector<HTMLElement>(".daily")!;
   const showProfile = () => {
-    const h = heroDef(currentHero());
+    const h = heroDef(heroFor(CHAPTERS[index].id));
     heroButton.innerHTML = `${h.id in CHARACTERS ? `<img class="face" alt="" src="${base}ui/heroes/${h.id}.webp">` : iconSvg(h.icon)}<small>${h.name.toUpperCase()}</small>`;
     heroButton.style.color = h.color;
     const p = profile();
@@ -212,6 +214,7 @@ export function showMainMenu(): Promise<BiomeId> {
     const bestToday = p.daily[d.key];
     dailyButton.innerHTML = `<b>${bestToday ? bestToday.toLocaleString("en-US") : "NEW"}</b><small>DAILY</small>${bestToday ? "" : `<i class="dot"></i>`}`;
   };
+  heroRefresh = showProfile;
   showProfile();
   heroButton.addEventListener("click", () => {
     audio.play("ui");

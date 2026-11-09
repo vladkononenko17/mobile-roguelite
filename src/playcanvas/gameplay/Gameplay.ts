@@ -36,7 +36,7 @@ import { rollRoutes, type RouteDef } from "./routes";
 import { EVOLUTIONS } from "./evolutions";
 import { GADGETS, GADGET_MAX_LEVEL, gadgetDef, gadgetLine, gadgetPrice, type GadgetId } from "./gadgets";
 import { GadgetSystem } from "./GadgetSystem";
-import { best, bump, checkQuests, chosenDanger, currentHero, gadgetUnlocked, profile, recordWin, rewardText, saveProfile } from "./profile";
+import { best, bump, checkQuests, chosenDanger, heroFor, gadgetUnlocked, profile, recordWin, rewardText, saveProfile } from "./profile";
 import { dailyScore, pendingDaily, seeded, type DailySetup } from "./daily";
 import { shareDaily } from "../ui/shareCard";
 
@@ -461,7 +461,7 @@ export class Gameplay {
     s.weaponLevel.clear();
     // Permanent upgrades (meta-progression) on top of a fresh hero, then the hero's kit and the danger.
     applyMeta(s);
-    this.hero = heroDef(this.daily?.hero ?? currentHero());
+    this.hero = heroDef(this.daily?.hero ?? heroFor(this.biome.id));
     this.hero.apply(s);
     if (this.hero.gadget) s.gadgets.set(this.hero.gadget, 1);
     this.danger = this.daily?.danger ?? chosenDanger(this.biome.id);

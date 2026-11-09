@@ -17,6 +17,8 @@ export type Tally =
 
 export interface Profile {
   hero: HeroId;
+  /** Whether the player has picked a hero himself (else a chapter may bring its own: heroFor). */
+  heroChosen?: boolean;
   unlocked: string[];
   quests: string[];
   tally: Record<Tally, number>;
@@ -75,19 +77,26 @@ export function best(t: Tally, value: number): void {
   if (value > p.tally[t]) p.tally[t] = value;
 }
 
-export const isUnlocked = (id: string): boolean => id === "survivor" || profile().unlocked.includes(id);
+export const isUnlocked = (id: string): boolean => HEROES.some((h) => h.id === id && h.free) || profile().unlocked.includes(id);
 export const heroUnlocked = (id: HeroId): boolean => isUnlocked(id);
 export const gadgetUnlocked = (id: GadgetId, locked = false): boolean => !locked || isUnlocked(id);
 
 export function chooseHero(id: HeroId): void {
   if (!heroUnlocked(id)) return;
   profile().hero = id;
+  profile().heroChosen = true;
   saveProfile();
 }
 
 export function currentHero(): HeroId {
   const h = profile().hero;
   return HEROES.some((d) => d.id === h) && heroUnlocked(h) ? h : "survivor";
+}
+
+/** The hero for a run in `chapter`: the chapter's own hero (the Drifter in Whiteout) until the player picks one. */
+export function heroFor(chapter: string): HeroId {
+  const own = HEROES.find((h) => h.chapter === chapter);
+  return own && !profile().heroChosen ? own.id : currentHero();
 }
 
 /** Highest danger the player may pick for `chapter` (one above the highest won). */

@@ -4,7 +4,7 @@ import { Game } from "./Game";
 import { DEV_MODE } from "./devMode";
 import { chapterName, menuWanted, showMainMenu } from "./ui/MainMenu";
 import { pickBiome, type BiomeId } from "./world/level/Biomes";
-import { currentHero } from "./gameplay/profile";
+import { heroFor } from "./gameplay/profile";
 import { pendingDaily } from "./gameplay/daily";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#app-canvas")!;
@@ -19,7 +19,7 @@ const isCharacterId = (value: string | null): value is CharacterId => value !== 
 
 // Dev: ?model=<id> wins, then the last tune-panel choice. Players: the body of the hero they picked on
 // the title screen (the daily run's hero on a daily); every hero id is also a character id.
-function pickCharacter(): CharacterId {
+function pickCharacter(biome: string): CharacterId {
   if (DEV_MODE) {
     const fromUrl = new URLSearchParams(location.search).get("model");
     if (isCharacterId(fromUrl)) return fromUrl;
@@ -28,7 +28,7 @@ function pickCharacter(): CharacterId {
       if (isCharacterId(saved)) return saved;
     } catch { /* storage unavailable */ }
   }
-  const hero = pendingDaily()?.hero ?? currentHero();
+  const hero = pendingDaily()?.hero ?? heroFor(biome);
   return isCharacterId(hero) ? hero : DEFAULT_CHARACTER;
 }
 
@@ -61,7 +61,7 @@ async function main(): Promise<void> {
     });
   }
   const biome: BiomeId = wantsMenu ? await showMainMenu() : pickBiome();
-  character = pickCharacter();
+  character = pickCharacter(biome);
   for (const [id, model] of Object.entries(CHARACTERS)) modelSelect.add(new Option(model.label, id, false, id === character));
 
   // The loading screen wears the chapter's art and name.

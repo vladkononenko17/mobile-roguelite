@@ -22,6 +22,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import * as THREE from "three";
+import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
 import { dedup, mergeDocuments, prune, textureCompress, unpartition } from "@gltf-transform/functions";
@@ -78,6 +79,16 @@ function shaper(d, hipsY, neckY) {
 /** Solid colours for garments by material-name prefix, per hero (base colour, before shading). */
 const TINTS = {
   medic: { toigo_keyhole_tank_top: [44, 44, 42], cortu_cargo_pants: [92, 96, 62] },
+  drifter: { toigo_fisherman_sweater: [78, 84, 58], cortu_cargo_pants: [52, 52, 54] },
+};
+
+/**
+ * Puffer garments per hero: the garment (material-name prefix) pushed out along its normals by `base`
+ * plus quilted baffles (`quilt` deep, every `pitch` m: across the torso, around the sleeves), its hem
+ * pulled `hem` m further down (a parka over the hips).
+ */
+const PUFF = {
+  drifter: { garment: "toigo_fisherman_sweater", base: 0.022, quilt: 0.011, pitch: 0.085, hem: 0.11 },
 };
 
 /** Spine, Spine1, Spine2 as shares of the Survivor's hips-to-neck height (1.133 -> 1.679 m). */
@@ -128,6 +139,54 @@ async function build(name, vrmPath) {
           a[i] = v.x; a[i + 1] = v.y; a[i + 2] = v.z;
         }
         prim.setAttribute("POSITION", doc.createAccessor().setType("VEC3").setArray(a).setBuffer(r.listBuffers()[0]));
+      }
+    }
+  }
+
+  // Puffer garment (PUFF): inflated along its normals in quilted baffles, the hem lengthened.
+  const puff = PUFF[base];
+  if (puff) {
+    const hipsY = P("hips").y;
+    for (const n of r.listNodes().filter((x) => x.getSkin() === vSkin)) {
+      for (const prim of n.getMesh().listPrimitives()) {
+        if (!prim.getMaterial()?.getName().startsWith(puff.garment)) continue;
+        const pos = prim.getAttribute("POSITION"), idx = prim.getIndices();
+        const a = pos.getArray().slice();
+        // Smooth normals of the garment as it is (welded by position so seams do not split).
+        const g = new THREE.BufferGeometry();
+        g.setAttribute("position", new THREE.Float32BufferAttribute(a, 3));
+        if (idx) g.setIndex(Array.from(idx.getArray()));
+        const welded = mergeVertices(g, 1e-4);
+        welded.computeVertexNormals();
+        const key = (x, y, z) => `${Math.round(x * 1e4)},${Math.round(y * 1e4)},${Math.round(z * 1e4)}`;
+        const nmap = new Map();
+        const wp = welded.getAttribute("position"), wn = welded.getAttribute("normal");
+        for (let i = 0; i < wp.count; i++) nmap.set(key(wp.getX(i), wp.getY(i), wp.getZ(i)), [wn.getX(i), wn.getY(i), wn.getZ(i)]);
+        let minY = Infinity;
+        for (let i = 1; i < a.length; i += 3) if (Math.abs(a[i - 1]) < 0.25) minY = Math.min(minY, a[i]);
+        for (let i = 0; i < a.length; i += 3) {
+          const [nx, ny, nz] = nmap.get(key(a[i], a[i + 1], a[i + 2])) ?? [0, 0, 1];
+          const arm = Math.abs(a[i]) > 0.2;
+          const coord = arm ? Math.abs(a[i]) : a[i + 1];
+          const d = puff.base + puff.quilt * Math.abs(Math.sin((Math.PI * coord) / puff.pitch));
+          a[i] += nx * d; a[i + 1] += ny * d * 0.6; a[i + 2] += nz * d;
+          // The lowest band of the torso (the hem) slides down over the hips.
+          if (!arm && a[i + 1] < minY + 0.09) a[i + 1] -= puff.hem * (1 - (a[i + 1] - minY) / 0.09);
+        }
+        void hipsY;
+        prim.setAttribute("POSITION", doc.createAccessor().setType("VEC3").setArray(a).setBuffer(r.listBuffers()[0]));
+        // New normals for the baffles to shade.
+        const g2 = new THREE.BufferGeometry();
+        g2.setAttribute("position", new THREE.Float32BufferAttribute(a, 3));
+        if (idx) g2.setIndex(Array.from(idx.getArray()));
+        const w2 = mergeVertices(g2, 1e-4);
+        w2.computeVertexNormals();
+        const n2 = new Map();
+        const p2 = w2.getAttribute("position"), q2 = w2.getAttribute("normal");
+        for (let i = 0; i < p2.count; i++) n2.set(key(p2.getX(i), p2.getY(i), p2.getZ(i)), [q2.getX(i), q2.getY(i), q2.getZ(i)]);
+        const na = new Float32Array(a.length);
+        for (let i = 0; i < a.length; i += 3) na.set(n2.get(key(a[i], a[i + 1], a[i + 2])) ?? [0, 0, 1], i);
+        prim.setAttribute("NORMAL", doc.createAccessor().setType("VEC3").setArray(na).setBuffer(r.listBuffers()[0]));
       }
     }
   }

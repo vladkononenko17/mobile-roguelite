@@ -50,9 +50,9 @@ const AMBIENT: AmbientEmitter[] = [
   // Snow over everything, travelling with the hero.
   { kind: "snow", x: 0, z: 0, y: 7, size: [26, 30], intensity: 1.1 },
   // Snow scraps blowing across each zone (the leaf sprite, white).
-  { kind: "leaves", x: 0, y: 0.3, z: 4, size: [40, 50], intensity: 1.2, color: [1.15, 1.25, 1.35] },
-  { kind: "leaves", x: 0, y: 0.3, z: -74, size: [50, 50], intensity: 1.8, color: [1.15, 1.25, 1.35] },
-  { kind: "leaves", x: 0, y: 0.3, z: -152, size: [50, 50], intensity: 1, color: [1.15, 1.25, 1.35] },
+  { kind: "leaves", x: 0, y: 0.3, z: 4, size: [40, 50], intensity: 1.2, color: [1.25, 1.6, 3.1] },
+  { kind: "leaves", x: 0, y: 0.3, z: -74, size: [50, 50], intensity: 1.8, color: [1.25, 1.6, 3.1] },
+  { kind: "leaves", x: 0, y: 0.3, z: -152, size: [50, 50], intensity: 1, color: [1.25, 1.6, 3.1] },
   { kind: "leaves", x: 0, y: 0.3, z: -232, size: [50, 50], intensity: 0.8, color: [0.6, 0.5, 0.45] },
   // Forest: the police car in the trees strobing red and blue; the camp's dead fire; a hurricane lamp.
   { kind: "glow", x: -15, z: -7, size: [9, 9], color: RED, intensity: 0.5, pulse: 1.4 },

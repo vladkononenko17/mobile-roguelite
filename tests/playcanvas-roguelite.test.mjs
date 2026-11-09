@@ -34,8 +34,9 @@ const bundle = join(mkdtempSync(join(tmpdir(), "roguelite-")), "roguelite.mjs");
 writeFileSync(bundle, outputFiles[0].text);
 const m = await import(pathToFileURL(bundle).href);
 
-test("three heroes, the Survivor free", () => {
-  assert.equal(m.HEROES.length, 3);
+test("four heroes, the Survivor and the Drifter free", () => {
+  assert.equal(m.HEROES.length, 4);
+  assert.deepEqual(m.HEROES.filter((h) => h.free).map((h) => h.id), ["survivor", "drifter"]);
   assert.equal(m.HEROES[0].id, "survivor");
 });
 
@@ -54,7 +55,7 @@ test("every hero applies cleanly, keeps the hero alive and has a real trade-off"
 
 test("every locked hero and gadget has a quest that unlocks it", () => {
   const rewards = m.QUESTS.map((q) => q.reward);
-  for (const h of m.HEROES.filter((x) => x.id !== "survivor")) assert.ok(rewards.some((r) => r.hero === h.id), h.id);
+  for (const h of m.HEROES.filter((x) => !x.free)) assert.ok(rewards.some((r) => r.hero === h.id), h.id);
   for (const g of m.GADGETS.filter((x) => x.locked)) assert.ok(rewards.some((r) => r.gadget === g.id), g.id);
 });
 
@@ -67,6 +68,7 @@ test("quests pay once, unlock heroes and respect their goals", () => {
   assert.deepEqual(m.checkQuests().map((q) => q.id), ["kills1000"]);
   assert.equal(m.heroUnlocked("demolitionist"), true);
   assert.deepEqual(m.checkQuests(), []);
+  assert.equal(m.heroUnlocked("drifter"), true);
   m.best("maxMk", 4);
   m.best("maxMk", 2);
   assert.equal(m.profile().tally.maxMk, 4);
