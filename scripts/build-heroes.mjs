@@ -74,6 +74,11 @@ function shaper(d, hipsY, neckY) {
   };
 }
 
+/** Solid colours for garments by material-name prefix, per hero (base colour, before shading). */
+const TINTS = {
+  medic: { toigo_keyhole_tank_top: [44, 44, 42], cortu_cargo_pants: [92, 96, 62] },
+};
+
 /** Spine, Spine1, Spine2 as shares of the Survivor's hips-to-neck height (1.133 -> 1.679 m). */
 const SPINE = [(1.242 - 1.133) / 0.546, (1.369 - 1.133) / 0.546, (1.515 - 1.133) / 0.546];
 
@@ -97,7 +102,9 @@ async function build(name, vrmPath) {
   const sJoints = sSkin.listJoints();
   const sIndex = new Map(sJoints.map((j, i) => [j.getName(), i]));
   const vJoints = vSkin.listJoints();
-  const shapeDef = SHAPES[name];
+  const base = name.replace(/_.*$/, "");
+  const shapeDef = SHAPES[base];
+  const tints = TINTS[base] ?? {};
 
   // The avatar's bind pose (its mesh nodes are identity: vertices are world positions).
   const ibm = vSkin.getInverseBindMatrices();
@@ -237,6 +244,20 @@ async function build(name, vrmPath) {
   for (const mat of r.listMaterials()) {
     const tex = mat.getBaseColorTexture();
     if (!tex || CLEAN.test(mat.getName()) || /hair|ponytail|braid|bob|afro|short0/i.test(mat.getName())) continue;
+    const tint = Object.entries(tints).find(([k]) => mat.getName().startsWith(k))?.[1];
+    if (tint) {
+      // A loud print (leopard, hot pink) becomes one solid colour: the pattern is blurred away and the
+      // fabric's light and shade kept as a soft luminance on top.
+      const src = sharp(Buffer.from(tex.getImage())).ensureAlpha();
+      const { data, info } = await src.clone().raw().toBuffer({ resolveWithObject: true });
+      const blur = (await src.clone().blur(18).raw().toBuffer());
+      for (let i = 0; i < data.length; i += 4) {
+        const l = (0.6 * (blur[i] + blur[i + 1] + blur[i + 2]) / 765 + 0.4) * (0.9 + 0.1 * Math.abs(Math.sin(i * 12.9898) * 43758.5453 % 1));
+        data[i] = Math.min(255, tint[0] * l); data[i + 1] = Math.min(255, tint[1] * l); data[i + 2] = Math.min(255, tint[2] * l);
+      }
+      tex.setImage(await sharp(data, { raw: info }).png().toBuffer()).setMimeType("image/png");
+      continue;
+    }
     const { data, info } = await sharp(Buffer.from(tex.getImage())).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     for (let i = 0; i < data.length; i += 4) {
       const g = (data[i] + data[i + 1] + data[i + 2]) / 3;
