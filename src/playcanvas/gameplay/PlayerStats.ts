@@ -1,6 +1,8 @@
 import { ARSENAL, LEVEL_UP, PLAYER_COMBAT, WEAPON_STATS, xpToNext, type UpgradeId, type UpgradeTag, type WeaponStats } from "./config";
 import type { WeaponId } from "../config";
 import { applyWeaponMods, weaponMod, type WeaponModId } from "../weaponMods";
+import { EVOLUTIONS } from "./evolutions";
+import type { GadgetId } from "./gadgets";
 
 /**
  * The hero's run state: health, cash (the shop currency), character level / XP (level-ups offer
@@ -62,6 +64,19 @@ export class PlayerStats {
   luck = 0;
   /** Revives left this run (meta upgrade "Second Wind"). */
   revives = 0;
+  /** Cash pickup multiplier (the Scavenger). */
+  cashMult = 1;
+  /** Healing multiplier (medkits, pickups, heal-on-kill; the Medic, danger). */
+  healMult = 1;
+  /** Gadget slots and the gadgets owned with their level (1-4). */
+  gadgetSlots = 2;
+  readonly gadgets = new Map<GadgetId, number>();
+  /** Dash: charges, cooldown multiplier, damage of the blast where a dash ends (0 = none). */
+  dashCharges = 1;
+  dashCooldownMult = 1;
+  dashBlast = 0;
+  /** Guns evolved at the Gunsmith (gameplay/evolutions.ts). */
+  readonly evolved = new Set<WeaponId>();
   /** Mk upgrades bought per weapon (0 = Mk I). */
   readonly weaponLevel = new Map<string, number>();
   /** Shop offers kept for the next visit. */
@@ -124,8 +139,10 @@ export class PlayerStats {
 
   /** One weapon's stats with its attachments and every run-wide modifier applied. */
   weaponStatsFor(weapon: WeaponId): WeaponStats | null {
-    const base = WEAPON_STATS[weapon];
-    if (!base) return null;
+    const raw = WEAPON_STATS[weapon];
+    if (!raw) return null;
+    const evo = this.evolved.has(weapon) ? EVOLUTIONS[weapon] : undefined;
+    const base = evo ? evo.apply(raw) : raw;
     const modified = applyWeaponMods(base, this.modsFor(weapon), `shot_${weapon}`);
     const mk = this.weaponLevel.get(weapon) ?? 0;
     return {
@@ -153,7 +170,7 @@ export class PlayerStats {
   }
 
   heal(amount: number): void {
-    this.hp = Math.min(this.maxHp, this.hp + amount);
+    this.hp = Math.min(this.maxHp, this.hp + amount * this.healMult);
   }
 }
 

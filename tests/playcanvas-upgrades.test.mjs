@@ -113,8 +113,8 @@ test("dust: every run pays, a win pays more", () => {
 
 test("shop: every item has a price and stat items a cap; late items come later", () => {
   for (const item of SHOP) {
-    if (item.id !== "mk") assert.ok(item.cost > 0, item.id);
-    if (!item.weapon && !["heal", "crate", "mk"].includes(item.id)) assert.ok(item.max, `${item.id} is capped`);
+    if (item.id !== "mk" && item.id !== "gadget") assert.ok(item.cost > 0, item.id);
+    if (!item.weapon && !["heal", "crate", "mk", "gadget"].includes(item.id)) assert.ok(item.max, `${item.id} is capped`);
   }
   assert.ok(SHOP.filter((i) => i.from).every((i) => i.cost >= 70));
   assert.ok(UPGRADES.some((u) => u.id === "magnet"));

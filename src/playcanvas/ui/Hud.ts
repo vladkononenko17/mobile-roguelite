@@ -54,6 +54,22 @@ const CSS = `
 #hud .bounty { display: grid; justify-items: end; padding: 3px 8px 4px; max-width: 170px; text-align: right; }
 #hud .bounty .cap { color: var(--amber); font-size: 9px; }
 #hud .bounty b { font-size: 12px; font-weight: 700; line-height: 1.15; }
+/* Dash: a round button bottom right (thumb reach), charge pips, a cooldown sweep. */
+#hud .dash { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: max(26px, calc(env(safe-area-inset-bottom) + 14px)); width: 76px; height: 76px;
+  border-radius: 50%; border: 2px solid rgba(239, 230, 210, 0.45); padding: 0; color: var(--cream); pointer-events: auto; touch-action: none;
+  background: conic-gradient(rgba(0, 0, 0, 0.55) calc(var(--cd, 0) * 360deg), rgba(214, 162, 60, 0.85) 0); box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+  font: 800 15px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.12em; display: none; -webkit-tap-highlight-color: transparent; }
+#hud .dash.on { display: grid; place-items: center; }
+#hud .dash.empty { border-color: rgba(239, 230, 210, 0.2); color: rgba(239, 230, 210, 0.55); }
+#hud .dash:active { transform: scale(0.94); }
+#hud .dash .pips { position: absolute; bottom: 12px; left: 0; right: 0; display: flex; justify-content: center; gap: 4px; }
+#hud .dash .pips i { width: 7px; height: 7px; border-radius: 50%; background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(239, 230, 210, 0.6); }
+#hud .dash .pips i.full { background: var(--cream); }
+#hud .gadgets { display: flex; gap: 4px; }
+#hud .gadgets span { position: relative; width: 26px; height: 26px; display: grid; place-items: center; padding: 0; border-radius: 4px; }
+#hud .gadgets svg { width: 16px; height: 16px; fill: currentColor; }
+#hud .gadgets b { position: absolute; right: 1px; bottom: 0; font-size: 9px; }
+@media (hover: hover) and (pointer: fine) { #hud .dash { width: 58px; height: 58px; font-size: 12px; } }
 #hud .bounty.done { box-shadow: inset 0 0 0 1px var(--green); }
 #hud .bounty.done .cap { color: var(--green); }
 #hud .bounty.failed { opacity: 0.5; }
@@ -368,6 +384,10 @@ export class Hud {
   private pulseTime = 0;
   /** The pause button (Gameplay opens its pause menu; without a run it toggles the dev panel in dev mode). */
   onPause: () => void = () => { if (DEV_MODE) document.body.classList.toggle("debug-on"); };
+  /** The dash button. */
+  onDash: () => void = () => {};
+  private dashShown = "";
+  private gadgetsShown = "";
 
   constructor() {
     const style = document.createElement("style");
@@ -386,12 +406,14 @@ export class Hud {
           <button type="button" class="plate gear snd" aria-label="sound">${SOUND_SVG}</button>
           <button type="button" class="plate gear cog" aria-label="pause">${PAUSE_SVG}</button>
         </div>
+        <div class="gadgets"></div>
       </div>
       <div class="corner tr">
         <div class="plate money">${NOTE_SVG}<b></b><span class="gain"></span></div>
         <div class="plate health"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICON_PATHS.heart}"/></svg><b></b><div class="hpbar"><i></i></div></div>
         <div class="plate bounty" style="display:none"><span class="cap"></span><b></b></div>
       </div>
+      <button type="button" class="dash" aria-label="dash">DASH<span class="pips"></span></button>
       <div class="plate boss"><span class="cap"></span><div class="bar"><i></i></div></div>
       <div class="banner"></div>
       <div class="pulse"></div>
@@ -442,6 +464,12 @@ export class Hud {
     });
     if (new URLSearchParams(location.search).get("debug") === "1") document.body.classList.add("debug-on");
     q(".cog").addEventListener("click", () => this.onPause());
+    const dash = q(".dash");
+    dash.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.onDash();
+    });
     const sound = q(".snd");
     sound.classList.toggle("off", audio.muted);
     sound.addEventListener("click", () => {
@@ -559,6 +587,27 @@ export class Hud {
     const capEl = el.querySelector(".cap")!, text = el.querySelector("b")!;
     if (capEl.textContent !== cap) capEl.textContent = cap;
     if (text.textContent !== b.text) text.textContent = b.text;
+  }
+
+  /** Dash button: shown in play; charges as pips, `cooldown` (0..1) the part of a recharge still to go. */
+  setDash(visible: boolean, charges: number, max: number, cooldown: number): void {
+    const el = this.root.querySelector<HTMLElement>(".dash")!;
+    const key = `${visible}|${charges}|${max}`;
+    if (key !== this.dashShown) {
+      this.dashShown = key;
+      el.classList.toggle("on", visible);
+      el.classList.toggle("empty", charges <= 0);
+      el.querySelector(".pips")!.innerHTML = max > 1 ? Array.from({ length: max }, (_, i) => `<i class="${i < charges ? "full" : ""}"></i>`).join("") : "";
+    }
+    el.style.setProperty("--cd", charges >= max ? "0" : cooldown.toFixed(3));
+  }
+
+  /** Owned gadgets as small icons with their level under the ammo plate. */
+  setGadgets(list: { icon: UpgradeIcon; color: string; level: number }[]): void {
+    const key = list.map((g) => `${g.icon}${g.level}`).join(",");
+    if (key === this.gadgetsShown) return;
+    this.gadgetsShown = key;
+    this.root.querySelector(".gadgets")!.innerHTML = list.map((g) => `<span class="plate" style="color:${g.color}">${iconSvg(g.icon)}<b>${g.level}</b></span>`).join("");
   }
 
   showBanner(text: string, seconds = 2): void {

@@ -287,6 +287,25 @@ The last and largest chapter of the 3D game at `/playcanvas.html`: open it from 
 - **Loadout everywhere**: bought guns stay in the loadout; choose one before each level in any chapter.
 - **Champions** (`ELITES`): every ~32 s a gold-glowing elite (x4 HP, x1.3 size) drops a chest: 1-3
   upgrades flip in plus cash.
+- **Heroes** (`gameplay/heroes.ts`): Survivor, Medic, Gunslinger, Demolitionist, Scavenger, Juggernaut,
+  Tinkerer: each a perk and a drawback, some start with a gadget. Picked on the title screen (HERO).
+- **Quests** (`gameplay/profile.ts`, title screen QUESTS): 20 lifetime goals (kills, bosses, champions,
+  cash, bounties, Mk V, evolutions, gadgets, dashes, chapter wins, danger) that unlock heroes, the Saw
+  Blades and Molotov gadgets, or pay Dust. The profile (tallies, unlocks, choices) lives in this browser.
+- **Danger 0-10** (`gameplay/danger.ts`): winning a chapter at Danger N unlocks N+1 for it (stepper on
+  the title screen); each level adds a rule (tougher, more, faster foes; dearer shop; less healing) and
+  +15% Dust.
+- **Route choice** (`gameplay/routes.ts`): before each regular level, pick one of three paths: Champion's
+  Hall, Supply Cache, Field Hospital, Cursed Ground, Black Market (next shop -25%, +1 offer), Training
+  Grounds.
+- **Dash** (button bottom right, Space / Shift): a short burst with invulnerability; level-up upgrades
+  Blink Pack (+1 charge), Quick Step (cooldown) and Afterburn (blast where it ends).
+- **Gun evolutions** (`gameplay/evolutions.ts`): every gun at Mk V plus its matching upgrade evolves at the
+  Gunsmith (Peacemaker, Widowmaker, Dragon Pump, Buzzsaw, ... Godspear, Inferno).
+- **Gadgets** (`gameplay/gadgets.ts`, `GadgetSystem.ts`): automatic side weapons in 2 slots (3 for the
+  Tinkerer), one offer per shop, Lv 1-4: Grenade Belt, Tesla Coil, Saw Blades, Molotov.
+- **Daily run** (`gameplay/daily.ts`, title screen DAILY): one seeded run a day (chapter, hero, danger and
+  the random numbers from the date), scored, best per day, and a share card (`ui/shareCard.ts`).
 - **Run summary** after a death or a win: time, kills, level, cleared levels, cash, damage taken, damage
   by source, Dust earned, the build. **Endless mode** after a cleared chapter: its last levels and boss
   fights loop, each loop tougher.

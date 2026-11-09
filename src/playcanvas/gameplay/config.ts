@@ -688,7 +688,7 @@ export const DROPS = {
 export type UpgradeId =
   | "rapidFire" | "heavyRounds" | "extendedMag" | "vitality" | "quickHands" | "piercing" | "adrenaline"
   | "incendiary" | "volatile" | "ricochet" | "splitShot" | "headhunter" | "chainLightning" | "drone" | "cryo" | "shockReload" | "bloodthirst"
-  | "dragonsBreath" | "deadeye" | "stormGrid" | "magnet"
+  | "dragonsBreath" | "deadeye" | "stormGrid" | "magnet" | "blink" | "quickStep" | "afterburn"
   | "armor" | "crit" | "medkit" | "fifthShot" | "vampire"
   | "pactFury" | "pactIron" | "pactSwift" | "pactRuin" | "pactEye" | "pactStorm";
 
@@ -698,7 +698,8 @@ export type UpgradeStat =
   | "critChance" | "critMult" | "critPierce" | "armor" | "maxHp" | "fifthShot" | "vampireChance" | "healOnKill"
   | "burnDps" | "burnVulnerability" | "fireSpread" | "explodeChance" | "explodeDamage" | "explosionsIgnite"
   | "ricochet" | "extraBullets"
-  | "chainChance" | "chainTargets" | "drones" | "techDamageMult" | "slowPct" | "shockDamage" | "magnetMult";
+  | "chainChance" | "chainTargets" | "drones" | "techDamageMult" | "slowPct" | "shockDamage" | "magnetMult"
+  | "dashCharges" | "dashCooldownMult" | "dashBlast";
 
 /**
  * One effect: `add` or `mul` a stat (clamped to `max` / `min`); `heal` restores HP (absolute) and
@@ -781,6 +782,13 @@ export const UPGRADES: UpgradeDef[] = [
     effects: [{ stat: "magnetMult", op: "mul", value: 1.4 }] },
   { id: "bloodthirst", name: "Bloodthirst", stat: "Heal on Kill", value: "+1 HP", icon: "drop", category: "player", rarity: "common", maxStacks: 3,
     effects: [{ stat: "healOnKill", op: "add", value: 1 }] },
+  // ---- Dash.
+  { id: "blink", name: "Blink Pack", stat: "Dash Charges", value: "+1", icon: "boot", category: "player", rarity: "rare", maxStacks: 2,
+    effects: [{ stat: "dashCharges", op: "add", value: 1 }] },
+  { id: "quickStep", name: "Quick Step", stat: "Dash Cooldown", value: "-25%", icon: "reload", category: "player", rarity: "common", maxStacks: 2,
+    effects: [{ stat: "dashCooldownMult", op: "mul", value: 0.75 }] },
+  { id: "afterburn", name: "Afterburn", stat: "Dash Ends in a Blast", value: "+30 damage", icon: "burst", category: "special", rarity: "rare", maxStacks: 2, tags: ["fire"],
+    effects: [{ stat: "dashBlast", op: "add", value: 30 }] },
   // ---- Evolution (offered once its requirements are met).
   { id: "dragonsBreath", name: "Dragon's Breath", stat: "Kills Explode in Flames ·", value: "Burn x2", icon: "flame", category: "special", rarity: "epic", maxStacks: 1, pools: ["levelUp"], tags: ["fire"],
     requires: [{ id: "incendiary", stacks: 3 }, { id: "volatile", stacks: 1 }],
@@ -883,7 +891,7 @@ export const upgradeText = (u: UpgradeDef): string => `${u.stat} ${u.value}`;
 
 export type ShopItemId =
   | "heal" | "maxHp" | "armor" | "damage" | "fireRate" | "magnet" | "boots" | "ammo" | "scope" | "loader"
-  | "hollowPoints" | "hairTrigger" | "exoFrame" | "crate" | "droneBay" | "mk"
+  | "hollowPoints" | "hairTrigger" | "exoFrame" | "crate" | "droneBay" | "mk" | "gadget"
   | "handCannon" | "shotgun" | "mp5" | "dualUzi" | "autoShotgun" | "rifle" | "battleRifle" | "marksman"
   | "plasma" | "pulseSmg" | "railgun" | "hellfire";
 
@@ -927,6 +935,7 @@ export const SHOP: ShopItem[] = [
   { id: "heal", title: "Medkit", text: "Heal to full", cost: 20, growth: 1.3 },
   // The equipped gun's next Mk (price from ARSENAL.mkPrice; always on the shelf while not maxed).
   { id: "mk", title: "Gunsmith", text: "Next Mk for your gun", cost: 0 },
+  { id: "gadget", title: "Gadget", text: "An automatic side weapon", cost: 0 },
   { id: "maxHp", title: "Vest", text: "+25 max HP", cost: 30, growth: 1.6, max: 4 },
   { id: "armor", title: "Plating", text: "+10% damage resistance", cost: 35, growth: 1.6, max: 3 },
   { id: "damage", title: "Gun Oil", text: "+10% weapon damage", cost: 28, growth: 1.6, max: 4 },

@@ -5,12 +5,12 @@ import { aimY, isAlive, type Enemy, type EnemyManager } from "./EnemyManager";
 import type { PlayerStats } from "./PlayerStats";
 
 /** What dealt a hit (decides which upgrades apply and how the number is shown). */
-export type HitSource = "bullet" | "ricochet" | "chain" | "explosion" | "burn" | "drone" | "shock";
+export type HitSource = "bullet" | "ricochet" | "chain" | "explosion" | "burn" | "drone" | "shock" | "gadget";
 
 /** Damage-number style for the HUD. */
 export type HitStyle = "normal" | "crit" | "burn" | "tech";
 
-const TECH: ReadonlySet<HitSource> = new Set(["chain", "drone", "shock"]);
+const TECH: ReadonlySet<HitSource> = new Set(["chain", "drone", "shock", "gadget"]);
 /** Sources that apply on-hit statuses (burn, slow) and can arc chain lightning. */
 const WEAPON: ReadonlySet<HitSource> = new Set(["bullet", "ricochet"]);
 
@@ -123,7 +123,7 @@ export class Combat {
   }
 
   /** Up to `count` living enemies nearest to (x, z) within `range`, excluding `skip`. */
-  private nearest(x: number, z: number, range: number, count: number, skip: Enemy[]): Enemy[] {
+  nearest(x: number, z: number, range: number, count: number, skip: Enemy[]): Enemy[] {
     const found: { e: Enemy; d: number }[] = [];
     for (const e of this.enemies.alive) {
       if (!isAlive(e) || skip.includes(e)) continue;
