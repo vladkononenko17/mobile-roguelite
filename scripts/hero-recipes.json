@@ -1,0 +1,102 @@
+{
+ "medic": {
+  "version": 1,
+  "editor": "AvatarEditor",
+  "name": "Medic",
+  "body": {
+   "gender": 0,
+   "age": 0.5,
+   "muscle": 0.62,
+   "weight": 0.45,
+   "race": {
+    "african": 0.1,
+    "asian": 0.1,
+    "caucasian": 0.8
+   }
+  },
+  "skin": {
+   "tone": 0.15,
+   "color": null
+  },
+  "eyes": "brown",
+  "face": {},
+  "hair": {
+   "style": "ponytail01",
+   "color": "#3b2618"
+  },
+  "eyebrows": "eyebrow005",
+  "eyebrowHeight": 0.8,
+  "moustache": null,
+  "beard": null,
+  "glasses": null,
+  "hat": null,
+  "outfit": null,
+  "top": "joepal_crude_t-shirt_female",
+  "bottom": "cortu_cargo_pants",
+  "shoes": "toigo_ankle_boots_male",
+  "makeup": {
+   "eyeshadow": {
+    "amount": 0,
+    "color": "#7a5a8c"
+   },
+   "lips": {
+    "amount": 0,
+    "color": "#a8323e"
+   },
+   "nails": {
+    "amount": 0,
+    "color": "#b0283a"
+   }
+  }
+ },
+ "demolitionist": {
+  "version": 1,
+  "editor": "AvatarEditor",
+  "name": "Demolitionist",
+  "body": {
+   "gender": 1,
+   "age": 0.6,
+   "muscle": 0.85,
+   "weight": 0.68,
+   "race": {
+    "african": 0.3,
+    "asian": 0.05,
+    "caucasian": 0.65
+   }
+  },
+  "skin": {
+   "tone": 0.35,
+   "color": null
+  },
+  "eyes": "brown",
+  "face": {},
+  "hair": {
+   "style": "short04",
+   "color": "#1e1712"
+  },
+  "eyebrows": "eyebrow002",
+  "eyebrowHeight": 0.8,
+  "moustache": null,
+  "beard": "beard_short",
+  "glasses": null,
+  "hat": null,
+  "outfit": "male_worksuit01",
+  "top": null,
+  "bottom": null,
+  "shoes": "toigo_ankle_boots_male",
+  "makeup": {
+   "eyeshadow": {
+    "amount": 0,
+    "color": "#7a5a8c"
+   },
+   "lips": {
+    "amount": 0,
+    "color": "#a8323e"
+   },
+   "nails": {
+    "amount": 0,
+    "color": "#b0283a"
+   }
+  }
+ }
+}

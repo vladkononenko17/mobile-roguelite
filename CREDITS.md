@@ -3,7 +3,7 @@
 Game by Neon Hollow. Third-party assets below; details and build steps in `assets-src/SOURCES.md`.
 
 ## Characters
-- Hero: "Zombie Apocalypse Survivor Male" by Codersan (Unity Asset Store, Standard EULA). "3D Alien Monster" by Codersan (same licence).
+- Hero: "Zombie Apocalypse Survivor Male" by Codersan (Unity Asset Store, Standard EULA). The Medic and the Demolitionist: made with the VRM Avatar Maker by Flemming Funch (github.com/ffunch/vrm-avatar-maker) from the MakeHuman community's CC0 assets (bodies, skins, hair, clothes). "3D Alien Monster" by Codersan (same licence).
 - Infected (rotter, bloater, ripper, abomination, hound, and the kit's four survivors re-skinned as the dead), aliens and mechs, Monster Pack Animated, Ultimate Monsters: Quaternius (quaternius.com), CC0. "Bestiary - Dungeon Monsters Kit": Quaternius Asset Licence.
 - Knights, skeletons and pirates: KayKit "Adventurers" and "Skeletons" by Kay Lousberg, CC0.
 - Monsters and dungeon pieces: "SHS Monsters Pack" and "SHS Dungeon Pack" - Assets created by Small Hearth Studios.

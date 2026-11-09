@@ -92,3 +92,11 @@ hellbats) and the wyvern (with the drakes), in fire colours with ember eyes. ORI
 for voidlings), a spiky floater (spitters), a squid (glubs, void for rift glubs), the tentacle-horned alien
 (hulks, void for rift brutes) and a blob (test subjects). Mixed in as extra looks of existing enemies
 (`ownSkins` keeps their own colour maps where a type has TYPE_SKINS).
+
+## Heroes: VRM Avatar Maker (CC0 MakeHuman assets)
+
+`heroes/` (git-ignored): `medic.vrm` and `demolitionist.vrm`, made with the VRM Avatar Maker by Flemming
+Funch (github.com/ffunch/vrm-avatar-maker; code MIT, every avatar asset CC0: MakeHuman community bodies,
+skins, hair, eyebrows and clothes, see its ASSETS.md) from `scripts/hero-recipes.json` by
+`scripts/export-avatars.mjs` (the maker served locally, driven headless), then rebound onto the V3
+Survivor's skeleton by `scripts/build-heroes.mjs` into `public/models/heroes/`.

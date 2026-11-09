@@ -289,8 +289,11 @@ The last and largest chapter of the 3D game at `/playcanvas.html`: open it from 
   upgrades flip in plus cash.
 - **Heroes** (`gameplay/heroes.ts`): Survivor (free), Medic (healing, speed) and Demolitionist (HP,
   explosions, Grenade Belt, 3 gadget slots), each a perk and a drawback; picked on the title screen
-  (HERO). The Medic and Demolitionist use the Survivor model until their own realistic models arrive
-  (`CHARACTERS` entries with the hero's id; `CharacterModel.posture` is there for big-headed bodies).
+  (HERO, with portraits). The Medic and the Demolitionist are realistic CC0 people made with the VRM
+  Avatar Maker (MakeHuman community assets; recipes in `scripts/hero-recipes.json`, exported headless by
+  `scripts/export-avatars.mjs`) and rebound onto the Survivor's Mixamo skeleton by
+  `scripts/build-heroes.mjs` (same clips, IK and grips; `CharacterModel.reach` scales the weapon stances
+  to their arm length).
 - **Quests** (`gameplay/profile.ts`, title screen QUESTS): 20 lifetime goals (kills, bosses, champions,
   cash, bounties, Mk V, evolutions, gadgets, dashes, chapter wins, danger) that unlock heroes, the Saw
   Blades and Molotov gadgets, or pay Dust. The profile (tallies, unlocks, choices) lives in this browser.

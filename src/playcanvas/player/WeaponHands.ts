@@ -63,7 +63,7 @@ export class WeaponHands {
   constructor(
     private readonly app: AppBase,
     model: Entity,
-    private readonly character: Pick<CharacterModel, "hands" | "fingers">,
+    private readonly character: Pick<CharacterModel, "hands" | "fingers" | "reach">,
   ) {
     this.leftIK = new ArmIK(model, "Left");
     this.rightIK = new ArmIK(model, "Right");
@@ -171,9 +171,11 @@ export class WeaponHands {
       // Anchor in the hero's facing frame: right = (-cos, 0, sin), forward = (sin, 0, cos) at yaw.
       const anchor = profile.anchor ?? [0, 0, 0];
       const shift = profile.runAnchorShift ?? [0, 0, 0];
-      const right = (anchor[0] + shift[0] * runBlend) * scale;
-      const up = (anchor[1] + shift[1] * runBlend) * scale;
-      const ahead = (anchor[2] + shift[2] * runBlend) * scale;
+      // Stances are tuned on the Survivor's arms: shorter arms hold the gun closer.
+      const reach = scale * (this.character.reach ?? 1);
+      const right = (anchor[0] + shift[0] * runBlend) * reach;
+      const up = (anchor[1] + shift[1] * runBlend) * reach;
+      const ahead = (anchor[2] + shift[2] * runBlend) * reach;
       const base = profile.hold === "shoulder" ? this.rightShoulder : this.chest;
       if (!base) return;
       palm.copy(base.getPosition()).add(this.a.set(-Math.cos(yaw) * right + Math.sin(yaw) * ahead, up, Math.sin(yaw) * right + Math.cos(yaw) * ahead));

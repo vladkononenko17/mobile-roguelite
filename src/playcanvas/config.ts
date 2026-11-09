@@ -40,6 +40,9 @@ export interface CharacterModel {
    * bodies lift the chest and head so the head clears the gun in the aiming and running poses.
    */
   posture?: { chestLiftDeg: number; headLiftDeg: number };
+  /** Arm length relative to the Survivor's (upper arm + forearm): scales the weapon stances' hand
+   *  positions, which are tuned on his long arms. */
+  reach?: number;
 }
 
 export type Vec3Tuple = [number, number, number];
@@ -63,8 +66,27 @@ export interface WeaponGrip extends GripFrame {
   rollRangeDeg?: number;
 }
 
+/**
+ * A hero model built by scripts/build-heroes.mjs: a VRM Avatar Maker person (CC0 MakeHuman assets) on
+ * the Survivor's skeleton, so it shares his clips, hand rig and grips. Its hips sit lower or higher
+ * than his, so the walk / run clips' native speeds scale with the hips height.
+ */
+function avatarHero(label: string, url: string, hipsY: number, knuckle: number, reach: number, palm = 1, fingerK = 1): CharacterModel {
+  const s = CHARACTERS_BASE.survivor;
+  const k = hipsY / 1.133;
+  // The palm grip sits at the same share of the hand (wrist to knuckles) as on his 12.2 cm hand.
+  const h = knuckle / 0.122;
+  const hand = (g: GripFrame): GripFrame => ({ ...g, position: [g.position[0] * h, g.position[1] * h, g.position[2] * palm] });
+  return {
+    ...s, label, url, walkNativeSpeed: s.walkNativeSpeed * k, runNativeSpeed: s.runNativeSpeed * k,
+    hands: { right: hand(s.hands.right), left: hand(s.hands.left) },
+    fingers: { ...s.fingers, thickness: s.fingers.thickness * fingerK },
+    reach,
+  };
+}
+
 /** Character GLBs selectable from the tune panel. All use a Mixamo-style rig with Walking / Running clips. */
-export const CHARACTERS = {
+const CHARACTERS_BASE = {
   survivor: {
     label: "Survivor (V3)",
     // "Zombie Apocalypse Survivor" by Codersan (Mixamo rig) built by scripts/build-survivor.mjs: its
@@ -88,6 +110,12 @@ export const CHARACTERS = {
     fingers: { rigid: true, curlAxis: [1, 0, 0], thickness: 0.011 },
     handRollDeg: { left: -237.0, right: -116.8 },
   },
+} satisfies Record<string, CharacterModel>;
+
+export const CHARACTERS = {
+  ...CHARACTERS_BASE,
+  medic: avatarHero("Medic", "models/heroes/medic.glb", 0.831, 0.093, 0.826),
+  demolitionist: avatarHero("Demolitionist", "models/heroes/demolitionist.glb", 0.947, 0.111, 0.955),
 } satisfies Record<string, CharacterModel>;
 
 export type CharacterId = keyof typeof CHARACTERS;
