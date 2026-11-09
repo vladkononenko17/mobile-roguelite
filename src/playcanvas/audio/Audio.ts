@@ -98,6 +98,10 @@ class AudioManager {
   private musicSource: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
   private unlocked = false;
   muted = false;
+  /** The game's pause menu is open (sound suspended until it closes). */
+  private paused = false;
+  /** Plays a blank inside a gesture and resumes the context (set up by init). */
+  private kick: () => void = () => {};
 
   /** Creates the context and hooks the unlock gesture; `base`: the site's base URL. */
   init(base: string): void {
@@ -126,7 +130,7 @@ class AudioManager {
     let htmlKick = false;
     const unlock = () => {
       const ctx = this.ctx;
-      if (!ctx || document.hidden || (this.unlocked && ctx.state === "running")) return;
+      if (!ctx || document.hidden || (this.unlocked && (ctx.state === "running" || this.paused))) return;
       // iOS: a (silent) sound started inside the gesture opens the output; an HTML audio element
       // played once moves older iOS to the playback session (sound with the silent switch on).
       const blank = ctx.createBufferSource();
@@ -150,8 +154,26 @@ class AudioManager {
     document.addEventListener("visibilitychange", () => {
       if (!this.ctx) return;
       if (document.hidden) void this.ctx.suspend();
-      else if (this.unlocked) void this.ctx.resume().catch(() => {});
+      else if (this.unlocked && !this.paused) void this.ctx.resume().catch(() => {});
     });
+    this.kick = () => {
+      const ctx = this.ctx;
+      if (!ctx) return;
+      const blank = ctx.createBufferSource();
+      blank.buffer = ctx.createBuffer(1, 1, 22050);
+      blank.connect(ctx.destination);
+      blank.start(0);
+      void ctx.resume().then(() => {
+        this.unlocked = true;
+        if (!this.musicSource && this.musicId && !this.muted) this.startMusic(this.musicId);
+      }, () => {});
+    };
+    // Safari can stop the output by itself ("interrupted", or suspended after a modal / route change):
+    // while playing, try to bring it back every second (a later tap also does).
+    window.setInterval(() => {
+      const ctx = this.ctx;
+      if (ctx && this.unlocked && !this.paused && !document.hidden && ctx.state !== "running") void ctx.resume().catch(() => {});
+    }, 1000);
     this.loadCounts();
   }
 
@@ -306,6 +328,18 @@ class AudioManager {
     gain.connect(this.musicBus);
     source.start(now, source.loopStart);
     this.musicSource = { source, gain };
+  }
+
+  /**
+   * The game's pause menu: suspends all sound; unpausing resumes it at once. Call `setPaused(false)`
+   * from the tap / click handler, so Safari treats the resume as part of the user gesture.
+   */
+  setPaused(paused: boolean): void {
+    if (this.paused === paused) return;
+    this.paused = paused;
+    if (!this.ctx) return;
+    if (paused) void this.ctx.suspend().catch(() => {});
+    else if (!document.hidden) this.kick();
   }
 
   /** Mutes / unmutes everything (remembered). */

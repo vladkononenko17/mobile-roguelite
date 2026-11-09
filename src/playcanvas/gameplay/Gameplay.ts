@@ -286,6 +286,7 @@ export class Gameplay {
     const playing = this.phase === "combat" || this.phase === "cleared" || this.phase === "travel";
     if (this.paused || this.choosing || !playing || !this.stats.alive || this.hud.modalOpen) return;
     this.paused = true;
+    audio.setPaused(true);
     this.pausedScale = this.app.timeScale;
     this.app.timeScale = 0;
     this.player.controlsEnabled = false;
@@ -305,6 +306,7 @@ export class Gameplay {
   resume(): void {
     if (!this.paused) return;
     this.paused = false;
+    audio.setPaused(false);
     this.hud.closeModal();
     this.app.timeScale = this.pausedScale;
     this.player.controlsEnabled = true;
@@ -443,6 +445,7 @@ export class Gameplay {
     }
     this.choosing = false;
     this.paused = false;
+    audio.setPaused(false);
     this.slowMo = 0;
     this.killHealBudget = 0;
     this.app.timeScale = 1;
@@ -626,6 +629,7 @@ export class Gameplay {
     this.pendingLevelUps = 0;
     this.choosing = false;
     this.paused = false;
+    audio.setPaused(false);
     this.slowMo = 0;
     this.app.timeScale = 1;
     this.shopRoll = null;
