@@ -107,7 +107,7 @@ export class WeaponHands {
       if (right && weapons.entity && weight > 0 && profile.hold !== "hand") {
         this.holdRight(weapons, profile, weight, facingYawDeg, runBlend);
       }
-      const oneHanded = AIM.oneHanded && profile !== WEAPON_CLASSES.dual;
+      const oneHanded = AIM.oneHanded.some((c) => WEAPON_CLASSES[c] === profile);
       if (oneHanded && weight > 0) this.relaxLeft(weight, facingYawDeg);
       else if (left && profile.leftHandIK && weight > 0) {
         this.solveLeftTarget(left.marker, left.def.radius, left.def.rollRangeDeg ?? 0);

@@ -733,10 +733,10 @@ export const ANIMATION = {
  */
 export const AIM = {
   /**
-   * One-handed holds: every gun but the dual Uzis is held in the gun hand only; the other arm hangs
-   * relaxed at the side (player/WeaponHands.ts relaxLeft) instead of reaching for the handguard.
+   * Weapon classes held in the gun hand only (pistols): the other arm hangs relaxed at the side
+   * (player/WeaponHands.ts relaxLeft). SMGs, rifles and shotguns keep both hands on the gun.
    */
-  oneHanded: true,
+  oneHanded: ["pistol"] as WeaponClass[],
   maxTwistDeg: 40,
   /** Share of a gripping hand's extra roll that the forearm takes as a twist about its own axis
    * (pronation / supination) instead of the wrist (player/ArmIK.ts). */
