@@ -1,5 +1,5 @@
 import { Color, Mat4, Quat, Vec3, math, type AppBase, type Entity, type GraphNode } from "playcanvas";
-import { AIM, AIM_STANCE, FINGER_GRIP, RECOIL, RELOAD, WEAPON_CLASSES, type CharacterModel, type WeaponClassProfile } from "../config";
+import { AIM, AIM_STANCE, FINGER_GRIP, ONE_HAND, RECOIL, RELOAD, WEAPON_CLASSES, type CharacterModel, type WeaponClassProfile } from "../config";
 import { FingerGrip } from "./FingerGrip";
 import { gripMatrix } from "./GripFrame";
 import { ArmIK } from "./ArmIK";
@@ -233,17 +233,18 @@ export class WeaponHands {
 
   /** Elbow directions for both arms from the class profile (mirrored for the left arm). */
   private setElbowPoles(profile: WeaponClassProfile, facingYawDeg: number): void {
-    const elbows = profile.elbows;
+    const oneHand = AIM.oneHanded.some((c) => WEAPON_CLASSES[c] === profile);
+    const elbows = oneHand ? ONE_HAND.elbow : profile.elbows;
     if (!elbows) {
       this.rightIK.setPole(null);
       this.leftIK.setPole(null);
       return;
     }
     const yaw = facingYawDeg * math.DEG_TO_RAD;
-    const weight = profile.elbowWeight ?? 1;
+    const weight = oneHand ? 1 : profile.elbowWeight ?? 1;
     // Hero's right = (-cos, 0, sin), forward = (sin, 0, cos) at yaw.
     for (const [ik, side] of [[this.rightIK, 1], [this.leftIK, -1]] as const) {
-      const [out, up, ahead] = side < 0 && profile.elbowsLeft ? profile.elbowsLeft : elbows;
+      const [out, up, ahead] = side < 0 && profile.elbowsLeft && !oneHand ? profile.elbowsLeft : elbows;
       const r = out * side;
       ik.setPole(this.pole.set(-Math.cos(yaw) * r + Math.sin(yaw) * ahead, up, Math.sin(yaw) * r + Math.cos(yaw) * ahead), weight);
     }
@@ -263,10 +264,14 @@ export class WeaponHands {
     const yaw = facingYawDeg * math.DEG_TO_RAD;
     // Aim.
     const forward = this.aim;
+    const oneHand = AIM.oneHanded.some((c) => WEAPON_CLASSES[c] === profile);
+    this.rightIK.maxReach = oneHand ? ONE_HAND.maxReach : 0.96;
     if (profile.hold === "clip") {
       handWorld.getY(forward).normalize();
     } else {
-      const pitchDeg = math.lerp(profile.pitchDeg ?? 0, profile.runPitchDeg ?? profile.pitchDeg ?? 0, runBlend);
+      const pitchDeg = oneHand
+        ? math.lerp(ONE_HAND.pitchDeg, ONE_HAND.runPitchDeg, runBlend)
+        : math.lerp(profile.pitchDeg ?? 0, profile.runPitchDeg ?? profile.pitchDeg ?? 0, runBlend);
       // Recoil flips the muzzle up; a reload tips it down toward the support hand.
       const pitch = (pitchDeg + weapons.recoil * RECOIL.pitchDeg - this.reloadTip(weapons) * RELOAD.tipDeg) * math.DEG_TO_RAD;
       forward.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
@@ -291,14 +296,15 @@ export class WeaponHands {
       handWorld.transformPoint(this.rightPalm, palm);
     } else {
       // Anchor in the hero's facing frame: right = (-cos, 0, sin), forward = (sin, 0, cos) at yaw.
-      const anchor = profile.anchor ?? [0, 0, 0];
-      const shift = profile.runAnchorShift ?? [0, 0, 0];
+      // One-handed (pistols): from the right shoulder, the arm out almost straight (GTA / CoD / BF).
+      const anchor = oneHand ? ONE_HAND.anchor : profile.anchor ?? [0, 0, 0];
+      const shift = oneHand ? ONE_HAND.runAnchorShift : profile.runAnchorShift ?? [0, 0, 0];
       // Stances are tuned on the Survivor's arms: shorter arms hold the gun closer.
       const reach = scale * (this.character.reach ?? 1);
       const right = (anchor[0] + shift[0] * runBlend) * reach;
       const up = (anchor[1] + shift[1] * runBlend) * reach;
       const ahead = (anchor[2] + shift[2] * runBlend) * reach;
-      const base = profile.hold === "shoulder" ? this.rightShoulder : this.chest;
+      const base = profile.hold === "shoulder" || oneHand ? this.rightShoulder : this.chest;
       if (!base) return;
       palm.copy(base.getPosition()).add(this.a.set(-Math.cos(yaw) * right + Math.sin(yaw) * ahead, up, Math.sin(yaw) * right + Math.cos(yaw) * ahead));
       if (profile.hold === "shoulder") {

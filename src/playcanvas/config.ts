@@ -819,6 +819,22 @@ export const AIM_STANCE = {
   headTiltDeg: 8,
 };
 
+/**
+ * One-handed pistol aim (GTA V / Call of Duty / Battlefield third person): the gun out in line with the
+ * right shoulder at shoulder height, the arm nearly straight (the elbow ~20 deg, pointing down, not out);
+ * at a run the arm drops to a low ready, muzzle down. Anchor: [right, up, ahead] from the right
+ * shoulder joint, metres on the Survivor's arms (scaled by each hero's reach).
+ */
+export const ONE_HAND = {
+  anchor: [-0.05, -0.05, 0.655] as Vec3Tuple,
+  runAnchorShift: [0.02, -0.22, -0.16] as Vec3Tuple,
+  pitchDeg: -3,
+  runPitchDeg: -32,
+  elbow: [0.2, -1, 0] as Vec3Tuple,
+  /** The arm may straighten to this share of its length (elbow ~20 deg; long guns keep 0.96, ~33 deg). */
+  maxReach: 0.985,
+};
+
 /** Shot recoil on the held gun: per full kick (WeaponHolder.recoil 1) the muzzle flips and the gun drives back. */
 export const RECOIL = { pitchDeg: 7, backMetres: 0.045 };
 
