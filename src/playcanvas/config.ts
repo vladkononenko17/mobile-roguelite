@@ -389,8 +389,15 @@ export const WEAPON_CLASSES: Record<WeaponClass, WeaponClassProfile> = {
     pose: "@idle", hold: "chest", anchor: [-0.02, -0.01, 0.44], pitchDeg: -4, runPitchDeg: -4, elbows: [0.8, -0.55, 0.3], elbowsLeft: [0.2, -0.9, 0.5], elbowWeight: 2,
     leftHandIK: true, fingerGrip: true, aimTwist: false,
   },
-  // The aiming clip drives the arms; hands are fitted to the rifle.
-  rifle: { pose: "Run_and_Shoot", hold: "clip", leftHandIK: true, fingerGrip: true, aimTwist: true },
+  // Rifles and SMGs the way shooters (and Battlefield / Call of Duty / GTA V heroes) hold them: the
+  // butt in the right shoulder pocket, the gun level at eye line and the head upright behind it; the
+  // gun arm's elbow out and down (~45 deg), the support elbow tucked under the gun, the support hand
+  // well forward on the handguard. At a run the stock drops off the shoulder into a low ready.
+  rifle: {
+    pose: "@idle", hold: "shoulder", anchor: [-0.05, -0.03, 0.04], pitchDeg: -2, runPitchDeg: -16, runAnchorShift: [-0.07, -0.06, 0.02],
+    elbows: [0.45, -0.85, 0.1], elbowsLeft: [0.1, -1, 0.25], elbowWeight: 1,
+    leftHandIK: true, fingerGrip: true, aimTwist: false,
+  },
   // Two compact guns held apart and pushed forward.  The hands sit close to the arms' maximum
   // reach (ArmIK keeps a small 4% safety bend), which gives the classic almost-straight dual-SMG
   // silhouette instead of tucking both elbows beside the ribs.  The light pole influence only
@@ -404,6 +411,7 @@ export const WEAPON_CLASSES: Record<WeaponClass, WeaponClassProfile> = {
   // off the shoulder toward the chest and the muzzle dips into a low ready carry across the body.
   shotgun: {
     pose: "@idle", hold: "shoulder", anchor: [-0.05, -0.03, 0.04], pitchDeg: -2, runPitchDeg: -16, runAnchorShift: [-0.07, -0.06, 0.02],
+    elbows: [0.45, -0.85, 0.1], elbowsLeft: [0.1, -1, 0.25], elbowWeight: 1,
     leftHandIK: true, fingerGrip: true, aimTwist: false,
   },
   // One-handed melee: locomotion (and attack clips) move the arm; the fingers close on the handle.
@@ -436,6 +444,18 @@ export interface WeaponDef {
 
 export type WeaponId = keyof typeof WEAPONS.list;
 export const DEFAULT_WEAPON: WeaponId | null = "rifle";
+
+/**
+ * Butt-plate centres (weapon space: muzzle -Z, top +Y; metres) of the shoulder-held guns, by model
+ * node - measured from the models (the furthest-back 1.5 cm of each, mid height). A weapon's own
+ * `stock` wins.
+ */
+export const BUTTS: Record<string, Vec3Tuple> = {
+  Rifle_Assault_East: [0, -0.03, 0.38], Rifle_Battle_East: [0, -0.041, 0.39], SMG_Full_East: [0, -0.027, 0.315],
+  Shotgun_Auto_East: [0, -0.007, 0.385], Shotgun_Pump_East: [0, -0.046, 0.418], Sniper_Material_East: [0, -0.018, 0.37],
+  Sniper_Rifle_East: [0, -0.027, 0.434], Plasma_Rifle: [0, -0.041, 0.39], Hellfire_Rifle: [0, -0.027, 0.434], Pulse_SMG: [0, -0.027, 0.315],
+  Railgun: [0, -0.018, 0.37],
+};
 export const DEFAULT_CHARACTER: CharacterId = "survivor";
 
 import type { SurfaceTextures } from "./world/Surface";

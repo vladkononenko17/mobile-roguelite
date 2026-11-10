@@ -1,5 +1,5 @@
 import { Entity, Mat4, Quat, Vec3, type AppBase, type Asset, type ContainerResource, type RenderComponent, type StandardMaterial } from "playcanvas";
-import { WEAPON_CLASSES, WEAPONS, type CharacterModel, type WeaponClassProfile, type WeaponDef, type WeaponGrip, type WeaponId } from "../config";
+import { BUTTS, WEAPON_CLASSES, WEAPONS, type CharacterModel, type WeaponClassProfile, type WeaponDef, type WeaponGrip, type WeaponId } from "../config";
 import { WEAPON_MODS, weaponMod, type WeaponModId } from "../weaponMods";
 import { gripMatrix } from "./GripFrame";
 import { CHARACTER_LIGHT_MASK } from "../world/Environment";
@@ -154,9 +154,10 @@ export class WeaponHolder {
         held.addChild(marker);
         this.markers.set(side, marker);
       }
-      if (def.stock) {
+      const butt = def.stock ?? BUTTS[def.node];
+      if (butt) {
         this.stockMarker = new Entity("Stock");
-        this.stockMarker.setLocalPosition(def.stock[0], def.stock[1], def.stock[2]);
+        this.stockMarker.setLocalPosition(butt[0], butt[1], butt[2]);
         held.addChild(this.stockMarker);
       }
       this.socketEntity.addChild(held);
