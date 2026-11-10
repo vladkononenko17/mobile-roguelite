@@ -76,7 +76,14 @@ export interface WeaponGrip extends GripFrame {
  * the grip's contact test (negative: the probe at the short finger chain's tip has to pass into the
  * handle before it counts as touching, because these realistic fingers reach well past it).
  */
-function avatarHero(label: string, url: string, hipsY: number, knuckle: number, reach: number, palm = 1, fingerK = 1): CharacterModel {
+/** docs/HERO_HOLD.md §3: the avatar heroes' support palm point, as a share of the scaled one. */
+let SUPPORT_ALONG = 0.35;
+if (typeof location !== "undefined") {
+  const v = Number(new URLSearchParams(location.search).get("support"));
+  if (v > 0) SUPPORT_ALONG = v;
+}
+
+function avatarHero(label: string, url: string, hipsY: number, knuckle: number, reach: number, palm = 1, fingerK = 1, support = SUPPORT_ALONG): CharacterModel {
   const s = CHARACTERS_BASE.survivor;
   const k = hipsY / 1.133;
   // The palm grip sits at the same share of the hand (wrist to knuckles) as on his 12.2 cm hand.
@@ -84,7 +91,9 @@ function avatarHero(label: string, url: string, hipsY: number, knuckle: number, 
   const hand = (g: GripFrame): GripFrame => ({ ...g, position: [g.position[0] * h, g.position[1] * h, g.position[2] * palm] });
   return {
     ...s, label, url, walkNativeSpeed: s.walkNativeSpeed * k, runNativeSpeed: s.runNativeSpeed * k,
-    hands: { right: hand(s.hands.right), left: hand(s.hands.left) },
+    // The support palm point sits nearer the wrist (`support` of the scaled distance along the hand) so
+    // the hand spans the handguard - knuckles past its far side - and the fingers close round it.
+    hands: { right: hand(s.hands.right), left: (() => { const l = hand(s.hands.left); return { ...l, position: [l.position[0], l.position[1] * support, l.position[2]] }; })() },
     fingers: { ...s.fingers, thickness: s.fingers.thickness * fingerK },
     reach,
   };
