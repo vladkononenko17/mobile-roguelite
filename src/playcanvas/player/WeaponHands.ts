@@ -1,5 +1,5 @@
 import { Color, Mat4, Quat, Vec3, math, type AppBase, type Entity, type GraphNode } from "playcanvas";
-import { AIM, WEAPON_CLASSES, type CharacterModel, type WeaponClassProfile } from "../config";
+import { AIM, AIM_STANCE, RECOIL, RELOAD, WEAPON_CLASSES, type CharacterModel, type WeaponClassProfile } from "../config";
 import { FingerGrip } from "./FingerGrip";
 import { gripMatrix } from "./GripFrame";
 import { ArmIK } from "./ArmIK";
@@ -39,6 +39,9 @@ export class WeaponHands {
   private readonly rightHand: GraphNode | null;
   private readonly leftHand: GraphNode | null;
   private readonly leftShoulder: GraphNode | null;
+  private readonly hips: GraphNode | null;
+  private readonly spine: GraphNode | null;
+  private readonly head: GraphNode | null;
   private readonly leftForeArm: GraphNode | null;
   /** The left hand's bind-pose local rotation (straight on the forearm). */
   private readonly leftRest = new Quat();
@@ -74,6 +77,9 @@ export class WeaponHands {
     this.rightHand = model.findByName("mixamorig:RightHand");
     this.leftHand = model.findByName("mixamorig:LeftHand");
     this.leftShoulder = model.findByName("mixamorig:LeftArm");
+    this.hips = model.findByName("mixamorig:Hips");
+    this.spine = model.findByName("mixamorig:Spine");
+    this.head = model.findByName("mixamorig:Head");
     this.leftForeArm = model.findByName("mixamorig:LeftForeArm");
     if (this.leftHand) this.leftRest.copy(this.leftHand.getLocalRotation());
     this.chest = model.findByName(AIM.chestBone);
@@ -104,22 +110,88 @@ export class WeaponHands {
     let targetValid = false;
     if (profile && weapons.gripped && this.character.hands) {
       this.setElbowPoles(profile, facingYawDeg);
+      const shoulder = profile.hold === "shoulder";
+      // Standing still with a long gun: side-on to the target, leaning into the gun (fades at a run).
+      const set = weight * (1 - runBlend);
+      if (shoulder && set > 0) this.stance(set, facingYawDeg);
       if (right && weapons.entity && weight > 0 && profile.hold !== "hand") {
         this.holdRight(weapons, profile, weight, facingYawDeg, runBlend);
       }
+      // Reload: the support hand leaves the gun for the magazine and back (0 -> 1 -> 0 over the reload).
+      const r = weapons.reloadPhase;
+      const fetchW = r >= 0 ? smooth(0, 0.15, r) * (1 - smooth(0.82, 1, r)) : 0;
       const oneHanded = AIM.oneHanded.some((c) => WEAPON_CLASSES[c] === profile);
-      if (oneHanded && weight > 0) this.relaxLeft(weight, facingYawDeg);
-      else if (left && profile.leftHandIK && weight > 0) {
+      if (oneHanded && weight > 0) {
+        this.relaxLeft(weight * (1 - fetchW), facingYawDeg);
+        if (fetchW > 0 && left) {
+          this.solveLeftTarget(left.marker, left.def.radius, left.def.rollRangeDeg ?? 0);
+          this.toMagazine(weapons, r, 1);
+          this.leftIK.apply(this.position, this.rotation, weight * fetchW, AIM.forearmTwistShare, AIM.elbowSwivelDeg);
+        }
+      } else if (left && profile.leftHandIK && weight > 0) {
         this.solveLeftTarget(left.marker, left.def.radius, left.def.rollRangeDeg ?? 0);
+        // Shorter arms hold further back on the handguard (the grips are set for the Survivor's reach).
+        const k = Math.min(1, (this.character.reach ?? 1) / 0.94) ** 2;
+        if (k < 1 && right) this.position.sub(this.a.copy(right.marker.getPosition())).mulScalar(k).add(right.marker.getPosition());
+        if (fetchW > 0) this.toMagazine(weapons, r, fetchW);
         this.leftIK.apply(this.position, this.rotation, weight, AIM.forearmTwistShare, AIM.elbowSwivelDeg);
         targetValid = true;
       }
+      // Cheek on the stock (after the arms, so the head follows the shouldered gun).
+      if (shoulder && set > 0) this.cheekWeld(set * (1 - fetchW), facingYawDeg);
       if (profile.fingerGrip) {
         if (right) this.wrap(this.rightFingers, right.marker, right.def.radius, 1);
-        if (left && profile.leftHandIK && !oneHanded) this.wrap(this.leftFingers, left.marker, left.def.radius, weight);
+        if (left && profile.leftHandIK && !oneHanded) this.wrap(this.leftFingers, left.marker, left.def.radius, weight * (1 - fetchW));
       }
     }
     if (this.debug) this.draw(weapons, targetValid);
+  }
+
+  /** How far into the reload's "gun on its side" pose (0..1). */
+  private reloadTip(weapons: WeaponHolder): number {
+    const r = weapons.reloadPhase;
+    return r >= 0 ? smooth(0, 0.2, r) * (1 - smooth(0.75, 1, r)) : 0;
+  }
+
+  /**
+   * The support hand during a reload: from its grip to the magazine well, down to the belt for a fresh
+   * magazine (mid reload), back up into the well and home to the grip (`fetchW` blends it in and out).
+   */
+  private toMagazine(weapons: WeaponHolder, r: number, fetchW: number): void {
+    const right = weapons.grip("right");
+    const mag = weapons.magazinePoint(this.a) ?? (right ? this.a.copy(right.marker.getPosition()).add(this.b.set(0, -0.08, 0)) : null);
+    if (!mag) return;
+    const scale = this.leftHand ? this.leftHand.getWorldTransform().getScale(this.b).x : 1;
+    const down = Math.sin(Math.PI * Math.min(1, Math.max(0, (r - 0.22) / 0.46))) * RELOAD.pouchMetres;
+    mag.y -= (0.02 + down) * scale;
+    this.position.lerp(this.position, mag, fetchW);
+  }
+
+  /**
+   * Bladed stance: the hips turn the gun side back (`AIM_STANCE.bladeDeg`), the chest turns part of
+   * the way back toward the target, the spine leans forward into the gun. World-space turns, so they
+   * read the same on every rig; the arms are solved afterwards.
+   */
+  private stance(weight: number, facingYawDeg: number): void {
+    const yaw = facingYawDeg * math.DEG_TO_RAD;
+    const right = this.b.set(-Math.cos(yaw), 0, Math.sin(yaw));
+    if (this.hips) this.turn(this.hips, Vec3.UP, -AIM_STANCE.bladeDeg * weight);
+    if (this.spine) this.turn(this.spine, right, -AIM_STANCE.leanDeg * weight);
+    if (this.chest) this.turn(this.chest, Vec3.UP, AIM_STANCE.bladeDeg * AIM_STANCE.chestBack * weight);
+  }
+
+  /** Cheek weld: the head nods forward and leans toward the stock (the right side). */
+  private cheekWeld(weight: number, facingYawDeg: number): void {
+    if (!this.head) return;
+    const yaw = facingYawDeg * math.DEG_TO_RAD;
+    this.turn(this.head, this.b.set(-Math.cos(yaw), 0, Math.sin(yaw)), -AIM_STANCE.headNodDeg * weight);
+    this.turn(this.head, this.b.set(Math.sin(yaw), 0, Math.cos(yaw)), AIM_STANCE.headTiltDeg * weight);
+  }
+
+  /** Turns a bone by `deg` about a world axis (keeping its position). */
+  private turn(bone: GraphNode, axis: Vec3, deg: number): void {
+    this.q3.setFromAxisAngle(axis, deg).mul(bone.getRotation());
+    bone.setRotation(this.q3);
   }
 
   /**
@@ -177,7 +249,8 @@ export class WeaponHands {
       handWorld.getY(forward).normalize();
     } else {
       const pitchDeg = math.lerp(profile.pitchDeg ?? 0, profile.runPitchDeg ?? profile.pitchDeg ?? 0, runBlend);
-      const pitch = pitchDeg * math.DEG_TO_RAD;
+      // Recoil flips the muzzle up; a reload tips it down toward the support hand.
+      const pitch = (pitchDeg + weapons.recoil * RECOIL.pitchDeg - this.reloadTip(weapons) * RELOAD.tipDeg) * math.DEG_TO_RAD;
       forward.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
     }
     // Desired weapon rotation: muzzle (-Z) along the aim, top (+Y) toward world up.
@@ -190,6 +263,9 @@ export class WeaponHands {
     d[0] = x.x; d[1] = x.y; d[2] = x.z; d[4] = y.x; d[5] = y.y; d[6] = y.z; d[8] = z.x; d[9] = z.y; d[10] = z.z;
     d[3] = d[7] = d[11] = d[12] = d[13] = d[14] = 0; d[15] = 1;
     const desiredWeapon = this.q1.setFromMat4(this.basis);
+    // Reload: the gun rolls onto its side (magazine toward the support hand).
+    const tip = this.reloadTip(weapons);
+    if (tip > 0) desiredWeapon.mul(this.q2.setFromAxisAngle(Vec3.FORWARD, -RELOAD.rollDeg * tip));
     const weaponInverse = this.rotation.copy(weapon.getRotation()).invert();
     // Palm point (the WeaponSocket).
     const palm = this.position;
@@ -215,6 +291,9 @@ export class WeaponHands {
         palm.add(desiredWeapon.transformVector(local, this.b));
       }
     }
+    // Recoil drives the gun back along its line (into the shoulder) and the reload drops it a little.
+    palm.sub(this.a.copy(forward).mulScalar(weapons.recoil * RECOIL.backMetres * scale));
+    palm.y -= tip * RELOAD.dropMetres * scale;
     // weapon = hand * S with S constant (socket and grip), so hand = weapon * inverse(S).
     const handToWeapon = this.q2.copy(hand.getRotation()).invert().mul(weapon.getRotation());
     const desiredHand = this.q3.copy(desiredWeapon).mul(handToWeapon.invert());
@@ -294,6 +373,12 @@ export class WeaponHands {
       this.app.drawLine(this.a, this.direction, color, false);
     }
   }
+}
+
+/** 0 below a, 1 above b, smooth between. */
+function smooth(a: number, b: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
 }
 
 function quatAngle(a: Quat, b: Quat): number {

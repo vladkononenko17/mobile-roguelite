@@ -32,6 +32,10 @@ export class WeaponHolder {
   private readonly overrides = new Map<WeaponId, WeaponDef>();
   private readonly handRoll = new Quat();
   current: WeaponId | null = null;
+  /** Recoil impulse of the last shots (0..1, decays fast; player/WeaponHands.ts kicks the gun). */
+  recoil = 0;
+  /** Reload progress 0..1 while reloading, else -1 (the support hand fetches the magazine). */
+  reloadPhase = -1;
 
   /** Called with the held weapon's upper-body clip (or null) whenever the weapon changes. */
   onPoseChange: (clipName: string | null) => void = () => {};
@@ -291,6 +295,19 @@ export class WeaponHolder {
     if (next.size === this.activeMods.size && [...next].every((id) => this.activeMods.has(id))) return;
     this.activeMods = next;
     if (refresh && this.current) this.equip(this.current);
+  }
+
+  /** A shot: adds `amount` of recoil (pistols ~0.6, rifles ~0.4, shotguns 1). */
+  kick(amount: number): void {
+    this.recoil = Math.min(1, this.recoil + amount);
+  }
+
+  /** World point of the held gun's magazine (its `magazineNode`), or null if it has none. */
+  magazinePoint(out: Vec3): Vec3 | null {
+    if (!this.current || !this.held) return null;
+    const node = this.definition(this.current).magazineNode;
+    const mag = node ? this.held.findByName(node) : null;
+    return mag ? out.copy(mag.getPosition()) : null;
   }
 
   /** The held weapon's class profile (null when empty-handed). */

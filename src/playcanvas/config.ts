@@ -161,7 +161,7 @@ export const WEAPONS = {
       label: "Assault rifle", class: "rifle", node: "Rifle_Assault_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.073, 0.09], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
-        left: { position: [0, -0.02, -0.15], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+        left: { position: [0, -0.02, -0.21], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
       },
       magazineNode: "Magazine",
       magazineAxis: "z",
@@ -175,7 +175,7 @@ export const WEAPONS = {
       label: "Shotgun", class: "shotgun", node: "Shotgun_Pump_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.02, 0.2], axis: [0, 0.97, 0.24], palm: [0.85, -0.13, 0.5], radius: 0.02 },
-        left: { position: [0, 0, -0.12], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+        left: { position: [0, 0, -0.18], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
       },
       stock: [0, -0.045, 0.42],
     },
@@ -197,7 +197,7 @@ export const WEAPONS = {
       label: "MP5 SMG", class: "rifle", node: "SMG_Full_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.073, 0.073], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
-        left: { position: [0, -0.006, -0.115], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.026, rollRangeDeg: 35 },
+        left: { position: [0, -0.006, -0.155], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.026, rollRangeDeg: 35 },
       },
       magazineNode: "Magazine",
       magazineAxis: "z",
@@ -223,7 +223,7 @@ export const WEAPONS = {
       label: "Auto shotgun (East)", class: "shotgun", node: "Shotgun_Auto_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.07, 0.205], axis: [0, 0.98, -0.2], palm: [0.85, 0.1, 0.5], radius: 0.02 },
-        left: { position: [0, 0.02, -0.11], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
+        left: { position: [0, 0.02, -0.16], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
       },
       stock: [0, 0, 0.39],
     },
@@ -233,7 +233,7 @@ export const WEAPONS = {
       label: "Pump shotgun (East)", class: "shotgun", node: "Shotgun_Pump_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.02, 0.2], axis: [0, 0.97, 0.24], palm: [0.85, -0.13, 0.5], radius: 0.02 },
-        left: { position: [0, 0, -0.12], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+        left: { position: [0, 0, -0.18], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
       },
       stock: [0, -0.045, 0.42],
     },
@@ -268,7 +268,7 @@ export const WEAPONS = {
       label: "Auto Shotgun", class: "shotgun", node: "Shotgun_Auto_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.07, 0.205], axis: [0, 0.98, -0.2], palm: [0.85, 0.1, 0.5], radius: 0.02 },
-        left: { position: [0, 0.02, -0.11], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
+        left: { position: [0, 0.02, -0.16], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
       },
       stock: [0, 0, 0.39],
       magazineNode: "Magazine", magazineAxis: "z",
@@ -279,7 +279,7 @@ export const WEAPONS = {
       label: "Battle Rifle", class: "rifle", node: "Rifle_Battle_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.073, 0.122], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
-        left: { position: [0, -0.015, -0.17], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+        left: { position: [0, -0.015, -0.22], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
       },
       magazineNode: "Magazine", magazineAxis: "z",
       modMounts: { suppressor: { anchor: "Attach_Muzzle" }, reflex: { anchor: "Attach_Scope" }, foregrip: { anchor: "Attach_Rail.Bottom" } },
@@ -290,7 +290,7 @@ export const WEAPONS = {
       label: "Marksman Rifle", class: "rifle", node: "Sniper_Material_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.073, -0.048], axis: [0, 0.97, -0.24], palm: [0.86, 0.14, 0.49], radius: 0.019 },
-        left: { position: [0, -0.02, -0.2], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+        left: { position: [0, -0.02, -0.25], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
       },
       magazineNode: "Magazine", magazineAxis: "z",
       modMounts: { suppressor: { anchor: "Attach_Muzzle" }, reflex: { anchor: "Attach_Scope" }, foregrip: { anchor: "Attach_Rail.Bottom" } },
@@ -300,14 +300,14 @@ export const WEAPONS = {
       label: "Pulse SMG", class: "rifle", node: "Pulse_SMG", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.073, 0.073], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
-        left: { position: [0, -0.006, -0.115], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.026, rollRangeDeg: 35 },
+        left: { position: [0, -0.006, -0.155], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.026, rollRangeDeg: 35 },
       },
     },
     railgun: {
       label: "Railgun", class: "rifle", node: "Railgun", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.073, -0.048], axis: [0, 0.97, -0.24], palm: [0.86, 0.14, 0.49], radius: 0.019 },
-        left: { position: [0, -0.02, -0.2], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+        left: { position: [0, -0.02, -0.25], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
       },
     },
     // Hell-chapter rifles (scripts/cc0-weapons.mjs): static recolours of two East rifles, their
@@ -318,14 +318,14 @@ export const WEAPONS = {
       label: "Plasma rifle", class: "rifle", node: "Plasma_Rifle", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.073, 0.122], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
-        left: { position: [0, -0.015, -0.17], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+        left: { position: [0, -0.015, -0.22], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
       },
     },
     hellfire: {
       label: "Hellfire rifle", class: "rifle", node: "Hellfire_Rifle", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.073, 0.137], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
-        left: { position: [0, -0.005, -0.2], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.022, rollRangeDeg: 35 },
+        left: { position: [0, -0.005, -0.25], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.022, rollRangeDeg: 35 },
       },
     },
   },
@@ -394,7 +394,7 @@ export const WEAPON_CLASSES: Record<WeaponClass, WeaponClassProfile> = {
   // gun arm's elbow out and down (~45 deg), the support elbow tucked under the gun, the support hand
   // well forward on the handguard. At a run the stock drops off the shoulder into a low ready.
   rifle: {
-    pose: "@idle", hold: "shoulder", anchor: [-0.05, -0.03, 0.04], pitchDeg: -2, runPitchDeg: -16, runAnchorShift: [-0.07, -0.06, 0.02],
+    pose: "@idle", hold: "shoulder", anchor: [-0.05, 0.025, 0.04], pitchDeg: -2, runPitchDeg: -16, runAnchorShift: [-0.07, -0.06, 0.02],
     elbows: [0.45, -0.85, 0.1], elbowsLeft: [0.1, -1, 0.25], elbowWeight: 1,
     leftHandIK: true, fingerGrip: true, aimTwist: false,
   },
@@ -410,7 +410,7 @@ export const WEAPON_CLASSES: Record<WeaponClass, WeaponClassProfile> = {
   // Stock in the right shoulder pocket (inside the shoulder joint), level; at a run the stock drops
   // off the shoulder toward the chest and the muzzle dips into a low ready carry across the body.
   shotgun: {
-    pose: "@idle", hold: "shoulder", anchor: [-0.05, -0.03, 0.04], pitchDeg: -2, runPitchDeg: -16, runAnchorShift: [-0.07, -0.06, 0.02],
+    pose: "@idle", hold: "shoulder", anchor: [-0.05, 0.025, 0.04], pitchDeg: -2, runPitchDeg: -16, runAnchorShift: [-0.07, -0.06, 0.02],
     elbows: [0.45, -0.85, 0.1], elbowsLeft: [0.1, -1, 0.25], elbowWeight: 1,
     leftHandIK: true, fingerGrip: true, aimTwist: false,
   },
@@ -773,6 +773,26 @@ export const AIM = {
     { bone: "mixamorig:Spine2", share: 0.35 },
   ],
 };
+
+/**
+ * Long-gun stance (player/WeaponHands.ts), the way Battlefield / Call of Duty / GTA V heroes stand:
+ * side-on to the target (the hips turned the gun side back), the chest turned part way back to it,
+ * leaning into the gun; the head nods onto the stock and leans to it (cheek weld). Fades at a run.
+ */
+export const AIM_STANCE = {
+  bladeDeg: 24,
+  /** Share of the blade the chest turns back toward the target. */
+  chestBack: 0.55,
+  leanDeg: 7,
+  headNodDeg: 9,
+  headTiltDeg: 8,
+};
+
+/** Shot recoil on the held gun: per full kick (WeaponHolder.recoil 1) the muzzle flips and the gun drives back. */
+export const RECOIL = { pitchDeg: 7, backMetres: 0.045 };
+
+/** Reload pose: the gun tips down and rolls, the support hand goes to the magazine and to the belt. */
+export const RELOAD = { tipDeg: 14, rollDeg: 28, dropMetres: 0.05, pouchMetres: 0.16 };
 
 /**
  * Procedural finger grip (player/FingerGrip.ts): each finger joint bends toward the palm, after the

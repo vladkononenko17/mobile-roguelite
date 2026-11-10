@@ -92,6 +92,9 @@ export class PlayerGun {
       this.reloading -= dt;
       if (this.reloading <= 0) this.ammo = stats.magazine;
     }
+    // For the hands: reload progress and the recoil decaying (a ~60 ms kick).
+    weapon.reloadPhase = this.reloading > 0 ? 1 - this.reloading / Math.max(0.01, stats.reloadSeconds) : -1;
+    weapon.recoil *= Math.exp(-dt * 16);
     // Empty: reload at once. Partly empty with nothing to shoot for a moment: top up.
     if (this.reloading <= 0 && this.ammo < stats.magazine && (this.ammo <= 0 || this.idle > 1.5)) {
       this.reloading = stats.reloadSeconds;
@@ -233,6 +236,8 @@ export class PlayerGun {
     const shot = stats.audio ?? { id: `shot_${this.weaponKey}`, volume: 1, rate: 1 };
     audio.play(shot.id, { volume: shot.volume, rate: shot.rate });
     const muzzle = weapon.muzzle(this.muzzle, this.shotCount - 1) ?? this.muzzle.copy(this.origin);
+    // Recoil: heavier per shot for slow, big guns (shotgun ~1, pistol ~0.45, automatic rifle ~0.35).
+    weapon.kick(Math.min(1, 0.3 + 0.5 / Math.max(1, stats.fireRate) + (stats.pellets > 1 ? 0.25 : 0)));
     const fx = stats.fx;
     this.effects.muzzleFlash(muzzle, fx?.muzzleSize ?? (stats.pellets > 1 ? 0.32 : 0.22), fx?.muzzle);
     const baseAngle = Math.atan2(tx, tz);

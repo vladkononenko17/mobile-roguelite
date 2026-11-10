@@ -59,3 +59,23 @@ Guns are never scaled per hero. A smaller hero gets a smaller hand, not a bigger
 2. Run `npm test`. The proportions test covers §1 and §2 for every built hero.
 3. Render pistol, SMG and rifle holds from the side and from the game camera (pitch ~70°), and compare
    with the Survivor.
+
+## 5. Long-gun stance, recoil and reload (`config.ts` `AIM_STANCE`, `RECOIL`, `RELOAD`)
+
+These match how Battlefield, Call of Duty and GTA V heroes handle rifles, SMGs and shotguns:
+- **Shouldered:** the butt plate (`BUTTS`, measured per model) sits in the right shoulder pocket, about
+  7 cm from the shoulder joint. The gun is raised to cheek height, level, with the head upright behind
+  it. Long guns never take the old run-and-shoot clip's hunched pose.
+- **Bladed when standing:** the hips turn 24° gun-side back, the chest turns 55% of that back toward
+  the target, and the spine leans 7° into the gun. The head nods 9° and leans 8° onto the stock (cheek
+  weld). All of it fades out at a run, where the gun drops to a low ready.
+- **Support hand far forward:** on the handguard or the pump, 5–6 cm further forward than the first
+  grips. Shorter arms scale this back by (reach / 0.94)², so the Medic still reaches.
+- **Recoil:** every shot kicks the gun back into the shoulder (4.5 cm) and flips the muzzle (7°),
+  decaying in about 60 ms. Per shot, a shotgun kicks about 1, a pistol about 0.45 and an automatic
+  rifle about 0.35.
+- **Reload:**
+  - the gun tips down 14° and rolls 28° onto its side;
+  - the support hand goes from its grip to the magazine, down to the belt for a fresh magazine, back
+    into the well, and home to the grip;
+  - one-handed pistols bring the free hand in for the reload too.
