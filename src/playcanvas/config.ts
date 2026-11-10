@@ -121,7 +121,7 @@ export const CHARACTERS = {
   ...CHARACTERS_BASE,
   medic: avatarHero("Medic", "models/heroes/medic.glb", 0.831, 0.093, 0.826, 1, -1.4),
   demolitionist: avatarHero("Demolitionist", "models/heroes/demolitionist.glb", 0.947, 0.111, 0.955, 1, -1.4),
-  drifter: avatarHero("Drifter", "models/heroes/drifter.glb", 0.933, 0.109, 0.94, 1, -1.4),
+  drifter: avatarHero("Drifter", "models/heroes/drifter.glb", 0.933, 0.109, 0.94, 0.6, -1.4),
 } satisfies Record<string, CharacterModel>;
 
 export type CharacterId = keyof typeof CHARACTERS;
@@ -185,7 +185,7 @@ export const WEAPONS = {
       label: "Pistol", class: "pistol", node: "Pistol_Full_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.07, 0.06], axis: [0, 0.98, -0.21], palm: [0.9, 0.09, 0.42], radius: 0.016 },
-        left: { position: [0, -0.085, 0.055], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.045, rollRangeDeg: 15 },
+        left: { position: [0, -0.085, 0.055], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.026, rollRangeDeg: 15 },
       },
     },
     // "Flat Guns East" (flat colours)
@@ -244,14 +244,14 @@ export const WEAPONS = {
       label: "Pistol (East)", class: "pistol", node: "Pistol_Full_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.07, 0.06], axis: [0, 0.98, -0.21], palm: [0.9, 0.09, 0.42], radius: 0.016 },
-        left: { position: [0, -0.085, 0.055], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.045, rollRangeDeg: 15 },
+        left: { position: [0, -0.085, 0.055], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.026, rollRangeDeg: 15 },
       },
     },
     eastPistolCompact: {
       label: "Compact pistol (East)", class: "pistol", node: "Pistol_Compact_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.055, 0.03], axis: [0, 0.98, -0.21], palm: [0.9, 0.09, 0.42], radius: 0.016 },
-        left: { position: [0, -0.07, 0.025], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.045, rollRangeDeg: 15 },
+        left: { position: [0, -0.07, 0.025], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.026, rollRangeDeg: 15 },
       },
     },
     // The arsenal's other guns (gameplay ids; the east* entries above are the raw models).
@@ -259,7 +259,7 @@ export const WEAPONS = {
       label: "Hand Cannon", class: "pistol", node: "Pistol_Compact_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.055, 0.03], axis: [0, 0.98, -0.21], palm: [0.9, 0.09, 0.42], radius: 0.016 },
-        left: { position: [0, -0.07, 0.025], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.045, rollRangeDeg: 15 },
+        left: { position: [0, -0.07, 0.025], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.026, rollRangeDeg: 15 },
       },
       magazineNode: "Magazine", magazineAxis: "z",
       modMounts: { suppressor: { anchor: "Attach_Muzzle" }, reflex: { anchor: "Attach_Scope" } },

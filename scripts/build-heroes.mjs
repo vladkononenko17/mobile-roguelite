@@ -88,7 +88,7 @@ const TINTS = {
  * pulled `hem` m further down (a parka over the hips).
  */
 const PUFF = {
-  drifter: { garment: "toigo_fisherman_sweater", base: 0.022, quilt: 0.011, pitch: 0.085, hem: 0.11 },
+  drifter: { garment: "toigo_fisherman_sweater", base: 0.022, quilt: 0.011, pitch: 0.085, hem: 0.11, arm: [0.35, 0.2], cuff: 0.05, cinch: { radius: 0.034, length: 0.09 } },
 };
 
 /** Spine, Spine1, Spine2 as shares of the Survivor's hips-to-neck height (1.133 -> 1.679 m). */
@@ -164,12 +164,40 @@ async function build(name, vrmPath) {
         for (let i = 0; i < wp.count; i++) nmap.set(key(wp.getX(i), wp.getY(i), wp.getZ(i)), [wn.getX(i), wn.getY(i), wn.getZ(i)]);
         let minY = Infinity;
         for (let i = 1; i < a.length; i += 3) if (Math.abs(a[i - 1]) < 0.25) minY = Math.min(minY, a[i]);
+        // Sleeves taper (docs/HERO_HOLD.md): full puff on the body, `arm[0]` of it at the shoulder down to
+        // `arm[1]` at the forearm, and a tight elastic cuff (`cuff`) over the last few centimetres - so the
+        // sleeve never swells over the hand. On the arms the puff is radial only (no push along the arm).
+        const shoulderX = Math.abs(P("leftUpperArm").x), wristX = Math.abs(P("leftHand").x);
+        const [armA, armB] = puff.arm ?? [1, 1], cuff = puff.cuff ?? 1;
         for (let i = 0; i < a.length; i += 3) {
-          const [nx, ny, nz] = nmap.get(key(a[i], a[i + 1], a[i + 2])) ?? [0, 0, 1];
+          let [nx, ny, nz] = nmap.get(key(a[i], a[i + 1], a[i + 2])) ?? [0, 0, 1];
           const arm = Math.abs(a[i]) > 0.2;
           const coord = arm ? Math.abs(a[i]) : a[i + 1];
-          const d = puff.base + puff.quilt * Math.abs(Math.sin((Math.PI * coord) / puff.pitch));
-          a[i] += nx * d; a[i + 1] += ny * d * 0.6; a[i + 2] += nz * d;
+          let f = 1;
+          if (arm) {
+            const t = Math.min(1, Math.max(0, (Math.abs(a[i]) - shoulderX) / (wristX - shoulderX)));
+            const toWrist = wristX - Math.abs(a[i]);
+            f = toWrist < 0.05 ? cuff + (armB - cuff) * Math.max(0, toWrist / 0.05) : armA + (armB - armA) * t;
+            const k = Math.hypot(ny, nz) || 1;
+            nx = 0; ny /= k; nz /= k;
+          }
+          const d = f * (puff.base + puff.quilt * Math.abs(Math.sin((Math.PI * coord) / puff.pitch)));
+          a[i] += nx * d; a[i + 1] += ny * d * (arm ? 1 : 0.6); a[i + 2] += nz * d;
+          // Elastic cuff: over the last `cinch.length` m the sleeve is drawn in to `cinch.radius` round the
+          // forearm's axis (the knit sleeve hangs loose at the wrist; a parka's cuff does not).
+          const cinch = puff.cinch;
+          if (arm && cinch) {
+            const side = a[i] > 0 ? "left" : "right", lo = P(`${side}LowerArm`), hd = P(`${side}Hand`);
+            const u = Math.min(1, Math.max(0, (a[i] - lo.x) / (hd.x - lo.x)));
+            const ay = lo.y + (hd.y - lo.y) * u, az = lo.z + (hd.z - lo.z) * u;
+            const toWrist = Math.abs(hd.x) - Math.abs(a[i]);
+            if (toWrist < cinch.length) {
+              const dy = a[i + 1] - ay, dz = a[i + 2] - az, rr = Math.hypot(dy, dz);
+              const w = Math.min(1, Math.max(0, 1 - toWrist / cinch.length)) ** 0.7;
+              const target = Math.min(rr, cinch.radius + (rr - cinch.radius) * (1 - w));
+              if (rr > 1e-6) { a[i + 1] = ay + (dy * target) / rr; a[i + 2] = az + (dz * target) / rr; }
+            }
+          }
           // The lowest band of the torso (the hem) slides down over the hips.
           if (!arm && a[i + 1] < minY + 0.09) a[i + 1] -= puff.hem * (1 - (a[i + 1] - minY) / 0.09);
         }
