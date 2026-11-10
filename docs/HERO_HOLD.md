@@ -69,8 +69,10 @@ These match how Battlefield, Call of Duty and GTA V heroes handle rifles, SMGs a
 - **Bladed when standing:** the hips turn 24° gun-side back, the chest turns 55% of that back toward
   the target, and the spine leans 7° into the gun. The head nods 9° and leans 8° onto the stock (cheek
   weld). All of it fades out at a run, where the gun drops to a low ready.
-- **Support hand far forward:** on the handguard or the pump, 5–6 cm further forward than the first
-  grips. Shorter arms scale this back by (reach / 0.94)², so the Medic still reaches.
+- **Support hand on the handguard:** on the middle of the handguard (or on the pump), in front of the
+  magazine, never on the barrel. Moving every grip 5–6 cm forward put the MP5 hand 7 cm from the
+  muzzle, so the grips are now hand-placed per gun. Shorter arms scale the reach back by
+  (reach / 0.94)², so the Medic still gets there.
 - **Recoil:** every shot kicks the gun back into the shoulder (4.5 cm) and flips the muzzle (7°),
   decaying in about 60 ms. Per shot, a shotgun kicks about 1, a pistol about 0.45 and an automatic
   rifle about 0.35.

@@ -192,7 +192,7 @@ export const WEAPONS = {
       label: "Assault rifle", class: "rifle", node: "Rifle_Assault_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.073, 0.09], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
-        left: { position: [0, -0.02, -0.21], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+        left: { position: [0, -0.02, -0.17], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
       },
       magazineNode: "Magazine",
       magazineAxis: "z",
@@ -228,7 +228,7 @@ export const WEAPONS = {
       label: "MP5 SMG", class: "rifle", node: "SMG_Full_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.073, 0.073], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
-        left: { position: [0, -0.006, -0.155], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.026, rollRangeDeg: 35 },
+        left: { position: [0, -0.006, -0.115], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.026, rollRangeDeg: 35 },
       },
       magazineNode: "Magazine",
       magazineAxis: "z",
@@ -254,7 +254,7 @@ export const WEAPONS = {
       label: "Auto shotgun (East)", class: "shotgun", node: "Shotgun_Auto_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.07, 0.205], axis: [0, 0.98, -0.2], palm: [0.85, 0.1, 0.5], radius: 0.02 },
-        left: { position: [0, 0.02, -0.16], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
+        left: { position: [0, 0.02, -0.13], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
       },
       stock: [0, 0, 0.39],
     },
@@ -299,7 +299,7 @@ export const WEAPONS = {
       label: "Auto Shotgun", class: "shotgun", node: "Shotgun_Auto_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.07, 0.205], axis: [0, 0.98, -0.2], palm: [0.85, 0.1, 0.5], radius: 0.02 },
-        left: { position: [0, 0.02, -0.16], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
+        left: { position: [0, 0.02, -0.13], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
       },
       stock: [0, 0, 0.39],
       magazineNode: "Magazine", magazineAxis: "z",
@@ -310,7 +310,7 @@ export const WEAPONS = {
       label: "Battle Rifle", class: "rifle", node: "Rifle_Battle_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.073, 0.122], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
-        left: { position: [0, -0.015, -0.22], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+        left: { position: [0, -0.015, -0.18], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
       },
       magazineNode: "Magazine", magazineAxis: "z",
       modMounts: { suppressor: { anchor: "Attach_Muzzle" }, reflex: { anchor: "Attach_Scope" }, foregrip: { anchor: "Attach_Rail.Bottom" } },
@@ -331,7 +331,7 @@ export const WEAPONS = {
       label: "Pulse SMG", class: "rifle", node: "Pulse_SMG", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.073, 0.073], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
-        left: { position: [0, -0.006, -0.155], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.026, rollRangeDeg: 35 },
+        left: { position: [0, -0.006, -0.115], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.026, rollRangeDeg: 35 },
       },
     },
     railgun: {
@@ -349,14 +349,14 @@ export const WEAPONS = {
       label: "Plasma rifle", class: "rifle", node: "Plasma_Rifle", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.073, 0.122], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
-        left: { position: [0, -0.015, -0.22], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+        left: { position: [0, -0.015, -0.18], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
       },
     },
     hellfire: {
       label: "Hellfire rifle", class: "rifle", node: "Hellfire_Rifle", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.073, 0.137], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
-        left: { position: [0, -0.005, -0.25], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.022, rollRangeDeg: 35 },
+        left: { position: [0, -0.005, -0.2], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.022, rollRangeDeg: 35 },
       },
     },
   },
