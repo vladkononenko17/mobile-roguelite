@@ -434,8 +434,8 @@ export const WEAPON_CLASSES: Record<WeaponClass, WeaponClassProfile> = {
   // silhouette instead of tucking both elbows beside the ribs.  The light pole influence only
   // decides which way that remaining bend points.
   dual: {
-    pose: "@idle", hold: "chest", anchor: [0.17, -0.055, 0.57], pitchDeg: -3, runPitchDeg: -6,
-    runAnchorShift: [0, -0.025, -0.015], elbows: [0.35, -0.3, 0.85], elbowWeight: 0.55,
+    pose: "@idle", hold: "chest", anchor: [0.17, -0.055, 0.7], pitchDeg: -3, runPitchDeg: -6,
+    runAnchorShift: [0, -0.025, -0.015], elbows: [0.15, -1, 0.1], elbowWeight: 1,
     leftHandIK: true, fingerGrip: true, aimTwist: false,
   },
   // Stock in the right shoulder pocket (inside the shoulder joint), level; at a run the stock drops

@@ -47,6 +47,9 @@ Guns are never scaled per hero. A smaller hero gets a smaller hand, not a bigger
   4.5 cm to 2.6 cm). The support fingers sit under the trigger guard.
 - **SMG and rifle support hand:** under the handguard, palm up and fingers round it. The palm centre is
   ≤ 8 cm from its grip mark, and the elbow points down, not out.
+- **Dual SMGs:** both arms pushed out almost straight, one gun in front of each shoulder, the elbows
+  bent about 20° and pointing down (never out or up). Both arms may open to 98.5% of their length, as
+  for the one-handed pistol, and the second gun is not pulled in for shorter arms.
 - **Both hands the same size on screen:** same bone scale, no sleeve swelling over either hand (§1).
   The hand nearer the camera will look a little larger; that is perspective and fine.
 - **Palm offset per hero** (`avatarHero(..., palm)` in `config.ts`): the Survivor's hands are chunky, and
@@ -59,6 +62,9 @@ Guns are never scaled per hero. A smaller hero gets a smaller hand, not a bigger
 2. Run `npm test`. The proportions test covers §1 and §2 for every built hero.
 3. Render pistol, SMG and rifle holds from the side and from the game camera (pitch ~70°), and compare
    with the Survivor.
+4. In the game, add `?arsenal=1` to the link: a TEST panel (top left) switches to any gun mid-level
+   (also Q / E), switches hero (the page reloads into the same map with the same gun), and has god
+   mode and frozen enemies.
 
 ## 5. Long-gun stance, recoil and reload (`config.ts` `AIM_STANCE`, `RECOIL`, `RELOAD`)
 

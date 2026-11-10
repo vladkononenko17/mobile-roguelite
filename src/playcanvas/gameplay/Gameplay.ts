@@ -1,5 +1,6 @@
 import { Vec3, type AnimTrack, type AppBase, type Asset, type ContainerResource, type Entity, type Texture } from "playcanvas";
-import { WEAPONS, type WeaponId } from "../config";
+import { CHARACTERS, WEAPONS, type WeaponId } from "../config";
+import { ArsenalPanel, TEST_ARSENAL } from "../ui/ArsenalPanel";
 import { audio } from "../audio/Audio";
 import { BIOME_AUDIO, BOSS_MUSIC, COMMON_SOUNDS, footstepAt, footstepsOf, voiceOf, voiceRate } from "../audio/soundMap";
 import type { PlayerController } from "../player/PlayerController";
@@ -86,6 +87,10 @@ const SLOW_MO = { seconds: 1.1, scale: 0.3 };
 export class Gameplay {
   phase: RunPhase = "loading";
   readonly stats = new PlayerStats();
+  /** ?arsenal=1 test panel (any gun, any hero, god mode, frozen enemies). */
+  private arsenal: ArsenalPanel | null = null;
+  private testGod = false;
+  private testFreeze = false;
   readonly enemies: EnemyManager;
   readonly gun: PlayerGun;
   readonly director: SpawnDirector;
@@ -215,6 +220,7 @@ export class Gameplay {
     const daily = pendingDaily();
     this.daily = daily && daily.chapter === biome.id ? daily : null;
     if (this.daily && this.campaign?.difficulties) this.params.set("difficulty", this.campaign.defaultDifficulty ?? Object.keys(this.campaign.difficulties)[0]);
+    if (TEST_ARSENAL) this.setupArsenal(biome.id);
     this.enemies.onPlayerHit = (damage, from) => {
       const c = this.rules?.cripple === false ? undefined : from.def.cripple;
       if (c) this.cripple = { time: Math.max(this.cripple.time, c.seconds), slow: Math.min(this.cripple.time > 0 ? this.cripple.slow : 1, c.slow) };
@@ -485,7 +491,7 @@ export class Gameplay {
     if (!this.baseCount) this.baseCount = this.levels.length;
     this.levels.splice(this.baseCount);
     const kit = this.campaign?.run;
-    const requested = DEV_MODE ? this.params.get("weapon") : null;
+    const requested = DEV_MODE || TEST_ARSENAL ? this.params.get("weapon") : null;
     this.weapons.setMods([], false);
     // Later chapters start one rung up the arsenal ladder; the pistol stays in the loadout.
     if (kit?.startWeapon) s.owned.add(kit.startWeapon);
@@ -591,6 +597,34 @@ export class Gameplay {
     this.weapons.setMods(this.stats.modsFor(weapon), false);
     this.weapons.equip(weapon);
     this.gun.reset();
+    this.arsenal?.refresh();
+  }
+
+  /** The ?arsenal=1 test panel: switch gun mid-level, switch hero (reload into this map), cheats. */
+  private setupArsenal(biomeId: string): void {
+    const url = new URL(location.href);
+    this.arsenal = new ArsenalPanel({
+      weapons: (Object.keys(WEAPON_STATS) as WeaponId[]).map((id) => ({ id, label: WEAPONS.list[id].label })),
+      heroes: Object.entries(CHARACTERS).map(([id, c]) => ({ id, label: c.label.replace(/ \(.*\)$/, "") })),
+      currentWeapon: () => this.stats.weapon ?? "",
+      currentHero: url.searchParams.get("model") ?? "",
+      onWeapon: (id) => {
+        if (this.phase === "loading") return;
+        this.equip(id as WeaponId);
+      },
+      onHero: (id) => {
+        const next = new URL(location.href);
+        next.searchParams.set("model", id);
+        if (this.stats.weapon) next.searchParams.set("weapon", this.stats.weapon);
+        // Straight back into this map (no title screen), on the difficulty already chosen.
+        next.searchParams.delete("biome");
+        next.searchParams.set("level", biomeId === "facility" ? "space" : biomeId);
+        if (this.difficultyId) next.searchParams.set("difficulty", this.difficultyId);
+        location.replace(next);
+      },
+      onGod: (on) => { this.testGod = on; },
+      onCalm: (on) => { this.testFreeze = on; },
+    });
   }
 
   /** Damages the hero; returns whether any damage was taken. */
@@ -1770,6 +1804,7 @@ export class Gameplay {
         this.navTimer = 0.3;
       }
       this.stats.invulnerable = Math.max(0, this.stats.invulnerable - dt);
+      if (this.testGod) this.stats.invulnerable = Math.max(this.stats.invulnerable, 0.5);
       // Tar and hellhound bites slow the hero; demons keep pace with his speed upgrades.
       this.cripple.time = Math.max(0, this.cripple.time - dt);
       this.player.speedMultiplier = this.stats.moveSpeedMult * (this.hazards.playerInTar ? TRAPS.tarSlow : 1) * (this.cripple.time > 0 ? this.cripple.slow : 1);
@@ -1777,7 +1812,8 @@ export class Gameplay {
       const rate = this.rules?.killHealPerSecond;
       if (rate !== undefined) this.killHealBudget = Math.min(rate * 2, this.killHealBudget + rate * dt);
       this.log.time += dt;
-      this.director.update(dt, position, this.projector);
+      if (this.testFreeze) this.enemies.pace = 0;
+      else this.director.update(dt, position, this.projector);
       this.updateElites(dt, position);
       this.enemies.update(dt, position, this.stats.alive);
       this.combat.update(dt);

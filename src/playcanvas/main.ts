@@ -2,6 +2,7 @@ import { CHARACTERS, DEFAULT_CHARACTER, type CharacterId } from "./config";
 import { audio } from "./audio/Audio";
 import { Game } from "./Game";
 import { DEV_MODE } from "./devMode";
+import { TEST_ARSENAL } from "./ui/ArsenalPanel";
 import { chapterName, menuWanted, showMainMenu } from "./ui/MainMenu";
 import { pickBiome, type BiomeId } from "./world/level/Biomes";
 import { heroFor } from "./gameplay/profile";
@@ -20,6 +21,11 @@ const isCharacterId = (value: string | null): value is CharacterId => value !== 
 // Dev: ?model=<id> wins, then the last tune-panel choice. Players: the body of the hero they picked on
 // the title screen (the daily run's hero on a daily); every hero id is also a character id.
 function pickCharacter(biome: string): CharacterId {
+  // The ?arsenal=1 test panel switches heroes through ?model= too.
+  if (TEST_ARSENAL) {
+    const fromUrl = new URLSearchParams(location.search).get("model");
+    if (isCharacterId(fromUrl)) return fromUrl;
+  }
   if (DEV_MODE) {
     const fromUrl = new URLSearchParams(location.search).get("model");
     if (isCharacterId(fromUrl)) return fromUrl;

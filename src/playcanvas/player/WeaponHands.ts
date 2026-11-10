@@ -131,7 +131,8 @@ export class WeaponHands {
       } else if (left && profile.leftHandIK && weight > 0) {
         this.solveLeftTarget(left.marker, left.def.radius, left.def.rollRangeDeg ?? 0);
         // Shorter arms hold further back on the handguard (the grips are set for the Survivor's reach).
-        const k = Math.min(1, (this.character.reach ?? 1) / 0.94) ** 2;
+        // (Not for dual guns: the second gun is already placed for this hero's reach.)
+        const k = profile === WEAPON_CLASSES.dual ? 1 : Math.min(1, (this.character.reach ?? 1) / 0.94) ** 2;
         if (k < 1 && right) this.position.sub(this.a.copy(right.marker.getPosition())).mulScalar(k).add(right.marker.getPosition());
         if (fetchW > 0) this.toMagazine(weapons, r, fetchW);
         this.leftIK.apply(this.position, this.rotation, weight, AIM.forearmTwistShare, AIM.elbowSwivelDeg);
@@ -265,7 +266,10 @@ export class WeaponHands {
     // Aim.
     const forward = this.aim;
     const oneHand = AIM.oneHanded.some((c) => WEAPON_CLASSES[c] === profile);
-    this.rightIK.maxReach = oneHand ? ONE_HAND.maxReach : 0.96;
+    // Pistols and dual SMGs are held out at arm's length: let the arms open almost straight.
+    const extended = oneHand || profile === WEAPON_CLASSES.dual;
+    this.rightIK.maxReach = extended ? ONE_HAND.maxReach : 0.96;
+    this.leftIK.maxReach = profile === WEAPON_CLASSES.dual ? ONE_HAND.maxReach : 0.96;
     if (profile.hold === "clip") {
       handWorld.getY(forward).normalize();
     } else {
