@@ -214,6 +214,7 @@ export class EnemyManager {
           m.diffuse.set(0, 0, 0);
           m.useLighting = false;
           m.blendType = BLEND_ADDITIVE;
+          m.useFog = false; // additive: fog would add its colour over the whole quad
           m.depthWrite = false;
           m.emissive = new Color(1.6, 0.55, 0.12);
           m.update();

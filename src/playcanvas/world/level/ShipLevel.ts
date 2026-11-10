@@ -266,6 +266,7 @@ function barrierMaterial(app: AppBase): StandardMaterial {
   });
   m.useLighting = false;
   m.blendType = BLEND_ADDITIVE;
+  m.useFog = false; // additive: fog would add its colour over the whole quad
   m.depthWrite = false;
   m.cull = 0;
   m.update();

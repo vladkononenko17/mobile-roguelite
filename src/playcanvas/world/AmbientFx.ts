@@ -94,6 +94,7 @@ export class AmbientFx {
     hot.emissive = new Color(1, 0.72, 0.3);
     hot.useLighting = false;
     hot.blendType = BLEND_ADDITIVE;
+    hot.useFog = false; // additive: fog would add its colour over the whole quad
     hot.depthWrite = false;
     hot.update();
     for (let i = 0; i < SPARK_POOL; i++) {
@@ -240,8 +241,8 @@ export class AmbientFx {
       material.emissiveMap = e.kind === "sigil" ? (this.sigilTexture ??= pentagram(this.app)) : this.glowTexture;
       material.useLighting = false;
       material.useSkybox = false;
-      material.useFog = true;
       material.blendType = BLEND_ADDITIVE;
+      material.useFog = false; // additive: fog would add its colour over the whole quad
       material.depthWrite = false;
       material.update();
       if (e.pulse) this.pulses.push({ material, rate: e.pulse, base: k, phase: Math.random() * 6.28 });
