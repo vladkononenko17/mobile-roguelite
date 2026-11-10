@@ -142,6 +142,13 @@ export class WeaponHands {
       if (profile.fingerGrip) {
         if (right) this.wrap(this.rightFingers, right.marker, right.def.radius, 1);
         if (left && profile.leftHandIK && !oneHanded) this.wrap(this.leftFingers, left.marker, left.def.radius, weight * (1 - fetchW));
+        // Reloading: the fingers hold the magazine (a closed grip round the hand's own palm line).
+        if (fetchW > 0 && this.leftFingers && this.leftHand) {
+          const m = this.leftHand.getWorldTransform();
+          m.getTranslation(this.origin);
+          m.getZ(this.direction).normalize();
+          this.leftFingers.apply(this.origin, this.direction, 0.012 * m.getScale(this.a).x, weight * fetchW);
+        }
       }
     }
     if (this.debug) this.draw(weapons, targetValid);
@@ -158,13 +165,22 @@ export class WeaponHands {
    * magazine (mid reload), back up into the well and home to the grip (`fetchW` blends it in and out).
    */
   private toMagazine(weapons: WeaponHolder, r: number, fetchW: number): void {
-    const right = weapons.grip("right");
-    const mag = weapons.magazinePoint(this.a) ?? (right ? this.a.copy(right.marker.getPosition()).add(this.b.set(0, -0.08, 0)) : null);
-    if (!mag) return;
+    const left = weapons.grip("left");
+    const mag = this.magazine(weapons, this.a);
+    if (!mag || !left) return;
     const scale = this.leftHand ? this.leftHand.getWorldTransform().getScale(this.b).x : 1;
-    const down = Math.sin(Math.PI * Math.min(1, Math.max(0, (r - 0.22) / 0.46))) * RELOAD.pouchMetres;
-    mag.y -= (0.02 + down) * scale;
-    this.position.lerp(this.position, mag, fetchW);
+    const down = Math.sin(Math.PI * Math.min(1, Math.max(0, (r - 0.25) / 0.4))) * RELOAD.pouchMetres;
+    mag.y -= down * scale;
+    // Move the whole hand by the grip -> magazine offset (the wrist target is the grip's, so the palm
+    // lands on the magazine exactly as it lands on the handguard).
+    this.position.add(mag.sub(left.marker.getPosition()).mulScalar(fetchW));
+  }
+
+  /** The magazine well point: the gun's magazine node, else under the firing hand's grip. */
+  private magazine(weapons: WeaponHolder, out: Vec3): Vec3 | null {
+    if (weapons.magazinePoint(out)) return out;
+    const right = weapons.grip("right");
+    return right ? out.copy(right.marker.getPosition()).add(this.b.set(0, -0.07, 0)) : null;
   }
 
   /**

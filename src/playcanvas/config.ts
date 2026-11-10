@@ -792,7 +792,7 @@ export const AIM_STANCE = {
 export const RECOIL = { pitchDeg: 7, backMetres: 0.045 };
 
 /** Reload pose: the gun tips down and rolls, the support hand goes to the magazine and to the belt. */
-export const RELOAD = { tipDeg: 14, rollDeg: 28, dropMetres: 0.05, pouchMetres: 0.16 };
+export const RELOAD = { tipDeg: 14, rollDeg: 28, dropMetres: 0.05, pouchMetres: 0.09 };
 
 /**
  * Procedural finger grip (player/FingerGrip.ts): each finger joint bends toward the palm, after the
