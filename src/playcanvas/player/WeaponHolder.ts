@@ -1,5 +1,5 @@
-import { Entity, Mat4, Quat, Vec3, type AppBase, type Asset, type ContainerResource, type RenderComponent, type StandardMaterial } from "playcanvas";
-import { BUTTS, WEAPON_CLASSES, WEAPONS, type CharacterModel, type WeaponClassProfile, type WeaponDef, type WeaponGrip, type WeaponId } from "../config";
+import { Color, Entity, Mat4, Quat, StandardMaterial, Vec3, math, type GraphNode, type AppBase, type Asset, type ContainerResource, type RenderComponent } from "playcanvas";
+import { BUTTS, RELOAD, WEAPON_CLASSES, WEAPONS, type CharacterModel, type WeaponClassProfile, type WeaponDef, type WeaponGrip, type WeaponId } from "../config";
 import { WEAPON_MODS, weaponMod, type WeaponModId } from "../weaponMods";
 import { gripMatrix } from "./GripFrame";
 import { CHARACTER_LIGHT_MASK } from "../world/Environment";
@@ -34,15 +34,108 @@ export class WeaponHolder {
   current: WeaponId | null = null;
   /** Recoil impulse of the last shots (0..1, decays fast; player/WeaponHands.ts kicks the gun). */
   recoil = 0;
+  private phase = -1;
+  /** Each held gun's magazine marker and rails (the drop direction), for the reload's spent magazines. */
+  private magazines: { node: Entity; top: Entity | null; bottom: Entity | null; muzzle: Entity | null }[] = [];
+  /** Spent magazines falling out of the guns: world velocity, ground height, age. */
+  private readonly dropped: { entity: Entity; velocity: Vec3; ground: number; age: number; landed: boolean }[] = [];
+  private magMaterial: StandardMaterial | null = null;
+  private readonly magTmp = new Vec3();
+  private readonly magTmp2 = new Vec3();
+  private readonly magBasis = new Mat4();
+
   /** Reload progress 0..1 while reloading, else -1 (the support hand fetches the magazine). */
-  reloadPhase = -1;
+  get reloadPhase(): number {
+    return this.phase;
+  }
+
+  set reloadPhase(value: number) {
+    // Early in every reload each gun drops its spent magazine (both guns of a dual pair).
+    if (value >= RELOAD.ejectAt && (this.phase < 0 || this.phase < RELOAD.ejectAt)) this.ejectMagazines();
+    this.phase = value;
+  }
+
+  /** A magazine-sized dark block at each gun's magazine well, falling free (gun down axis + gravity). */
+  private ejectMagazines(): void {
+    if (!this.held) return;
+    if (!this.magMaterial) {
+      this.magMaterial = new StandardMaterial();
+      this.magMaterial.diffuse = new Color(0.07, 0.07, 0.075);
+      this.magMaterial.metalness = 0.4;
+      this.magMaterial.useMetalness = true;
+      this.magMaterial.gloss = 0.45;
+      this.magMaterial.update();
+    }
+    const [w, h, d] = RELOAD.magSize;
+    for (const m of this.magazines) {
+      // Down: the gun's top rail -> bottom rail; along: magazine -> muzzle (flattened off "down").
+      const down = this.magTmp;
+      if (m.top && m.bottom) down.sub2(m.bottom.getPosition(), m.top.getPosition()).normalize();
+      else down.set(0, -1, 0);
+      const along = this.magTmp2;
+      if (m.muzzle) along.sub2(m.muzzle.getPosition(), m.node.getPosition());
+      else along.set(0, 0, 1);
+      along.sub(new Vec3().copy(down).mulScalar(along.dot(down))).normalize();
+      const side = new Vec3().cross(down, along).normalize();
+      const e = new Entity("SpentMagazine");
+      e.addComponent("render", { type: "box", material: this.magMaterial, castShadows: true });
+      const b = this.magBasis.data;
+      b[0] = side.x; b[1] = side.y; b[2] = side.z; b[4] = -down.x; b[5] = -down.y; b[6] = -down.z; b[8] = along.x; b[9] = along.y; b[10] = along.z;
+      b[3] = b[7] = b[11] = b[12] = b[13] = b[14] = 0; b[15] = 1;
+      e.setRotation(new Quat().setFromMat4(this.magBasis));
+      // Centred half its length below the well.
+      e.setPosition(m.node.getPosition().clone().add(new Vec3().copy(down).mulScalar(h * 0.5)));
+      e.setLocalScale(w, h, d);
+      this.app.root.addChild(e);
+      this.dropped.push({ entity: e, velocity: new Vec3().copy(down).mulScalar(1.2), ground: this.findGround() ?? 0, age: 0, landed: false });
+    }
+  }
+
+  /** The hero's feet height (the character root under which the weapon socket lives). */
+  private findGround(): number | null {
+    let n = this.socketEntity?.parent ?? null;
+    let last: GraphNode | null = null;
+    while (n && n !== this.app.root) { last = n; n = n.parent; }
+    return last ? last.getPosition().y : null;
+  }
+
+  /** Spent magazines: fall, land flat, lie a moment, sink away. */
+  private updateDropped(dt: number): void {
+    for (let i = this.dropped.length - 1; i >= 0; i--) {
+      const m = this.dropped[i];
+      m.age += dt;
+      const p = this.magTmp2.copy(m.entity.getPosition());
+      const half = RELOAD.magSize[0] * 0.5;
+      if (!m.landed) {
+        m.velocity.y -= 9.8 * dt;
+        p.add(this.magTmp.copy(m.velocity).mulScalar(dt));
+        if (p.y <= m.ground + half) {
+          p.y = m.ground + half;
+          m.landed = true;
+          // Lands lying on its side.
+          const yaw = Math.atan2(m.velocity.x, m.velocity.z) * math.RAD_TO_DEG;
+          m.entity.setEulerAngles(0, yaw, 90);
+        }
+        m.entity.setPosition(p);
+      } else if (m.age > RELOAD.magLife) {
+        p.y -= dt * 0.1;
+        m.entity.setPosition(p);
+      }
+      if (m.age > RELOAD.magLife + 0.6) {
+        m.entity.destroy();
+        this.dropped.splice(i, 1);
+      }
+    }
+  }
 
   /** Called with the held weapon's upper-body clip (or null) whenever the weapon changes. */
   onPoseChange: (clipName: string | null) => void = () => {};
   /** Called after every equip (e.g. to show or hide the attack button). */
   onChange: () => void = () => {};
 
-  constructor(private readonly app: AppBase) {}
+  constructor(private readonly app: AppBase) {
+    app.on("update", (dt: number) => this.updateDropped(dt));
+  }
 
   async load(url: string): Promise<void> {
     const asset = await new Promise<Asset>((resolve, reject) => {
@@ -122,6 +215,7 @@ export class WeaponHolder {
 
   /** Puts `id` in the hand (null = empty hands). */
   equip(id: WeaponId | null): void {
+    this.magazines = [];
     this.held?.destroy();
     this.held = null;
     this.markers.clear();
@@ -146,6 +240,16 @@ export class WeaponHolder {
       guns.push(second);
     }
     this.applyMods(def, guns);
+    this.magazines = [];
+    for (const gun of guns) {
+      const node = def.magazineNode ? (gun.findByName(def.magazineNode) as Entity | null) : null;
+      if (node) this.magazines.push({
+        node,
+        top: gun.findByName("Attach_Rail.Top") as Entity | null,
+        bottom: gun.findByName("Attach_Rail.Bottom") as Entity | null,
+        muzzle: gun.findByName("Attach_Muzzle") as Entity | null,
+      });
+    }
     if (def.grips && this.socketEntity) {
       // Weapon in socket space = inverse of (scale * right grip frame at the handle surface).
       const grip = new Mat4().setScale(scale, scale, scale).mul(gripMatrix(def.grips.right, new Mat4(), def.grips.right.radius));
@@ -305,9 +409,8 @@ export class WeaponHolder {
   /** World point of the held gun's magazine (its `magazineNode`), or null if it has none. */
   magazinePoint(out: Vec3): Vec3 | null {
     if (!this.current || !this.held) return null;
-    const node = this.definition(this.current).magazineNode;
-    const mag = node ? this.held.findByName(node) : null;
-    return mag ? out.copy(mag.getPosition()) : null;
+    const m = this.magazines[0];
+    return m ? out.copy(m.node.getPosition()) : null;
   }
 
   /** The held weapon's class profile (null when empty-handed). */

@@ -50,6 +50,11 @@ Guns are never scaled per hero. A smaller hero gets a smaller hand, not a bigger
 - **Dual SMGs:** both arms pushed out almost straight, one gun in front of each shoulder, the elbows
   bent about 20° and pointing down (never out or up). Both arms may open to 98.5% of their length, as
   for the one-handed pistol, and the second gun is not pulled in for shorter arms.
+- **Reloads (GTA / CoD):** every gun with a magazine drops the spent one, which falls and lies on
+  the ground a moment. A one-handed pistol comes in from arm's length to the chest so the free hand
+  can reach the grip. Dual guns both come in with the muzzles tipped up. Both magazines drop, and
+  neither hand leaves its gun; the left gun is held with the plain palm (`leftGunHand`), not the
+  handguard grip.
 - **Both hands the same size on screen:** same bone scale, no sleeve swelling over either hand (§1).
   The hand nearer the camera will look a little larger; that is perspective and fine.
 - **Palm offset per hero** (`avatarHero(..., palm)` in `config.ts`): the Survivor's hands are chunky, and

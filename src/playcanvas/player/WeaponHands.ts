@@ -36,6 +36,7 @@ export class WeaponHands {
   private readonly rightFingers: FingerGrip | null;
   private readonly leftFingers: FingerGrip | null;
   private readonly leftPalmInverse = new Mat4();
+  private readonly leftGunPalmInverse = new Mat4();
   private readonly rightHand: GraphNode | null;
   private readonly leftHand: GraphNode | null;
   private readonly leftShoulder: GraphNode | null;
@@ -70,7 +71,7 @@ export class WeaponHands {
   constructor(
     private readonly app: AppBase,
     model: Entity,
-    private readonly character: Pick<CharacterModel, "hands" | "fingers" | "reach" | "supportRollDeg">,
+    private readonly character: Pick<CharacterModel, "hands" | "fingers" | "reach" | "supportRollDeg" | "leftGunHand">,
   ) {
     this.leftIK = new ArmIK(model, "Left");
     this.rightIK = new ArmIK(model, "Right");
@@ -89,6 +90,7 @@ export class WeaponHands {
     this.leftFingers = fingers ? new FingerGrip(model, "Left", fingers.supportJoints ? { ...fingers, rigid: false } : fingers) : null;
     if (character.hands) {
       gripMatrix(character.hands.left, this.leftPalmInverse).invert();
+      gripMatrix(character.leftGunHand ?? character.hands.left, this.leftGunPalmInverse).invert();
       const p = character.hands.right.position;
       this.rightPalm.set(p[0], p[1], p[2]);
     }
@@ -119,7 +121,8 @@ export class WeaponHands {
       }
       // Reload: the support hand leaves the gun for the magazine and back (0 -> 1 -> 0 over the reload).
       const r = weapons.reloadPhase;
-      const fetchW = r >= 0 ? smooth(0, 0.15, r) * (1 - smooth(0.82, 1, r)) : 0;
+      // (Dual guns: no fetch - each hand keeps its own gun through the reload.)
+      const fetchW = r >= 0 && profile !== WEAPON_CLASSES.dual ? smooth(0, 0.15, r) * (1 - smooth(0.82, 1, r)) : 0;
       const oneHanded = AIM.oneHanded.some((c) => WEAPON_CLASSES[c] === profile);
       if (oneHanded && weight > 0) {
         this.relaxLeft(weight * (1 - fetchW), facingYawDeg);
@@ -129,12 +132,13 @@ export class WeaponHands {
           this.leftIK.apply(this.position, this.rotation, weight * fetchW, AIM.forearmTwistShare, AIM.elbowSwivelDeg);
         }
       } else if (left && profile.leftHandIK && weight > 0) {
-        this.solveLeftTarget(left.marker, left.def.radius, left.def.rollRangeDeg ?? 0);
+        this.solveLeftTarget(left.marker, left.def.radius, left.def.rollRangeDeg ?? 0, profile === WEAPON_CLASSES.dual);
         // Shorter arms hold further back on the handguard (the grips are set for the Survivor's reach).
         // (Not for dual guns: the second gun is already placed for this hero's reach.)
         const k = profile === WEAPON_CLASSES.dual ? 1 : Math.min(1, (this.character.reach ?? 1) / 0.94) ** 2;
         if (k < 1 && right) this.position.sub(this.a.copy(right.marker.getPosition())).mulScalar(k).add(right.marker.getPosition());
-        if (fetchW > 0) this.toMagazine(weapons, r, fetchW);
+        // Dual guns: each hand keeps its own gun (both magazines drop and refill on their own).
+        if (fetchW > 0 && profile !== WEAPON_CLASSES.dual) this.toMagazine(weapons, r, fetchW);
         this.leftIK.apply(this.position, this.rotation, weight, AIM.forearmTwistShare, AIM.elbowSwivelDeg);
         targetValid = true;
       }
@@ -146,7 +150,7 @@ export class WeaponHands {
         const minDeg = profile === WEAPON_CLASSES.dual ? 0 : FINGER_GRIP.supportMinDeg;
         if (left && profile.leftHandIK && !oneHanded) this.wrap(this.leftFingers, left.marker, left.def.radius, weight * (1 - fetchW), minDeg);
         // Reloading: the fingers hold the magazine (a closed grip round the hand's own palm line).
-        if (fetchW > 0 && this.leftFingers && this.leftHand) {
+        if (fetchW > 0 && this.leftFingers && this.leftHand && profile !== WEAPON_CLASSES.dual) {
           const m = this.leftHand.getWorldTransform();
           m.getTranslation(this.origin);
           m.getZ(this.direction).normalize();
@@ -217,6 +221,8 @@ export class WeaponHands {
    * The free arm of a one-handed hold: the wrist hangs beside the hip (a hair forward and out), the
    * elbow a little back, the hand straight on the forearm - instead of where the aim clip left it.
    */
+  private readonly anchorTmp: [number, number, number] = [0, 0, 0];
+
   private relaxLeft(weight: number, facingYawDeg: number): void {
     const shoulder = this.leftShoulder, hand = this.leftHand, fore = this.leftForeArm;
     if (!shoulder || !hand || !fore) return;
@@ -277,7 +283,8 @@ export class WeaponHands {
         ? math.lerp(ONE_HAND.pitchDeg, ONE_HAND.runPitchDeg, runBlend)
         : math.lerp(profile.pitchDeg ?? 0, profile.runPitchDeg ?? profile.pitchDeg ?? 0, runBlend);
       // Recoil flips the muzzle up; a reload tips it down toward the support hand.
-      const pitch = (pitchDeg + weapons.recoil * RECOIL.pitchDeg - this.reloadTip(weapons) * RELOAD.tipDeg) * math.DEG_TO_RAD;
+      const tipDeg = profile === WEAPON_CLASSES.dual ? -RELOAD.dualTipDeg : RELOAD.tipDeg;
+      const pitch = (pitchDeg + weapons.recoil * RECOIL.pitchDeg - this.reloadTip(weapons) * tipDeg) * math.DEG_TO_RAD;
       forward.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
     }
     // Desired weapon rotation: muzzle (-Z) along the aim, top (+Y) toward world up.
@@ -292,7 +299,8 @@ export class WeaponHands {
     const desiredWeapon = this.q1.setFromMat4(this.basis);
     // Reload: the gun rolls onto its side (magazine toward the support hand).
     const tip = this.reloadTip(weapons);
-    if (tip > 0) desiredWeapon.mul(this.q2.setFromAxisAngle(Vec3.FORWARD, -RELOAD.rollDeg * tip));
+    // (Not dual guns: rolling the pair about the right grip would swing the left gun up or down.)
+    if (tip > 0 && profile !== WEAPON_CLASSES.dual) desiredWeapon.mul(this.q2.setFromAxisAngle(Vec3.FORWARD, -RELOAD.rollDeg * tip));
     const weaponInverse = this.rotation.copy(weapon.getRotation()).invert();
     // Palm point (the WeaponSocket).
     const palm = this.position;
@@ -301,13 +309,21 @@ export class WeaponHands {
     } else {
       // Anchor in the hero's facing frame: right = (-cos, 0, sin), forward = (sin, 0, cos) at yaw.
       // One-handed (pistols): from the right shoulder, the arm out almost straight (GTA / CoD / BF).
-      const anchor = oneHand ? ONE_HAND.anchor : profile.anchor ?? [0, 0, 0];
+      const hold = oneHand ? ONE_HAND.anchor : profile.anchor ?? [0, 0, 0];
       const shift = oneHand ? ONE_HAND.runAnchorShift : profile.runAnchorShift ?? [0, 0, 0];
+      // Reloading: a pistol (or a pair of guns) comes in from arm's length (GTA / CoD), and back out.
+      const inAnchor = oneHand ? RELOAD.pistolAnchor : profile === WEAPON_CLASSES.dual ? RELOAD.dualAnchor : null;
+      const pull = inAnchor ? this.reloadTip(weapons) : 0;
+      const anchor = this.anchorTmp;
+      for (let i = 0; i < 3; i++) anchor[i] = math.lerp(hold[i], inAnchor ? inAnchor[i] : hold[i], pull);
       // Stances are tuned on the Survivor's arms: shorter arms hold the gun closer.
       const reach = scale * (this.character.reach ?? 1);
-      const right = (anchor[0] + shift[0] * runBlend) * reach;
-      const up = (anchor[1] + shift[1] * runBlend) * reach;
-      const ahead = (anchor[2] + shift[2] * runBlend) * reach;
+      const run = runBlend * (1 - pull);
+      // Dual guns: the pair stays centred on the chest (the second gun's offset is fixed, so a
+      // reach-scaled right gun would push the left one out past a shorter left arm).
+      const right = (anchor[0] + shift[0] * run) * (profile === WEAPON_CLASSES.dual ? scale : reach);
+      const up = (anchor[1] + shift[1] * run) * reach;
+      const ahead = (anchor[2] + shift[2] * run) * reach;
       const base = profile.hold === "shoulder" || oneHand ? this.rightShoulder : this.chest;
       if (!base) return;
       palm.copy(base.getPosition()).add(this.a.set(-Math.cos(yaw) * right + Math.sin(yaw) * ahead, up, Math.sin(yaw) * right + Math.cos(yaw) * ahead));
@@ -335,14 +351,16 @@ export class WeaponHands {
    * Left wrist target = LeftHandGrip, rolled about the handle axis, moved out to the handle surface,
    * times the inverse left palm frame. Picks the roll (within the range) nearest the animated wrist.
    */
-  private solveLeftTarget(marker: Entity, radius: number, rangeDeg: number): void {
+  private solveLeftTarget(marker: Entity, radius: number, rangeDeg: number, gunHand = false): void {
+    const palmInverse = gunHand ? this.leftGunPalmInverse : this.leftPalmInverse;
+    const baseRoll = gunHand ? 0 : this.character.supportRollDeg ?? 0;
     const animated = this.leftIK.animatedHandRotation;
     this.surface.setTranslate(0, 0, radius);
     let bestAngle = Infinity;
     for (let i = 0; i < ROLL_SAMPLES; i++) {
       const rollDeg = ROLL_SAMPLES > 1 ? -rangeDeg + (2 * rangeDeg * i) / (ROLL_SAMPLES - 1) : 0;
-      this.roll.setFromAxisAngle(Vec3.UP, rollDeg + (this.character.supportRollDeg ?? 0));
-      this.target.copy(marker.getWorldTransform()).mul(this.roll).mul(this.surface).mul(this.leftPalmInverse);
+      this.roll.setFromAxisAngle(Vec3.UP, rollDeg + baseRoll);
+      this.target.copy(marker.getWorldTransform()).mul(this.roll).mul(this.surface).mul(palmInverse);
       this.rotation.setFromMat4(this.target);
       const angle = animated ? quatAngle(this.rotation, animated) : 0;
       if (angle < bestAngle) {

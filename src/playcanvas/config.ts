@@ -36,6 +36,8 @@ export interface CharacterModel {
    * the handguard, and the fingers curl beside the gun.
    */
   supportRollDeg?: number;
+  /** The left hand as a gun hand (dual guns: the left gun's pistol grip), if it differs from `hands.left`. */
+  leftGunHand?: GripFrame;
   /**
    * Legacy weapon placement only (weapons without `grips`): this rig's hand-bone roll about +Y
    * relative to the Vanguard's hand, which those transforms were authored on (degrees).
@@ -118,6 +120,8 @@ function avatarHero(label: string, url: string, hipsY: number, knuckle: number, 
     fingers: { ...s.fingers, supportJoints: true, trigger: false, thickness: s.fingers.thickness * fingerK, curlAxis: SUPPORT_CURL_AXIS ?? s.fingers.curlAxis },
     reach,
     supportRollDeg: SUPPORT_ROLL,
+    // The left gun of a dual pair is held like the right one: the plain palm, no handguard roll.
+    leftGunHand: hand(s.hands.left),
   };
 }
 
@@ -838,8 +842,23 @@ export const ONE_HAND = {
 /** Shot recoil on the held gun: per full kick (WeaponHolder.recoil 1) the muzzle flips and the gun drives back. */
 export const RECOIL = { pitchDeg: 7, backMetres: 0.045 };
 
-/** Reload pose: the gun tips down and rolls, the support hand goes to the magazine and to the belt. */
-export const RELOAD = { tipDeg: 14, rollDeg: 28, dropMetres: 0.05, pouchMetres: 0.09 };
+/**
+ * Reload pose: the gun tips down and rolls, the support hand goes to the magazine and to the belt.
+ * Every gun with a magazine drops the spent one early in the reload (it falls out of the well and
+ * lies on the ground a moment). Like GTA / CoD:
+ * - one-handed pistols come in from arm's length to `pistolAnchor` (from the right shoulder, metres
+ *   right / up / forward), so the free hand can reach the grip with a fresh magazine;
+ * - dual guns both come in to `dualAnchor` (from the chest, like the dual hold's anchor), muzzles
+ *   tipped up `dualTipDeg`; both magazines drop and refill, and neither hand leaves its gun.
+ */
+export const RELOAD = {
+  tipDeg: 14, rollDeg: 28, dropMetres: 0.05, pouchMetres: 0.09,
+  /** Spent magazine: dropped at this reload phase, its box (thick, long, deep in metres), seconds on the ground. */
+  ejectAt: 0.18, magSize: [0.026, 0.11, 0.034] as Vec3Tuple, magLife: 2.2,
+  pistolAnchor: [-0.12, -0.2, 0.36] as Vec3Tuple,
+  dualAnchor: [0.17, -0.1, 0.44] as Vec3Tuple,
+  dualTipDeg: 32,
+};
 
 /**
  * Procedural finger grip (player/FingerGrip.ts): each finger joint bends toward the palm, after the
