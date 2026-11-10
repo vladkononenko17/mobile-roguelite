@@ -41,6 +41,12 @@ function mixamoFor(role) {
   const side = role.startsWith("left") ? "Left" : role.startsWith("right") ? "Right" : "";
   const r = side ? role.slice(side.length).replace(/^./, (c) => c.toLowerCase()) : role;
   if (/^thumb/.test(r)) return `${side}Hand`;
+  // The four fingers bend together on the Index chain, joint for joint (so the game can curl the whole
+  // finger, not just the knuckle - a straight finger block on a handguard reads as pointing).
+  // Only the support (left) hand: the gun hand stays one rigid block round the grip (the shared chain's
+  // joints sit at the middle finger's, so per-joint bends splay the other fingers on a tight grip).
+  if (side === "Left" && /^(index|middle|ring|little)Intermediate/.test(r)) return `${side}HandIndex2`;
+  if (side === "Left" && /^(index|middle|ring|little)Distal/.test(r)) return `${side}HandIndex3`;
   if (/^(index|middle|ring|little)/.test(r)) return `${side}HandIndex1`;
   const map = {
     hips: "Hips", spine: "Spine", chest: "Spine1", upperChest: "Spine2", neck: "Neck", head: "Head", eye: "Head", jaw: "Head",

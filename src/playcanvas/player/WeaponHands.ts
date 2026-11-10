@@ -1,5 +1,5 @@
 import { Color, Mat4, Quat, Vec3, math, type AppBase, type Entity, type GraphNode } from "playcanvas";
-import { AIM, AIM_STANCE, RECOIL, RELOAD, WEAPON_CLASSES, type CharacterModel, type WeaponClassProfile } from "../config";
+import { AIM, AIM_STANCE, FINGER_GRIP, RECOIL, RELOAD, WEAPON_CLASSES, type CharacterModel, type WeaponClassProfile } from "../config";
 import { FingerGrip } from "./FingerGrip";
 import { gripMatrix } from "./GripFrame";
 import { ArmIK } from "./ArmIK";
@@ -70,7 +70,7 @@ export class WeaponHands {
   constructor(
     private readonly app: AppBase,
     model: Entity,
-    private readonly character: Pick<CharacterModel, "hands" | "fingers" | "reach">,
+    private readonly character: Pick<CharacterModel, "hands" | "fingers" | "reach" | "supportRollDeg">,
   ) {
     this.leftIK = new ArmIK(model, "Left");
     this.rightIK = new ArmIK(model, "Right");
@@ -86,7 +86,7 @@ export class WeaponHands {
     this.rightShoulder = model.findByName("mixamorig:RightArm");
     const fingers = character.fingers;
     this.rightFingers = fingers ? new FingerGrip(model, "Right", fingers) : null;
-    this.leftFingers = fingers ? new FingerGrip(model, "Left", fingers) : null;
+    this.leftFingers = fingers ? new FingerGrip(model, "Left", fingers.supportJoints ? { ...fingers, rigid: false } : fingers) : null;
     if (character.hands) {
       gripMatrix(character.hands.left, this.leftPalmInverse).invert();
       const p = character.hands.right.position;
@@ -141,7 +141,9 @@ export class WeaponHands {
       if (shoulder && set > 0) this.cheekWeld(set * (1 - fetchW), facingYawDeg);
       if (profile.fingerGrip) {
         if (right) this.wrap(this.rightFingers, right.marker, right.def.radius, 1);
-        if (left && profile.leftHandIK && !oneHanded) this.wrap(this.leftFingers, left.marker, left.def.radius, weight * (1 - fetchW));
+        // Long guns: the support fingers close round the handguard at least FINGER_GRIP.supportMinDeg.
+        const minDeg = profile === WEAPON_CLASSES.dual ? 0 : FINGER_GRIP.supportMinDeg;
+        if (left && profile.leftHandIK && !oneHanded) this.wrap(this.leftFingers, left.marker, left.def.radius, weight * (1 - fetchW), minDeg);
         // Reloading: the fingers hold the magazine (a closed grip round the hand's own palm line).
         if (fetchW > 0 && this.leftFingers && this.leftHand) {
           const m = this.leftHand.getWorldTransform();
@@ -329,7 +331,7 @@ export class WeaponHands {
     let bestAngle = Infinity;
     for (let i = 0; i < ROLL_SAMPLES; i++) {
       const rollDeg = ROLL_SAMPLES > 1 ? -rangeDeg + (2 * rangeDeg * i) / (ROLL_SAMPLES - 1) : 0;
-      this.roll.setFromAxisAngle(Vec3.UP, rollDeg);
+      this.roll.setFromAxisAngle(Vec3.UP, rollDeg + (this.character.supportRollDeg ?? 0));
       this.target.copy(marker.getWorldTransform()).mul(this.roll).mul(this.surface).mul(this.leftPalmInverse);
       this.rotation.setFromMat4(this.target);
       const angle = animated ? quatAngle(this.rotation, animated) : 0;
@@ -343,13 +345,13 @@ export class WeaponHands {
     this.rotation.setFromMat4(this.best);
   }
 
-  private wrap(fingers: FingerGrip | null, marker: Entity, radius: number, weight: number): void {
+  private wrap(fingers: FingerGrip | null, marker: Entity, radius: number, weight: number, minDeg = 0): void {
     if (!fingers) return;
     const m = marker.getWorldTransform();
     m.getTranslation(this.origin);
     m.getY(this.direction).normalize();
     // Radius in world units (the weapon inherits the character's scale).
-    fingers.apply(this.origin, this.direction, radius * m.getScale(this.a).x, weight);
+    fingers.apply(this.origin, this.direction, radius * m.getScale(this.a).x, weight, minDeg);
   }
 
   private draw(weapons: WeaponHolder, targetValid: boolean): void {

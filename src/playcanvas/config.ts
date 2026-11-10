@@ -29,7 +29,13 @@ export interface CharacterModel {
    * to its first joint (bend only there, measure contact at the chain's tip). `curlAxis`: the local
    * axis that bends a finger toward the palm. `thickness`: finger half-thickness (m, bone space).
    */
-  fingers?: { rigid: boolean; curlAxis: Vec3Tuple; thickness: number };
+  fingers?: { rigid: boolean; curlAxis: Vec3Tuple; thickness: number; trigger?: boolean; supportJoints?: boolean };
+  /**
+   * Extra roll of the support hand about the handguard axis (degrees). The CC0 avatars' palms sit at a
+   * different roll on the hand bone than the Survivor's: without it their palm faces out, not up into
+   * the handguard, and the fingers curl beside the gun.
+   */
+  supportRollDeg?: number;
   /**
    * Legacy weapon placement only (weapons without `grips`): this rig's hand-bone roll about +Y
    * relative to the Vanguard's hand, which those transforms were authored on (degrees).
@@ -78,9 +84,20 @@ export interface WeaponGrip extends GripFrame {
  */
 /** docs/HERO_HOLD.md §3: the avatar heroes' support palm point, as a share of the scaled one. */
 let SUPPORT_ALONG = 0.35;
+/** The avatar heroes' support palm surface offset (their hands are thinner than the Survivor's). */
+let SUPPORT_PALM = -1;
+let SUPPORT_ROLL = -75;
+let SUPPORT_CURL_AXIS: Vec3Tuple | null = null;
 if (typeof location !== "undefined") {
-  const v = Number(new URLSearchParams(location.search).get("support"));
+  const q = new URLSearchParams(location.search);
+  const v = Number(q.get("support"));
   if (v > 0) SUPPORT_ALONG = v;
+  const ax = q.get("caxis");
+  if (ax) SUPPORT_CURL_AXIS = ({ x: [1, 0, 0], "-x": [-1, 0, 0], z: [0, 0, 1], "-z": [0, 0, -1], y: [0, 1, 0], "-y": [0, -1, 0] } as Record<string, Vec3Tuple>)[ax] ?? null;
+  const rv = q.get("sroll");
+  if (rv !== null && !Number.isNaN(Number(rv))) SUPPORT_ROLL = Number(rv);
+  const pv = q.get("spalm");
+  if (pv !== null && !Number.isNaN(Number(pv))) SUPPORT_PALM = Number(pv);
 }
 
 function avatarHero(label: string, url: string, hipsY: number, knuckle: number, reach: number, palm = 1, fingerK = 1, support = SUPPORT_ALONG): CharacterModel {
@@ -93,9 +110,14 @@ function avatarHero(label: string, url: string, hipsY: number, knuckle: number, 
     ...s, label, url, walkNativeSpeed: s.walkNativeSpeed * k, runNativeSpeed: s.runNativeSpeed * k,
     // The support palm point sits nearer the wrist (`support` of the scaled distance along the hand) so
     // the hand spans the handguard - knuckles past its far side - and the fingers close round it.
-    hands: { right: hand(s.hands.right), left: (() => { const l = hand(s.hands.left); return { ...l, position: [l.position[0], l.position[1] * support, l.position[2]] }; })() },
-    fingers: { ...s.fingers, thickness: s.fingers.thickness * fingerK },
+    hands: { right: hand(s.hands.right), left: (() => { const l = hand(s.hands.left); return { ...l, position: [l.position[0], l.position[1] * support, l.position[2] * SUPPORT_PALM] }; })() },
+    // The four fingers are bound joint for joint to the Index chain: curl every joint, and no separate
+    // trigger finger (the index moves with the others).
+    // The gun hand keeps the rigid knuckle curl (a clean block round the grip); the support hand curls
+    // every joint (supportJoints) so it closes round the handguard.
+    fingers: { ...s.fingers, supportJoints: true, trigger: false, thickness: s.fingers.thickness * fingerK, curlAxis: SUPPORT_CURL_AXIS ?? s.fingers.curlAxis },
     reach,
+    supportRollDeg: SUPPORT_ROLL,
   };
 }
 
@@ -814,7 +836,13 @@ export const FINGER_GRIP = {
   stepDeg: 3,
   /** Right index finger on a trigger: bent this fraction of its wrap (only rigs with separate fingers). */
   triggerCurl: 0.55,
+  /** Least bend per joint of a support hand's fingers on a long gun (degrees): closed round the handguard. */
+  supportMinDeg: 60,
 };
+if (typeof location !== "undefined") {
+  const v = new URLSearchParams(location.search).get("curl");
+  if (v !== null && Number(v) >= 0) FINGER_GRIP.supportMinDeg = Number(v);
+}
 
 /** Procedural breathing idle generated from the rest pose (see player/BreathingIdle.ts). */
 export const IDLE = {
