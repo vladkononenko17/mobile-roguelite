@@ -1,5 +1,5 @@
 import { Color, Mat4, Quat, Vec3, math, type AppBase, type Entity, type GraphNode } from "playcanvas";
-import { AIM, type CharacterModel, type WeaponClassProfile } from "../config";
+import { AIM, WEAPON_CLASSES, type CharacterModel, type WeaponClassProfile } from "../config";
 import { FingerGrip } from "./FingerGrip";
 import { gripMatrix } from "./GripFrame";
 import { ArmIK } from "./ArmIK";
@@ -38,6 +38,10 @@ export class WeaponHands {
   private readonly leftPalmInverse = new Mat4();
   private readonly rightHand: GraphNode | null;
   private readonly leftHand: GraphNode | null;
+  private readonly leftShoulder: GraphNode | null;
+  private readonly leftForeArm: GraphNode | null;
+  /** The left hand's bind-pose local rotation (straight on the forearm). */
+  private readonly leftRest = new Quat();
   private readonly chest: GraphNode | null;
   private readonly rightShoulder: GraphNode | null;
   private readonly aim = new Vec3();
@@ -69,6 +73,9 @@ export class WeaponHands {
     this.rightIK = new ArmIK(model, "Right");
     this.rightHand = model.findByName("mixamorig:RightHand");
     this.leftHand = model.findByName("mixamorig:LeftHand");
+    this.leftShoulder = model.findByName("mixamorig:LeftArm");
+    this.leftForeArm = model.findByName("mixamorig:LeftForeArm");
+    if (this.leftHand) this.leftRest.copy(this.leftHand.getLocalRotation());
     this.chest = model.findByName(AIM.chestBone);
     this.rightShoulder = model.findByName("mixamorig:RightArm");
     const fingers = character.fingers;
@@ -100,17 +107,38 @@ export class WeaponHands {
       if (right && weapons.entity && weight > 0 && profile.hold !== "hand") {
         this.holdRight(weapons, profile, weight, facingYawDeg, runBlend);
       }
-      if (left && profile.leftHandIK && weight > 0) {
+      const oneHanded = AIM.oneHanded && profile !== WEAPON_CLASSES.dual;
+      if (oneHanded && weight > 0) this.relaxLeft(weight, facingYawDeg);
+      else if (left && profile.leftHandIK && weight > 0) {
         this.solveLeftTarget(left.marker, left.def.radius, left.def.rollRangeDeg ?? 0);
         this.leftIK.apply(this.position, this.rotation, weight, AIM.forearmTwistShare, AIM.elbowSwivelDeg);
         targetValid = true;
       }
       if (profile.fingerGrip) {
         if (right) this.wrap(this.rightFingers, right.marker, right.def.radius, 1);
-        if (left && profile.leftHandIK) this.wrap(this.leftFingers, left.marker, left.def.radius, weight);
+        if (left && profile.leftHandIK && !oneHanded) this.wrap(this.leftFingers, left.marker, left.def.radius, weight);
       }
     }
     if (this.debug) this.draw(weapons, targetValid);
+  }
+
+  /**
+   * The free arm of a one-handed hold: the wrist hangs beside the hip (a hair forward and out), the
+   * elbow a little back, the hand straight on the forearm - instead of where the aim clip left it.
+   */
+  private relaxLeft(weight: number, facingYawDeg: number): void {
+    const shoulder = this.leftShoulder, hand = this.leftHand, fore = this.leftForeArm;
+    if (!shoulder || !hand || !fore) return;
+    const yaw = facingYawDeg * math.DEG_TO_RAD;
+    const lx = Math.cos(yaw), lz = -Math.sin(yaw), fx = Math.sin(yaw), fz = Math.cos(yaw);
+    const reach = shoulder.getPosition().distance(fore.getPosition()) + fore.getPosition().distance(hand.getPosition());
+    const s = shoulder.getPosition();
+    this.position.set(s.x + lx * 0.07 + fx * 0.06, s.y - reach * 0.93, s.z + lz * 0.07 + fz * 0.06);
+    this.leftIK.setPole(this.pole.set(lx * 0.3 - fx, -0.2, lz * 0.3 - fz), 1);
+    this.leftIK.apply(this.position, hand.getRotation(), weight, 0, 0);
+    // Straight wrist: the hand's own bend from the aim clip, eased out.
+    this.q1.copy(hand.getLocalRotation()).slerp(hand.getLocalRotation(), this.leftRest, weight);
+    hand.setLocalRotation(this.q1);
   }
 
   /** Elbow directions for both arms from the class profile (mirrored for the left arm). */
