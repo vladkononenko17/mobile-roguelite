@@ -15,10 +15,10 @@ export interface ArsenalOptions {
 }
 
 const CSS = `
-#arsenal { position: fixed; left: 8px; top: 64px; z-index: 60; font: 600 12px/1.2 system-ui, sans-serif; color: #f3ead8; user-select: none; -webkit-user-select: none; }
+#arsenal { position: fixed; left: 8px; top: calc(env(safe-area-inset-top, 0px) + 116px); z-index: 60; font: 600 12px/1.2 system-ui, sans-serif; color: #f3ead8; user-select: none; -webkit-user-select: none; }
 #arsenal .tab { display: inline-flex; gap: 6px; align-items: center; padding: 7px 10px; border-radius: 10px; background: rgba(20,16,12,.82); border: 1px solid rgba(255,220,160,.35); cursor: pointer; }
 #arsenal .tab b { color: #ffcf6e; }
-#arsenal .body { display: none; margin-top: 6px; padding: 8px; width: min(300px, calc(100vw - 32px)); max-height: calc(100vh - 140px); overflow-y: auto; border-radius: 12px; background: rgba(20,16,12,.9); border: 1px solid rgba(255,220,160,.3); }
+#arsenal .body { display: none; margin-top: 6px; padding: 8px; width: min(300px, calc(100vw - 32px)); max-height: calc(100vh - 200px); overflow-y: auto; border-radius: 12px; background: rgba(20,16,12,.9); border: 1px solid rgba(255,220,160,.3); }
 #arsenal.open .body { display: block; }
 #arsenal h4 { margin: 8px 2px 5px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #bfae8e; }
 #arsenal h4:first-child { margin-top: 0; }
