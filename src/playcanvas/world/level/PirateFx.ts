@@ -139,6 +139,7 @@ export function buildSeaFx(app: AppBase, root: Entity, shorelines: Shoreline[], 
     gm.emissiveMapTiling = new Vec2(s.w / 11, s.d / 11);
     gm.useLighting = false;
     gm.blendType = BLEND_ADDITIVE;
+    gm.useFog = false; // additive: fog would add its colour over the whole quad
     gm.depthWrite = false;
     gm.update();
     const e = new Entity("glints");

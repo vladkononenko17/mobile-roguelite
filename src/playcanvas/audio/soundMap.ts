@@ -9,6 +9,7 @@ export const BIOME_AUDIO: Record<string, { music: string; gate: string }> = {
   hell: { music: "music_hell", gate: "gate_hell" },
   medieval: { music: "music_hell", gate: "gate_wood" },
   pirate: { music: "music_wasteland", gate: "gate_wood" },
+  winter: { music: "music_station", gate: "gate_wood" },
 };
 export const BOSS_MUSIC = "music_boss";
 
@@ -22,6 +23,7 @@ const STEP: Partial<Record<GroundSurface, string>> = {
   beach: "step_sand", wetsand: "step_sand", jungle: "step_grass", grotto: "step_stone", fortstone: "step_stone", planks: "step_concrete", ghostdeck: "step_concrete",
   deck: "step_metal", hangardeck: "step_metal", stationdeck: "step_metal", labdeck: "step_metal", quarantine: "step_metal",
   grate: "step_metal", gatefloor: "step_metal", dockdeck: "step_metal",
+  snow: "step_grass", snowpack: "step_sand", slush: "step_sand", ice: "step_stone", bloodsnow: "step_grass",
 };
 
 const inside = (r: { x0: number; z0: number; x1: number; z1: number }, x: number, z: number) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1;
@@ -55,8 +57,8 @@ export function footstepsOf({ ground, stepAreas = [] }: StepGround): Set<string>
 export type Voice = "zombie" | "runner" | "brute" | "bloater" | "demon" | "alien" | "hound" | "mech";
 const VOICES: Partial<Record<EnemyId, Voice>> = {
   hound: "hound", stray: "hound",
-  runner: "runner", ripper: "runner", sprinter: "runner",
-  brute: "brute", charger: "brute", tank: "brute", abomination: "brute",
+  runner: "runner", ripper: "runner", sprinter: "runner", stalker: "runner",
+  brute: "brute", charger: "brute", tank: "brute", abomination: "brute", ravager: "brute",
   bloater: "bloater",
 };
 

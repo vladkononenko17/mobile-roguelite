@@ -4,7 +4,17 @@ import { audio } from "../audio/Audio";
 import { BIOME_AUDIO } from "../audio/soundMap";
 import { ENEMIES } from "../gameplay/config";
 import { BIOMES, type BiomeId } from "../world/level/Biomes";
+import { showCredits } from "./credits";
+import { showMetaShop } from "./MetaShop";
+import { loadMeta } from "../gameplay/meta";
 import { loadProgress } from "./progress";
+import { iconSvg } from "./UpgradeIcons";
+import { CHARACTERS } from "../config";
+import { showHeroes, showQuests } from "./ProfileScreens";
+import { checkQuests, chooseDanger, chosenDanger, heroFor, dangerUnlocked, profile, QUESTS } from "../gameplay/profile";
+import { dangerMods, dangerSummary } from "../gameplay/danger";
+import { heroDef } from "../gameplay/heroes";
+import { clearDaily, dailySetup, markDaily, todayKey } from "../gameplay/daily";
 
 /** What the menu says about each chapter (the rest comes from the campaign data). */
 const CHAPTERS: { id: BiomeId; numeral: string; name: string; tagline: string; accent: string }[] = [
@@ -13,6 +23,7 @@ const CHAPTERS: { id: BiomeId; numeral: string; name: string; tagline: string; a
   { id: "medieval", numeral: "III", name: "The Dark Kingdom", tagline: "A plague-struck realm where the dead rise. Cross the graveyard and the abbey, storm the castle, and face the Fallen King.", accent: "#c9a25a" },
   { id: "hell", numeral: "IV", name: "Hell", tagline: "Nine circles of fire and ash. Descend past the Citadel to the Archfiend's throne.", accent: "#ff6a2e" },
   { id: "pirate", numeral: "V", name: "The Black Tide", tagline: "Cursed gold woke the drowned. Escape the treasure grotto, cross the wrecks and the reef, and sink the ghost flagship.", accent: "#3fc7b0" },
+  { id: "winter", numeral: "VI", name: "Whiteout", tagline: "One night of snow and the dead. Cross the black pines and a farm in the blizzard, walk the dark suburb, and survive the burning town of Ashford.", accent: "#9fc4ff" },
 ];
 
 const LAST_KEY = "dustline3d.chapter";
@@ -65,6 +76,25 @@ const CSS = `
 #menu .tab b { position: absolute; left: 8px; right: 8px; bottom: 6px; z-index: 1; text-align: left; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
 #menu .tab i { position: absolute; top: 5px; left: 8px; z-index: 1; font-style: normal; font-size: 11px; letter-spacing: 0.2em; opacity: 0.8; }
 #menu .tab.on { filter: none; border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); }
+#menu .go { display: grid; gap: 8px; }
+#menu .row4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+#menu .mini { position: relative; height: 54px; border: 1px solid rgba(236, 227, 207, 0.3); border-radius: 10px; background: rgba(13, 10, 8, 0.6); color: #ece3cf; padding: 0;
+  display: grid; place-items: center; align-content: center; gap: 2px; font: 800 15px/1 "Barlow Condensed", system-ui, sans-serif; }
+#menu .mini small { font-size: 10px; letter-spacing: 0.16em; opacity: 0.75; }
+#menu .mini svg { width: 18px; height: 18px; fill: currentColor; }
+#menu .mini .face { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 2px currentColor; }
+#menu .mini .dot { position: absolute; top: 5px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: #8fd8ff; box-shadow: 0 0 6px #8fd8ff; }
+#menu .mini.daily { border-color: rgba(214, 162, 60, 0.7); color: #f2c66b; }
+#menu .danger { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+#menu .danger button { width: 34px; height: 30px; border-radius: 6px; border: 1px solid rgba(236, 227, 207, 0.3); background: rgba(13, 10, 8, 0.6); color: inherit; font: 800 18px/1 system-ui; padding: 0; }
+#menu .danger button:disabled { opacity: 0.3; }
+#menu .danger b { min-width: 92px; text-align: center; font-size: 17px; letter-spacing: 0.12em; color: var(--accent); }
+#menu .danger small { flex: 1; font: 500 11px/1.25 system-ui, sans-serif; opacity: 0.75; }
+#menu .meta { height: 54px; border: 1px solid rgba(143, 216, 255, 0.55); border-radius: 12px; background: rgba(10, 18, 24, 0.6); color: #8fd8ff;
+  display: grid; grid-template-columns: auto auto; justify-content: center; align-items: center; column-gap: 4px; padding: 0; font: 800 18px/1 "Barlow Condensed", system-ui, sans-serif; }
+#menu .meta i { font-style: normal; font-size: 15px; }
+#menu .meta small { grid-column: 1 / -1; font-size: 11px; letter-spacing: 0.16em; color: #ece3cf; opacity: 0.75; margin-top: 3px; }
+#menu .meta.fresh { box-shadow: 0 0 14px rgba(143, 216, 255, 0.45); }
 #menu .play { position: relative; width: 100%; height: 62px; border: 0; border-radius: 12px; background: var(--accent); color: #140f0b;
   font: 800 24px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.3em; text-indent: 0.3em; overflow: hidden;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55), inset 0 -3px 0 rgba(0, 0, 0, 0.2); transition: background 0.5s, transform 0.1s; }
@@ -72,7 +102,7 @@ const CSS = `
   background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent); animation: menu-shine 3.2s ease-in-out infinite; }
 @keyframes menu-shine { 0%, 55% { left: -60%; } 100% { left: 130%; } }
 #menu .play:active { transform: scale(0.98); }
-#menu .foot { margin-top: 10px; text-align: center; font: 500 11px/1.3 system-ui, sans-serif; opacity: 0.45; }
+#menu .foot { margin: 8px auto 0; padding: 6px 12px; border: 0; background: none; color: inherit; text-align: center; font: 500 12px/1.3 system-ui, sans-serif; opacity: 0.6; text-decoration: underline; text-underline-offset: 3px; }
 @media (min-height: 760px) { #menu .tab { height: 90px; } }
 `;
 
@@ -93,6 +123,7 @@ function facts(id: BiomeId): { levels: number; bosses: string[] } {
  */
 export function showMainMenu(): Promise<BiomeId> {
   const base = import.meta.env.BASE_URL;
+  clearDaily();
   const style = document.createElement("style");
   style.textContent = CSS;
   document.head.append(style);
@@ -109,8 +140,8 @@ export function showMainMenu(): Promise<BiomeId> {
       <div class="grow"></div>
       <div class="chapter"></div>
       <div class="tabs">${CHAPTERS.map((c) => `<button type="button" class="tab" data-tab="${c.id}" style="background-image:url('${base}menu/${c.id}.webp')"><i>${c.numeral}</i><b>${c.name.replace(/^The /, "")}</b></button>`).join("")}</div>
-      <button type="button" class="play">PLAY</button>
-      <div class="foot">Art, sound and music: CC0 (Kenney, Quaternius, OpenGameArt)</div>
+      <div class="go"><div class="row4"><button type="button" class="meta"><i>◆</i><b></b><small>UPGRADES</small></button><button type="button" class="mini hero"></button><button type="button" class="mini quests"></button><button type="button" class="mini daily"></button></div><button type="button" class="play">PLAY</button></div>
+      <button type="button" class="foot">Credits · third-party art, sound and music</button>
     </div>`;
   document.body.append(root);
 
@@ -122,8 +153,10 @@ export function showMainMenu(): Promise<BiomeId> {
     /* storage unavailable */
   }
 
+  let heroRefresh = () => {};
   const select = (i: number, sound = true) => {
     index = (i + CHAPTERS.length) % CHAPTERS.length;
+    heroRefresh();
     const c = CHAPTERS[index];
     root.style.setProperty("--accent", c.accent);
     root.querySelectorAll<HTMLElement>("[data-art]").forEach((el) => el.classList.toggle("on", el.dataset.art === c.id));
@@ -133,7 +166,14 @@ export function showMainMenu(): Promise<BiomeId> {
     const chips = [`${f.levels} levels`, ...f.bosses.map((b) => `Boss · ${b}`)].map((t) => `<span>${t}</span>`);
     if (p.cleared) chips.unshift(`<span class="done">Cleared · ${p.cleared}</span>`);
     else if (p.best) chips.unshift(`<span class="done">Best · level ${p.best}/${f.levels}</span>`);
-    chapterEl.innerHTML = `<div class="kicker">CHAPTER ${c.numeral}</div><h2></h2><p></p><div class="chips">${chips.join("")}</div>`;
+    const top = dangerUnlocked(c.id), danger = chosenDanger(c.id);
+    const dangerRow = top > 0 ? `<div class="danger"><button type="button" class="dn" ${danger <= 0 ? "disabled" : ""}>‹</button><b>DANGER ${danger}</b><button type="button" class="up" ${danger >= top ? "disabled" : ""}>›</button><small></small></div>` : "";
+    chapterEl.innerHTML = `<div class="kicker">CHAPTER ${c.numeral}</div><h2></h2><p></p><div class="chips">${chips.join("")}</div>${dangerRow}`;
+    if (top > 0) {
+      chapterEl.querySelector(".danger small")!.textContent = `${dangerSummary(danger)}${danger > 0 ? ` · Dust x${dangerMods(danger).dust.toFixed(2)}` : ""}`;
+      chapterEl.querySelector(".dn")!.addEventListener("click", () => { chooseDanger(c.id, danger - 1); select(index); });
+      chapterEl.querySelector(".up")!.addEventListener("click", () => { chooseDanger(c.id, danger + 1); select(index); });
+    }
     chapterEl.querySelector("h2")!.textContent = c.name;
     chapterEl.querySelector("p")!.textContent = c.tagline;
     // Restart the entry animation.
@@ -148,6 +188,46 @@ export function showMainMenu(): Promise<BiomeId> {
   select(index, false);
 
   root.querySelectorAll<HTMLElement>("[data-tab]").forEach((el, i) => el.addEventListener("click", () => select(i)));
+  const metaButton = root.querySelector<HTMLElement>(".meta")!;
+  const showDust = () => {
+    const m = loadMeta();
+    metaButton.querySelector("b")!.textContent = String(m.dust);
+    metaButton.classList.toggle("fresh", m.dust >= 15);
+  };
+  showDust();
+  metaButton.addEventListener("click", () => {
+    audio.play("ui");
+    showMetaShop(showDust);
+  });
+  // Quests completed outside a run (none yet) and the hero / quests / daily buttons.
+  checkQuests();
+  const heroButton = root.querySelector<HTMLElement>(".hero")!;
+  const questButton = root.querySelector<HTMLElement>(".quests")!;
+  const dailyButton = root.querySelector<HTMLElement>(".daily")!;
+  const showProfile = () => {
+    const h = heroDef(heroFor(CHAPTERS[index].id));
+    heroButton.innerHTML = `${h.id in CHARACTERS ? `<img class="face" alt="" src="${base}ui/heroes/${h.id}.webp">` : iconSvg(h.icon)}<small>${h.name.toUpperCase()}</small>`;
+    heroButton.style.color = h.color;
+    const p = profile();
+    questButton.innerHTML = `<b>${p.quests.length}/${QUESTS.length}</b><small>QUESTS</small>`;
+    const d = dailySetup();
+    const bestToday = p.daily[d.key];
+    dailyButton.innerHTML = `<b>${bestToday ? bestToday.toLocaleString("en-US") : "NEW"}</b><small>DAILY</small>${bestToday ? "" : `<i class="dot"></i>`}`;
+  };
+  heroRefresh = showProfile;
+  showProfile();
+  heroButton.addEventListener("click", () => {
+    audio.play("ui");
+    showHeroes(showProfile);
+  });
+  questButton.addEventListener("click", () => {
+    audio.play("ui");
+    showQuests(showProfile);
+  });
+  root.querySelector(".foot")!.addEventListener("click", () => {
+    audio.play("ui");
+    showCredits();
+  });
   const soundButton = root.querySelector<HTMLElement>(".icon")!;
   soundButton.classList.toggle("off", audio.muted);
   soundButton.addEventListener("click", () => {
@@ -191,6 +271,13 @@ export function showMainMenu(): Promise<BiomeId> {
     };
     window.addEventListener("keydown", onKey);
     root.querySelector(".play")!.addEventListener("click", play);
+    // Today's daily: its chapter with the day's hero and danger (the run reads the mark).
+    dailyButton.addEventListener("click", () => {
+      const d = dailySetup(todayKey());
+      markDaily(d.key);
+      index = Math.max(0, CHAPTERS.findIndex((c) => c.id === d.chapter));
+      play();
+    });
   });
 }
 
@@ -198,6 +285,12 @@ export function showMainMenu(): Promise<BiomeId> {
 export function menuWanted(): boolean {
   const params = new URLSearchParams(location.search);
   return !["level", "biome", "wave", "difficulty", "play"].some((k) => params.has(k));
+}
+
+/** Chapter numeral, name, tagline and accent colour for the loading screen. */
+export function chapterInfo(id: BiomeId): { numeral: string; name: string; tagline: string; accent: string } {
+  const c = CHAPTERS.find((c) => c.id === id);
+  return c ?? { numeral: "", name: BIOMES[id].label, tagline: "", accent: "#d6a23c" };
 }
 
 /** Chapter name for the loading screen. */

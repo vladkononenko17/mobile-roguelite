@@ -9,17 +9,21 @@ export interface BarTarget {
   scale: number;
   lift: number;
   def: { boss?: boolean; aimHeight?: number };
+  elite?: boolean;
 }
 
 /** Bar width (CSS px) by toughness; height above the feet per unit of aim height. */
 const BARS = {
-  width: { grunt: 38, elite: 54, boss: 86, hero: 60 },
+  width: { grunt: 38, elite: 54, champion: 62, boss: 86, hero: 60 },
   /** Max HP from which a foe counts as an elite (wider bar). */
   eliteHp: 200,
   /** Head top ~ 1.8 x the chest aim point, plus clearance (m). */
   headOverAim: 1.8,
   clearance: 0.32,
   heroHeight: 2.25,
+  /** Extra lift on screen (CSS px): the camera looks steeply down, so a point over the head still
+   *  lands on it; the bar sits this far above that point (bottom edge clear of the head). */
+  liftPx: { enemy: 8, hero: 26 },
   /** Fill colours: healthy, hurt, critical; the hero's own. */
   /** Enemies red, the hero green: friend and foe read at a glance. */
   colors: { enemy: "#e5403a", hero: "#5fd65a" },
@@ -65,9 +69,10 @@ export class HealthBars {
     bar.el.style.display = on ? "block" : "none";
   }
 
-  private place(bar: Bar, p: Vec3, camera: ScreenProjector): boolean {
+  private place(bar: Bar, p: Vec3, camera: ScreenProjector, liftPx: number): boolean {
     camera.toScreen(p, this.screen);
     const s = this.screen;
+    s.y -= liftPx;
     if (s.z <= 0 || s.x < -60 || s.y < -20 || s.x > camera.width + 60 || s.y > camera.height + 20) return false;
     bar.el.style.transform = `translate3d(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px, 0)`;
     return true;
@@ -115,7 +120,7 @@ export class HealthBars {
         bar = this.free.pop() ?? this.make();
         this.owners.set(e, bar);
       }
-      const kind = e.def.boss ? "boss" : e.maxHp >= BARS.eliteHp ? "elite" : "grunt";
+      const kind = e.def.boss ? "boss" : e.elite ? "champion" : e.maxHp >= BARS.eliteHp ? "elite" : "grunt";
       if (bar.cls !== kind) {
         if (bar.cls && bar.cls !== "grunt") bar.el.classList.remove(bar.cls);
         if (kind !== "grunt") bar.el.classList.add(kind);
@@ -124,7 +129,7 @@ export class HealthBars {
       }
       const aim = (e.def.aimHeight ?? 1) * e.scale;
       this.top.set(e.position.x, e.lift + aim * BARS.headOverAim + BARS.clearance, e.position.z);
-      const onScreen = this.place(bar, this.top, camera);
+      const onScreen = this.place(bar, this.top, camera, BARS.liftPx.enemy);
       this.show(bar, onScreen);
       if (!onScreen) continue;
       const frac = e.hp / e.maxHp;
@@ -132,7 +137,7 @@ export class HealthBars {
     }
     // The hero.
     this.top.set(hero.position.x, BARS.heroHeight, hero.position.z);
-    const heroOn = hero.hp > 0 && this.place(this.hero, this.top, camera);
+    const heroOn = hero.hp > 0 && this.place(this.hero, this.top, camera, BARS.liftPx.hero);
     this.show(this.hero, heroOn);
     if (heroOn) {
       const frac = hero.hp / Math.max(1, hero.maxHp);

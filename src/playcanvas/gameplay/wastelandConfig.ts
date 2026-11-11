@@ -10,13 +10,21 @@ import type { DifficultyDef, EnemyClips, EnemyDef, EnemyVisual, WaveDef } from "
  * Looks
  * ---------------------------------------------------------------------------------------------- */
 
-export type WastelandVisualId = "zkRotter" | "zkBloater" | "zkRipper" | "zkHound" | "zkAbomination";
+/** The kit's four survivors turned (scripts/build-zombified-survivors.mjs): Lis, Matt, Sam, Shaun. */
+export const SURVIVOR_BODIES = ["zsLis", "zsMatt", "zsSam", "zsShaun"] as const;
+export type SurvivorBody = (typeof SURVIVOR_BODIES)[number];
+/** Their roles beyond the horde's walker (the body itself); the looks are made in config.ts. */
+export type SurvivorRole = "Runner" | "Crew" | "CrewRunner" | "Drowned" | "Frozen" | "FrozenRunner";
+/** Visual ids of every survivor body in one role. */
+export const survivorsAs = (role: SurvivorRole) => SURVIVOR_BODIES.map((b) => `${b}${role}` as const);
+export type WastelandVisualId = "zkRotter" | "zkBloater" | "zkRipper" | "zkHound" | "zkAbomination" | SurvivorBody;
 export type WastelandSkinId =
   | "rotter_green" | "rotter_grey" | "rotter_bruised"
   | "bloater_blue" | "bloater_toxic"
   | "ripper_bone" | "ripper_blood"
   | "abom_flesh" | "abom_rot"
-  | "hound_rotten" | "hound_blood";
+  | "hound_rotten" | "hound_blood"
+  | "zs_rot" | "zs_pale" | "zs_jaundice" | "zs_charred" | "zs_crewOrange" | "zs_crewTeal" | "zs_drownedKelp" | "zs_drownedBlue";
 
 const skin = (id: WastelandSkinId) => `models/infected/skins/${id}.webp`;
 export const WASTELAND_SKINS: Record<WastelandSkinId, string> = {
@@ -25,7 +33,14 @@ export const WASTELAND_SKINS: Record<WastelandSkinId, string> = {
   ripper_bone: skin("ripper_bone"), ripper_blood: skin("ripper_blood"),
   abom_flesh: skin("abom_flesh"), abom_rot: skin("abom_rot"),
   hound_rotten: skin("hound_rotten"), hound_blood: skin("hound_blood"),
+  // One colour map over the survivors' shared swatch atlas: fits all four bodies.
+  zs_rot: skin("zs_rot"), zs_pale: skin("zs_pale"), zs_jaundice: skin("zs_jaundice"), zs_charred: skin("zs_charred"),
+  zs_crewOrange: skin("zs_crewOrange"), zs_crewTeal: skin("zs_crewTeal"),
+  zs_drownedKelp: skin("zs_drownedKelp"), zs_drownedBlue: skin("zs_drownedBlue"),
 };
+
+/** The horde's four kinds of dead, on any survivor body. */
+export const HORDE_SKINS: WastelandSkinId[] = ["zs_rot", "zs_pale", "zs_jaundice", "zs_charred"];
 
 /** Quaternius zombie clips (the kit's shared rig). */
 const ZOMBIE_KIT_CLIPS: EnemyClips = {
@@ -46,6 +61,11 @@ export const WASTELAND_VISUALS: Record<WastelandVisualId, EnemyVisual> = {
   },
   // Zombie_Arm: the Abomination, one arm grown into a club, ~1.57 units.
   zkAbomination: { url: "models/infected/abomination.glb", scale: 1.3, clips: { ...ZOMBIE_KIT_CLIPS, move: "Walk", special: "Run_Attack" }, moveSpeed: 1.4, skins: ["abom_flesh", "abom_rot"] },
+  // The survivors, turned: ~1.5 units upright, the rotter's shamble and lunge.
+  zsLis: { url: "models/infected/zlis.glb", scale: 1.2, clips: ZOMBIE_KIT_CLIPS, moveSpeed: 1.3, skins: HORDE_SKINS },
+  zsMatt: { url: "models/infected/zmatt.glb", scale: 1.2, clips: ZOMBIE_KIT_CLIPS, moveSpeed: 1.3, skins: HORDE_SKINS },
+  zsSam: { url: "models/infected/zsam.glb", scale: 1.2, clips: ZOMBIE_KIT_CLIPS, moveSpeed: 1.3, skins: HORDE_SKINS },
+  zsShaun: { url: "models/infected/zshaun.glb", scale: 1.2, clips: ZOMBIE_KIT_CLIPS, moveSpeed: 1.3, skins: HORDE_SKINS },
 };
 
 /* ------------------------------------------------------------------------------------------------
@@ -57,7 +77,7 @@ export type WastelandEnemyId = "rotter" | "bloater" | "ripper" | "stray" | "abom
 export const WASTELAND_ENEMIES: Record<WastelandEnemyId, EnemyDef> = {
   // GRUNT: the city's dead, in numbers.
   rotter: {
-    label: "Rotter", visuals: ["zkRotter"], scale: 1, scaleJitter: 0.06, behavior: "chaser",
+    label: "Rotter", visuals: ["zkRotter", ...SURVIVOR_BODIES], scale: 1, scaleJitter: 0.06, behavior: "chaser",
     maxHp: 42, speed: 1.45, radius: 0.36, damage: 10, attackRange: 1.15, attackWindup: 0.42, attackCooldown: 1.15,
     cash: 1, xp: 11, drops: { cash: 0.4, health: 0.025, upgrade: 0.006 },
   },
@@ -164,8 +184,9 @@ export const WASTELAND_LEVELS: WaveDef[] = [
 
 /** A Wasteland run: the hero's first chapter - a rifle, a little cash, level 1. */
 export const WASTELAND_RUN = {
-  startWeapon: "rifle" as const,
+  startWeapon: "pistol" as const,
   startCash: 60,
+  tierBoost: 0,
   startPicks: 0,
   /** No pact in the first chapter. */
   pactAfter: -1,

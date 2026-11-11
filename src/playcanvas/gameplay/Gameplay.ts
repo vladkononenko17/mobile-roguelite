@@ -1,5 +1,6 @@
 import { Vec3, type AnimTrack, type AppBase, type Asset, type ContainerResource, type Entity, type Texture } from "playcanvas";
-import { WEAPONS, type WeaponId } from "../config";
+import { CHARACTERS, WEAPONS, type WeaponId } from "../config";
+import { ArsenalPanel, TEST_ARSENAL } from "../ui/ArsenalPanel";
 import { audio } from "../audio/Audio";
 import { BIOME_AUDIO, BOSS_MUSIC, COMMON_SOUNDS, footstepAt, footstepsOf, voiceOf, voiceRate } from "../audio/soundMap";
 import type { PlayerController } from "../player/PlayerController";
@@ -9,7 +10,7 @@ import { HealthBars } from "../ui/HealthBars";
 import type { UpgradeIcon } from "../ui/UpgradeIcons";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
 import type { Biome, Campaign, LevelBounds, WayPoint, Zone } from "../world/level/Biome";
-import { DROPS, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, shopPrice, TRAPS, ENEMY_PACE, WEAPON_CARDS, levelsAt, type DifficultyDef, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
+import { ARSENAL, BALANCE, DROPS, ECONOMY, ELITES, weaponTier, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SHOP_RULES, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, shopPrice, type ShopItemId, type WaveEnemyId, TRAPS, ENEMY_PACE, WEAPON_CARDS, levelsAt, type DifficultyDef, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
 import { BossBrain } from "./BossBrain";
 import { BOSS_SCRIPTS, TYPE_SKINS } from "./campaigns";
 import { Effects } from "./Effects";
@@ -22,12 +23,26 @@ import { PlayerStats } from "./PlayerStats";
 import { SpawnDirector } from "./SpawnDirector";
 import { TargetDebug } from "../ui/TargetDebug";
 import { clearedCampaign, menuUrl, reachedLevel } from "../ui/progress";
-import { Combat } from "./Combat";
+import { Combat, type HitSource } from "./Combat";
+import { addDust, applyMeta, dustFor, loadMeta } from "./meta";
+import { restoreStats, snapshotStats, type StatsSnapshot } from "./checkpoint";
 import { Drones } from "./Drones";
 import { ScreenProjector } from "../camera/ScreenProjector";
-import { applyUpgrade, availableUpgrades, rollUpgrades, tagCounts, upgradeStacks, type SynergyReached } from "./Upgrades";
+import { applyUpgrade, availableUpgrades, rollUpgrades, tagCounts, upgradeDef, upgradeStacks, type SynergyReached } from "./Upgrades";
 import { modsForWeapon, weaponMod } from "../weaponMods";
 import { DEV_MODE } from "../devMode";
+import { heroDef, type HeroDef } from "./heroes";
+import { dangerMods, type DangerMods } from "./danger";
+import { rollRoutes, type RouteDef } from "./routes";
+import { EVOLUTIONS } from "./evolutions";
+import { GADGETS, GADGET_MAX_LEVEL, gadgetDef, gadgetLine, gadgetPrice, type GadgetId } from "./gadgets";
+import { GadgetSystem } from "./GadgetSystem";
+import { best, bump, checkQuests, chosenDanger, heroFor, gadgetUnlocked, profile, recordWin, rewardText, saveProfile } from "./profile";
+import { dailyScore, pendingDaily, seeded, type DailySetup } from "./daily";
+import { shareDaily } from "../ui/shareCard";
+
+/** Dash: speed (m/s), length (s), invulnerability (s) and recharge per charge (s). */
+const DASH = { speed: 15, seconds: 0.17, iframes: 0.32, cooldown: 2.2, blastRadius: 2.6 };
 
 /** "travel": a campaign level is won and the hero walks to the way on (see Zone.exit). */
 export type RunPhase = "loading" | "combat" | "cleared" | "shop" | "travel" | "dead" | "complete";
@@ -72,6 +87,10 @@ const SLOW_MO = { seconds: 1.1, scale: 0.3 };
 export class Gameplay {
   phase: RunPhase = "loading";
   readonly stats = new PlayerStats();
+  /** ?arsenal=1 test panel (any gun, any hero, god mode, frozen enemies). */
+  private arsenal: ArsenalPanel | null = null;
+  private testGod = false;
+  private testFreeze = false;
   readonly enemies: EnemyManager;
   readonly gun: PlayerGun;
   readonly director: SpawnDirector;
@@ -126,6 +145,36 @@ export class Gameplay {
   private readonly lastStep = new Vec3();
   /** A boss is up: its theme plays (the chapter's music resumes when it falls). */
   private bossMusic = false;
+  /** This attempt (run start or the last checkpoint) for the summary and Dust. */
+  private log = newRunLog();
+  /** Dust banked this run (all attempts). */
+  private dustRun = 0;
+  /** The last act checkpoint (continue from it after a death). */
+  private checkpoint: { index: number; stats: StatsSnapshot; armorySeen: boolean } | null = null;
+  /** This visit's shop offers (rolled once per level; rerolls replace them). */
+  private shopRoll: { level: number; offers: ShopItemId[]; sale: ShopItemId | null; gadget: GadgetId | null; rerolls: number } | null = null;
+  /** Seconds to the next elite champion. */
+  private eliteTimer = 0;
+  /** This level's bounty contract. */
+  private bounty: Bounty | null = null;
+  /** Endless loops played (0: the campaign proper). */
+  private endless = 0;
+  /** How many levels the campaign has (endless levels are appended after them). */
+  private baseCount = 0;
+  /** This run's hero, danger level (and its rules) and, on a daily run, the day's setup. */
+  private hero: HeroDef = heroDef("survivor");
+  private danger = 0;
+  private dmods: DangerMods = dangerMods(0);
+  private readonly daily: DailySetup | null;
+  /** The path chosen for level `routeFor`, and what it leaves for the next shop. */
+  private route: RouteDef | null = null;
+  private routeFor = -1;
+  private shopBonus: { discount: number; extra: boolean } | null = null;
+  private readonly gadgetSystem: GadgetSystem;
+  /** Dash charges ready, seconds to the next charge, seconds to the end-of-dash blast. */
+  private dashReady = 1;
+  private dashTimer = 0;
+  private dashBlastIn = 0;
 
   constructor(
     private readonly app: AppBase,
@@ -141,7 +190,7 @@ export class Gameplay {
     const bounds = biome.bounds;
     this.campaign = biome.campaign ?? null;
     // A copy for campaigns: the chosen difficulty rewrites it in place (the director shares it).
-    this.levels = this.campaign ? [...this.campaign.levels] : WAVES;
+    this.levels = this.campaign ? [...this.campaign.levels] : [...WAVES];
     this.region = bounds;
     this.effects = new Effects(app);
     this.hazards = new Hazards(app);
@@ -158,12 +207,20 @@ export class Gameplay {
     this.enemies.brain = this.brain;
     this.projector = new ScreenProjector(camera.camera!);
     this.combat = new Combat(this.enemies, this.effects, this.stats);
+    this.combat.onDealt = (source, amount) => { this.log.dealt[source] = (this.log.dealt[source] ?? 0) + amount; };
     this.combat.onHit = (position, amount, style, enemy) => {
       this.hud.damageNumber(position, String(amount), style);
       if (style !== "burn") audio.voice(voiceOf(enemy.id, enemy.def), "hit", { x: position.x, z: position.z, rate: voiceRate(enemy.scale) });
     };
     this.gun = new PlayerGun(this.enemies, this.effects, collision, this.stats, this.projector, this.combat);
     this.drones = new Drones(app, this.effects, this.combat, this.gun);
+    this.gadgetSystem = new GadgetSystem(app, this.effects, this.combat, this.gun);
+    this.gadgetSystem.onBlast = (x, z) => this.shakeAt(x, z, 0.2);
+    // The daily run: its chapter is this one; its difficulty is the chapter's intended one.
+    const daily = pendingDaily();
+    this.daily = daily && daily.chapter === biome.id ? daily : null;
+    if (this.daily && this.campaign?.difficulties) this.params.set("difficulty", this.campaign.defaultDifficulty ?? Object.keys(this.campaign.difficulties)[0]);
+    if (TEST_ARSENAL) this.setupArsenal(biome.id);
     this.enemies.onPlayerHit = (damage, from) => {
       const c = this.rules?.cripple === false ? undefined : from.def.cripple;
       if (c) this.cripple = { time: Math.max(this.cripple.time, c.seconds), slow: Math.min(this.cripple.time > 0 ? this.cripple.slow : 1, c.slow) };
@@ -250,7 +307,9 @@ export class Gameplay {
     this.hud.onPause = () => this.togglePause();
     window.addEventListener("keydown", (event) => {
       if (event.code === "Escape" || event.code === "KeyP") this.togglePause();
+      else if ((event.code === "Space" || event.code === "ShiftLeft" || event.code === "ShiftRight") && !event.repeat) this.tryDash();
     });
+    this.hud.onDash = () => this.tryDash();
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) this.pause();
     });
@@ -267,6 +326,8 @@ export class Gameplay {
     const playing = this.phase === "combat" || this.phase === "cleared" || this.phase === "travel";
     if (this.paused || this.choosing || !playing || !this.stats.alive || this.hud.modalOpen) return;
     this.paused = true;
+    audio.setPaused(true);
+    saveProfile();
     this.pausedScale = this.app.timeScale;
     this.app.timeScale = 0;
     this.player.controlsEnabled = false;
@@ -277,8 +338,8 @@ export class Gameplay {
       actions: [
         { label: "Resume", onClick: () => this.resume() },
         ...(DEV_MODE ? [{ label: "Dev tools", onClick: () => { document.body.classList.toggle("debug-on"); this.resume(); } }] : []),
-        { label: "Restart run", onClick: () => this.startRun() },
-        MAIN_MENU,
+        { label: "Restart run", onClick: () => { this.bankDust(false); this.startRun(); } },
+        { label: "Main menu", onClick: () => { this.bankDust(false); MAIN_MENU.onClick(); } },
       ],
     });
   }
@@ -286,6 +347,7 @@ export class Gameplay {
   resume(): void {
     if (!this.paused) return;
     this.paused = false;
+    audio.setPaused(false);
     this.hud.closeModal();
     this.app.timeScale = this.pausedScale;
     this.player.controlsEnabled = true;
@@ -343,7 +405,7 @@ export class Gameplay {
 
   /** "Hard · " for the end screens (empty without difficulties). */
   private get difficultyTag(): string {
-    return this.difficultyId && this.difficulty ? `${this.difficulty.label} · ` : "";
+    return `${this.daily ? "Daily · " : ""}${this.difficultyId && this.difficulty ? `${this.difficulty.label} · ` : ""}${this.danger > 0 ? `Danger ${this.danger} · ` : ""}`;
   }
 
   /** The difficulty rules in force (campaigns with difficulties; else none). */
@@ -392,27 +454,58 @@ export class Gameplay {
       this.chooseDifficulty(() => this.startRun());
       return;
     }
+    // The daily run: the same random numbers for everyone today (re-seeded on every restart).
+    if (this.daily) Math.random = seeded(this.daily.seed);
     const s = this.stats;
     Object.assign(s, new PlayerStats());
     s.owned.clear();
     s.owned.add("pistol");
     s.weaponMods.clear();
     s.upgrades.clear();
+    s.gadgets.clear();
+    s.evolved.clear();
+    s.weaponLevel.clear();
+    // Permanent upgrades (meta-progression) on top of a fresh hero, then the hero's kit and the danger.
+    applyMeta(s);
+    this.hero = heroDef(this.daily?.hero ?? heroFor(this.biome.id));
+    this.hero.apply(s);
+    if (this.hero.gadget) s.gadgets.set(this.hero.gadget, 1);
+    this.danger = this.daily?.danger ?? chosenDanger(this.biome.id);
+    this.dmods = dangerMods(this.danger);
+    s.healMult *= this.dmods.heal;
+    this.route = null;
+    this.routeFor = -1;
+    this.shopBonus = null;
+    this.dashReady = s.dashCharges;
+    this.dashTimer = 0;
+    this.dashBlastIn = 0;
+    this.gadgetSystem.reset();
+    bump("runs");
     this.unlocked = null;
     this.armorySeen = false;
+    this.log = newRunLog();
+    this.dustRun = 0;
+    this.checkpoint = null;
+    this.shopRoll = null;
+    this.endless = 0;
+    if (!this.baseCount) this.baseCount = this.levels.length;
+    this.levels.splice(this.baseCount);
     const kit = this.campaign?.run;
-    const requested = DEV_MODE ? this.params.get("weapon") : null;
+    const requested = DEV_MODE || TEST_ARSENAL ? this.params.get("weapon") : null;
     this.weapons.setMods([], false);
+    // Later chapters start one rung up the arsenal ladder; the pistol stays in the loadout.
+    if (kit?.startWeapon) s.owned.add(kit.startWeapon);
     this.equip(requested && requested in WEAPON_STATS ? (requested as WeaponId) : kit?.startWeapon ?? "pistol");
     this.pendingLevelUps = 0;
     if (kit) {
       // A veteran: cash for the first shop, and the first upgrades picked before the first demon.
-      s.cash = kit.startCash;
+      s.cash += kit.startCash;
       s.level += kit.startPicks;
       this.pendingLevelUps = kit.startPicks;
     }
     this.choosing = false;
     this.paused = false;
+    audio.setPaused(false);
     this.slowMo = 0;
     this.killHealBudget = 0;
     this.app.timeScale = 1;
@@ -468,14 +561,30 @@ export class Gameplay {
     this.nav.build(here.x, here.z);
     this.hazards.reset();
     this.combat.reset();
+    // Act checkpoints: the build at the start of each new act (and of the final level).
+    const prev = this.levels[index - 1];
+    if (index > 0 && !this.endless && (this.levels[index].act !== prev?.act || index === this.campaign?.run?.finalLevel)) {
+      this.checkpoint = { index, stats: snapshotStats(this.stats), armorySeen: this.armorySeen };
+      if (index > 0) this.hud.showBanner("Checkpoint", 1.6);
+    }
+    this.eliteTimer = ELITES.first * (0.8 + Math.random() * 0.4) * this.eliteEveryMult;
+    this.bounty = this.rollBounty(index);
+    this.showBounty();
     if (index > 0) this.stats.rerolls += LEVEL_UP.rerollsPerWave;
     this.director.start(index);
+    // Danger and the chosen path on top of the level's own balance.
+    const route = this.routeFor === index ? this.route : null;
+    if (!route) this.route = null;
+    BALANCE.enemyHp *= this.dmods.enemyHp * (route?.enemyHp ?? 1) * (this.levels[index].boss ? this.dmods.bossHp : 1);
+    BALANCE.enemyDamage *= this.dmods.enemyDamage * (route?.enemyDamage ?? 1);
+    BALANCE.density *= this.dmods.density * (route?.density ?? 1);
+    this.gadgetSystem.reset();
     this.gun.reset();
     this.phase = "combat";
     this.player.controlsEnabled = true;
     this.hud.closeModal();
     const level = this.levels[index];
-    this.hud.showBanner(level.subtitle ? `${level.label} · ${level.subtitle}` : level.label, 2.6);
+    this.hud.showBanner(route ? `${level.label} · ${route.name}` : level.subtitle ? `${level.label} · ${level.subtitle}` : level.label, 2.6);
     const card = this.unlocked && WEAPON_CARDS[this.unlocked];
     if (card) this.hud.showWeapon(WEAPONS.list[this.unlocked!].label, card.text, card.stats, card.color);
     this.unlocked = null;
@@ -488,6 +597,34 @@ export class Gameplay {
     this.weapons.setMods(this.stats.modsFor(weapon), false);
     this.weapons.equip(weapon);
     this.gun.reset();
+    this.arsenal?.refresh();
+  }
+
+  /** The ?arsenal=1 test panel: switch gun mid-level, switch hero (reload into this map), cheats. */
+  private setupArsenal(biomeId: string): void {
+    const url = new URL(location.href);
+    this.arsenal = new ArsenalPanel({
+      weapons: (Object.keys(WEAPON_STATS) as WeaponId[]).map((id) => ({ id, label: WEAPONS.list[id].label })),
+      heroes: Object.entries(CHARACTERS).map(([id, c]) => ({ id, label: c.label.replace(/ \(.*\)$/, "") })),
+      currentWeapon: () => this.stats.weapon ?? "",
+      currentHero: url.searchParams.get("model") ?? "",
+      onWeapon: (id) => {
+        if (this.phase === "loading") return;
+        this.equip(id as WeaponId);
+      },
+      onHero: (id) => {
+        const next = new URL(location.href);
+        next.searchParams.set("model", id);
+        if (this.stats.weapon) next.searchParams.set("weapon", this.stats.weapon);
+        // Straight back into this map (no title screen), on the difficulty already chosen.
+        next.searchParams.delete("biome");
+        next.searchParams.set("level", biomeId === "facility" ? "space" : biomeId);
+        if (this.difficultyId) next.searchParams.set("difficulty", this.difficultyId);
+        location.replace(next);
+      },
+      onGod: (on) => { this.testGod = on; },
+      onCalm: (on) => { this.testFreeze = on; },
+    });
   }
 
   /** Damages the hero; returns whether any damage was taken. */
@@ -528,6 +665,13 @@ export class Gameplay {
     if (this.phase !== "combat") return false;
     const taken = this.stats.hurt(damage);
     if (taken <= 0) return false;
+    this.log.taken += taken;
+    const b = this.bounty;
+    if (b?.kind === "untouchable" && !b.done && !b.failed) {
+      b.progress += taken;
+      if (b.progress >= b.target) b.failed = true;
+      this.showBounty();
+    }
     audio.play("hurt");
     this.hud.flashHurt();
     this.onShake(Math.min(0.45, 0.12 + taken / 80));
@@ -539,34 +683,181 @@ export class Gameplay {
   }
 
   private die(): void {
+    const s = this.stats;
+    // Second Wind (meta upgrade): back on his feet once, with a blast that clears the space around him.
+    if (s.revives > 0) {
+      s.revives--;
+      s.hp = Math.round(s.maxHp * 0.5);
+      s.invulnerable = 2.5;
+      const p = this.player.entity.getPosition();
+      this.combat.blast(p.x, p.z, 6.5, 120 * this.director.wave.hpScale);
+      this.onShake(0.6);
+      audio.play("levelup");
+      this.hud.showBanner("SECOND WIND", 2.2);
+      return;
+    }
     this.phase = "dead";
     audio.play("die");
     this.player.controlsEnabled = false;
     this.player.aimYawDeg = null;
-    this.hud.openModal({
-      title: "YOU DIED",
-      text: `${this.difficultyTag}${this.director.wave.label} · Level ${this.stats.level} · ${this.stats.kills} kills · ${this.stats.cash}$`,
-      actions: [
-        { label: "Restart run", onClick: () => this.startRun() },
-        ...(this.difficulty ? [{ label: "Change difficulty", onClick: () => { this.difficulty = null; this.params.delete("difficulty"); this.startRun(); } }] : []),
-        MAIN_MENU,
+    const dust = this.bankDust(false);
+    best("maxLevel", s.level);
+    this.questCheck();
+    const daily = this.finishDaily(false);
+    const cp = this.checkpoint;
+    const canContinue = !!cp && this.difficultyId !== "nightmare" && !this.endless && !this.daily;
+    this.showSummary("YOU DIED", `${this.difficultyTag}${daily ?? this.director.wave.label}`, dust, [
+      ...(this.daily ? [{ label: "Share score", onClick: () => this.shareScore(false) }] : []),
+      ...(canContinue ? [{ label: `Continue from ${this.levels[cp!.index].label}`, onClick: () => this.continueFromCheckpoint() }] : []),
+      { label: "Restart run", onClick: () => this.startRun(), minor: canContinue },
+      ...(this.difficulty && !this.daily ? [{ label: "Change difficulty", onClick: () => { this.difficulty = null; this.params.delete("difficulty"); this.startRun(); }, minor: true }] : []),
+      { ...MAIN_MENU, minor: true },
+    ]);
+  }
+
+  /** Back to the last act checkpoint with the build from then (at least half health). */
+  private continueFromCheckpoint(): void {
+    const cp = this.checkpoint;
+    if (!cp) return this.startRun();
+    const s = this.stats;
+    restoreStats(s, cp.stats);
+    s.hp = Math.max(s.hp, Math.round(s.maxHp * 0.5));
+    s.invulnerable = 0;
+    this.armorySeen = cp.armorySeen;
+    this.unlocked = null;
+    this.pendingLevelUps = 0;
+    this.choosing = false;
+    this.paused = false;
+    audio.setPaused(false);
+    this.slowMo = 0;
+    this.app.timeScale = 1;
+    this.shopRoll = null;
+    this.route = null;
+    this.routeFor = -1;
+    this.shopBonus = null;
+    this.dashReady = s.dashCharges;
+    this.log = newRunLog();
+    this.weapons.setMods(s.modsFor(s.weapon), false);
+    this.weapons.equip(s.weapon);
+    this.gun.reset();
+    this.startWave(cp.index);
+  }
+
+  /** Banks this attempt's Dust (difficulty-scaled) and starts a new tally; returns what was earned. */
+  private bankDust(won: boolean): number {
+    const mult = (this.difficultyId === "easy" ? 0.7 : this.difficultyId === "nightmare" ? 1.5 : 1) * this.dmods.dust;
+    const amount = dustFor({ ...this.log, won }, mult);
+    if (amount > 0) addDust(amount);
+    this.dustRun += amount;
+    this.log.kills = this.log.levels = this.log.bosses = this.log.elites = 0;
+    return amount;
+  }
+
+  /** The end-of-run screen for this attempt. */
+  private showSummary(title: string, subtitle: string, dust: number, actions: { label: string; onClick: () => void; minor?: boolean }[]): void {
+    const s = this.stats, l = this.log;
+    const mm = Math.floor(l.time / 60), ss = Math.floor(l.time % 60);
+    const damage = (Object.entries(l.dealt) as [HitSource, number][])
+      .filter(([, v]) => v > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, v]) => ({ label: SOURCE_LOOK[k].label, value: v, color: SOURCE_LOOK[k].color }));
+    const ups = [...s.upgrades.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id, n]) => `${upgradeDef(id).name}${n > 1 ? ` ${n}` : ""}`).join(" · ");
+    this.hud.openSummary({
+      title,
+      subtitle,
+      stats: [
+        { label: "Hero", value: this.hero.name },
+        { label: "Time", value: `${mm}:${String(ss).padStart(2, "0")}` },
+        { label: "Kills", value: String(l.totalKills) },
+        { label: "Level", value: String(s.level) },
+        { label: "Cleared", value: this.endless ? `+${this.endless} endless` : `${Math.min(this.baseCount, this.director.waveIndex + (this.phase === "complete" ? 1 : 0))}/${this.baseCount}` },
+        { label: "Cash earned", value: `${l.cash}$` },
+        { label: "Damage taken", value: String(Math.round(l.taken)) },
       ],
+      damage,
+      dust: dust > 0 ? `+${dust} ◆ DUST · ${loadMeta().dust} to spend on the title screen` : "",
+      upgrades: ups ? `Build: ${ups}` : "",
+      actions,
     });
   }
 
   /** The wave is over: the rest of the horde drops (no rewards), leftover pickups fly to the hero. */
   private waveComplete(): void {
     this.phase = "cleared";
+    this.log.levels++;
+    const s = this.stats;
+    // Untouchable bounties pay when the level ends unbroken; interest on the cash he kept.
+    if (this.bounty?.kind === "untouchable" && !this.bounty.failed) this.payBounty();
+    const i = ECONOMY.interest, interest = Math.floor(Math.min(i.capBase + i.capPerLevel * this.director.waveIndex, Math.floor(s.cash * i.rate)) * this.dmods.interest);
+    if (interest > 0) {
+      s.cash += interest;
+      this.log.cash += interest;
+    }
+    // The path's shop bonus is for the shop right after its level.
+    this.shopBonus = this.route?.shopDiscount ? { discount: this.route.shopDiscount, extra: !!this.route.extraOffer } : null;
+    this.route = null;
+    best("maxLevel", s.level);
+    this.questCheck();
     this.enemies.killAll();
     this.hazards.reset();
     this.clearTimer = 2.8;
     this.player.aimYawDeg = null;
-    this.hud.showBanner(`${this.director.wave.label} complete`, 2.4);
+    this.hud.showBanner(`${this.director.wave.label} complete${interest > 0 ? ` · interest +${interest}$` : ""}`, 2.4);
+  }
+
+  /**
+   * One contract per level, paid in cash: hunt N of the level's commonest foe, slay a champion, or
+   * end the level having lost less than a third of max HP.
+   */
+  private rollBounty(index: number): Bounty | null {
+    const w = this.levels[index];
+    if (!w) return null;
+    const reward = Math.round((ECONOMY.bounty.base + ECONOMY.bounty.perLevel * Math.min(index, 12)) * this.dmods.bounty);
+    const totals = new Map<WaveEnemyId, number>();
+    for (const p of w.phases) {
+      const sum = Object.values(p.weights).reduce((a, b) => a + (b ?? 0), 0) || 1;
+      for (const [id, v] of Object.entries(p.weights) as [WaveEnemyId, number][]) totals.set(id, (totals.get(id) ?? 0) + v / sum);
+    }
+    const kinds: Bounty["kind"][] = ["untouchable"];
+    if (totals.size) kinds.push("hunt", "hunt");
+    if (w.duration >= 40 && !w.boss) kinds.push("champion");
+    const kind = kinds[Math.floor(Math.random() * kinds.length)];
+    if (kind === "hunt") {
+      const [type, share] = [...totals].sort((a, b) => b[1] - a[1])[0];
+      const target = Math.max(8, Math.min(40, Math.round(w.duration * 0.35 * (share / w.phases.length))));
+      return { kind, type, target, progress: 0, reward, done: false, failed: false };
+    }
+    if (kind === "champion") return { kind, target: 1, progress: 0, reward: Math.round(reward * 1.2), done: false, failed: false };
+    return { kind, target: Math.round(this.stats.maxHp * 0.35), progress: 0, reward: Math.round(reward * 1.3), done: false, failed: false };
+  }
+
+  private bountyText(b: Bounty): string {
+    if (b.kind === "hunt") return `Kill ${b.target} ${ENEMIES[b.type!].label}s · ${Math.min(b.progress, b.target)}/${b.target}`;
+    if (b.kind === "champion") return b.done ? "Champion slain" : "Slay a champion";
+    return `Take under ${b.target} damage · ${Math.round(b.progress)}`;
+  }
+
+  private showBounty(): void {
+    const b = this.bounty;
+    this.hud.setBounty(b ? { text: this.bountyText(b), reward: b.reward, state: b.done ? "done" : b.failed ? "failed" : "on" } : null);
+  }
+
+  private payBounty(): void {
+    const b = this.bounty;
+    if (!b || b.done || b.failed) return;
+    b.done = true;
+    bump("bounties");
+    this.stats.cash += b.reward;
+    this.log.cash += b.reward;
+    audio.play("cash");
+    this.hud.showBanner(`Bounty paid +${b.reward}$`, 1.8);
+    this.showBounty();
   }
 
   /** After the short "wave complete": the shop, then the next wave (or the end of the run). */
   private afterWave(): void {
     const next = this.director.waveIndex + 1;
+    if (this.endless && next >= this.levels.length) this.pushEndless();
     if (next < this.levels.length) {
       const run = this.campaign?.run;
       if (run && this.director.waveIndex === run.pactAfter) this.openPact(next);
@@ -579,10 +870,49 @@ export class Gameplay {
     this.player.aimYawDeg = null;
     const victory = this.campaign?.victory ?? { title: "RUN COMPLETE", text: "The outpost is quiet." };
     clearedCampaign(this.biome.id, this.difficulty?.label ?? "Normal");
-    this.hud.openModal({
-      title: victory.title,
-      text: `${victory.text} ${this.difficultyTag}Level ${this.stats.level} · ${this.stats.kills} kills · ${this.stats.cash}$ left.`,
-      actions: [{ label: "New run", onClick: () => this.startRun() }, MAIN_MENU],
+    if (this.difficultyId !== "easy") recordWin(this.biome.id, this.danger);
+    const dust = this.bankDust(true);
+    best("maxLevel", this.stats.level);
+    this.questCheck();
+    const daily = this.finishDaily(true);
+    this.showSummary(victory.title, `${this.difficultyTag}${daily ?? victory.text}`, dust, [
+      ...(this.daily ? [{ label: "Share score", onClick: () => this.shareScore(true) }] : []),
+      { label: "Endless mode", onClick: () => this.startEndless() },
+      { label: "New run", onClick: () => this.startRun(), minor: true },
+      { ...MAIN_MENU, minor: true },
+    ]);
+  }
+
+  /** After a cleared campaign: the build carries on through ever harder loops of its levels. */
+  private startEndless(): void {
+    this.endless = 0;
+    this.pushEndless();
+    this.openShop(this.levels.length - 1);
+  }
+
+  /**
+   * Appends the next endless level: the campaign's last regular levels (and every third loop one of its
+   * boss fights) in their own zones, each loop tougher (HP x1.15, damage x1.07, bosses x1.2 per loop).
+   */
+  private pushEndless(): void {
+    this.endless++;
+    const n = this.endless;
+    const originals = this.levels.slice(0, this.baseCount);
+    const regular = originals.filter((l) => !l.boss);
+    const bosses = originals.filter((l) => l.boss);
+    const top = originals.reduce((a, l) => (l.hpScale > a.hpScale ? l : a));
+    const boss = n % 3 === 0 && bosses.length > 0;
+    const src = boss ? bosses[Math.floor(Math.random() * bosses.length)] : regular[Math.max(0, regular.length - 1 - (n % Math.min(2, regular.length)))] ?? top;
+    this.levels.push({
+      ...src,
+      label: `Endless ${n}`,
+      act: "Endless",
+      subtitle: src.subtitle,
+      duration: boss ? src.duration : Math.max(src.duration, 75),
+      hpScale: top.hpScale * 1.15 ** n,
+      damageScale: top.damageScale * 1.07 ** n,
+      bossHpScale: (src.bossHpScale ?? 1) * 1.2 ** n,
+      phases: src.phases.map((p) => ({ ...p, maxAlive: Math.round(p.maxAlive * Math.min(1.5, 1 + 0.05 * n)) })),
     });
   }
 
@@ -678,31 +1008,119 @@ export class Gameplay {
     }
   }
 
-  /** Between waves: spend cash. */
+  /** The level index a weapon first shows up in the shop at (its tier, lowered by the chapter's boost). */
+  private weaponFrom(id: WeaponId): number {
+    const tier = weaponTier(id);
+    return Math.max(tier > 0 ? 1 : 0, ARSENAL.tiers[tier].from - (this.campaign?.run?.tierBoost ?? 0));
+  }
+
+  /** Items the shop may offer before level `next` (never the Medkit / Gunsmith, a maxed item or an owned gun). */
+  private shopPool(next: number): ShopItem[] {
+    const s = this.stats;
+    return SHOP.filter((item) =>
+      item.id !== "heal" && item.id !== "mk" &&
+      (!item.weapon || (WEAPON_STATS[item.weapon] && !s.owned.has(item.weapon) && next >= this.weaponFrom(item.weapon))) &&
+      (!item.biomes || item.biomes.includes(this.biome.id)) &&
+      (item.from === undefined || next >= item.from) &&
+      !(item.max !== undefined && (s.bought.get(item.id) ?? 0) >= item.max),
+    );
+  }
+
+  /**
+   * Rolls this visit's offers: locked ones stay; one gun from the unlocked tiers (newest tier most
+   * likely) when the locks leave room, then the rest by weight; one offer goes on sale.
+   */
+  private rollShop(next: number): { offers: ShopItemId[]; sale: ShopItemId | null; gadget: GadgetId | null } {
+    const pool = this.shopPool(next);
+    const kept = pool.filter((i) => this.stats.lockedShop.has(i.id)).map((i) => i.id);
+    const out = [...kept];
+    const guns = pool.filter((i) => i.weapon && !kept.includes(i.id));
+    if (guns.length && !out.some((id) => SHOP.find((i) => i.id === id)?.weapon)) {
+      const top = Math.max(...guns.map((g) => weaponTier(g.weapon!)));
+      const weighted = guns.map((g) => ({ g, w: weaponTier(g.weapon!) === top ? 3 : 1 }));
+      let r = Math.random() * weighted.reduce((t, x) => t + x.w, 0);
+      const pick = weighted.find((x) => (r -= x.w) <= 0) ?? weighted[0];
+      out.push(pick.g.id);
+    }
+    const rest = pool.filter((i) => !i.weapon && !out.includes(i.id));
+    const slots = SHOP_RULES.offers + (this.shopBonus?.extra ? 1 : 0);
+    while (out.length < slots && rest.length) {
+      const total = rest.reduce((t, i) => t + (i.weight ?? 1), 0);
+      let r = Math.random() * total, k = 0;
+      while (k < rest.length - 1 && (r -= rest[k].weight ?? 1) > 0) k++;
+      out.push(rest.splice(k, 1)[0].id);
+    }
+    const saleable = out.filter((id) => !kept.includes(id));
+    return { offers: out, sale: saleable.length ? saleable[Math.floor(Math.random() * saleable.length)] : null, gadget: this.rollGadget() };
+  }
+
+  /** One gadget offer per shop: a level-up for an owned one, or a new one while a slot is free. */
+  private rollGadget(): GadgetId | null {
+    const s = this.stats;
+    const ups = [...s.gadgets].filter(([, l]) => l < GADGET_MAX_LEVEL).map(([id]) => id);
+    const fresh = s.gadgets.size < s.gadgetSlots ? GADGETS.filter((g) => !s.gadgets.has(g.id) && gadgetUnlocked(g.id, g.locked)).map((g) => g.id) : [];
+    const pool = [...ups, ...fresh];
+    return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+  }
+
+  /** What a reroll costs now. */
+  private rerollPrice(next: number): number {
+    const r = SHOP_RULES.reroll;
+    return r.base + r.perLevel * Math.min(next, 12) + r.step * (this.shopRoll?.rerolls ?? 0);
+  }
+
+  /**
+   * Between levels: the Medkit plus this visit's rolled offers (Brotato-style): reroll them for cash,
+   * lock any to keep it for the next visit; then the loadout (with more than one gun) or the next level.
+   */
   private openShop(next: number): void {
     this.phase = "shop";
     const s = this.stats;
-    const items = SHOP.filter((item) =>
-      (!item.weapon || WEAPON_STATS[item.weapon]) && (!item.campaign || this.armorySeen) && (!item.biomes || item.biomes.includes(this.biome.id)),
-    );
+    if (!this.shopRoll || this.shopRoll.level !== next) this.shopRoll = { level: next, ...this.rollShop(next), rerolls: 0 };
+    const roll = this.shopRoll;
+    const items = [SHOP.find((i) => i.id === "heal")!, SHOP.find((i) => i.id === "mk")!, ...(roll.gadget ? [SHOP.find((i) => i.id === "gadget")!] : []), ...roll.offers.map((id) => SHOP.find((i) => i.id === id)!)];
     const count = (item: ShopItem) => s.bought.get(item.id) ?? 0;
-    const maxed = (item: ShopItem) => item.max !== undefined && count(item) >= item.max;
+    const mkLevel = s.weaponLevel.get(s.weapon) ?? 0;
+    const evo = EVOLUTIONS[s.weapon];
+    const canEvolve = mkLevel >= ARSENAL.mk.max && !!evo && !s.evolved.has(s.weapon) && (s.upgrades.get(evo.needs) ?? 0) > 0;
+    const gadgetLevel = roll.gadget ? s.gadgets.get(roll.gadget) ?? 0 : 0;
+    const maxed = (item: ShopItem) => (item.max !== undefined && count(item) >= item.max) || (item.id === "mk" && mkLevel >= ARSENAL.mk.max && !canEvolve) || (item.id === "gadget" && gadgetLevel >= GADGET_MAX_LEVEL);
     const soldOut = (item: ShopItem) => (item.weapon ? s.owned.has(item.weapon) : false) || (item.id === "heal" && s.hp >= s.maxHp) || maxed(item);
-    const note = (item: ShopItem) => item.weapon ? "Owned" : maxed(item) ? `Maxed ${count(item)}/${item.max}` : "HP full";
+    const mkNote = () => !evo ? `${this.gunName()} is Mk V` : s.evolved.has(s.weapon) ? `Evolved: ${evo.text}` : `Mk V · take ${upgradeDef(evo.needs).name} to evolve it into ${evo.name}`;
+    const note = (item: ShopItem) => item.weapon ? "In your loadout" : item.id === "mk" ? mkNote() : item.id === "gadget" ? "Maxed" : maxed(item) ? `Maxed ${count(item)}/${item.max}` : "HP full";
+    const reroll = this.rerollPrice(next);
+    const guns = [...s.owned].filter((id) => !!WEAPON_STATS[id]);
     this.hud.openModal({
       title: "SHOP",
       compact: true,
-      text: `Cash: ${s.cash}$ · HP ${Math.ceil(s.hp)}/${s.maxHp} · ${WEAPONS.list[s.weapon]?.label ?? s.weapon}`,
+      text: `Cash: ${s.cash}$ · HP ${Math.ceil(s.hp)}/${s.maxHp} · ${this.gunName()} · 🔓 keeps an offer for the next shop`,
       image: weaponArt(s.weapon),
-      cards: items.map((item): Card => {
-        const title = maxed(item) || (item.weapon && s.owned.has(item.weapon)) ? item.title : `${item.title} — ${this.shopPrice(item)}$`;
-        const text = soldOut(item) ? note(item) : item.max !== undefined ? `${item.text} · ${count(item)}/${item.max}` : item.text;
-        const disabled = soldOut(item) || s.cash < this.shopPrice(item);
+      cards: items.map((item, i): Card => {
+        const sale = roll.sale === item.id && !soldOut(item);
+        const g = item.id === "gadget" && roll.gadget ? gadgetDef(roll.gadget) : null;
+        const name = item.id === "mk" ? (canEvolve ? `Evolve: ${evo!.name}` : mkLevel >= ARSENAL.mk.max ? this.gunName() : `${this.gunName()} Mk ${MK_NAMES[mkLevel + 1]}`) : g ? `${g.name} Lv ${Math.min(GADGET_MAX_LEVEL, gadgetLevel + 1)}` : item.title;
+        const title = soldOut(item) && item.id !== "heal" ? name : `${name} — ${this.shopPrice(item)}$${sale ? " (SALE)" : ""}`;
+        const text = soldOut(item) ? note(item)
+          : item.id === "mk" ? (canEvolve ? evo!.text : `+${Math.round(ARSENAL.mk.damage * 100)}% damage · +${Math.round(ARSENAL.mk.fireRate * 100)}% fire rate · +${Math.round(ARSENAL.mk.magazine * 100)}% magazine`)
+          : g ? `${gadgetLevel ? "" : `${g.text} · `}${gadgetLine(g.id, gadgetLevel + 1)}`
+          : item.max !== undefined ? `${item.text} · ${count(item)}/${item.max}` : item.text;
+        const off = soldOut(item) || s.cash < this.shopPrice(item);
+        if (item.id === "mk") return { title, text, tag: canEvolve ? "evolution" : "gunsmith", kind: canEvolve ? "special" : "weapon", icon: canEvolve ? "star" : "bullet", off };
+        if (g) return { title, text, tag: gadgetLevel ? `gadget · lv ${gadgetLevel}` : `new gadget · ${s.gadgets.size}/${s.gadgetSlots} slots`, kind: "special", icon: g.icon, off };
+        const lock = i === 0 || soldOut(item) ? undefined : {
+          on: s.lockedShop.has(item.id),
+          onToggle: () => {
+            if (s.lockedShop.has(item.id)) s.lockedShop.delete(item.id);
+            else s.lockedShop.add(item.id);
+            this.openShop(next);
+          },
+        };
         if (item.weapon) {
           const stats = WEAPON_STATS[item.weapon]!;
-          return { title, text, tag: s.owned.has(item.weapon) ? "owned" : "weapon", kind: "weapon", image: weaponArt(item.weapon), bars: weaponBars(stats), disabled };
+          const tier = weaponTier(item.weapon);
+          return { title, text, tag: sale ? "sale" : s.owned.has(item.weapon) ? "owned" : `tier ${tier}`, kind: "weapon", image: weaponArt(item.weapon), bars: weaponBars(stats), off, lock };
         }
-        return { title, text, kind: "player", icon: SHOP_ICONS[item.id] ?? "star", disabled };
+        return { title, text, tag: sale ? "sale" : item.from !== undefined ? "rare" : undefined, kind: item.from !== undefined ? "special" : "player", icon: SHOP_ICONS[item.id] ?? "star", off, lock };
       }),
       onCard: (i) => {
         const item = items[i];
@@ -710,17 +1128,30 @@ export class Gameplay {
         if (s.cash < price || soldOut(item)) return;
         s.cash -= price;
         s.bought.set(item.id, count(item) + 1);
+        s.lockedShop.delete(item.id);
+        if (roll.sale === item.id) roll.sale = null;
         this.buy(item);
         this.openShop(next);
       },
-      actions: [{
-        label: this.biome.id === "outpost" ? "Choose loadout" : `${this.wayOn(next) ? "On to" : "Start"} ${this.levels[next].label}`,
-        onClick: () => this.biome.id === "outpost" ? this.openLoadout(next) : this.beforeLevel(next),
-      }],
+      actions: [
+        {
+          label: `↻ Reroll · ${reroll}$`, minor: true,
+          onClick: () => {
+            if (s.cash < reroll) return;
+            s.cash -= reroll;
+            roll.rerolls++;
+            Object.assign(roll, this.rollShop(next));
+            this.openShop(next);
+          },
+        },
+        guns.length > 1 || modsForWeapon(s.weapon).length > 0
+          ? { label: "Choose loadout", onClick: () => this.openLoadout(next) }
+          : { label: `${this.wayOn(next) && !this.endless ? "On to" : "Start"} ${this.levels[next].label}`, onClick: () => this.beforeLevel(next) },
+      ],
     });
   }
 
-  /** Wasteland-only test: choose any owned weapon before the next level, then tune it at the bench. */
+  /** Choose any owned weapon before the next level; weapons with modules open the bench. */
   private openLoadout(next: number): void {
     this.phase = "shop";
     const s = this.stats;
@@ -743,7 +1174,8 @@ export class Gameplay {
       }),
       onCard: (i) => {
         this.equip(weapons[i]);
-        this.openWeaponBench(next, weapons[i]);
+        if (modsForWeapon(weapons[i]).length) this.openWeaponBench(next, weapons[i]);
+        else this.openLoadout(next);
       },
       actions: [{ label: `Continue with ${WEAPONS.list[s.weapon].label}`, onClick: () => this.beforeLevel(next) }],
     });
@@ -787,11 +1219,37 @@ export class Gameplay {
 
   /** What `item` costs now (its price grows with each purchase this run). */
   shopPrice(item: ShopItem): number {
-    return shopPrice(item, this.stats.bought.get(item.id) ?? 0);
+    const s = this.stats;
+    const k = this.dmods.shopPrice * (1 - (this.shopBonus?.discount ?? 0));
+    if (item.id === "mk") {
+      const p = ARSENAL.mkPrice, mk = s.weaponLevel.get(s.weapon) ?? 0;
+      // At Mk V the Gunsmith evolves the gun instead (gameplay/evolutions.ts).
+      return Math.round((mk >= ARSENAL.mk.max ? p.base[weaponTier(s.weapon)] * 4 : p.base[weaponTier(s.weapon)] * p.growth ** mk) * k);
+    }
+    if (item.id === "gadget") {
+      const g = this.shopRoll?.gadget;
+      return Math.round(gadgetPrice(g ? s.gadgets.get(g) ?? 0 : 0) * k);
+    }
+    const full = shopPrice(item, s.bought.get(item.id) ?? 0) * k;
+    return Math.round(this.shopRoll?.sale === item.id ? full * (1 - ECONOMY.sale.discount) : full);
+  }
+
+  /** The equipped gun's name with its Mk ("MP5 SMG Mk III"). */
+  private gunName(weapon = this.stats.weapon): string {
+    const evo = this.stats.evolved.has(weapon) ? EVOLUTIONS[weapon] : undefined;
+    if (evo) return `${evo.name} ★`;
+    const mk = this.stats.weaponLevel.get(weapon) ?? 0;
+    return `${WEAPONS.list[weapon]?.label ?? weapon}${mk ? ` Mk ${MK_NAMES[mk]}` : ""}`;
   }
 
   /** The last level gets a warning first: this is the final encounter. */
   private beforeLevel(next: number): void {
+    this.shopBonus = null;
+    const level = this.levels[next];
+    if (this.routeFor !== next && next > 0 && !this.endless && !level.boss && next !== this.campaign?.run?.finalLevel) {
+      this.openRoutes(next);
+      return;
+    }
     if (this.campaign?.run && next === this.campaign.run.finalLevel) {
       this.hud.openModal({
         title: this.campaign.run.text?.finalWarning?.[0] ?? "THE FINAL ENCOUNTER",
@@ -803,6 +1261,24 @@ export class Gameplay {
     this.proceed(next);
   }
 
+  /** The path to level `next`: three doors, each changing that level or the next shop (routes.ts). */
+  private openRoutes(next: number): void {
+    this.phase = "shop";
+    const offers = rollRoutes(3);
+    this.hud.openModal({
+      title: "CHOOSE YOUR PATH",
+      text: `The road to ${this.levels[next].label} forks.`,
+      cards: offers.map((r): Card => ({ title: r.name, text: r.text, icon: r.icon, kind: r.kind, tag: "path" })),
+      onCard: (i) => {
+        const r = offers[i];
+        this.route = r;
+        this.routeFor = next;
+        if (r.heal) this.stats.heal(this.stats.maxHp * r.heal);
+        this.beforeLevel(next);
+      },
+    });
+  }
+
   /** The current zone's way on to level `next` (campaigns whose zones have exits), or null. */
   private wayOn(next: number): { zone: string; exit: NonNullable<Zone["exit"]>; region: LevelBounds } | null {
     const zone = this.levels[this.director.waveIndex]?.zone;
@@ -812,7 +1288,7 @@ export class Gameplay {
 
   /** Next level: walk there over the map when the zone has a way on, else start it in place. */
   private proceed(next: number): void {
-    const way = this.wayOn(next);
+    const way = this.endless ? null : this.wayOn(next);
     const exits = way ? this.campaign!.exits!(way.zone) : [];
     if (!way || !exits.length) {
       this.startWave(next);
@@ -901,6 +1377,45 @@ export class Gameplay {
       case "armor": s.armor = Math.min(0.6, s.armor + 0.1); break;
       case "damage": s.damageMult *= 1.1; break;
       case "fireRate": s.fireRateMult *= 1.1; break;
+      case "magnet": s.magnetMult *= 1.3; break;
+      case "mk": {
+        const mk = s.weaponLevel.get(s.weapon) ?? 0;
+        if (mk >= ARSENAL.mk.max) {
+          s.evolved.add(s.weapon);
+          bump("evolutions");
+          audio.play("levelup");
+          this.hud.showBanner(`EVOLVED · ${this.gunName()}`, 2);
+        } else {
+          s.weaponLevel.set(s.weapon, mk + 1);
+          best("maxMk", mk + 1);
+          this.hud.showBanner(`${this.gunName()}`, 1.4);
+        }
+        this.weapons.setMods(s.modsFor(s.weapon), false);
+        this.gun.reset();
+        this.questCheck();
+        break;
+      }
+      case "gadget": {
+        const g = this.shopRoll?.gadget;
+        if (!g) break;
+        s.gadgets.set(g, (s.gadgets.get(g) ?? 0) + 1);
+        best("maxGadgets", s.gadgets.size);
+        this.questCheck();
+        break;
+      }
+      case "boots": s.moveSpeedMult *= 1.08; break;
+      case "ammo": s.magazineBonus += 4; break;
+      case "scope": s.critChance = Math.min(0.9, s.critChance + 0.06); break;
+      case "loader": s.reloadTimeMult *= 0.85; break;
+      case "hollowPoints": s.damageMult *= 1.25; break;
+      case "hairTrigger": s.fireRateMult *= 1.2; break;
+      case "exoFrame": s.maxHp += 50; s.heal(50); s.armor = Math.min(0.6, s.armor + 0.08); break;
+      case "droneBay": s.drones += 1; break;
+      case "crate": {
+        const [u] = rollUpgrades(s, 1, "levelUp");
+        if (u) this.announce(applyUpgrade(s, u.id));
+        break;
+      }
       default: if (item.weapon) this.equip(item.weapon);
     }
   }
@@ -908,8 +1423,24 @@ export class Gameplay {
   /** Called exactly once per enemy death (EnemyManager.die): XP, heal-on-kill, drops. */
   private onEnemyDeath(enemy: Enemy): void {
     this.stats.kills++;
+    this.log.kills++;
+    this.log.totalKills++;
+    bump("kills");
+    if (enemy.def.boss) {
+      this.log.bosses++;
+      bump("bosses");
+    }
+    if (enemy.elite) bump("champions");
+    const b = this.bounty;
+    if (b && !b.done && !b.failed) {
+      if ((b.kind === "hunt" && enemy.id === b.type) || (b.kind === "champion" && enemy.elite)) {
+        b.progress++;
+        if (b.progress >= b.target) this.payBounty();
+        else this.showBounty();
+      }
+    }
     if (this.stats.healOnKill > 0) this.killHeal(this.stats.healOnKill);
-    this.pendingLevelUps += this.stats.gainXp(enemy.def.xp);
+    this.pendingLevelUps += this.stats.gainXp(enemy.def.xp * (this.route?.xp ?? 1));
     if (this.stats.vampireChance > 0 && Math.random() < this.stats.vampireChance) this.killHeal(this.stats.vampireHeal);
     // Drops: most zombies leave nothing, so the ground stays readable.
     const { x, z } = enemy.position;
@@ -954,6 +1485,15 @@ export class Gameplay {
       this.effects.bloodDecal(x, z, enemy.scale * (enemy.def.boss ? 1.8 : 1.1), enemy.def.gore);
     } else this.effects.bloodDecal(x, z, enemy.scale * (enemy.def.boss ? 1.6 : 1));
     const drops = enemy.def.drops;
+    if (enemy.elite) {
+      // A champion's chest: 1-3 upgrades (luck shifts the odds up) and some cash.
+      this.log.elites++;
+      const odds = ELITES.chest, luck = this.stats.luck;
+      const r = Math.random() * (1 + luck);
+      const size = Math.min(3, (r > odds[0] + odds[1] ? 3 : r > odds[0] ? 2 : 1) + (this.route?.chestBonus ?? 0));
+      this.pickups.drop("chest", x, z, size);
+      this.hud.showBanner("Champion down: a chest!", 1.8);
+    }
     if (enemy.def.boss) {
       const pieces = DROPS.bossCashPieces;
       for (let i = 0; i < pieces; i++) this.pickups.drop("cash", x, z, Math.ceil(enemy.def.cash / pieces));
@@ -968,19 +1508,75 @@ export class Gameplay {
 
   private collect(kind: PickupKind, value: number, upgrade: UpgradeId | null): void {
     const s = this.stats;
-    audio.play(kind === "cash" ? "cash" : kind === "health" ? "heal" : "upgrade");
-    if (kind === "cash") s.cash += value;
+    audio.play(kind === "cash" ? "cash" : kind === "health" ? "heal" : kind === "chest" ? "levelup" : "upgrade");
+    if (kind === "cash") {
+      value = Math.round(value * s.cashMult * (this.route?.cash ?? 1));
+      s.cash += value;
+      this.log.cash += value;
+      bump("cash", value);
+    } else if (kind === "chest") this.openChest(value);
     else if (kind === "health") {
       const before = s.hp;
       s.heal(Math.min(s.maxHp * DROPS.healthFraction, this.rules?.pickupHealMax ?? Infinity));
       const p = this.player.entity.getPosition();
       this.tmp.set(p.x, 2.1 * this.characterScale(), p.z);
       this.hud.damageNumber(this.tmp, `+${Math.round(s.hp - before)} HP`, "heal");
-    } else {
+    } else if (kind === "upgrade") {
       // The pickup carries the upgrade it shows; reroll if that one got maxed out meanwhile.
       const pick = upgrade && availableUpgrades(s, "drop").some((u) => u.id === upgrade) ? upgrade : rollUpgrades(s, 1, "drop")[0]?.id;
       if (pick) this.announce(applyUpgrade(s, pick));
     }
+  }
+
+  /**
+   * A champion's chest: the game pauses, its cash and `size` upgrades flip in one after another
+   * (rolled from the level-up pool, rarity-weighted), then all are taken at once.
+   */
+  private openChest(size: number): void {
+    const s = this.stats;
+    const ups = rollUpgrades(s, Math.max(1, Math.min(3, size)), "levelUp");
+    const cash = ELITES.cash * size;
+    this.choosing = true;
+    this.app.timeScale = 0;
+    this.hud.openModal({
+      title: size >= 3 ? "LEGENDARY CHEST" : size === 2 ? "GOLDEN CHEST" : "CHAMPION'S CHEST",
+      text: `+${cash}$ and ${ups.length} upgrade${ups.length === 1 ? "" : "s"}`,
+      className: "chest",
+      cards: ups.map((u) => ({ title: u.name, text: upgradeText(u), icon: u.icon, kind: u.category, tag: u.rarity === "common" ? "" : u.rarity })),
+      onCard: () => {},
+      actions: [{
+        label: "Take all",
+        onClick: () => {
+          s.cash += cash;
+          this.log.cash += cash;
+          for (const u of ups) this.announce(applyUpgrade(s, u.id));
+          this.hud.closeModal();
+          this.choosing = false;
+          this.app.timeScale = 1;
+        },
+      }],
+    });
+  }
+
+  /** An elite champion now and then while a level's waves run: a gold-glowing, tougher regular foe. */
+  private updateElites(dt: number, hero: Vec3): void {
+    if (this.director.phase !== "waves") return;
+    this.eliteTimer -= dt;
+    if (this.eliteTimer > 0) return;
+    this.eliteTimer = ELITES.every * (0.75 + Math.random() * 0.5) * this.eliteEveryMult;
+    const weights = Object.entries(this.director.step.weights) as [WaveEnemyId, number][];
+    const total = weights.reduce((t, [, w]) => t + w, 0);
+    if (!total) return;
+    let r = Math.random() * total, type = weights[0][0];
+    for (const [id, w] of weights) if ((r -= w) <= 0) { type = id; break; }
+    const spot = this.director.offscreenSpot(hero, this.projector);
+    if (!spot) return;
+    const w = this.director.wave;
+    const e = this.enemies.spawn(type, spot.x, spot.z, w.hpScale, w.damageScale);
+    if (!e) return;
+    this.enemies.makeElite(e, ELITES.hp * this.dmods.eliteHp, ELITES.scale, ELITES.damage);
+    this.hud.showBanner(`A champion ${e.def.label.toLowerCase()} approaches`, 2);
+    audio.voice(voiceOf(e.id, e.def), "attack", { x: spot.x, z: spot.z, rate: 0.8, volume: 1.3 });
   }
 
   /** Starts loading the sounds this run can play: the map's, the weapons', its enemies' voices. */
@@ -1106,6 +1702,87 @@ export class Gameplay {
     if (given > 0) this.stats.heal(given);
   }
 
+  /** Champion interval multiplier: danger and the chosen path. */
+  private get eliteEveryMult(): number {
+    return this.dmods.eliteEvery * (this.route?.eliteEvery ?? 1);
+  }
+
+  /** Completes quests whose goals are met and toasts each (gameplay/profile.ts). */
+  private questCheck(): void {
+    for (const q of checkQuests()) {
+      this.hud.showUpgrade({ name: `Quest · ${q.name}`, stat: rewardText(q.reward), value: "", icon: q.icon, category: "special", rarity: "epic", color: "#8fd8ff" }, this.player.entity);
+    }
+  }
+
+  /** A daily run ended: its score and today's best (the summary's subtitle), or null off a daily. */
+  private finishDaily(won: boolean): string | null {
+    const d = this.daily;
+    if (!d) return null;
+    const score = this.dailyPoints(won);
+    const p = profile();
+    const prev = p.daily[d.key] ?? 0;
+    p.daily[d.key] = Math.max(prev, score);
+    bump("dailies");
+    this.questCheck();
+    const tail = prev > 0 && score <= prev ? ` · today's best ${prev.toLocaleString("en-US")}` : score > 0 ? " · new best!" : "";
+    return `${d.key} · score ${score.toLocaleString("en-US")}${tail}`;
+  }
+
+  private dailyPoints(won: boolean): number {
+    const cleared = Math.min(this.baseCount, this.director.waveIndex + (won ? 1 : 0));
+    return dailyScore({ levels: cleared, kills: this.log.totalKills, bosses: this.log.bosses, won, seconds: this.log.time });
+  }
+
+  private shareScore(won: boolean): void {
+    const d = this.daily;
+    if (!d) return;
+    void shareDaily({
+      date: d.key, chapter: this.biome.label ?? this.biome.id, hero: this.hero.name, danger: d.danger, score: this.dailyPoints(won), won,
+      kills: this.log.totalKills, cleared: Math.min(this.baseCount, this.director.waveIndex + (won ? 1 : 0)), levels: this.baseCount,
+      time: this.log.time, art: `${import.meta.env.BASE_URL}menu/${this.biome.id}.webp`,
+    });
+  }
+
+  /** Dash (button, Space / Shift): a burst along the stick (or facing), invulnerable for a moment. */
+  private tryDash(): void {
+    const playing = this.phase === "combat" || this.phase === "cleared" || this.phase === "travel";
+    if (!playing || this.paused || this.choosing || this.hud.modalOpen || !this.player.controlsEnabled || !this.stats.alive || this.dashReady <= 0) return;
+    const s = this.stats;
+    this.dashReady--;
+    if (this.dashTimer <= 0) this.dashTimer = DASH.cooldown * s.dashCooldownMult;
+    const d = this.player.moveDirection;
+    this.player.dash(d.x, d.z, DASH.speed, DASH.seconds);
+    s.invulnerable = Math.max(s.invulnerable, DASH.iframes);
+    const p = this.player.entity.getPosition();
+    this.effects.ring(this.tmp.set(p.x, 0.05, p.z), 1.1, true);
+    audio.play("reload", { rate: 1.8, volume: 0.6 });
+    this.dashBlastIn = s.dashBlast > 0 ? DASH.seconds : 0;
+    bump("dashes");
+  }
+
+  /** Dash recharge and Afterburn's blast where a dash ends. */
+  private updateDash(dt: number, position: Vec3): void {
+    const s = this.stats;
+    const max = Math.max(1, Math.round(s.dashCharges));
+    if (this.dashReady > max) this.dashReady = max;
+    if (this.dashReady < max) {
+      const cd = DASH.cooldown * s.dashCooldownMult;
+      if (this.dashTimer <= 0) this.dashTimer = cd;
+      this.dashTimer -= dt;
+      if (this.dashTimer <= 0) {
+        this.dashReady++;
+        this.dashTimer = this.dashReady < max ? cd : 0;
+      }
+    }
+    if (this.dashBlastIn > 0) {
+      this.dashBlastIn -= dt;
+      if (this.dashBlastIn <= 0 && this.phase === "combat") {
+        this.combat.blast(position.x, position.z, DASH.blastRadius, s.dashBlast);
+        audio.play("explosion", { rate: 1.3, volume: 0.5 });
+      }
+    }
+  }
+
   update(dt: number): void {
     if (this.phase === "loading") return;
     if (this.slowMo > 0) {
@@ -1127,13 +1804,17 @@ export class Gameplay {
         this.navTimer = 0.3;
       }
       this.stats.invulnerable = Math.max(0, this.stats.invulnerable - dt);
+      if (this.testGod) this.stats.invulnerable = Math.max(this.stats.invulnerable, 0.5);
       // Tar and hellhound bites slow the hero; demons keep pace with his speed upgrades.
       this.cripple.time = Math.max(0, this.cripple.time - dt);
       this.player.speedMultiplier = this.stats.moveSpeedMult * (this.hazards.playerInTar ? TRAPS.tarSlow : 1) * (this.cripple.time > 0 ? this.cripple.slow : 1);
-      this.enemies.pace = (this.director.wave.speedScale ?? 1) * (1 + (this.rules?.followHero ?? ENEMY_PACE.followHero) * (this.stats.moveSpeedMult - 1));
+      this.enemies.pace = this.dmods.speed * (this.director.wave.speedScale ?? 1) * (1 + (this.rules?.followHero ?? ENEMY_PACE.followHero) * (this.stats.moveSpeedMult - 1));
       const rate = this.rules?.killHealPerSecond;
       if (rate !== undefined) this.killHealBudget = Math.min(rate * 2, this.killHealBudget + rate * dt);
-      this.director.update(dt, position, this.projector);
+      this.log.time += dt;
+      if (this.testFreeze) this.enemies.pace = 0;
+      else this.director.update(dt, position, this.projector);
+      this.updateElites(dt, position);
       this.enemies.update(dt, position, this.stats.alive);
       this.combat.update(dt);
       this.hazards.update(dt, position, this.player.radius);
@@ -1148,7 +1829,9 @@ export class Gameplay {
     }
     this.gun.update(dt, this.player, this.weapons, this.characterScale(), combat && this.stats.alive);
     this.drones.update(dt, position, this.stats.drones, this.characterScale(), combat && this.stats.alive);
-    if (combat || this.phase === "cleared") this.pickups.update(dt, position, this.characterScale(), this.phase === "cleared");
+    this.gadgetSystem.update(dt, position, this.characterScale(), this.stats.gadgets, combat && this.stats.alive);
+    this.updateDash(dt, position);
+    if (combat || this.phase === "cleared") this.pickups.update(dt, position, this.characterScale(), this.phase === "cleared", this.stats.magnetMult);
     this.effects.update(dt);
     this.campaign?.update?.(dt, position);
     if (this.pops.length) this.updatePops(dt, position);
@@ -1164,7 +1847,7 @@ export class Gameplay {
     this.hud.setHp(s.hp, s.maxHp);
     this.hud.setCash(s.cash);
     const ws = s.weaponStats();
-    const label = WEAPONS.list[s.weapon]?.label ?? s.weapon;
+    const label = this.gunName();
     this.hud.setWeapon(label, this.gun.ammo, ws?.magazine ?? 0, this.gun.reloading > 0);
     const remaining = Math.max(0, d.duration - d.time);
     const right = d.phase === "waves" ? `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(Math.floor(remaining % 60)).padStart(2, "0")}` : d.phase === "boss" ? "BOSS" : "CLEAR";
@@ -1203,6 +1886,9 @@ export class Gameplay {
     }
     this.hud.update(dt, this.projector);
     const barsOn = (this.phase === "combat" || this.phase === "cleared" || this.phase === "travel") && s.alive && !this.hud.modalOpen;
+    const cd = DASH.cooldown * s.dashCooldownMult;
+    this.hud.setDash(barsOn && !this.paused, this.dashReady, s.dashCharges, Math.max(0, Math.min(1, this.dashTimer / cd)));
+    this.hud.setGadgets([...s.gadgets].map(([id, level]) => ({ icon: gadgetDef(id).icon, color: gadgetDef(id).color, level })));
     this.healthBars.update(dt, this.enemies.alive, { position: hero, hp: s.hp, maxHp: s.maxHp }, this.projector, barsOn);
     this.targetDebug.update(this.gun.debug);
   }
@@ -1231,8 +1917,57 @@ function weaponArt(id: WeaponId): string {
   return `${import.meta.env.BASE_URL}ui/weapons/${id}.webp`;
 }
 
+/** Mk levels as numerals (index = Mk upgrades bought; 0 = Mk I). */
+const MK_NAMES = ["I", "II", "III", "IV", "V"];
+
 /** Shop icons for the stat items. */
-const SHOP_ICONS: Record<string, UpgradeIcon> = { heal: "medkit", maxHp: "heart", armor: "shield", damage: "bullet", fireRate: "rapid" };
+const SHOP_ICONS: Record<string, UpgradeIcon> = {
+  heal: "medkit", maxHp: "heart", armor: "shield", damage: "bullet", fireRate: "rapid", magnet: "magnet", boots: "boot", ammo: "magazine",
+  scope: "target", loader: "reload", crate: "chest", hollowPoints: "bullet", hairTrigger: "rapid", exoFrame: "shield", droneBay: "drone",
+};
+
+/** A level's bounty contract. */
+interface Bounty {
+  kind: "hunt" | "champion" | "untouchable";
+  /** Hunt: the enemy to kill. */
+  type?: WaveEnemyId;
+  /** Kills needed, or (untouchable) the damage ceiling. */
+  target: number;
+  progress: number;
+  reward: number;
+  done: boolean;
+  failed: boolean;
+}
+
+/** One attempt's tally (run summary and Dust). */
+interface RunLog {
+  time: number;
+  /** Since the last Dust payout; `totalKills` for the whole attempt. */
+  kills: number;
+  totalKills: number;
+  levels: number;
+  bosses: number;
+  elites: number;
+  cash: number;
+  taken: number;
+  dealt: Partial<Record<HitSource, number>>;
+}
+
+function newRunLog(): RunLog {
+  return { time: 0, kills: 0, totalKills: 0, levels: 0, bosses: 0, elites: 0, cash: 0, taken: 0, dealt: {} };
+}
+
+/** Damage sources on the summary. */
+const SOURCE_LOOK: Record<HitSource, { label: string; color: string }> = {
+  bullet: { label: "Gun", color: "#e8c35a" },
+  ricochet: { label: "Ricochet", color: "#d9b26a" },
+  chain: { label: "Lightning", color: "#4fb8ff" },
+  explosion: { label: "Explosions", color: "#ff8a3a" },
+  burn: { label: "Fire", color: "#e8653a" },
+  drone: { label: "Drones", color: "#7fd0ff" },
+  shock: { label: "Shock", color: "#9fe0ff" },
+  gadget: { label: "Gadgets", color: "#c8e07a" },
+};
 
 /** The best value of each stat across the arsenal (bars are drawn against these). */
 const BAR_MAX = (() => {

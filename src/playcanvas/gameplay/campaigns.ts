@@ -5,9 +5,10 @@ import { SPACE_BOSSES, SPACE_TYPE_SKINS } from "./spaceConfig";
 import { WASTELAND_BOSSES, WASTELAND_TYPE_SKINS } from "./wastelandConfig";
 import { MEDIEVAL_BOSSES, MEDIEVAL_TYPE_SKINS } from "./medievalConfig";
 import { PIRATE_BOSSES, PIRATE_TYPE_SKINS } from "./pirateConfig";
+import { WINTER_BOSSES, WINTER_TYPE_SKINS } from "./winterConfig";
 
 /** Boss scripts by name (EnemyDef.script). */
-export const BOSS_SCRIPTS: Record<string, BossPhase[]> = { ...HELL_BOSSES, ...SPACE_BOSSES, ...WASTELAND_BOSSES, ...MEDIEVAL_BOSSES, ...PIRATE_BOSSES };
+export const BOSS_SCRIPTS: Record<string, BossPhase[]> = { ...HELL_BOSSES, ...SPACE_BOSSES, ...WASTELAND_BOSSES, ...MEDIEVAL_BOSSES, ...PIRATE_BOSSES, ...WINTER_BOSSES };
 
 /** Skins per enemy type, overriding the look's own list. */
-export const TYPE_SKINS: Partial<Record<EnemyId, EnemySkinId[]>> = { ...HELL_TYPE_SKINS, ...SPACE_TYPE_SKINS, ...WASTELAND_TYPE_SKINS, ...MEDIEVAL_TYPE_SKINS, ...PIRATE_TYPE_SKINS };
+export const TYPE_SKINS: Partial<Record<EnemyId, EnemySkinId[]>> = { ...HELL_TYPE_SKINS, ...SPACE_TYPE_SKINS, ...WASTELAND_TYPE_SKINS, ...MEDIEVAL_TYPE_SKINS, ...PIRATE_TYPE_SKINS, ...WINTER_TYPE_SKINS };

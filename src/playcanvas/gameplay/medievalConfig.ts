@@ -319,8 +319,9 @@ export const MEDIEVAL_LEVELS: WaveDef[] = [
 
 /** A run in the Dark Kingdom: a rifle, a little cash, level 1. */
 export const MEDIEVAL_RUN = {
-  startWeapon: "rifle" as const,
-  startCash: 120,
+  startWeapon: "handCannon" as const,
+  startCash: 110,
+  tierBoost: 1,
   startPicks: 0,
   /** After this level (index) the pact is offered. */
   pactAfter: 4,

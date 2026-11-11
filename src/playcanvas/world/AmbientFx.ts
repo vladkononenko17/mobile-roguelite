@@ -9,11 +9,12 @@ import {
  * generator or lamp, or a coloured pool of light on the floor under a screen or lamp (optionally
  * pulsing, for alarms); a fire (licking flames over a flickering light pool: burning wrecks,
  * barrels, camp fires; braziers); a failing lamp (flicker); leaves and scraps blowing across an area; "birds" marks where ravens fly over
- * now and then (see flyBy). Positions are world metres; `size` is the area (dust, glow, leaves, birds) or the
+ * now and then (see flyBy); "snow" is a snowfall that travels with the hero (one per level; `size` its
+ * spread round him, `intensity` how hard it falls). Positions are world metres; `size` is the area (dust, glow, leaves, birds) or the
  * emitter spread (smoke / sparks / fire).
  */
 export interface AmbientEmitter {
-  kind: "dust" | "smoke" | "sparks" | "glow" | "embers" | "sigil" | "fire" | "leaves" | "birds";
+  kind: "dust" | "smoke" | "sparks" | "glow" | "embers" | "sigil" | "fire" | "leaves" | "birds" | "snow";
   /** Tint (linear 0..1): dust and smoke colour, glow light colour. */
   color?: [number, number, number];
   /** Glow: pulses per second (0 = steady). */
@@ -67,6 +68,8 @@ export class AmbientFx {
   private readonly bursts: Burst[] = [];
   private readonly emitters: { entity: Entity; reach: number; radius: number }[] = [];
   private readonly sparks: Spark[] = [];
+  /** Emitters that travel with the focus (snowfall), at this height over it. */
+  private readonly followers: { entity: Entity; y: number }[] = [];
   private readonly pulses: { material: StandardMaterial; rate: number; base: number; phase: number }[] = [];
   private readonly glowMaterials = new Map<string, StandardMaterial>();
   /** Failing lamps: each stutters on its own timer. */
@@ -91,6 +94,7 @@ export class AmbientFx {
     hot.emissive = new Color(1, 0.72, 0.3);
     hot.useLighting = false;
     hot.blendType = BLEND_ADDITIVE;
+    hot.useFog = false; // additive: fog would add its colour over the whole quad
     hot.depthWrite = false;
     hot.update();
     for (let i = 0; i < SPARK_POOL; i++) {
@@ -107,6 +111,10 @@ export class AmbientFx {
     const entity = new Entity(`ambient-${e.kind}`);
     entity.setPosition(e.x, e.y ?? 0, e.z);
     this.root.addChild(entity);
+    if (e.kind === "snow") {
+      this.addSnow(entity, e, sprite);
+      return;
+    }
     const small = e.kind === "fire" || e.kind === "smoke" || e.kind === "sparks";
     this.emitters.push({ entity, reach: Math.max(...(e.size ?? [1, 1])) / 2, radius: small ? SMALL_RADIUS : ACTIVE_RADIUS });
     const k = e.intensity ?? 1;
@@ -195,6 +203,27 @@ export class AmbientFx {
   }
 
   /**
+   * Snowfall round the hero: flakes drift down and sideways with the wind, wobbling (world space, so
+   * they stay put as the emitter follows him). Unlit, tinted to sit in a dark night.
+   */
+  private addSnow(entity: Entity, e: AmbientEmitter, sprite: Texture): void {
+    const k = e.intensity ?? 1;
+    const [sx, sz] = e.size ?? [26, 30];
+    const [cr, cg, cb] = e.color ?? [0.8, 0.84, 0.9];
+    this.followers.push({ entity, y: e.y ?? 7 });
+    entity.addComponent("particlesystem", {
+      colorMap: sprite, depthWrite: false, lighting: false, localSpace: false, emitterShape: EMITTERSHAPE_BOX,
+      numParticles: Math.round(360 * k), lifetime: 4.6, rate: 0.012 / k, rate2: 0.02 / k, preWarm: true, loop: true,
+      emitterExtents: new Vec3(sx, 1, sz), blendType: BLEND_NORMAL,
+      velocityGraph: new CurveSet([[0, 0.5, 0.5, 1.3, 1, 0.7], [0, -1.3, 1, -1.6], [0, -0.3, 0.5, 0.2, 1, -0.2]]),
+      velocityGraph2: new CurveSet([[0, 1.2, 0.5, 2.2, 1, 1.4], [0, -1.9, 1, -2.4], [0, 0.3, 0.5, -0.25, 1, 0.3]]),
+      scaleGraph: new Curve([0, 0.055]), scaleGraph2: new Curve([0, 0.1]),
+      alphaGraph: new Curve([0, 0, 0.12, 0.85, 0.85, 0.85, 1, 0]),
+      colorGraph: new CurveSet([[0, cr], [0, cg], [0, cb]]),
+    });
+  }
+
+  /**
    * A pool of coloured light on the floor: an additive quad with a soft falloff, just above the
    * ground decals. Steady pools of the same colour share a material; pulsing ones own theirs.
    */
@@ -212,8 +241,8 @@ export class AmbientFx {
       material.emissiveMap = e.kind === "sigil" ? (this.sigilTexture ??= pentagram(this.app)) : this.glowTexture;
       material.useLighting = false;
       material.useSkybox = false;
-      material.useFog = true;
       material.blendType = BLEND_ADDITIVE;
+      material.useFog = false; // additive: fog would add its colour over the whole quad
       material.depthWrite = false;
       material.update();
       if (e.pulse) this.pulses.push({ material, rate: e.pulse, base: k, phase: Math.random() * 6.28 });
@@ -348,6 +377,7 @@ export class AmbientFx {
       f.material.update();
     }
     this.flyBy(dt, focus);
+    for (const f of this.followers) f.entity.setPosition(focus.x + 2, focus.y + f.y, focus.z - 4);
     for (const { entity, reach, radius } of this.emitters) {
       const p = entity.getPosition();
       const d = Math.hypot(p.x - focus.x, p.z - focus.z) - reach;
