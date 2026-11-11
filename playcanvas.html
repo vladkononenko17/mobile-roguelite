@@ -10,12 +10,37 @@
       html, body { margin: 0; height: 100%; overflow: hidden; background: #66503e; touch-action: none; }
       body { font: 12px/1.4 system-ui, sans-serif; color: #f3e7d3; }
       #app-canvas { display: block; width: 100%; height: 100%; }
-      #loading { position: fixed; inset: 0; z-index: 25; display: grid; place-content: center; gap: 12px; background: #1c1612; transition: opacity 0.4s; }
+      /* Loading screen: brand on boot, then the chapter's key art, name, a gameplay tip and the bar. */
+      #loading { position: fixed; inset: 0; z-index: 25; overflow: hidden; background: #0d0a08; color: #ece3cf; transition: opacity 0.5s; --accent: #d6a23c;
+        font: 700 14px/1.25 "Barlow Condensed", system-ui, sans-serif; -webkit-user-select: none; user-select: none; }
       #loading.done { opacity: 0; pointer-events: none; }
-      #loading-title { font: 800 30px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; text-align: center; color: #ece3cf; }
-      #loading-text { text-align: center; opacity: 0.8; }
-      #loading-track { width: min(280px, 70vw); height: 6px; background: #3b2f26; overflow: hidden; }
-      #loading-bar { height: 100%; background: #e8a92f; transform: scaleX(0); transform-origin: left; }
+      /* No transitions on the content: the main thread is busy building the level while this shows. */
+      #loading .ld-art { position: absolute; inset: -4%; background: center / cover no-repeat; display: none; }
+      #loading.chapter .ld-art { display: block; animation: ld-drift 16s ease-out forwards; }
+      @keyframes ld-drift { to { transform: scale(1.1) translateY(-1.5%); } }
+      #loading .ld-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(13,10,8,0.55) 0%, rgba(13,10,8,0.05) 30%, rgba(13,10,8,0.35) 55%, rgba(13,10,8,0.96) 86%); }
+      #loading .ld-brand { position: absolute; left: 0; right: 0; top: 38%; text-align: center; }
+      #loading.chapter .ld-brand { top: max(18px, env(safe-area-inset-top)); transform: scale(0.55); transform-origin: 50% 0; }
+      #loading .ld-brand small { display: block; font-size: 12px; letter-spacing: 0.42em; text-indent: 0.42em; color: var(--accent); }
+      #loading .ld-brand b { display: block; margin-top: 2px; font-size: clamp(46px, 15vw, 72px); font-weight: 800; line-height: 0.9; letter-spacing: 0.06em; text-indent: 0.06em;
+        background: linear-gradient(180deg, #fff6e2 20%, #c9b48f 100%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 3px 0 rgba(0,0,0,0.6)); }
+      #loading .ld-foot { position: absolute; left: max(22px, env(safe-area-inset-left)); right: max(22px, env(safe-area-inset-right)); bottom: max(26px, calc(env(safe-area-inset-bottom) + 14px)); }
+      #loading .ld-chapter { display: none; }
+      #loading.chapter .ld-chapter { display: block; }
+      #loading .ld-chapter small { display: block; font-size: 13px; letter-spacing: 0.32em; color: var(--accent); }
+      #loading .ld-chapter h2 { margin: 2px 0 6px; font-size: clamp(38px, 11vw, 60px); font-weight: 800; line-height: 0.95; letter-spacing: 0.03em; text-transform: uppercase; text-shadow: 0 3px 0 rgba(0,0,0,0.5); }
+      #loading .ld-chapter p { margin: 0; max-width: 520px; font: 500 14px/1.4 system-ui, sans-serif; opacity: 0.8; }
+      #loading .ld-tip { min-height: 38px; margin: 18px 0 12px; display: flex; gap: 10px; align-items: flex-start; font: 500 13px/1.4 system-ui, sans-serif; color: #d9ccb2; transition: opacity 0.35s; }
+      #loading .ld-tip:empty { visibility: hidden; }
+      #loading .ld-tip b { flex: none; padding: 2px 6px; border-radius: 4px; background: var(--accent); color: #140f0b; font: 800 11px/1.3 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.12em; }
+      #loading .ld-tip.fade { opacity: 0; }
+      #loading .ld-row { display: flex; align-items: center; gap: 12px; }
+      #loading-track { position: relative; flex: 1; height: 4px; border-radius: 2px; background: rgba(236, 227, 207, 0.16); overflow: hidden; }
+      #loading-bar { height: 100%; border-radius: 2px; background: var(--accent); box-shadow: 0 0 10px var(--accent); transform: scaleX(0); transform-origin: left; }
+      #loading-track::after { content: ""; position: absolute; top: 0; bottom: 0; width: 30%; left: -30%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent); animation: ld-sweep 1.6s linear infinite; }
+      @keyframes ld-sweep { to { left: 100%; } }
+      #loading:not(.chapter) .ld-pct { visibility: hidden; }
+      #loading .ld-pct { min-width: 44px; text-align: right; font-size: 16px; font-weight: 800; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
       #debug { position: fixed; top: max(8px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); width: min(420px, calc(100vw - 16px)); max-height: 45vh; overflow-y: auto; padding: 8px 10px; background: rgba(20, 15, 12, 0.72); border-radius: 8px; box-sizing: border-box; font-size: 12px; -webkit-user-select: none; user-select: none; }
       #debug.collapsed { width: auto; }
       #debug [data-stats] { white-space: pre; margin-right: 64px; font-variant-numeric: tabular-nums; }
@@ -70,8 +95,14 @@
       <div data-weapon-tuner hidden></div>
     </div>
     <div id="loading">
-      <div id="loading-text">Loading character…</div>
-      <div id="loading-track"><div id="loading-bar"></div></div>
+      <div class="ld-art"></div>
+      <div class="ld-shade"></div>
+      <div class="ld-brand"><small>NEON HOLLOW</small><b>DUSTLINE</b></div>
+      <div class="ld-foot">
+        <div class="ld-chapter"></div>
+        <div class="ld-tip"></div>
+        <div class="ld-row"><div id="loading-track"><div id="loading-bar"></div></div><span class="ld-pct">0%</span></div>
+      </div>
     </div>
     <script type="module" src="/src/playcanvas/main.ts"></script>
   </body>

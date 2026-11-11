@@ -287,6 +287,12 @@ export function menuWanted(): boolean {
   return !["level", "biome", "wave", "difficulty", "play"].some((k) => params.has(k));
 }
 
+/** Chapter numeral, name, tagline and accent colour for the loading screen. */
+export function chapterInfo(id: BiomeId): { numeral: string; name: string; tagline: string; accent: string } {
+  const c = CHAPTERS.find((c) => c.id === id);
+  return c ?? { numeral: "", name: BIOMES[id].label, tagline: "", accent: "#d6a23c" };
+}
+
 /** Chapter name for the loading screen. */
 export function chapterName(id: BiomeId): string {
   return CHAPTERS.find((c) => c.id === id)?.name ?? BIOMES[id].label;
