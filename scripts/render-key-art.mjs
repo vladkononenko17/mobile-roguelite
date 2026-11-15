@@ -20,21 +20,29 @@ const sharp = need("sharp");
 const ROOT = path.resolve(import.meta.dirname, "..");
 const DIST = path.join(ROOT, "dist-itch");
 const OUT = process.env.OUTDIR ?? path.join(ROOT, "public/menu");
-const W = 720, H = 1296;
+// DRAFT=1: half size, for trying a composition.
+const DRAFT = !!process.env.DRAFT;
+const W = DRAFT ? 360 : 720, H = DRAFT ? 648 : 1296;
 
 /**
  * Per chapter: the level (`wave`, 1-based) whose scenery is the backdrop, the hero and gun, the
  * camera (metres, degrees; `yaw` turns it around the hero), how many enemies come from the front,
- * the boss behind (`bossAt`: metres up-screen and to the right; `bossScale` shrinks a giant to fit).
+ * the boss behind (`bossAt`: metres up-screen and to the right; `bossScale` shrinks a giant so its
+ * head stays in the frame), a `grade` for the dark chapters.
  */
 const CHAPTERS = {
-  outpost: { level: "outpost", wave: 3, hero: "survivor", weapon: "rifle", distance: 8.2, pitch: 34, yaw: 0, enemies: 6 },
-  facility: { level: "space", wave: 2, hero: "survivor", weapon: "plasma", distance: 8.2, pitch: 34, yaw: 0, enemies: 6 },
-  medieval: { level: "medieval", wave: 2, hero: "survivor", weapon: "autoShotgun", distance: 8.4, pitch: 34, yaw: 0, enemies: 6 },
-  hell: { level: "hell", wave: 3, hero: "demolitionist", weapon: "battleRifle", distance: 8.4, pitch: 34, yaw: 0, enemies: 6 },
-  pirate: { level: "pirate", wave: 2, hero: "medic", weapon: "mp5", distance: 8.4, pitch: 34, yaw: 0, enemies: 6 },
-  winter: { level: "winter", wave: 4, hero: "drifter", weapon: "rifle", distance: 8.2, pitch: 34, yaw: 0, enemies: 6 },
+  outpost: { level: "outpost", wave: 2, hero: "survivor", weapon: "rifle", bossAt: [2.9, 1.6], bossScale: 0.72 },
+  facility: { level: "space", wave: 2, hero: "survivor", weapon: "plasma", bossAt: [3.1, 1.3], bossScale: 0.8, kinds: ["infected", "skitter", "sprinter"] },
+  medieval: { level: "medieval", wave: 3, hero: "survivor", weapon: "autoShotgun" },
+  // The two night chapters are graded up: the menu and the loading screen darken the picture again.
+  hell: { level: "hell", wave: 3, hero: "demolitionist", weapon: "battleRifle", bossAt: [2.8, 1.5], bossScale: 0.75, grade: { brightness: 1.7, saturation: 1.15 } },
+  pirate: { level: "pirate", wave: 2, hero: "medic", weapon: "mp5" },
+  // The snowfield of the first level (the white reads as Whiteout), with the last level's boss.
+  winter: { level: "winter", wave: 1, hero: "drifter", weapon: "rifle", boss: "ravager", bossAt: [2.9, 1.6], bossScale: 0.72, grade: { brightness: 1.5, saturation: 1.1 } },
 };
+/** Shared framing: the hero a little above the middle, the boss whole behind him, the horde below. */
+const FRAME = { distance: 12.5, pitch: 38, yaw: 0, offset: -0.06, enemies: 6, bossAt: [4.6, 1.4], spots: [[-1.9, -0.7], [-2.6, 1.3], [-3.3, -1.9], [-3.9, 0.3], [-1.3, 2.3], [-4.6, -1.0], [-0.6, -2.6], [-4.9, 1.8]] };
+for (const c of Object.values(CHAPTERS)) for (const [k, v] of Object.entries(FRAME)) c[k] ??= v;
 for (const [id, extra] of Object.entries(JSON.parse(process.env.TWEAK ?? "{}"))) Object.assign(CHAPTERS[id], extra);
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".webp": "image/webp", ".png": "image/png", ".woff2": "font/woff2" };
@@ -55,11 +63,24 @@ for (const id of wanted) {
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/index.html?level=${c.level}&difficulty=hard&debug=1&wave=${c.wave}&model=${c.hero}&weapon=${c.weapon}`);
   await page.waitForFunction(() => window.game?.gameplay?.phase === "combat", null, { timeout: 300000 });
-  await page.evaluate((c) => {
+  // The enemy looks load in the background: wait for every kind the picture uses.
+  await page.waitForFunction((c) => {
+    const gp = window.game.gameplay, level = gp.director.wave;
+    const kinds = c.kinds ?? Object.keys(level.phases[level.phases.length - 1].weights);
+    const boss = c.boss === null ? null : c.boss ?? [...gp.levels].reverse().find((l) => l.boss)?.boss.type;
+    gp.testFreeze = true;
+    const ok = [...kinds.slice(0, c.enemies), ...(boss ? [boss] : [])].every((k) => !!gp.enemies.spawn(k, 9000, 9000, 1, 1));
+    gp.enemies.clear();
+    return ok;
+  }, c, { timeout: 300000, polling: 2000 });
+  // No interface in the picture.
+  await page.addStyleTag({ content: "#hud, #hpbars, #tut, #arsenal, #debug, #overlay { display: none !important; }" });
+  const info = await page.evaluate((c) => {
     const g = window.game, gp = g.gameplay;
-    // No interface, no deaths, no level-ups; full resolution however slow the frames are.
-    for (const sel of ["#hud", "#hpbars", "#tut", "#arsenal", "#debug"]) { const el = document.querySelector(sel); if (el) el.style.display = "none"; }
+    // No deaths, no level-ups, shots that do nothing (tracers and muzzle flash, no hit flashes);
+    // full resolution however slow the frames are.
     document.body.classList.remove("debug-on");
+    gp.combat.bulletHit = () => {};
     gp.testGod = true;
     gp.testFreeze = true;
     gp.stats.gainXp = () => 0;
@@ -86,23 +107,30 @@ for (const id of wanted) {
     const level = gp.director.wave;
     const kinds = c.kinds ?? Object.entries(level.phases[level.phases.length - 1].weights).sort((a, b) => b[1] - a[1]).map(([k]) => k);
     // An arc below and beside the hero, nearest first (the gun picks the nearest).
-    const spots = c.spots ?? [[-2.6, -0.9], [-3.4, 1.7], [-2.2, -3.0], [-4.6, -2.1], [-1.2, 3.4], [-5.2, 0.6], [0.6, -3.9], [-0.4, 4.6]];
+    const spots = c.spots;
     spots.slice(0, c.enemies).forEach(([u, r], i) => put(kinds[i % kinds.length], u, r, false));
     const boss = c.boss === null ? null : c.boss ?? [...gp.levels].reverse().find((l) => l.boss)?.boss.type;
     if (boss) {
       const b = put(boss, c.bossAt?.[0] ?? 5.2, c.bossAt?.[1] ?? 1.6, false);
-      // No boss fight: it only stands there.
-      if (b) b.brain = null;
+      // No boss fight: it only stands there (a giant is shrunk a little so its head stays in the frame).
+      if (b) {
+        b.brain = null;
+        if (c.bossScale) { b.scale *= c.bossScale; b.root.setLocalScale(b.scale, b.scale, b.scale); }
+      }
     }
     gp.testFreeze = true;
     step(c.settle ?? 0.9);
     g.app.timeScale = 0.0001;
+    return { alive: gp.enemies.alive.map((e) => e.type ?? e.def.label), kinds, boss, hero: [P.x.toFixed(1), P.z.toFixed(1)] };
   }, c);
+  if (process.env.VERBOSE) console.log(JSON.stringify(info));
   await page.waitForTimeout(6000);
   const png = await page.screenshot({ timeout: 300000 });
   fs.mkdirSync(OUT, { recursive: true });
   const file = path.join(OUT, `${id}.webp`);
-  await sharp(png).webp({ quality: Number(process.env.QUALITY ?? 80) }).toFile(file);
+  let image = sharp(png);
+  if (c.grade) image = image.modulate(c.grade);
+  await image.webp({ quality: Number(process.env.QUALITY ?? 80) }).toFile(file);
   console.log(id, fs.statSync(file).size, "bytes", errors.length ? `errors: ${errors.slice(0, 2).join(" | ")}` : "");
   await page.close();
 }

@@ -40,7 +40,7 @@ const CSS = `
 #menu .art.on { opacity: 1; }
 @keyframes menu-drift { from { transform: scale(1.08) translateY(0); } to { transform: scale(1.16) translateY(-2%); } }
 #menu .shade { position: absolute; inset: 0; background:
-  linear-gradient(180deg, rgba(10, 7, 5, 0.92) 0%, rgba(10, 7, 5, 0.35) 26%, rgba(10, 7, 5, 0.1) 44%, rgba(10, 7, 5, 0.72) 64%, rgba(10, 7, 5, 0.97) 84%),
+  linear-gradient(180deg, rgba(10, 7, 5, 0.9) 0%, rgba(10, 7, 5, 0.3) 15%, rgba(10, 7, 5, 0.4) 23%, rgba(10, 7, 5, 0.74) 33%, rgba(10, 7, 5, 0.8) 60%, rgba(10, 7, 5, 0.97) 84%),
   radial-gradient(ellipse 90% 60% at 50% 45%, transparent 40%, rgba(0, 0, 0, 0.5) 100%); }
 #menu .grain { position: absolute; inset: -50%; opacity: 0.05; pointer-events: none;
   background-image: repeating-radial-gradient(circle at 17% 32%, #fff 0 0.6px, transparent 0.6px 3px); animation: menu-grain 1.2s steps(4) infinite; }
@@ -123,7 +123,8 @@ const CSS = `
 @media (min-height: 760px) { #menu .tab { height: 90px; } }
 /* Short screens (a phone browser with its bars showing): the story line gives way first. */
 @media (max-height: 700px) { #menu .chapter p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } #menu .tab { height: 62px; } #menu .logo h1 { font-size: clamp(38px, 12vw, 56px); } }
-@media (max-height: 600px) { #menu .chapter p { display: none; } #menu .logo p { display: none; } #menu .tabs { margin: 10px 0 8px; } #menu .diff-note { min-height: 0; } }
+@media (max-height: 660px) { #menu .logo p { display: none; } }
+@media (max-height: 600px) { #menu .chapter p { display: none; } #menu .tabs { margin: 10px 0 8px; } #menu .diff-note { min-height: 0; } }
 `;
 
 /** Settings cog: a ring, a hub, and a dashed outer ring for the teeth. */
