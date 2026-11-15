@@ -15,9 +15,10 @@ import {
   type RenderComponent,
 } from "playcanvas";
 import { audio } from "./audio/Audio";
+import { onSettings, settings } from "./settings";
 import { CameraController } from "./camera/CameraController";
 import { Gameplay } from "./gameplay/Gameplay";
-import { CAMERA, CHARACTER, CHARACTERS, DEBUG, DEFAULT_WEAPON, PLAYER, WEAPONS, type CharacterId, type CharacterModel, type WeaponId } from "./config";
+import { CAMERA, CHARACTER, CHARACTERS, DEBUG, DEFAULT_WEAPON, PLAYER, RENDER, WEAPONS, type CharacterId, type CharacterModel, type WeaponId } from "./config";
 import { KeyboardMoveInput } from "./input/KeyboardMoveInput";
 import { TouchJoystickInput } from "./input/TouchJoystickInput";
 import { CombinedMoveInput, type MoveInputSource } from "./input/MoveInput";
@@ -55,6 +56,8 @@ export interface GameOptions {
 
 /** Longest frame step we simulate; avoids teleporting after a background tab resumes. */
 const MAX_DT = 1 / 15;
+/** Battery saver: a drawn frame at most every `frameSeconds` (just under 1/30 s), resolution capped. */
+const SAVER = { frameSeconds: 1 / 31, maxPixelRatio: 1.5 };
 const DEBUG_INTERVAL = 0.25;
 
 /** Bootstraps the PlayCanvas app, builds the arena and wires the player systems together. */
@@ -110,6 +113,14 @@ export class Game {
     app.start();
 
     this.resolution = new ResolutionGovernor(app);
+    // Battery saver (settings menu): the scene is drawn 30 times a second at a lower resolution; the
+    // game itself still steps every frame, so it plays the same.
+    const applySaver = () => {
+      app.autoRender = !settings.saver;
+      this.resolution.setMaxRatio(settings.saver ? SAVER.maxPixelRatio : RENDER.maxPixelRatio);
+    };
+    applySaver();
+    onSettings(applySaver);
     const biome = this.biome;
     createLighting(app, biome.lighting);
     this.kit = new ModelKit(app, biome.kit.models, { name: biome.id, ...biome.kit });
@@ -255,15 +266,25 @@ export class Game {
     // The roguelite run on this arena (enemies, combat, levels). ?sandbox=1 skips it.
     if (new URLSearchParams(location.search).get("sandbox") !== "1") {
       this.gameplay = new Gameplay(app, this.camera.entity, this.collision, biome, this.player, this.weapons, new Hud(), () => this.characterScale, () => this.camera.snap());
-      this.gameplay.onShake = (amount) => this.camera.shake(amount);
+      this.gameplay.onShake = (amount) => { if (settings.shake) this.camera.shake(amount); };
       this.gameplay.init().catch((error: unknown) => console.error("[Gameplay] failed to start.", error));
     }
     app.on("update", this.update, this);
   }
 
+  /** Battery saver: time since the last drawn frame. */
+  private saverClock = 0;
+
   private update(rawDt: number): void {
     const dt = Math.min(rawDt, MAX_DT);
     this.resolution.update(rawDt);
+    if (settings.saver) {
+      this.saverClock += rawDt;
+      if (this.saverClock >= SAVER.frameSeconds) {
+        this.saverClock = Math.min(this.saverClock - SAVER.frameSeconds, SAVER.frameSeconds);
+        this.app.renderNextFrame = true;
+      }
+    }
     this.player.update(dt);
     // Legs first (the skeleton is posed): turn the hips toward the movement, backpedal when moving
     // away from the facing; the animation reverses the cycle from the next frame.

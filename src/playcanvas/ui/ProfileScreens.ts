@@ -40,7 +40,7 @@ const CSS = `
 `;
 
 /** A modal sheet over the title screen; `fill` draws its content (again after every change). */
-function sheet(fill: (box: HTMLElement, redraw: () => void) => void, onClose: () => void): void {
+export function sheet(fill: (box: HTMLElement, redraw: () => void) => void, onClose: () => void): void {
   if (document.getElementById("sheet")) return;
   if (!document.getElementById("sheet-css")) {
     const style = document.createElement("style");

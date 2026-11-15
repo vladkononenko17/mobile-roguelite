@@ -672,6 +672,9 @@ export const SPAWNING = {
   groupSpread: 1.6,
 };
 
+/** The health plate turns red, and the low-health warning (red edge, heartbeat) starts, at this share of max HP. */
+export const LOW_HP_FRACTION = 0.3;
+
 /* ------------------------------------------------------------------------------------------------
  * Drops
  * ---------------------------------------------------------------------------------------------- */

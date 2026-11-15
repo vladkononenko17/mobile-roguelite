@@ -9,7 +9,7 @@ export const BIOME_AUDIO: Record<string, { music: string; gate: string }> = {
   hell: { music: "music_hell", gate: "gate_hell" },
   medieval: { music: "music_hell", gate: "gate_wood" },
   pirate: { music: "music_wasteland", gate: "gate_wood" },
-  winter: { music: "music_station", gate: "gate_wood" },
+  winter: { music: "music_whiteout", gate: "gate_wood" },
 };
 export const BOSS_MUSIC = "music_boss";
 

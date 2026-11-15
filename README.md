@@ -263,6 +263,33 @@ the Ravager).
 - **Health bars** (`src/playcanvas/ui/HealthBars.ts`): red over every living enemy (wider for elites
   and bosses, dimmed at full health, the lost part flashes white) and green over the hero.
 
+## Dustline 3D — settings, warnings, hints, install
+
+- **Settings** (`src/playcanvas/settings.ts`, `ui/SettingsScreen.ts`; the cog on the title screen and the
+  pause menu): music and sound volume, screen shake, damage numbers over enemies, a battery saver (the
+  scene is drawn 30 times a second and at most 1.5x resolution; the game still steps every frame), a
+  replay of the first-run hints, and **Move your save** (`saveData.ts`: the whole save as one code to copy
+  out of a browser and paste into the Home Screen app, which keeps its own storage).
+- **Difficulty** is picked on the title screen (a three-way switch under the chapter, remembered per
+  chapter); a run starts straight away. The end screen's "Change difficulty" still asks.
+- **Warnings in play** (`Gameplay.updateWarnings`, `ui/Hud.ts`): under 30% health the screen edge stays red
+  and a synthesised heartbeat plays, faster the lower the health; elites, chargers and ranged enemies
+  within 30 m that are off screen get an arrow at the screen edge (gold: elite).
+- **First-run hints** (`ui/Tutorial.ts`): a new player's first level shows three hints (drag to move, with
+  a ghost thumb; the gun fires on its own; DASH, with a ring round the button). Each goes when the player
+  has done it. Never in dailies or later levels.
+- **Banners** queue (one at a time, a small kicker over one or two big lines, above the hero); interest
+  shows as "+N INTEREST" on the cash plate. Level-up cards carry their tag on its own line and take the
+  rarity's colour; shop cards have a price chip (amber, red-outlined when short of cash, green on sale).
+- **Install** (`public/dustline.webmanifest`, `public/app/` icons from `scripts/build-app-icons.mjs`,
+  `ui/Install.ts`): the game can be added to the Home Screen (full screen, own icon). The title screen
+  shows an install pill where that is possible: the browser's prompt on Android / desktop Chrome, the three
+  taps on iOS. No service worker: the game does not play offline, and updates are never stale.
+- **Key art** for the six chapters is rendered in the game by `scripts/render-key-art.mjs`
+  (`public/menu/<chapter>.webp`): the chapter's hero, its enemies closing in, its last boss behind.
+- **Whiteout's music** is synthesised by `scripts/build-whiteout-music.py` (wind, a low drone, glassy
+  bells, a distant boom; original, no third-party material).
+
 ## Dustline 3D — publishing build (itch.io and web portals)
 
 - `npm run build:itch` builds the 3D game alone with relative paths (`vite.itch.config.ts`), copies only

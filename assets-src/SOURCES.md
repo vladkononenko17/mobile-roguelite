@@ -79,6 +79,7 @@ Raw packs in `assets-src/audio/` (git-ignored; re-download to rebuild). `scripts
 - "Zombie moans" by darsycho (opengameart.org/content/zombie-moans, CC0; seven moans cut from one take) and "Zombie pain" (opengameart.org/content/zombie-pain, offered under CC0): more walker groans, hits and deaths.
 - "Monster Sound Pack, Volume 1" (opengameart.org/content/monster-sound-pack-volume-1, CC0): demon voices (pitched down), alien and hound voices (pitched up), boss roars.
 - Music: Juhani Junkala "Post Apocalyptic Wastelands" (opengameart.org/content/horror-atmosphere) for the Wasteland, "Infestation in the Control Room" and "The Depths of Hell" from "Ambience Pack 1 - Sci Fi Horror" (opengameart.org/content/ambience-pack-1-sci-fi-horror) for ORION and Hell, Juhani Junkala "Epic Boss Battle" (opengameart.org/content/boss-battle-music) for bosses; loudness-normalised, mono.
+- Whiteout's loop (`music_whiteout.mp3`) has no source file: `scripts/build-whiteout-music.py` synthesises it (wind, a low drone, glassy bells in D minor, a distant boom; 64 s, seamless), original work.
 
 ## Quaternius Ultimate Monsters (CC0)
 

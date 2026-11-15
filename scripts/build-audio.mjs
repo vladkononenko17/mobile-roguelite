@@ -216,5 +216,7 @@ for (const [id, m] of Object.entries(MUSIC)) {
   const r = spawnSync(FFMPEG, ["-v", "error", "-y", "-f", "lavfi", "-i", `anullsrc=r=${SR}:cl=mono`, "-t", "0.2", "-c:a", "libmp3lame", "-b:a", "32k", join(OUT, "silence.mp3")]);
   if (r.status !== 0) throw new Error(`silence.mp3: ${r.stderr}`);
 }
+// Whiteout's loop is synthesised by scripts/build-whiteout-music.py (not from a source file).
+counts.music_whiteout = 1;
 writeFileSync(join(OUT, "sounds.json"), JSON.stringify(counts));
 console.log(`${Object.keys(counts).length} sounds, ${Object.values(counts).reduce((a, b) => a + b, 0)} files, ${(total / 1024).toFixed(0)} KB`);

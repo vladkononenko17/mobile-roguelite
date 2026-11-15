@@ -1,16 +1,19 @@
 import { Vec3, type AnimTrack, type AppBase, type Asset, type ContainerResource, type Entity, type Texture } from "playcanvas";
 import { CHARACTERS, WEAPONS, type WeaponId } from "../config";
 import { ArsenalPanel, TEST_ARSENAL } from "../ui/ArsenalPanel";
+import { showSettings } from "../ui/SettingsScreen";
+import { setSetting, settings } from "../settings";
 import { audio } from "../audio/Audio";
 import { BIOME_AUDIO, BOSS_MUSIC, COMMON_SOUNDS, footstepAt, footstepsOf, voiceOf, voiceRate } from "../audio/soundMap";
 import type { PlayerController } from "../player/PlayerController";
 import type { WeaponHolder } from "../player/WeaponHolder";
-import type { Card, Hud } from "../ui/Hud";
+import type { Card, Hud, Threat } from "../ui/Hud";
+import { Tutorial } from "../ui/Tutorial";
 import { HealthBars } from "../ui/HealthBars";
 import type { UpgradeIcon } from "../ui/UpgradeIcons";
 import type { CollisionWorld } from "../world/collision/CollisionWorld";
 import type { Biome, Campaign, LevelBounds, WayPoint, Zone } from "../world/level/Biome";
-import { ARSENAL, BALANCE, DROPS, ECONOMY, ELITES, weaponTier, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SHOP_RULES, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, shopPrice, type ShopItemId, type WaveEnemyId, TRAPS, ENEMY_PACE, WEAPON_CARDS, levelsAt, type DifficultyDef, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
+import { ARSENAL, BALANCE, DROPS, ECONOMY, ELITES, LOW_HP_FRACTION, weaponTier, ENEMIES, ENEMY_LIMITS, ENEMY_SKINS, ENEMY_VISUALS, SHOP_RULES, SYNERGIES, WAVES, XP, LEVEL_UP, SHOP, shopPrice, type ShopItemId, type WaveEnemyId, TRAPS, ENEMY_PACE, WEAPON_CARDS, levelsAt, type DifficultyDef, WEAPON_STATS, upgradeText, type EnemyId, type EnemySkinId, type EnemyVisualId, type ShopItem, type UpgradeDef, type UpgradeId, type UpgradeTag, type WaveDef } from "./config";
 import { BossBrain } from "./BossBrain";
 import { BOSS_SCRIPTS, TYPE_SKINS } from "./campaigns";
 import { Effects } from "./Effects";
@@ -37,7 +40,7 @@ import { rollRoutes, type RouteDef } from "./routes";
 import { EVOLUTIONS } from "./evolutions";
 import { GADGETS, GADGET_MAX_LEVEL, gadgetDef, gadgetLine, gadgetPrice, type GadgetId } from "./gadgets";
 import { GadgetSystem } from "./GadgetSystem";
-import { best, bump, checkQuests, chosenDanger, heroFor, gadgetUnlocked, profile, recordWin, rewardText, saveProfile } from "./profile";
+import { best, bump, checkQuests, chosenDanger, chosenDifficulty, heroFor, gadgetUnlocked, profile, recordWin, rewardText, saveProfile } from "./profile";
 import { dailyScore, pendingDaily, seeded, type DailySetup } from "./daily";
 import { shareDaily } from "../ui/shareCard";
 
@@ -80,6 +83,9 @@ const MAIN_MENU = { label: "Main menu", onClick: () => location.assign(menuUrl()
 /** Footstep spacing (m of ground per step, times the hero's scale) and the horde's idle groan interval (s). */
 const STEP_LENGTH = 1.25;
 const GROAN_EVERY = [1.4, 3.2];
+
+/** Off-screen arrows point at dangerous enemies within this many metres of the hero. */
+const THREAT_RANGE = 30;
 
 /** A boss's death plays in slow motion: this long (real seconds) at this time scale. */
 const SLOW_MO = { seconds: 1.1, scale: 0.3 };
@@ -171,6 +177,15 @@ export class Gameplay {
   private routeFor = -1;
   private shopBonus: { discount: number; extra: boolean } | null = null;
   private readonly gadgetSystem: GadgetSystem;
+  /** First-run hints (the very first level only), and what the player has done in this level. */
+  private tutorial: Tutorial | null = null;
+  private walked = 0;
+  private dashes = 0;
+  /** Low health: seconds to the next heartbeat. */
+  private beatTimer = 0;
+  /** Dangerous enemies for the HUD's off-screen arrows (reused every frame). */
+  private readonly threats: Threat[] = [];
+  private readonly threatPool: Threat[] = [];
   /** Dash charges ready, seconds to the next charge, seconds to the end-of-dash blast. */
   private dashReady = 1;
   private dashTimer = 0;
@@ -292,7 +307,7 @@ export class Gameplay {
     };
     this.brain.onPhase = (enemy, phase) => {
       if (phase.enter) {
-        this.hud.showBanner(phase.enter.banner, 2.2);
+        this.hud.showBanner(phase.enter.banner, 2.4, enemy.def.label);
         this.campaign?.arena?.(phase.enter.arena);
       }
       audio.voice(voiceOf(enemy.id, enemy.def), "roar", { x: enemy.position.x, z: enemy.position.z });
@@ -337,9 +352,11 @@ export class Gameplay {
       text: `${this.difficultyTag}${this.director.wave.label} · Level ${s.level} · ${s.kills} kills · ${s.cash}$`,
       actions: [
         { label: "Resume", onClick: () => this.resume() },
-        ...(DEV_MODE ? [{ label: "Dev tools", onClick: () => { document.body.classList.toggle("debug-on"); this.resume(); } }] : []),
-        { label: "Restart run", onClick: () => { this.bankDust(false); this.startRun(); } },
-        { label: "Main menu", onClick: () => { this.bankDust(false); MAIN_MENU.onClick(); } },
+        // Sound plays while the settings are open, so the volume sliders can be heard.
+        { label: "Settings", minor: true, onClick: () => { audio.setPaused(false); showSettings(() => { if (this.paused) audio.setPaused(true); }); } },
+        ...(DEV_MODE ? [{ label: "Dev tools", minor: true, onClick: () => { document.body.classList.toggle("debug-on"); this.resume(); } }] : []),
+        { label: "Restart run", minor: true, onClick: () => { this.bankDust(false); this.startRun(); } },
+        { label: "Main menu", minor: true, onClick: () => { this.bankDust(false); MAIN_MENU.onClick(); } },
       ],
     });
   }
@@ -414,10 +431,11 @@ export class Gameplay {
   }
 
   /**
-   * Campaigns with difficulties: pick one (?difficulty=id, else a choice screen; remembered), then
-   * rewrite the levels for it and start the run.
+   * Campaigns with difficulties: ?difficulty=id, else the one picked on the title screen (remembered
+   * per chapter), else the chapter's intended one; `ask` opens the choice screen instead (the end
+   * screen's "Change difficulty"). Then the levels are rewritten for it and the run starts.
    */
-  private chooseDifficulty(then: () => void): void {
+  private chooseDifficulty(then: () => void, ask = false): void {
     const all = this.campaign?.difficulties;
     if (!all) {
       then();
@@ -435,23 +453,26 @@ export class Gameplay {
       apply(requested);
       return;
     }
-    let last: string | null = null;
-    try { last = localStorage.getItem(`${this.biome.id}.difficulty`); } catch { /* private mode */ }
     const ids = Object.keys(all);
+    const last = chosenDifficulty(this.biome.id, ids, this.campaign?.defaultDifficulty);
+    if (!ask) {
+      apply(last);
+      return;
+    }
     this.phase = "shop";
     this.player.controlsEnabled = false;
     this.hud.openModal({
       title: "CHOOSE YOUR DOOM",
-      text: last && all[last] ? `Last time: ${all[last].label}` : "How hard do you want it?",
+      text: `Now: ${all[last].label}`,
       cards: ids.map((id) => ({ title: all[id].label, text: all[id].text, tag: id === this.campaign?.defaultDifficulty ? "intended" : "", kind: id === "nightmare" ? "special" : "player" })),
       onCard: (i) => apply(ids[i]),
       actions: [MAIN_MENU],
     });
   }
 
-  startRun(): void {
+  startRun(askDifficulty = false): void {
     if (this.campaign?.difficulties && !this.difficulty) {
-      this.chooseDifficulty(() => this.startRun());
+      this.chooseDifficulty(() => this.startRun(), askDifficulty);
       return;
     }
     // The daily run: the same random numbers for everyone today (re-seeded on every restart).
@@ -563,9 +584,10 @@ export class Gameplay {
     this.combat.reset();
     // Act checkpoints: the build at the start of each new act (and of the final level).
     const prev = this.levels[index - 1];
+    let checkpoint = false;
     if (index > 0 && !this.endless && (this.levels[index].act !== prev?.act || index === this.campaign?.run?.finalLevel)) {
       this.checkpoint = { index, stats: snapshotStats(this.stats), armorySeen: this.armorySeen };
-      if (index > 0) this.hud.showBanner("Checkpoint", 1.6);
+      checkpoint = true;
     }
     this.eliteTimer = ELITES.first * (0.8 + Math.random() * 0.4) * this.eliteEveryMult;
     this.bounty = this.rollBounty(index);
@@ -584,7 +606,18 @@ export class Gameplay {
     this.player.controlsEnabled = true;
     this.hud.closeModal();
     const level = this.levels[index];
-    this.hud.showBanner(route ? `${level.label} · ${route.name}` : level.subtitle ? `${level.label} · ${level.subtitle}` : level.label, 2.6);
+    // The level's name big, its number (and a checkpoint) as the small line over it.
+    const place = route?.name ?? level.subtitle;
+    this.hud.clearBanners();
+    this.hud.showBanner(place ?? level.label, 2.6, `${checkpoint ? "Checkpoint · " : ""}${place ? level.label : ""}`);
+    this.hud.setLowHealth(false);
+    this.beatTimer = 0;
+    this.walked = 0;
+    this.dashes = 0;
+    this.lastWalk.copy(this.player.entity.getPosition());
+    // First-run hints: a new player's first level (not a daily, a test session or a later level).
+    this.tutorial?.dispose();
+    this.tutorial = index === 0 && settings.tutorial && !this.daily && !TEST_ARSENAL && !this.endless ? new Tutorial() : null;
     const card = this.unlocked && WEAPON_CARDS[this.unlocked];
     if (card) this.hud.showWeapon(WEAPONS.list[this.unlocked!].label, card.text, card.stats, card.color);
     this.unlocked = null;
@@ -697,6 +730,8 @@ export class Gameplay {
       return;
     }
     this.phase = "dead";
+    this.endTutorial();
+    this.hud.setLowHealth(false);
     audio.play("die");
     this.player.controlsEnabled = false;
     this.player.aimYawDeg = null;
@@ -710,7 +745,7 @@ export class Gameplay {
       ...(this.daily ? [{ label: "Share score", onClick: () => this.shareScore(false) }] : []),
       ...(canContinue ? [{ label: `Continue from ${this.levels[cp!.index].label}`, onClick: () => this.continueFromCheckpoint() }] : []),
       { label: "Restart run", onClick: () => this.startRun(), minor: canContinue },
-      ...(this.difficulty && !this.daily ? [{ label: "Change difficulty", onClick: () => { this.difficulty = null; this.params.delete("difficulty"); this.startRun(); }, minor: true }] : []),
+      ...(this.difficulty && !this.daily ? [{ label: "Change difficulty", onClick: () => { this.difficulty = null; this.params.delete("difficulty"); this.startRun(true); }, minor: true }] : []),
       { ...MAIN_MENU, minor: true },
     ]);
   }
@@ -792,6 +827,8 @@ export class Gameplay {
     if (interest > 0) {
       s.cash += interest;
       this.log.cash += interest;
+      // Its own pop on the cash plate ("+6 INTEREST"), not a line in the banner.
+      this.hud.cashNote("interest");
     }
     // The path's shop bonus is for the shop right after its level.
     this.shopBonus = this.route?.shopDiscount ? { discount: this.route.shopDiscount, extra: !!this.route.extraOffer } : null;
@@ -802,7 +839,8 @@ export class Gameplay {
     this.hazards.reset();
     this.clearTimer = 2.8;
     this.player.aimYawDeg = null;
-    this.hud.showBanner(`${this.director.wave.label} complete${interest > 0 ? ` · interest +${interest}$` : ""}`, 2.4);
+    this.hud.showBanner("Level complete", 2.4, this.director.wave.label);
+    this.endTutorial();
   }
 
   /**
@@ -850,7 +888,7 @@ export class Gameplay {
     this.stats.cash += b.reward;
     this.log.cash += b.reward;
     audio.play("cash");
-    this.hud.showBanner(`Bounty paid +${b.reward}$`, 1.8);
+    this.hud.showBanner(`Bounty paid +${b.reward}$`, 1.8, "Contract");
     this.showBounty();
   }
 
@@ -949,7 +987,7 @@ export class Gameplay {
       cards: this.offers.map((u) => {
         const stacks = upgradeStacks(s, u.id);
         return {
-          name: u.name, text: upgradeText(u), icon: u.icon, category: u.category, evolution: !!u.requires,
+          name: u.name, text: upgradeText(u), icon: u.icon, category: u.category, rarity: u.rarity, evolution: !!u.requires,
           tag: stacks > 0 ? `Lv ${stacks} → ${stacks + 1}` : u.rarity === "common" ? "new" : `new · ${u.rarity}`,
           tags: (u.tags ?? []).map((t) => ({ label: SYNERGIES[t].label, color: SYNERGIES[t].color })),
         };
@@ -1014,11 +1052,11 @@ export class Gameplay {
     return Math.max(tier > 0 ? 1 : 0, ARSENAL.tiers[tier].from - (this.campaign?.run?.tierBoost ?? 0));
   }
 
-  /** Items the shop may offer before level `next` (never the Medkit / Gunsmith, a maxed item or an owned gun). */
+  /** Items the shop may offer before level `next` (never the Medkit / Gunsmith / gadget, which have their own places on the shelf; nor a maxed item or an owned gun). */
   private shopPool(next: number): ShopItem[] {
     const s = this.stats;
     return SHOP.filter((item) =>
-      item.id !== "heal" && item.id !== "mk" &&
+      item.id !== "heal" && item.id !== "mk" && item.id !== "gadget" &&
       (!item.weapon || (WEAPON_STATS[item.weapon] && !s.owned.has(item.weapon) && next >= this.weaponFrom(item.weapon))) &&
       (!item.biomes || item.biomes.includes(this.biome.id)) &&
       (item.from === undefined || next >= item.from) &&
@@ -1087,26 +1125,32 @@ export class Gameplay {
     const maxed = (item: ShopItem) => (item.max !== undefined && count(item) >= item.max) || (item.id === "mk" && mkLevel >= ARSENAL.mk.max && !canEvolve) || (item.id === "gadget" && gadgetLevel >= GADGET_MAX_LEVEL);
     const soldOut = (item: ShopItem) => (item.weapon ? s.owned.has(item.weapon) : false) || (item.id === "heal" && s.hp >= s.maxHp) || maxed(item);
     const mkNote = () => !evo ? `${this.gunName()} is Mk V` : s.evolved.has(s.weapon) ? `Evolved: ${evo.text}` : `Mk V · take ${upgradeDef(evo.needs).name} to evolve it into ${evo.name}`;
-    const note = (item: ShopItem) => item.weapon ? "In your loadout" : item.id === "mk" ? mkNote() : item.id === "gadget" ? "Maxed" : maxed(item) ? `Maxed ${count(item)}/${item.max}` : "HP full";
+    const note = (item: ShopItem) => item.weapon ? "In your loadout" : item.id === "mk" ? mkNote() : item.id === "gadget" ? "At its top level" : maxed(item) ? `${item.text} · ${count(item)}/${item.max}` : item.text;
     const reroll = this.rerollPrice(next);
     const guns = [...s.owned].filter((id) => !!WEAPON_STATS[id]);
     this.hud.openModal({
       title: "SHOP",
       compact: true,
-      text: `Cash: ${s.cash}$ · HP ${Math.ceil(s.hp)}/${s.maxHp} · ${this.gunName()} · 🔓 keeps an offer for the next shop`,
+      className: "shop",
+      text: `${s.cash}$ to spend · HP ${Math.ceil(s.hp)}/${s.maxHp} · ${this.gunName()}`,
+      hint: "🔓 Tap a lock to keep that offer for the next shop.",
       image: weaponArt(s.weapon),
       cards: items.map((item, i): Card => {
         const sale = roll.sale === item.id && !soldOut(item);
         const g = item.id === "gadget" && roll.gadget ? gadgetDef(roll.gadget) : null;
         const name = item.id === "mk" ? (canEvolve ? `Evolve: ${evo!.name}` : mkLevel >= ARSENAL.mk.max ? this.gunName() : `${this.gunName()} Mk ${MK_NAMES[mkLevel + 1]}`) : g ? `${g.name} Lv ${Math.min(GADGET_MAX_LEVEL, gadgetLevel + 1)}` : item.title;
-        const title = soldOut(item) && item.id !== "heal" ? name : `${name} — ${this.shopPrice(item)}$${sale ? " (SALE)" : ""}`;
-        const text = soldOut(item) ? note(item)
+        const title = name;
+        const sold = soldOut(item);
+        // The foot of the card: the price (green on sale, red-outlined when short of cash), or why it can't be bought.
+        const price = sold ? undefined : { label: `${this.shopPrice(item)}$`, afford: s.cash >= this.shopPrice(item), sale };
+        const status = !sold ? undefined : item.weapon ? "Owned" : item.id === "heal" ? "HP full" : "Maxed";
+        const text = sold ? note(item)
           : item.id === "mk" ? (canEvolve ? evo!.text : `+${Math.round(ARSENAL.mk.damage * 100)}% damage · +${Math.round(ARSENAL.mk.fireRate * 100)}% fire rate · +${Math.round(ARSENAL.mk.magazine * 100)}% magazine`)
           : g ? `${gadgetLevel ? "" : `${g.text} · `}${gadgetLine(g.id, gadgetLevel + 1)}`
           : item.max !== undefined ? `${item.text} · ${count(item)}/${item.max}` : item.text;
-        const off = soldOut(item) || s.cash < this.shopPrice(item);
-        if (item.id === "mk") return { title, text, tag: canEvolve ? "evolution" : "gunsmith", kind: canEvolve ? "special" : "weapon", icon: canEvolve ? "star" : "bullet", off };
-        if (g) return { title, text, tag: gadgetLevel ? `gadget · lv ${gadgetLevel}` : `new gadget · ${s.gadgets.size}/${s.gadgetSlots} slots`, kind: "special", icon: g.icon, off };
+        const off = sold;
+        if (item.id === "mk") return { title, text, tag: canEvolve ? "evolution" : "gunsmith", kind: canEvolve ? "special" : "weapon", icon: canEvolve ? "star" : "bullet", off, price, status };
+        if (g) return { title, text, tag: gadgetLevel ? "gadget" : `new gadget · slot ${s.gadgets.size + 1}/${s.gadgetSlots}`, kind: "special", icon: g.icon, off, price, status };
         const lock = i === 0 || soldOut(item) ? undefined : {
           on: s.lockedShop.has(item.id),
           onToggle: () => {
@@ -1118,9 +1162,9 @@ export class Gameplay {
         if (item.weapon) {
           const stats = WEAPON_STATS[item.weapon]!;
           const tier = weaponTier(item.weapon);
-          return { title, text, tag: sale ? "sale" : s.owned.has(item.weapon) ? "owned" : `tier ${tier}`, kind: "weapon", image: weaponArt(item.weapon), bars: weaponBars(stats), off, lock };
+          return { title, text, tag: sale ? "sale" : sold ? undefined : `tier ${tier}`, kind: "weapon", image: weaponArt(item.weapon), bars: weaponBars(stats), off, lock, price, status };
         }
-        return { title, text, tag: sale ? "sale" : item.from !== undefined ? "rare" : undefined, kind: item.from !== undefined ? "special" : "player", icon: SHOP_ICONS[item.id] ?? "star", off, lock };
+        return { title, text, tag: sale ? "sale" : sold ? undefined : item.from !== undefined ? "rare" : undefined, kind: item.from !== undefined ? "special" : "player", icon: SHOP_ICONS[item.id] ?? "star", off, lock, price, status };
       }),
       onCard: (i) => {
         const item = items[i];
@@ -1158,6 +1202,7 @@ export class Gameplay {
     const weapons = [...s.owned].filter((id) => !!WEAPON_STATS[id]);
     this.hud.openModal({
       title: "LOADOUT",
+      className: "tall",
       text: `Choose a weapon for ${this.levels[next].label}. Tap one to inspect its attachments.`,
       cards: weapons.map((id) => {
         const stats = s.weaponStatsFor(id)!;
@@ -1189,16 +1234,19 @@ export class Gameplay {
     const occupied = new Set([...installed].map((id) => weaponMod(id).slot));
     this.hud.openModal({
       title: "WEAPON BENCH",
+      className: "tall",
       image: weaponArt(weapon),
       text: `${WEAPONS.list[weapon].label} · ${s.cash}$ · modules are fitted to this weapon for the run.`,
       cards: mods.map((mod) => {
         const owned = installed.has(mod.id);
         const blocked = !owned && occupied.has(mod.slot);
         return {
-          title: owned ? mod.name : `${mod.name} — ${mod.cost}$`,
-          text: owned ? `${mod.text} · fitted` : blocked ? `${mod.text} · slot occupied` : mod.text,
-          tag: owned ? "installed" : mod.slot,
+          title: mod.name,
+          text: mod.text,
+          tag: mod.slot,
           kind: "weapon" as const,
+          price: owned || blocked ? undefined : { label: `${mod.cost}$`, afford: s.cash >= mod.cost },
+          status: owned ? "Fitted" : blocked ? "Slot taken" : undefined,
           disabled: owned || blocked || s.cash < mod.cost,
         };
       }),
@@ -1384,7 +1432,7 @@ export class Gameplay {
           s.evolved.add(s.weapon);
           bump("evolutions");
           audio.play("levelup");
-          this.hud.showBanner(`EVOLVED · ${this.gunName()}`, 2);
+          this.hud.showBanner(this.gunName(), 2, "Evolved");
         } else {
           s.weaponLevel.set(s.weapon, mk + 1);
           best("maxMk", mk + 1);
@@ -1492,7 +1540,7 @@ export class Gameplay {
       const r = Math.random() * (1 + luck);
       const size = Math.min(3, (r > odds[0] + odds[1] ? 3 : r > odds[0] ? 2 : 1) + (this.route?.chestBonus ?? 0));
       this.pickups.drop("chest", x, z, size);
-      this.hud.showBanner("Champion down: a chest!", 1.8);
+      this.hud.showBanner("Grab the chest", 1.8, "Champion down");
     }
     if (enemy.def.boss) {
       const pieces = DROPS.bossCashPieces;
@@ -1575,7 +1623,7 @@ export class Gameplay {
     const e = this.enemies.spawn(type, spot.x, spot.z, w.hpScale, w.damageScale);
     if (!e) return;
     this.enemies.makeElite(e, ELITES.hp * this.dmods.eliteHp, ELITES.scale, ELITES.damage);
-    this.hud.showBanner(`A champion ${e.def.label.toLowerCase()} approaches`, 2);
+    this.hud.showBanner(`Champion ${e.def.label}`, 2, "Incoming");
     audio.voice(voiceOf(e.id, e.def), "attack", { x: spot.x, z: spot.z, rate: 0.8, volume: 1.3 });
   }
 
@@ -1743,6 +1791,70 @@ export class Gameplay {
     });
   }
 
+  private readonly lastWalk = new Vec3();
+
+  /** First-run hints: steps them with what the player has done; once seen they never show again. */
+  private updateTutorial(dt: number, position: Vec3, combat: boolean): void {
+    const moved = Math.hypot(position.x - this.lastWalk.x, position.z - this.lastWalk.z);
+    this.lastWalk.copy(position);
+    if (moved < 3) this.walked += moved;
+    const t = this.tutorial;
+    if (!t) return;
+    const visible = combat && this.stats.alive && !this.paused && !this.choosing && !this.hud.modalOpen;
+    if (t.update(dt, { moved: this.walked, firing: !!this.gun.target, dashes: this.dashes, visible })) this.endTutorial();
+  }
+
+  /** Puts the hints away; they count as seen once the second one has shown (or the level is over). */
+  private endTutorial(): void {
+    const t = this.tutorial;
+    if (!t) return;
+    this.tutorial = null;
+    if (t.seen >= 2 || this.phase === "cleared") setSetting("tutorial", false);
+    t.dispose();
+  }
+
+  /**
+   * Low health: under LOW_HP_FRACTION the screen edge stays red and a heartbeat plays, faster the
+   * lower the health. Off-screen threats: elites, chargers and ranged foes near the hero get an
+   * arrow at the screen edge (the boss has its own pointer).
+   */
+  private updateWarnings(dt: number, hero: Vec3): void {
+    const s = this.stats;
+    const combat = this.phase === "combat" && s.alive;
+    const frac = s.hp / Math.max(1, s.maxHp);
+    const low = combat && frac <= LOW_HP_FRACTION;
+    this.hud.setLowHealth(low);
+    if (low) {
+      this.beatTimer -= dt;
+      if (this.beatTimer <= 0) {
+        const urgency = 1 - frac / LOW_HP_FRACTION;
+        this.beatTimer = 1 - 0.42 * urgency;
+        audio.heartbeat(0.75 + 0.25 * urgency);
+        this.hud.beat();
+      }
+    } else this.beatTimer = 0;
+
+    const list = this.threats;
+    list.length = 0;
+    if (combat) {
+      for (const e of this.enemies.alive) {
+        if (!isAlive(e) || e.def.boss) continue;
+        const b = e.def.behavior;
+        const kind = e.elite ? "elite" : b === "charger" ? "charger" : b === "thrower" || b === "caster" ? "ranged" : null;
+        if (!kind) continue;
+        const distance = Math.hypot(e.position.x - hero.x, e.position.z - hero.z);
+        if (distance > THREAT_RANGE) continue;
+        const t = this.threatPool[list.length] ?? (this.threatPool[list.length] = { position: e.position, kind, distance });
+        t.position = e.position;
+        t.kind = kind;
+        t.distance = distance;
+        list.push(t);
+      }
+      list.sort((a, b) => a.distance - b.distance);
+    }
+    this.hud.setThreats(list);
+  }
+
   /** Dash (button, Space / Shift): a burst along the stick (or facing), invulnerable for a moment. */
   private tryDash(): void {
     const playing = this.phase === "combat" || this.phase === "cleared" || this.phase === "travel";
@@ -1757,6 +1869,7 @@ export class Gameplay {
     this.effects.ring(this.tmp.set(p.x, 0.05, p.z), 1.1, true);
     audio.play("reload", { rate: 1.8, volume: 0.6 });
     this.dashBlastIn = s.dashBlast > 0 ? DASH.seconds : 0;
+    this.dashes++;
     bump("dashes");
   }
 
@@ -1836,6 +1949,7 @@ export class Gameplay {
     this.campaign?.update?.(dt, position);
     if (this.pops.length) this.updatePops(dt, position);
     this.updateSounds(dt, position, combat);
+    this.updateTutorial(dt, position, combat);
     // Level-ups wait for combat (or the wave-complete pause) and a living hero.
     if (this.pendingLevelUps > 0 && !this.choosing && !this.paused && (combat || this.phase === "cleared" || this.phase === "travel") && this.stats.alive) this.openLevelUp();
     this.updateHud(dt);
@@ -1884,6 +1998,7 @@ export class Gameplay {
     } else {
       this.hud.setPointer(combatBoss?.position ?? null, combatBoss ? Math.hypot(combatBoss.position.x - hero.x, combatBoss.position.z - hero.z) : 0, "boss");
     }
+    this.updateWarnings(dt, hero);
     this.hud.update(dt, this.projector);
     const barsOn = (this.phase === "combat" || this.phase === "cleared" || this.phase === "travel") && s.alive && !this.hud.modalOpen;
     const cd = DASH.cooldown * s.dashCooldownMult;

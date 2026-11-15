@@ -10,11 +10,15 @@ import { execFileSync } from "node:child_process";
 const ROOT = path.resolve(import.meta.dirname, "..");
 const OUT = path.join(ROOT, "dist-itch");
 const ZIP = path.join(ROOT, "dustline-itch.zip");
-const COPY = ["models", "textures", "audio", "menu", "ui", "licenses", "icon.svg"];
+const COPY = ["models", "textures", "audio", "menu", "ui", "licenses", "icon.svg", "app"];
 
 fs.renameSync(path.join(OUT, "playcanvas.html"), path.join(OUT, "index.html"));
 for (const item of COPY) fs.cpSync(path.join(ROOT, "public", item), path.join(OUT, item), { recursive: true });
 fs.copyFileSync(path.join(ROOT, "CREDITS.md"), path.join(OUT, "credits.txt"));
+// The install manifest: here the game is index.html at the root (on the Pages site it is playcanvas.html).
+const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "public/dustline.webmanifest"), "utf8"));
+manifest.start_url = "./";
+fs.writeFileSync(path.join(OUT, "dustline.webmanifest"), JSON.stringify(manifest, null, 2));
 
 const files = [];
 const walk = (dir) => {

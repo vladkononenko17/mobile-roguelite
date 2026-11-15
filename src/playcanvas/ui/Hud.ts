@@ -4,6 +4,8 @@ import type { ScreenProjector } from "../camera/ScreenProjector";
 import "@fontsource/barlow-condensed/latin-700.css";
 import "@fontsource/barlow-condensed/latin-800.css";
 import { DEV_MODE } from "../devMode";
+import { settings } from "../settings";
+import { LOW_HP_FRACTION } from "../gameplay/config";
 import { CATEGORY_COLORS, ICON_PATHS, iconSvg, type UpgradeCategory, type UpgradeIcon, type UpgradeRarity } from "./UpgradeIcons";
 
 const CSS = `
@@ -80,7 +82,9 @@ const CSS = `
 #hud .money.pop { animation: money-pop 0.35s ease-out; }
 #hud .money.pop b { animation: money-flash 0.5s ease-out; }
 #hud .gain { position: absolute; right: calc(100% + 6px); top: 5px; font-size: 14px; font-weight: 800; color: #c9d98a; opacity: 0; }
+#hud .gain { white-space: nowrap; letter-spacing: 0.06em; }
 #hud .gain.show { animation: money-gain 0.8s ease-out forwards; }
+#hud .gain.show.long { animation-duration: 2s; }
 @keyframes money-pop { 35% { transform: scale(1.14); } }
 @keyframes money-flash { 0% { color: #f1dc86; text-shadow: 0 0 8px rgba(214, 190, 80, 0.8), 0 1px 2px #000; } 100% { color: #b6c99a; } }
 @keyframes money-gain { 0% { opacity: 0; transform: translateX(6px); } 20% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-10px); } }
@@ -102,9 +106,27 @@ const CSS = `
 #hud .boss > span { display: block; color: #d9a0a0; margin-bottom: 4px; }
 #hud .boss .bar { height: 5px; background: rgba(0, 0, 0, 0.5); border-radius: 1px; overflow: hidden; position: relative; }
 #hud .boss .bar > i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #7d2a22, #b8452f); transition: width 0.15s; }
-#hud .banner { position: absolute; left: 0; right: 0; top: 34%; text-align: center; font-size: 30px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; text-shadow: 0 2px 6px #000; opacity: 0; transition: opacity 0.3s; }
+/* Banner: a small amber kicker over one or two big lines, well above the hero; one at a time (queued). */
+#hud .banner { position: absolute; left: 0; right: 0; top: 29%; padding: 0 20px; text-align: center; text-transform: uppercase; opacity: 0; transform: translateY(6px); transition: opacity 0.3s, transform 0.3s; }
+#hud .banner.show { opacity: 1; transform: none; }
+#hud .banner small { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 700; letter-spacing: 0.3em; text-indent: 0.3em; color: var(--amber); text-shadow: 0 1px 4px #000; }
+#hud .banner small:empty { display: none; }
+#hud .banner b { display: block; max-width: 420px; margin: 0 auto; font-size: clamp(22px, 6.8vw, 28px); font-weight: 800; line-height: 1.08; letter-spacing: 0.1em; text-indent: 0.1em; text-shadow: 0 2px 6px #000, 0 0 14px rgba(0, 0, 0, 0.6); text-wrap: balance; }
 #hud .banner::after { content: ""; display: block; width: 42px; height: 2px; margin: 7px auto 0; background: var(--amber); }
 #hud .hurt { position: absolute; inset: 0; box-shadow: inset 0 0 90px 30px rgba(170, 20, 10, 0.55); opacity: 0; transition: opacity 0.25s; }
+/* Low health: a red edge that stays and throbs with every heartbeat. */
+#hud .lowhp { position: absolute; inset: 0; box-shadow: inset 0 0 78px 16px rgba(190, 18, 8, 0.7); opacity: 0; transition: opacity 0.5s; }
+#hud .lowhp.on { opacity: 0.4; }
+#hud .lowhp.beat { animation: lowhp-beat 0.55s ease-out; }
+@keyframes lowhp-beat { 0% { opacity: 0.4; } 12% { opacity: 1; } 32% { opacity: 0.55; } 46% { opacity: 0.9; } 100% { opacity: 0.4; } }
+/* Off-screen threats: a small arrow at the screen edge pointing at an elite, a charger or a ranged foe. */
+#hud .threat { --c: #ff5a3a; position: absolute; left: 0; top: 0; width: 26px; height: 26px; margin: -13px 0 0 -13px; display: none; pointer-events: none; will-change: transform; }
+#hud .threat.elite { --c: #f2c14e; }
+#hud .threat i { position: absolute; inset: 0; }
+#hud .threat i::before { content: ""; position: absolute; left: 7px; top: 3px; border-left: 15px solid var(--c); border-top: 10px solid transparent; border-bottom: 10px solid transparent; filter: drop-shadow(0 0 4px var(--c)) drop-shadow(0 1px 1px #000); }
+#hud .threat i::after { content: ""; position: absolute; left: 2px; top: 8px; width: 3px; height: 10px; border-radius: 2px; background: var(--c); opacity: 0.75; }
+#hud .threat.near i { animation: threat-near 0.5s ease-in-out infinite; }
+@keyframes threat-near { 50% { transform: scale(1.25); } }
 #hud .dmg { position: absolute; font-size: 16px; font-weight: 800; text-shadow: 0 1px 2px #000, 0 0 3px #000; transform: translate(-50%, -50%); white-space: nowrap; }
 #hud .dmg.crit { color: #f0c24a; font-size: 20px; }
 #hud .dmg.player { color: #e0553e; }
@@ -157,11 +179,34 @@ const CSS = `
 #overlay .card small { opacity: 0.8; font-weight: 500; }
 #overlay .card .tag { float: right; font-size: 11px; opacity: 0.7; text-transform: uppercase; }
 #overlay .card.weapon { border-color: #e8a92f; }
-#overlay .cards.compact { grid-template-columns: 1fr 1fr; gap: 8px; }
+#overlay .cards.compact { grid-template-columns: 1fr 1fr; gap: 8px; grid-auto-flow: dense; }
 #overlay .cards.compact .card { min-height: 58px; padding: 9px 10px; }
 #overlay .cards.compact .card b { font-size: 15px; }
 #overlay .cards.compact .card .tag { display: none; }
 #overlay .card.special { border-color: #9c3bd8; }
+/* Shop offers: icon and name on one row, the effect under them, and a foot with the price (amber:
+   affordable, red outline: not yet, green: on sale) or a status ("OWNED"), a note and the lock. */
+#overlay .cards.compact .card:not(.has-art) { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto 1fr auto; gap: 4px 8px; align-items: center; min-height: 96px; padding: 8px 10px 7px; }
+#overlay .cards.compact .card:not(.has-art) .ci { float: none; width: 30px; height: 30px; margin: 0; }
+#overlay .cards.compact .card:not(.has-art) .ci svg { width: 18px; height: 18px; }
+#overlay .cards.compact .card:not(.has-art) b { margin: 0; font: 800 16px/1.05 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.03em; text-transform: uppercase; }
+#overlay .cards.compact .card:not(.has-art) b:first-child { grid-column: 1 / -1; }
+#overlay .cards.compact .card:not(.has-art) small { grid-column: 1 / -1; align-self: start; font-size: 12px; line-height: 1.3; }
+#overlay .card .foot { grid-column: 1 / -1; display: flex; align-items: center; gap: 7px; min-height: 28px; margin-top: 4px; }
+#overlay .card .foot.locks { padding-right: 34px; }
+#overlay .card .price { flex: none; padding: 6px 10px 5px; border-radius: 6px; background: #e8a92f; color: #1b140f; font: 800 16px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+#overlay .card .price.sale { background: #8fd37a; }
+#overlay .card .price.no { background: rgba(0, 0, 0, 0.35); color: #e8806a; box-shadow: inset 0 0 0 1px rgba(232, 128, 106, 0.65); }
+#overlay .card .price.status { background: rgba(243, 231, 211, 0.12); color: inherit; }
+#overlay .card .foot em { min-width: 0; font: 700 10px/1.15 "Barlow Condensed", system-ui, sans-serif; font-style: normal; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.7; }
+#overlay .card .foot em.sale { color: #9be096; opacity: 1; }
+#overlay .card.poor { opacity: 0.8; }
+#overlay .card.has-art .foot { margin-top: 8px; }
+#overlay .panel .hint { margin: 8px 0 0; font-size: 12px; opacity: 0.6; }
+/* The shop's header stays small so the whole shelf fits a phone screen. */
+#overlay .panel.shop h2 { margin: 0; }
+#overlay .panel.shop .hero-art { width: auto; height: 64px; margin: 0 auto 2px; }
+#overlay .panel.shop > p:not(.hint) { margin: 2px 0 8px; }
 /* Weapon cards: the weapon's picture on a lit plinth, name and note, stat bars. */
 #overlay .card.has-art { display: grid; grid-template-columns: 132px minmax(0, 1fr); column-gap: 12px; align-items: center; padding: 10px 12px; position: relative; overflow: hidden; }
 #overlay .cards.compact .card.has-art { grid-column: 1 / -1; min-height: 0; padding: 10px 12px; }
@@ -222,12 +267,21 @@ const CSS = `
 #overlay .panel.levelup .card:nth-child(2) { animation-delay: 0.06s; }
 #overlay .panel.levelup .card:nth-child(3) { animation-delay: 0.12s; }
 #overlay .panel.levelup .card:active { transform: scale(0.98); }
-#overlay .panel.levelup .card b { font: 800 19px "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.04em; }
-#overlay .panel.levelup .card { position: relative; cursor: pointer; padding-right: 44px; box-sizing: border-box; }
-#overlay .panel.levelup .card.evolution { border-color: #f2c14e; box-shadow: 0 0 16px rgba(242, 193, 78, 0.45), inset 0 0 12px rgba(242, 193, 78, 0.15); }
-#overlay .panel.levelup .card.evolution .tag { color: #f2c14e; opacity: 1; }
-#overlay .panel.levelup .card .tag { position: absolute; right: 40px; top: 12px; float: none; }
+#overlay .panel.levelup .card b { margin: 0; font: 800 20px/1.05 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.04em; }
+/* Icon left; right of it the tag ("NEW · RARE") on its own line, the name, the effect, the build tags.
+   The border and the tag take the rarity's colour (the icon disc keeps the category's). */
+#overlay .panel.levelup .card { --r: rgba(243, 231, 211, 0.5); position: relative; cursor: pointer; display: grid; grid-template-columns: 42px minmax(0, 1fr); column-gap: 12px; row-gap: 2px; align-items: start;
+  padding: 12px 44px 12px 14px; box-sizing: border-box; border-color: var(--r); }
+#overlay .panel.levelup .card > * { grid-column: 2; }
+#overlay .panel.levelup .card .ci { grid-column: 1; grid-row: 1 / span 4; float: none; width: 42px; height: 42px; margin: 2px 0 0; }
+#overlay .panel.levelup .card.rare { --r: #5aa9ff; box-shadow: inset 0 0 0 1px rgba(90, 169, 255, 0.35); }
+#overlay .panel.levelup .card.epic { --r: #b773ff; box-shadow: 0 0 14px rgba(183, 115, 255, 0.35), inset 0 0 0 1px rgba(183, 115, 255, 0.4); }
+#overlay .panel.levelup .card.evolution { --r: #f2c14e; box-shadow: 0 0 16px rgba(242, 193, 78, 0.45), inset 0 0 12px rgba(242, 193, 78, 0.15); }
+#overlay .panel.levelup .card .tag { position: static; float: none; display: block; font: 700 11px/1.2 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.2em; color: var(--r); opacity: 1; }
+#overlay .panel.levelup .card.common .tag { opacity: 0.7; }
+#overlay .panel.levelup .card small { display: block; margin-top: 2px; line-height: 1.3; }
 #overlay .panel.levelup .card .tags { display: flex; gap: 5px; margin-top: 6px; }
+#overlay .panel.levelup .card .tags:empty { display: none; }
 #overlay .panel.levelup .card .tags i { font: 700 10px "Barlow Condensed", system-ui, sans-serif; font-style: normal; letter-spacing: 0.14em; text-transform: uppercase; color: var(--c); border: 1px solid var(--c); border-radius: 2px; padding: 1px 5px; opacity: 0.9; }
 #overlay .panel.levelup .card .banish { position: absolute; right: 6px; top: 6px; width: 30px; height: 30px; border-radius: 4px; border: 1px solid rgba(243, 231, 211, 0.3); background: rgba(0, 0, 0, 0.35); color: rgba(243, 231, 211, 0.7); font: 700 14px system-ui; padding: 0; }
 #overlay .panel.levelup .syns { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin: -4px 0 12px; }
@@ -240,6 +294,9 @@ const CSS = `
 @keyframes card-in { 0% { transform: translateY(14px); opacity: 0; } 100% { transform: none; opacity: 1; } }
 #overlay .card:disabled { opacity: 0.4; }
 #overlay .actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+/* Long screens (shop, loadout, bench): the buttons stay in reach when the list scrolls on a small phone. */
+#overlay .panel.shop .actions, #overlay .panel.tall .actions { position: sticky; bottom: -1px; z-index: 2; margin-top: 2px; padding: 12px 0 2px;
+  background: linear-gradient(180deg, rgba(12, 8, 6, 0), rgba(12, 8, 6, 0.94) 36%); }
 #overlay .primary { padding: 12px 22px; border-radius: 10px; border: 0; background: #e8a92f; color: #1b140f; font: 700 16px system-ui, sans-serif; }
 body:not(.debug-on) #debug { display: none; }
 `;
@@ -278,6 +335,10 @@ export interface Card {
   off?: boolean;
   /** A lock toggle in the corner (shop offers kept for the next visit). */
   lock?: { on: boolean; onToggle: () => void };
+  /** A price chip in the card's foot: amber when affordable, red-outlined when not, green on sale. */
+  price?: { label: string; afford: boolean; sale?: boolean };
+  /** Instead of a price: a grey status chip ("OWNED", "MAXED"). */
+  status?: string;
 }
 
 /** The end-of-run screen. */
@@ -313,6 +374,7 @@ export interface LevelUpCard {
   category: UpgradeCategory;
   /** "new", "new · rare", "Lv 1 → 2"... */
   tag: string;
+  rarity: UpgradeRarity;
   /** Build tags (label + colour). */
   tags: { label: string; color: string }[];
   evolution: boolean;
@@ -329,6 +391,17 @@ export interface LevelUpScreen {
   onReroll: () => void;
   onBanish: (index: number) => void;
 }
+
+/** A dangerous enemy for the off-screen arrows. */
+export interface Threat {
+  position: Vec3;
+  kind: "elite" | "charger" | "ranged";
+  /** Metres from the hero. */
+  distance: number;
+}
+
+/** How many threat arrows can show at once. */
+const THREAT_ARROWS = 5;
 
 interface Floater {
   el: HTMLElement;
@@ -369,6 +442,18 @@ export class Hud {
   private readonly floaters: Floater[] = [];
   private readonly screen = new Vec3();
   private bannerTimer = 0;
+  /** Banners wait their turn: the one showing, a short gap, then the next. */
+  private readonly bannerQueue: { text: string; kicker: string; seconds: number }[] = [];
+  private bannerText = "";
+  private bannerGap = 0;
+  private readonly lowHp: HTMLElement;
+  private lowHpOn = false;
+  /** Label for the next "+N" over the cash plate ("interest"). */
+  private gainLabel = "";
+  /** Off-screen threat arrows (a small pool) and this frame's candidates, nearest first. */
+  private readonly threats: { el: HTMLElement; tip: HTMLElement; shown: boolean; key: string }[] = [];
+  private threatList: readonly Threat[] = [];
+  private readonly threatPoint = new Vec3();
   private readonly upgrade: HTMLElement;
   private readonly weaponCard: HTMLElement;
   private readonly pointer: HTMLElement;
@@ -397,6 +482,7 @@ export class Hud {
     this.root.id = "hud";
     const bulletSvg = `<svg viewBox="4 1 16 22" aria-hidden="true"><path d="${ICON_PATHS.bullet}"/></svg>`;
     this.root.innerHTML = `
+      <div class="lowhp"></div>
       <div class="hurt"></div>
       <div class="corner tl">
         <div class="plate lvl"><span class="cap"></span><span class="time"></span><div class="prog"><i></i></div></div>
@@ -415,7 +501,7 @@ export class Hud {
       </div>
       <button type="button" class="dash" aria-label="dash">DASH<span class="pips"></span></button>
       <div class="plate boss"><span class="cap"></span><div class="bar"><i></i></div></div>
-      <div class="banner"></div>
+      <div class="banner"><small></small><b></b></div>
       <div class="pulse"></div>
       <div class="upgrade"><div class="disc"></div><div class="card"><i></i><b></b><small></small></div></div>`;
     document.body.append(this.root);
@@ -444,6 +530,14 @@ export class Hud {
     this.bossBar = q(".boss .bar > i");
     this.banner = q(".banner");
     this.hurt = q(".hurt");
+    this.lowHp = q(".lowhp");
+    for (let i = 0; i < THREAT_ARROWS; i++) {
+      const el = document.createElement("div");
+      el.className = "threat";
+      el.innerHTML = "<i></i>";
+      this.root.append(el);
+      this.threats.push({ el, tip: el.querySelector("i")!, shown: false, key: "" });
+    }
     this.upgrade = q(".upgrade");
     this.weaponCard = document.createElement("div");
     this.weaponCard.className = "weapon-new";
@@ -502,7 +596,7 @@ export class Hud {
     this.shownMaxHp = max;
     this.hpText.textContent = String(value);
     this.hpBar.style.width = `${Math.min(100, (100 * value) / max)}%`;
-    this.health.classList.toggle("low", value > 0 && value <= max * 0.25);
+    this.health.classList.toggle("low", value > 0 && value <= max * LOW_HP_FRACTION);
   }
 
   private shownLevel = 0;
@@ -535,11 +629,18 @@ export class Hud {
     // when spending).
     if (amount > this.shownCash && this.shownCash >= 0) {
       restartAnimation(this.money, "pop");
-      this.gain.textContent = `+${Math.floor(amount - this.shownCash)}`;
+      this.gain.textContent = `+${Math.floor(amount - this.shownCash)}${this.gainLabel ? ` ${this.gainLabel}` : ""}`;
+      this.gain.classList.toggle("long", !!this.gainLabel);
+      this.gainLabel = "";
       restartAnimation(this.gain, "show");
     }
     this.shownCash = amount;
     this.moneyText.textContent = String(Math.max(0, Math.floor(amount)));
+  }
+
+  /** Names the next cash gain: the "+N" over the cash plate reads "+N INTEREST" and stays longer. */
+  cashNote(label: string): void {
+    this.gainLabel = label.toUpperCase();
   }
 
   private ammoKey = "";
@@ -610,10 +711,57 @@ export class Hud {
     this.root.querySelector(".gadgets")!.innerHTML = list.map((g) => `<span class="plate" style="color:${g.color}">${iconSvg(g.icon)}<b>${g.level}</b></span>`).join("");
   }
 
-  showBanner(text: string, seconds = 2): void {
-    this.banner.textContent = text;
-    this.banner.style.opacity = "1";
+  /**
+   * A banner above the hero: `text` big (one or two lines), `kicker` small over it. One shows at a
+   * time: a new one waits in a short queue while the current one is cut short (never replaced
+   * mid-read); the same text is not queued twice.
+   */
+  showBanner(text: string, seconds = 2, kicker = ""): void {
+    if (this.bannerTimer > 0 || this.bannerGap > 0) {
+      if (text === this.bannerText || this.bannerQueue.some((b) => b.text === text)) return;
+      if (this.bannerQueue.length >= 3) this.bannerQueue.shift();
+      this.bannerQueue.push({ text, kicker, seconds });
+      this.bannerTimer = Math.min(this.bannerTimer, 0.9);
+      return;
+    }
+    this.presentBanner(text, kicker, seconds);
+  }
+
+  private presentBanner(text: string, kicker: string, seconds: number): void {
+    this.bannerText = text;
+    this.banner.querySelector("small")!.textContent = kicker;
+    this.banner.querySelector("b")!.textContent = text;
+    this.banner.classList.add("show");
     this.bannerTimer = seconds;
+  }
+
+  /** Drops the banner and anything queued (a new level, a restart). */
+  clearBanners(): void {
+    this.bannerQueue.length = 0;
+    this.bannerTimer = 0;
+    this.bannerGap = 0;
+    this.bannerText = "";
+    this.banner.classList.remove("show");
+  }
+
+  /**
+   * Low health (`on`): the red edge stays; `beat()` throbs it once (Gameplay calls it with each
+   * heartbeat sound).
+   */
+  setLowHealth(on: boolean): void {
+    if (on === this.lowHpOn) return;
+    this.lowHpOn = on;
+    this.lowHp.classList.toggle("on", on);
+    if (!on) this.lowHp.classList.remove("beat");
+  }
+
+  beat(): void {
+    if (this.lowHpOn) restartAnimation(this.lowHp, "beat");
+  }
+
+  /** This frame's dangerous enemies, nearest first (the off-screen ones get an arrow at the screen edge). */
+  setThreats(list: readonly Threat[]): void {
+    this.threatList = list;
   }
 
   /**
@@ -679,6 +827,8 @@ export class Hud {
 
   /** Floating number at a world position. */
   damageNumber(position: Vec3, text: string, kind: "normal" | "crit" | "player" | "heal" | "burn" | "tech" = "normal"): void {
+    // Settings: numbers over enemies can be turned off (the hero's own -HP / +HP always show).
+    if (!settings.numbers && kind !== "player" && kind !== "heal") return;
     const f = this.floaters.find((x) => x.life <= 0) ?? this.floaters.reduce((a, b) => (a.life < b.life ? a : b));
     f.position.copy(position);
     f.life = 0.7;
@@ -695,8 +845,19 @@ export class Hud {
     }
     if (this.bannerTimer > 0) {
       this.bannerTimer -= dt;
-      if (this.bannerTimer <= 0) this.banner.style.opacity = "0";
+      if (this.bannerTimer <= 0) {
+        this.banner.classList.remove("show");
+        this.bannerGap = 0.32;
+      }
+    } else if (this.bannerGap > 0) {
+      this.bannerGap -= dt;
+      if (this.bannerGap <= 0) {
+        this.bannerText = "";
+        const next = this.bannerQueue.shift();
+        if (next) this.presentBanner(next.text, next.kicker, next.seconds);
+      }
     }
+    this.placeThreats(camera);
     if (this.pulseTime > 0 && this.pulseAnchor) {
       this.pulseTime -= dt;
       camera.toScreen(this.pulseAnchor.getPosition(), this.screen);
@@ -715,6 +876,48 @@ export class Hud {
       f.el.style.left = `${this.screen.x}px`;
       f.el.style.top = `${this.screen.y}px`;
       f.el.style.opacity = `${Math.min(1, f.life / 0.3)}`;
+    }
+  }
+
+  /**
+   * Threat arrows: each off-screen candidate (nearest first, up to the pool size) gets an arrow on the
+   * line from the screen's middle toward it, clamped inside an inset frame (clear of the top plates
+   * and the dash button); brighter when closer, throbbing when very close.
+   */
+  private placeThreats(camera: ScreenProjector): void {
+    const w = camera.width, h = camera.height;
+    const cx = w / 2, cy = h * 0.55;
+    const left = 20, right = w - 20, top = 150, bottom = h - 34;
+    let used = 0;
+    for (const t of this.threatList) {
+      if (used >= this.threats.length) break;
+      const p = camera.toScreen(this.threatPoint.set(t.position.x, 1, t.position.z), this.screen);
+      if (p.z > 0 && p.x > 6 && p.x < w - 6 && p.y > 60 && p.y < h - 6) continue;
+      let dx = p.x - cx, dy = p.y - cy;
+      if (p.z <= 0) { dx = -dx; dy = -dy; }
+      const tx = dx > 0 ? (right - cx) / dx : dx < 0 ? (left - cx) / dx : Infinity;
+      const ty = dy > 0 ? (bottom - cy) / dy : dy < 0 ? (top - cy) / dy : Infinity;
+      const k = Math.min(tx, ty);
+      if (!Number.isFinite(k)) continue;
+      let x = cx + dx * k, y = cy + dy * k;
+      // Clear of the dash button (bottom right).
+      if (x > w - 124 && y > h - 132) y = h - 132;
+      const a = this.threats[used++];
+      const key = `${t.kind === "elite" ? "elite" : ""}${t.distance < 9 ? " near" : ""}`;
+      if (!a.shown || a.key !== key) {
+        a.el.className = `threat ${key}`;
+        a.el.style.display = "block";
+        a.shown = true;
+        a.key = key;
+      }
+      a.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) rotate(${Math.atan2(dy, dx).toFixed(3)}rad)`;
+      a.el.style.opacity = Math.min(1, Math.max(0.45, 1.25 - t.distance / 30)).toFixed(2);
+    }
+    for (let i = used; i < this.threats.length; i++) {
+      const a = this.threats[i];
+      if (!a.shown) continue;
+      a.shown = false;
+      a.el.style.display = "none";
     }
   }
 
@@ -745,7 +948,7 @@ export class Hud {
   }
 
   /** Opens the modal with a title, text, optional cards (each a button) and optional actions. */
-  openModal(options: { title: string; text?: string; image?: string; cards?: Card[]; compact?: boolean; levelUp?: boolean; className?: string; onCard?: (index: number) => void; actions?: { label: string; onClick: () => void; minor?: boolean }[] }): void {
+  openModal(options: { title: string; text?: string; image?: string; cards?: Card[]; compact?: boolean; levelUp?: boolean; className?: string; hint?: string; onCard?: (index: number) => void; actions?: { label: string; onClick: () => void; minor?: boolean }[] }): void {
     const panel = document.createElement("div");
     panel.className = options.levelUp ? "panel levelup" : `panel${options.className ? ` ${options.className}` : ""}`;
     const h = document.createElement("h2");
@@ -769,10 +972,11 @@ export class Hud {
       options.cards.forEach((card, i) => {
         const b = document.createElement("button");
         b.type = "button";
-        b.className = `card ${card.kind ?? ""}${card.image ? " has-art" : ""}${card.active ? " equipped" : ""}${card.off ? " off" : ""}`;
+        const priced = !!card.price || !!card.status;
+        b.className = `card ${card.kind ?? ""}${card.image ? " has-art" : ""}${card.active ? " equipped" : ""}${card.off ? " off" : ""}${card.price && !card.price.afford ? " poor" : ""}`;
         b.disabled = !!card.disabled;
         if (card.image) {
-          b.innerHTML = `<span class="art"><img alt="" loading="lazy"></span>${card.tag ? `<span class="tag"></span>` : ""}<b></b><small></small>${card.bars?.length ? `<span class="bars"></span>` : ""}`;
+          b.innerHTML = `<span class="art"><img alt="" loading="lazy"></span>${card.tag && !priced ? `<span class="tag"></span>` : ""}<b></b><small></small>${card.bars?.length ? `<span class="bars"></span>` : ""}`;
           b.querySelector("img")!.src = card.image;
           const bars = b.querySelector(".bars");
           for (const bar of card.bars ?? []) {
@@ -782,9 +986,25 @@ export class Hud {
             value.textContent = bar.text;
             bars!.append(label, track, value);
           }
-        } else b.innerHTML = `${card.icon ? `<span class="ci">${iconSvg(card.icon)}</span>` : ""}${card.tag ? `<span class="tag"></span>` : ""}<b></b><small></small>`;
+        } else b.innerHTML = `${card.icon ? `<span class="ci">${iconSvg(card.icon)}</span>` : ""}${card.tag && !priced ? `<span class="tag"></span>` : ""}<b></b><small></small>`;
         if (card.icon && card.kind) b.style.setProperty("--c", CATEGORY_COLORS[card.kind]);
-        if (card.tag) b.querySelector(".tag")!.textContent = card.tag;
+        if (card.tag && !priced) b.querySelector(".tag")!.textContent = card.tag;
+        if (priced) {
+          // The foot: price (or status) chip, the tag as a small note beside it; the lock sits at its right.
+          const foot = document.createElement("span");
+          foot.className = `foot${card.lock ? " locks" : ""}`;
+          const chip = document.createElement("span");
+          chip.className = card.price ? `price${card.price.sale ? " sale" : ""}${card.price.afford ? "" : " no"}` : "price status";
+          chip.textContent = card.price?.label ?? card.status ?? "";
+          foot.append(chip);
+          if (card.tag) {
+            const note = document.createElement("em");
+            if (card.price?.sale) note.className = "sale";
+            note.textContent = card.tag;
+            foot.append(note);
+          }
+          b.append(foot);
+        }
         b.querySelector("b")!.textContent = card.title;
         b.querySelector("small")!.textContent = card.text;
         b.addEventListener("click", () => options.onCard?.(i));
@@ -805,6 +1025,12 @@ export class Hud {
         cards.append(b);
       });
       panel.append(cards);
+    }
+    if (options.hint) {
+      const hint = document.createElement("p");
+      hint.className = "hint";
+      hint.textContent = options.hint;
+      panel.append(hint);
     }
     if (options.actions) {
       const actions = document.createElement("div");
@@ -840,7 +1066,7 @@ export class Hud {
     const cards = panel.querySelector(".cards")!;
     o.cards.forEach((c, i) => {
       const card = document.createElement("div");
-      card.className = `card ${c.category}${c.evolution ? " evolution" : ""}`;
+      card.className = `card ${c.category} ${c.rarity}${c.evolution ? " evolution" : ""}`;
       card.setAttribute("role", "button");
       card.style.setProperty("--c", CATEGORY_COLORS[c.category]);
       card.innerHTML = `<span class="ci">${iconSvg(c.icon)}</span><span class="tag">${esc(c.evolution ? "EVOLUTION" : c.tag)}</span><b>${esc(c.name)}</b><small>${esc(c.text)}</small>

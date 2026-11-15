@@ -11,7 +11,9 @@ import { loadProgress } from "./progress";
 import { iconSvg } from "./UpgradeIcons";
 import { CHARACTERS } from "../config";
 import { showHeroes, showQuests } from "./ProfileScreens";
-import { checkQuests, chooseDanger, chosenDanger, heroFor, dangerUnlocked, profile, QUESTS } from "../gameplay/profile";
+import { showSettings } from "./SettingsScreen";
+import { keepSaves, setupInstall } from "./Install";
+import { checkQuests, chooseDanger, chooseDifficulty, chosenDanger, chosenDifficulty, heroFor, dangerUnlocked, profile, QUESTS } from "../gameplay/profile";
 import { dangerMods, dangerSummary } from "../gameplay/danger";
 import { heroDef } from "../gameplay/heroes";
 import { clearDaily, dailySetup, markDaily, todayKey } from "../gameplay/daily";
@@ -55,6 +57,14 @@ const CSS = `
 #menu .logo p { margin: 6px 0 0; font-size: 13px; letter-spacing: 0.24em; opacity: 0.7; }
 #menu .icon { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid rgba(236, 227, 207, 0.35); border-radius: 10px;
   background: rgba(13, 10, 8, 0.5); color: inherit; padding: 0; }
+#menu .icons { display: flex; gap: 8px; }
+/* Install pill (only where the game can be installed and is not yet): under the logo, in the art. */
+#menu .install { align-self: flex-start; margin-top: 12px; display: grid; grid-template-columns: auto auto; gap: 0 10px; align-items: center; padding: 7px 8px 7px 12px; border-radius: 10px;
+  border: 1px solid var(--accent); background: rgba(13, 10, 8, 0.72); cursor: pointer; }
+#menu .install[hidden] { display: none; }
+#menu .install b { font: 800 15px/1.1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.14em; color: var(--accent); }
+#menu .install small { grid-column: 1; font: 500 11px/1.2 system-ui, sans-serif; opacity: 0.8; }
+#menu .install .x { grid-column: 2; grid-row: 1 / span 2; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; font-size: 12px; opacity: 0.6; }
 #menu .icon svg { width: 20px; height: 20px; }
 #menu .icon.off { opacity: 0.45; }
 #menu .icon.off .wave, #menu .icon:not(.off) .mute { display: none; }
@@ -85,6 +95,13 @@ const CSS = `
 #menu .mini .face { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 2px currentColor; }
 #menu .mini .dot { position: absolute; top: 5px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: #8fd8ff; box-shadow: 0 0 6px #8fd8ff; }
 #menu .mini.daily { border-color: rgba(214, 162, 60, 0.7); color: #f2c66b; }
+/* Difficulty: a three-way switch under the chapter's chips, its one-line rule under it. */
+#menu .diff { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0; margin-top: 10px; border: 1px solid rgba(236, 227, 207, 0.3); border-radius: 8px; overflow: hidden; background: rgba(13, 10, 8, 0.6); }
+#menu .diff button { height: 34px; padding: 0 4px; border: 0; border-left: 1px solid rgba(236, 227, 207, 0.18); background: none; color: inherit; font: 800 14px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.7; }
+#menu .diff button:first-child { border-left: 0; }
+#menu .diff button.on { background: var(--accent); color: #140f0b; opacity: 1; }
+#menu .diff button.nm.on { background: #b773ff; }
+#menu .diff-note { margin-top: 5px; min-height: 2.5em; font: 500 11px/1.25 system-ui, sans-serif; opacity: 0.75; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9); }
 #menu .danger { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 #menu .danger button { width: 34px; height: 30px; border-radius: 6px; border: 1px solid rgba(236, 227, 207, 0.3); background: rgba(13, 10, 8, 0.6); color: inherit; font: 800 18px/1 system-ui; padding: 0; }
 #menu .danger button:disabled { opacity: 0.3; }
@@ -104,7 +121,13 @@ const CSS = `
 #menu .play:active { transform: scale(0.98); }
 #menu .foot { margin: 8px auto 0; padding: 6px 12px; border: 0; background: none; color: inherit; text-align: center; font: 500 12px/1.3 system-ui, sans-serif; opacity: 0.6; text-decoration: underline; text-underline-offset: 3px; }
 @media (min-height: 760px) { #menu .tab { height: 90px; } }
+/* Short screens (a phone browser with its bars showing): the story line gives way first. */
+@media (max-height: 700px) { #menu .chapter p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } #menu .tab { height: 62px; } #menu .logo h1 { font-size: clamp(38px, 12vw, 56px); } }
+@media (max-height: 600px) { #menu .chapter p { display: none; } #menu .logo p { display: none; } #menu .tabs { margin: 10px 0 8px; } #menu .diff-note { min-height: 0; } }
 `;
+
+/** Settings cog: a ring, a hub, and a dashed outer ring for the teeth. */
+export const COG_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="2.6" stroke-width="2.2"/><circle cx="12" cy="12" r="6.6" stroke-width="2.4"/><circle cx="12" cy="12" r="9.3" stroke-width="3" stroke-dasharray="3.65 3.654"/></svg>`;
 
 const SOUND_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5H7L12 5V19L7 14.5H3Z" fill="currentColor"/><path class="wave" d="M15.5 9A4.5 4.5 0 0 1 15.5 15M18.5 6.5A8 8 0 0 1 18.5 17.5"/><path class="mute" d="M16 9.5L21 14.5M21 9.5L16 14.5"/></svg>`;
 
@@ -135,8 +158,9 @@ export function showMainMenu(): Promise<BiomeId> {
     <div class="ui">
       <div class="top">
         <div class="logo"><small>NEON HOLLOW</small><h1>DUSTLINE</h1><p>SURVIVE THE HORDE</p></div>
-        <button type="button" class="icon" aria-label="sound">${SOUND_SVG}</button>
+        <div class="icons"><button type="button" class="icon cog" aria-label="settings">${COG_SVG}</button><button type="button" class="icon snd" aria-label="sound">${SOUND_SVG}</button></div>
       </div>
+      <div class="install" role="button" tabindex="0" hidden><b>＋ INSTALL APP</b><small>Full screen, own icon, saves that stay</small><span class="x" aria-label="hide">✕</span></div>
       <div class="grow"></div>
       <div class="chapter"></div>
       <div class="tabs">${CHAPTERS.map((c) => `<button type="button" class="tab" data-tab="${c.id}" style="background-image:url('${base}menu/${c.id}.webp')"><i>${c.numeral}</i><b>${c.name.replace(/^The /, "")}</b></button>`).join("")}</div>
@@ -154,6 +178,8 @@ export function showMainMenu(): Promise<BiomeId> {
   }
 
   let heroRefresh = () => {};
+  /** The chapter is being redrawn in place (its difficulty or danger changed). */
+  let refresh = false;
   const select = (i: number, sound = true) => {
     index = (i + CHAPTERS.length) % CHAPTERS.length;
     heroRefresh();
@@ -168,18 +194,37 @@ export function showMainMenu(): Promise<BiomeId> {
     else if (p.best) chips.unshift(`<span class="done">Best · level ${p.best}/${f.levels}</span>`);
     const top = dangerUnlocked(c.id), danger = chosenDanger(c.id);
     const dangerRow = top > 0 ? `<div class="danger"><button type="button" class="dn" ${danger <= 0 ? "disabled" : ""}>‹</button><b>DANGER ${danger}</b><button type="button" class="up" ${danger >= top ? "disabled" : ""}>›</button><small></small></div>` : "";
-    chapterEl.innerHTML = `<div class="kicker">CHAPTER ${c.numeral}</div><h2></h2><p></p><div class="chips">${chips.join("")}</div>${dangerRow}`;
+    // Difficulty: picked here once per chapter (remembered), not asked again before every run.
+    const all = BIOMES[c.id].campaign?.difficulties;
+    const ids = all ? Object.keys(all) : [];
+    const intended = BIOMES[c.id].campaign?.defaultDifficulty;
+    const difficulty = ids.length ? chosenDifficulty(c.id, ids, intended) : "";
+    const diffRow = ids.length > 1 ? `<div class="diff" role="radiogroup" aria-label="difficulty">${ids.map((id) => `<button type="button" role="radio" aria-checked="${id === difficulty}" class="${id === difficulty ? "on" : ""}${id === "nightmare" ? " nm" : ""}" data-diff="${id}">${all![id].label}</button>`).join("")}</div><div class="diff-note"></div>` : "";
+    chapterEl.innerHTML = `<div class="kicker">CHAPTER ${c.numeral}</div><h2></h2><p></p><div class="chips">${chips.join("")}</div>${diffRow}${dangerRow}`;
+    if (diffRow) {
+      chapterEl.querySelector(".diff-note")!.textContent = `${difficulty === intended ? "Intended · " : ""}${all![difficulty].text}`;
+      chapterEl.querySelectorAll<HTMLElement>("[data-diff]").forEach((el) => el.addEventListener("click", () => {
+        if (el.dataset.diff === difficulty) return;
+        chooseDifficulty(c.id, el.dataset.diff!);
+        refresh = true;
+        select(index);
+        refresh = false;
+      }));
+    }
     if (top > 0) {
       chapterEl.querySelector(".danger small")!.textContent = `${dangerSummary(danger)}${danger > 0 ? ` · Dust x${dangerMods(danger).dust.toFixed(2)}` : ""}`;
-      chapterEl.querySelector(".dn")!.addEventListener("click", () => { chooseDanger(c.id, danger - 1); select(index); });
-      chapterEl.querySelector(".up")!.addEventListener("click", () => { chooseDanger(c.id, danger + 1); select(index); });
+      const redraw = () => { refresh = true; select(index); refresh = false; };
+      chapterEl.querySelector(".dn")!.addEventListener("click", () => { chooseDanger(c.id, danger - 1); redraw(); });
+      chapterEl.querySelector(".up")!.addEventListener("click", () => { chooseDanger(c.id, danger + 1); redraw(); });
     }
     chapterEl.querySelector("h2")!.textContent = c.name;
     chapterEl.querySelector("p")!.textContent = c.tagline;
-    // Restart the entry animation.
-    chapterEl.style.animation = "none";
-    void chapterEl.offsetWidth;
-    chapterEl.style.animation = "";
+    // Restart the entry animation (not when only a setting of this chapter changed).
+    if (!refresh) {
+      chapterEl.style.animation = "none";
+      void chapterEl.offsetWidth;
+      chapterEl.style.animation = "";
+    }
     audio.music(BIOME_AUDIO[c.id]?.music ?? null);
     if (sound) audio.play("ui");
   };
@@ -228,7 +273,12 @@ export function showMainMenu(): Promise<BiomeId> {
     audio.play("ui");
     showCredits();
   });
-  const soundButton = root.querySelector<HTMLElement>(".icon")!;
+  root.querySelector(".cog")!.addEventListener("click", () => {
+    audio.play("ui");
+    showSettings();
+  });
+  setupInstall(root.querySelector<HTMLElement>(".install")!, () => audio.play("ui"));
+  const soundButton = root.querySelector<HTMLElement>(".snd")!;
   soundButton.classList.toggle("off", audio.muted);
   soundButton.addEventListener("click", () => {
     audio.setMuted(!audio.muted);
@@ -259,6 +309,8 @@ export function showMainMenu(): Promise<BiomeId> {
       } catch {
         /* storage unavailable */
       }
+      // A tap on Play: ask the browser to keep this site's saves.
+      keepSaves();
       audio.play("upgrade");
       root.classList.add("gone");
       setTimeout(() => root.remove(), 500);

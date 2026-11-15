@@ -1,3 +1,5 @@
+import { onSettings, settings } from "../settings";
+
 /**
  * Game audio on Web Audio: short one-shot effects and a looping music track, built by
  * scripts/build-audio.mjs into public/audio/ (small mono mp3, a few variants per sound).
@@ -123,10 +125,17 @@ class AudioManager {
     this.master.gain.value = this.muted ? 0 : 1;
     this.master.connect(this.ctx.destination);
     this.sfx = this.ctx.createGain();
+    this.sfx.gain.value = settings.sfx;
     this.sfx.connect(this.master);
     this.musicBus = this.ctx.createGain();
-    this.musicBus.gain.value = MUSIC_VOLUME;
+    this.musicBus.gain.value = MUSIC_VOLUME * settings.music;
     this.musicBus.connect(this.master);
+    // The settings menu's volume sliders.
+    onSettings((v) => {
+      if (!this.ctx) return;
+      this.sfx?.gain.setTargetAtTime(v.sfx, this.ctx.currentTime, 0.03);
+      this.musicBus?.gain.setTargetAtTime(MUSIC_VOLUME * v.music, this.ctx.currentTime, 0.03);
+    });
     let htmlKick = false;
     const unlock = () => {
       const ctx = this.ctx;
@@ -328,6 +337,33 @@ class AudioManager {
     gain.connect(this.musicBus);
     source.start(now, source.loopStart);
     this.musicSource = { source, gain };
+  }
+
+  /**
+   * One heartbeat ("lub-dub"), synthesised: two low thumps through the sound bus. The low-health
+   * warning calls it on its own beat.
+   */
+  heartbeat(volume = 1): void {
+    const ctx = this.ctx;
+    if (!ctx || this.muted || !this.unlocked || ctx.state !== "running" || !this.sfx) return;
+    const thump = (at: number, hz: number, level: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(hz, at);
+      osc.frequency.exponentialRampToValueAtTime(hz * 0.55, at + 0.14);
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(level, at + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.2);
+      osc.connect(gain);
+      gain.connect(this.sfx!);
+      osc.start(at);
+      osc.stop(at + 0.22);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+    };
+    const now = ctx.currentTime;
+    thump(now, 78, 0.9 * volume);
+    thump(now + 0.16, 62, 0.65 * volume);
   }
 
   /**

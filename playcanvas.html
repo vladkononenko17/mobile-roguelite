@@ -3,11 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
-    <meta name="theme-color" content="#c79a6b" />
-    <title>Dustline 3D Prototype</title>
-    <link rel="icon" href="%BASE_URL%icon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#0d0a08" />
+    <title>Dustline</title>
+    <!-- Installable (Add to Home Screen): full screen, its own icon, and saves the browser does not clear. -->
+    <link rel="manifest" href="%BASE_URL%dustline.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Dustline" />
+    <link rel="apple-touch-icon" href="%BASE_URL%app/apple-touch-icon.png" />
+    <link rel="icon" href="%BASE_URL%app/icon-192.png" type="image/png" />
     <style>
-      html, body { margin: 0; height: 100%; overflow: hidden; background: #66503e; touch-action: none; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0a08; touch-action: none; }
       body { font: 12px/1.4 system-ui, sans-serif; color: #f3e7d3; }
       #app-canvas { display: block; width: 100%; height: 100%; }
       /* Loading screen: brand on boot, then the chapter's key art, name, a gameplay tip and the bar. */

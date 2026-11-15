@@ -187,3 +187,25 @@ export function checkQuests(): QuestDef[] {
   saveProfile();
   return done;
 }
+
+/**
+ * The difficulty chosen for a chapter (title screen; remembered in this browser), else the chapter's
+ * intended one, else the first. `ids`: the chapter's difficulties.
+ */
+export function chosenDifficulty(chapter: string, ids: readonly string[], intended?: string): string {
+  let last: string | null = null;
+  try {
+    last = globalThis.localStorage?.getItem(`${chapter}.difficulty`) ?? null;
+  } catch {
+    /* storage unavailable */
+  }
+  return last && ids.includes(last) ? last : intended && ids.includes(intended) ? intended : ids[0];
+}
+
+export function chooseDifficulty(chapter: string, id: string): void {
+  try {
+    globalThis.localStorage?.setItem(`${chapter}.difficulty`, id);
+  } catch {
+    /* storage unavailable */
+  }
+}
