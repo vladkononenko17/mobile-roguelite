@@ -1,6 +1,7 @@
 import { audio } from "../audio/Audio";
 import { setSetting, settings, type Settings } from "../settings";
 import { sheet } from "./ProfileScreens";
+import { installKind, startInstall } from "./Install";
 import { exportSave, importSave } from "../saveData";
 import { BIOMES } from "../world/level/Biomes";
 
@@ -34,7 +35,7 @@ const CSS = `
  * The settings sheet (title screen and pause menu): music and sound volume, screen shake, damage
  * numbers, the battery saver, and a replay of the first-run hints. Every change applies at once.
  */
-export function showSettings(onClose: () => void = () => {}): void {
+export function showSettings(onClose: () => void = () => {}, links: { label: string; note: string; onClick: () => void }[] = []): void {
   if (!document.getElementById("settings-css")) {
     const style = document.createElement("style");
     style.id = "settings-css";
@@ -114,6 +115,24 @@ export function showSettings(onClose: () => void = () => {}): void {
       redraw();
     });
     list.append(save);
+
+    // Rows that open another screen (install, credits): this sheet closes first.
+    const link = (label: string, note: string, onClick: () => void) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "set";
+      row.innerHTML = `<b></b><span class="act">OPEN</span><small></small>`;
+      row.querySelector("b")!.textContent = label;
+      row.querySelector("small")!.textContent = note;
+      row.addEventListener("click", () => {
+        audio.play("ui");
+        box.querySelector<HTMLElement>(".close")?.click();
+        onClick();
+      });
+      list.append(row);
+    };
+    if (installKind()) link("Install app", "Add Dustline to your Home Screen: full screen, its own icon", startInstall);
+    for (const l of links) link(l.label, l.note, l.onClick);
   }, onClose);
 }
 

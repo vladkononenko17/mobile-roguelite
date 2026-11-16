@@ -1,6 +1,7 @@
 // "Install app": Dustline as a Home Screen app (full screen, its own icon, saves the browser does
 // not clear). Android / desktop Chrome offer a real prompt (beforeinstallprompt, kept here until the
-// player asks); iOS has no prompt, so the player is shown the three taps. Hidden once installed.
+// player asks); iOS has no prompt, so the player is shown the three taps. Offered in the settings
+// (not once installed).
 
 import { sheet } from "./ProfileScreens";
 
@@ -10,18 +11,14 @@ interface InstallPromptEvent extends Event {
 }
 
 let promptEvent: InstallPromptEvent | null = null;
-const listeners = new Set<() => void>();
-const DISMISS_KEY = "dustline.install.hidden";
 
 if (typeof window !== "undefined") {
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     promptEvent = e as InstallPromptEvent;
-    for (const fn of listeners) fn();
   });
   window.addEventListener("appinstalled", () => {
     promptEvent = null;
-    for (const fn of listeners) fn();
   });
 }
 
@@ -41,14 +38,6 @@ export function installKind(): "prompt" | "ios" | null {
   return isIos() ? "ios" : null;
 }
 
-function dismissed(): boolean {
-  try {
-    return localStorage.getItem(DISMISS_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
 /** Asks the browser to keep this site's saves (not cleared when storage runs low or the site goes unvisited). */
 export function keepSaves(): void {
   try {
@@ -58,29 +47,15 @@ export function keepSaves(): void {
   }
 }
 
-/**
- * Wires the title screen's install pill: shown while the game can be installed and the player has
- * not closed it; a tap opens the browser's prompt, or the iOS steps.
- */
-export function setupInstall(pill: HTMLElement, onSound: () => void): void {
-  const show = () => { pill.hidden = !installKind() || dismissed(); };
-  show();
-  listeners.add(show);
-  pill.querySelector(".x")?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    try { localStorage.setItem(DISMISS_KEY, "1"); } catch { /* storage unavailable */ }
-    show();
-  });
-  pill.addEventListener("click", () => {
-    onSound();
-    if (promptEvent) {
-      const e = promptEvent;
-      promptEvent = null;
-      void e.prompt().then(() => e.userChoice).then(show, show);
-      return;
-    }
-    showIosSteps();
-  });
+/** Starts the install (settings: "Install app"): the browser's prompt, or the iOS steps. */
+export function startInstall(): void {
+  if (promptEvent) {
+    const e = promptEvent;
+    promptEvent = null;
+    void e.prompt().catch(() => {});
+    return;
+  }
+  showIosSteps();
 }
 
 const CSS = `
