@@ -56,6 +56,7 @@ function glow(color: Color): StandardMaterial {
   material.emissive.copy(color);
   material.useLighting = false;
   material.blendType = BLEND_ADDITIVE;
+  material.useFog = false; // additive: fog would add its colour over the whole quad
   material.depthWrite = false;
   material.update();
   return material;
@@ -220,6 +221,7 @@ export class Effects {
       m.emissiveMap = this.softGlowTexture;
       m.useLighting = false;
       m.blendType = BLEND_ADDITIVE;
+      m.useFog = false; // additive: fog would add its colour over the whole quad
       m.depthWrite = false;
       m.update();
       this.groundGlows.set(key, m);

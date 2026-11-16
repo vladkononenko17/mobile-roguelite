@@ -6,7 +6,8 @@ import { DROPS, PLAYER_COMBAT, UPGRADES, type UpgradeId } from "./config";
 import { badgeCanvas, CATEGORY_COLORS, type UpgradeCategory } from "../ui/UpgradeIcons";
 
 /** Pickup kinds. "cash" is the run currency (spent between levels). */
-export type PickupKind = "cash" | "health" | "upgrade";
+/** "chest": an elite's treasure chest (a gold box under a glowing halo; opens a reward screen). */
+export type PickupKind = "cash" | "health" | "upgrade" | "chest";
 
 interface Pickup {
   entity: Entity;
@@ -43,9 +44,11 @@ function material(color: Color, glow: number): StandardMaterial {
   return m;
 }
 
-const BOX_LOOK: Record<"health", { size: [number, number, number]; material: () => StandardMaterial }> = {
+const BOX_LOOK: Record<"health" | "chest", { size: [number, number, number]; material: () => StandardMaterial }> = {
   // A flat red plus sign (the second bar is a child); red so it never reads as green cash.
   health: { size: [0.36, 0.12, 0.12], material: () => material(new Color(0.95, 0.22, 0.2), 0.5) },
+  // A glowing gold chest.
+  chest: { size: [0.62, 0.42, 0.42], material: () => material(new Color(1, 0.78, 0.25), 0.75) },
 };
 
 type Box = [[number, number, number], [number, number, number], [number, number, number]];
@@ -112,7 +115,7 @@ const BADGE_SIZE = 0.72;
 export class Pickups {
   private readonly items: Pickup[] = [];
   private readonly root = new Entity("Pickups");
-  private readonly materials = new Map<"health", StandardMaterial>();
+  private readonly materials = new Map<"health" | "chest", StandardMaterial>();
   /** Upgrade badge materials per upgrade (icon texture), glow materials per category. */
   private readonly badgeMaterials = new Map<UpgradeId, StandardMaterial>();
   private readonly glowMaterials = new Map<UpgradeCategory, StandardMaterial>();
@@ -159,7 +162,7 @@ export class Pickups {
     }
   }
 
-  private boxMaterial(kind: "health"): StandardMaterial {
+  private boxMaterial(kind: "health" | "chest"): StandardMaterial {
     let m = this.materials.get(kind);
     if (!m) this.materials.set(kind, (m = BOX_LOOK[kind].material()));
     return m;
@@ -226,9 +229,18 @@ export class Pickups {
     p.position.set(x + (Math.random() - 0.5) * 0.8, 0, z + (Math.random() - 0.5) * 0.8);
     p.upgrade = kind === "upgrade" ? upgrade ?? UPGRADES[0].id : null;
     p.cash.enabled = kind === "cash";
-    p.box.enabled = kind === "health";
-    p.token.enabled = kind === "upgrade";
-    if (p.upgrade) {
+    p.box.enabled = kind === "health" || kind === "chest";
+    p.token.enabled = kind === "upgrade" || kind === "chest";
+    p.badge.enabled = kind === "upgrade";
+    p.bar.enabled = false;
+    if (kind === "chest") {
+      // Chests wait (they are the reward of a hard fight).
+      p.life = DROPS.lifetime * 3;
+      const look = BOX_LOOK.chest;
+      p.box.render!.meshInstances[0].material = this.boxMaterial("chest");
+      p.box.setLocalScale(look.size[0], look.size[1], look.size[2]);
+      p.glow.render!.meshInstances[0].material = this.glowMaterial("special");
+    } else if (p.upgrade) {
       const def = UPGRADES.find((u) => u.id === p.upgrade)!;
       p.badge.render!.meshInstances[0].material = this.badgeMaterial(def.id);
       p.glow.render!.meshInstances[0].material = this.glowMaterial(def.category);
@@ -254,8 +266,8 @@ export class Pickups {
   }
 
   /** `vacuum`: everything flies to the hero (end of a level). */
-  update(dt: number, player: Vec3, scale: number, vacuum = false): void {
-    const magnet = vacuum ? 1000 : PLAYER_COMBAT.magnetRadius, grab = PLAYER_COMBAT.pickupRadius;
+  update(dt: number, player: Vec3, scale: number, vacuum = false, magnetScale = 1): void {
+    const magnet = vacuum ? 1000 : PLAYER_COMBAT.magnetRadius * magnetScale, grab = PLAYER_COMBAT.pickupRadius;
     for (const p of this.items) {
       if (!p.active) continue;
       // Collected: shrink while flying up into the hero's chest (purely visual; already counted).
@@ -293,7 +305,7 @@ export class Pickups {
         p.position.x += (dx / d) * step;
         p.position.z += (dz / d) * step;
       }
-      const cash = p.kind === "cash", token = p.kind === "upgrade";
+      const cash = p.kind === "cash", token = p.kind === "upgrade" || p.kind === "chest";
       p.spin += dt * (cash ? 70 : 140);
       if (token) {
         // Floats higher, bobs, sways (a full spin would hide the icon) and its halo breathes.

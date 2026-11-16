@@ -1,3 +1,5 @@
+import { onSettings, settings } from "../settings";
+
 /**
  * Game audio on Web Audio: short one-shot effects and a looping music track, built by
  * scripts/build-audio.mjs into public/audio/ (small mono mp3, a few variants per sound).
@@ -8,7 +10,8 @@
  *   skipped; `preload` fetches what a map needs up front.
  * - Positional one-shots fade with distance from the listener (the hero) and pan left / right in
  *   screen space; RULES caps simultaneous voices and repeat rate per sound (rapid fire, hordes).
- * - Music crossfades between tracks (the chapter's loop, the boss theme).
+ * - Music crossfades between tracks (the chapter's loop, the boss theme); an ambience bed (wind,
+ *   surf, the station's hum) loops quietly under it during a run.
  * - Muting is remembered in localStorage (the HUD's speaker button).
  */
 
@@ -27,7 +30,36 @@ const RULES: Record<string, Rule> = {
   shot_shotgun: { volume: 0.55, pitch: 0.05, voices: 2 },
   shot_plasma: { volume: 0.3, pitch: 0.08, voices: 4 },
   shot_hellfire: { volume: 0.55, pitch: 0.05, voices: 2 },
+  shot_handcannon: { volume: 0.6, pitch: 0.05, voices: 2 },
+  shot_smg: { volume: 0.45, pitch: 0.06, voices: 4 },
+  shot_uzi: { volume: 0.36, pitch: 0.07, voices: 4 },
+  shot_autoshotgun: { volume: 0.5, pitch: 0.05, voices: 2 },
+  shot_battle: { volume: 0.45, pitch: 0.05, voices: 3 },
+  shot_marksman: { volume: 0.6, pitch: 0.04, voices: 2 },
+  shot_pulse: { volume: 0.22, pitch: 0.1, voices: 4 },
+  shot_railgun: { volume: 0.42, pitch: 0.03, voices: 2 },
   reload: { volume: 0.45, voices: 1 },
+  reload_shotgun: { volume: 0.45, voices: 1 },
+  reload_rifle: { volume: 0.45, voices: 1 },
+  reload_energy: { volume: 0.6, voices: 1 },
+  dash: { volume: 0.5, pitch: 0.08, voices: 2 },
+  // Bullets landing: quiet, under the enemy's own voice.
+  hit_flesh: { volume: 0.2, pitch: 0.15, voices: 3, gap: 0.045 },
+  hit_metal: { volume: 0.16, pitch: 0.15, voices: 3, gap: 0.045 },
+  pickup: { volume: 0.4, pitch: 0.08, voices: 2, gap: 0.05 },
+  chest: { volume: 0.6, voices: 1 },
+  ui_open: { volume: 0.9, pitch: 0.06, voices: 1, gap: 0.12 },
+  ui_close: { volume: 0.45, pitch: 0.06, voices: 1, gap: 0.12 },
+  banish: { volume: 0.45, voices: 1 },
+  stamp: { volume: 0.5, voices: 1 },
+  buy: { volume: 0.9, pitch: 0.05, voices: 2 },
+  deny: { volume: 0.4, voices: 1, gap: 0.15 },
+  reroll: { volume: 0.85, voices: 1 },
+  lock: { volume: 0.9, voices: 1 },
+  bell: { volume: 0.6, voices: 2 },
+  sting_clear: { volume: 0.5, voices: 1 },
+  sting_win: { volume: 0.6, voices: 1 },
+  sting_dead: { volume: 0.5, voices: 1 },
   step_sand: { volume: 0.12, pitch: 0.1, voices: 2 },
   step_concrete: { volume: 0.13, pitch: 0.1, voices: 2 },
   step_metal: { volume: 0.09, pitch: 0.1, voices: 2 },
@@ -65,6 +97,8 @@ const PAN_RANGE = 14;
 const PAN_MAX = 0.7;
 const MUSIC_VOLUME = 0.6;
 const MUSIC_FADE = 1.6;
+/** The chapter's ambience bed (wind, surf, the station's hum), on the sound bus under everything. */
+const AMBIENCE_VOLUME = 0.3;
 const STORAGE_KEY = "roguelite.sound";
 
 export interface PlayOptions {
@@ -96,8 +130,14 @@ class AudioManager {
   private yawCos = 1;
   private musicId: string | null = null;
   private musicSource: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private ambienceId: string | null = null;
+  private ambienceSource: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
   private unlocked = false;
   muted = false;
+  /** The game's pause menu is open (sound suspended until it closes). */
+  private paused = false;
+  /** Plays a blank inside a gesture and resumes the context (set up by init). */
+  private kick: () => void = () => {};
 
   /** Creates the context and hooks the unlock gesture; `base`: the site's base URL. */
   init(base: string): void {
@@ -119,14 +159,21 @@ class AudioManager {
     this.master.gain.value = this.muted ? 0 : 1;
     this.master.connect(this.ctx.destination);
     this.sfx = this.ctx.createGain();
+    this.sfx.gain.value = settings.sfx;
     this.sfx.connect(this.master);
     this.musicBus = this.ctx.createGain();
-    this.musicBus.gain.value = MUSIC_VOLUME;
+    this.musicBus.gain.value = MUSIC_VOLUME * settings.music;
     this.musicBus.connect(this.master);
+    // The settings menu's volume sliders.
+    onSettings((v) => {
+      if (!this.ctx) return;
+      this.sfx?.gain.setTargetAtTime(v.sfx, this.ctx.currentTime, 0.03);
+      this.musicBus?.gain.setTargetAtTime(MUSIC_VOLUME * v.music, this.ctx.currentTime, 0.03);
+    });
     let htmlKick = false;
     const unlock = () => {
       const ctx = this.ctx;
-      if (!ctx || document.hidden || (this.unlocked && ctx.state === "running")) return;
+      if (!ctx || document.hidden || (this.unlocked && (ctx.state === "running" || this.paused))) return;
       // iOS: a (silent) sound started inside the gesture opens the output; an HTML audio element
       // played once moves older iOS to the playback session (sound with the silent switch on).
       const blank = ctx.createBufferSource();
@@ -143,6 +190,7 @@ class AudioManager {
         this.unlocked = true;
         // Music asked for before the gesture starts now.
         if (!this.musicSource && this.musicId) this.startMusic(this.musicId);
+        if (!this.ambienceSource && this.ambienceId) this.startAmbience(this.ambienceId);
       }, () => {});
     };
     // Resumed on every gesture until it runs (iOS also "interrupts" it after calls / backgrounding).
@@ -150,8 +198,27 @@ class AudioManager {
     document.addEventListener("visibilitychange", () => {
       if (!this.ctx) return;
       if (document.hidden) void this.ctx.suspend();
-      else if (this.unlocked) void this.ctx.resume().catch(() => {});
+      else if (this.unlocked && !this.paused) void this.ctx.resume().catch(() => {});
     });
+    this.kick = () => {
+      const ctx = this.ctx;
+      if (!ctx) return;
+      const blank = ctx.createBufferSource();
+      blank.buffer = ctx.createBuffer(1, 1, 22050);
+      blank.connect(ctx.destination);
+      blank.start(0);
+      void ctx.resume().then(() => {
+        this.unlocked = true;
+        if (!this.musicSource && this.musicId && !this.muted) this.startMusic(this.musicId);
+        if (!this.ambienceSource && this.ambienceId && !this.muted) this.startAmbience(this.ambienceId);
+      }, () => {});
+    };
+    // Safari can stop the output by itself ("interrupted", or suspended after a modal / route change):
+    // while playing, try to bring it back every second (a later tap also does).
+    window.setInterval(() => {
+      const ctx = this.ctx;
+      if (ctx && this.unlocked && !this.paused && !document.hidden && ctx.state !== "running") void ctx.resume().catch(() => {});
+    }, 1000);
     this.loadCounts();
   }
 
@@ -267,6 +334,52 @@ class AudioManager {
     if (id && this.unlocked && !this.muted) this.startMusic(id);
   }
 
+  /** Fades to ambience loop `id` (null: none): the place itself, under the music and the fight. */
+  ambience(id: string | null): void {
+    if (id === this.ambienceId) return;
+    this.ambienceId = id;
+    this.fadeOut(this.ambienceSource);
+    this.ambienceSource = null;
+    if (id && this.unlocked && !this.muted) this.startAmbience(id);
+  }
+
+  private fadeOut(m: { source: AudioBufferSourceNode; gain: GainNode } | null): void {
+    const ctx = this.ctx;
+    if (!ctx || !m) return;
+    const now = ctx.currentTime;
+    m.gain.gain.cancelScheduledValues(now);
+    m.gain.gain.setValueAtTime(m.gain.gain.value, now);
+    m.gain.gain.linearRampToValueAtTime(0, now + MUSIC_FADE);
+    m.source.stop(now + MUSIC_FADE + 0.05);
+  }
+
+  private startAmbience(id: string): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.sfx) return;
+    const buffers = this.buffers.get(id);
+    if (!Array.isArray(buffers)) {
+      const pending = buffers instanceof Promise ? buffers : this.loadCounts().then(() => this.load(id) ?? undefined);
+      void pending.then(() => {
+        if (this.ambienceId === id && !this.ambienceSource && this.unlocked && !this.muted && Array.isArray(this.buffers.get(id))) this.startAmbience(id);
+      });
+      return;
+    }
+    const buffer = buffers[0];
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.loopStart = Math.min(0.05, buffer.duration / 4);
+    source.loopEnd = Math.max(source.loopStart + 0.1, buffer.duration - 0.05);
+    const gain = ctx.createGain();
+    const now = ctx.currentTime;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(AMBIENCE_VOLUME, now + MUSIC_FADE);
+    source.connect(gain);
+    gain.connect(this.sfx);
+    source.start(now, source.loopStart);
+    this.ambienceSource = { source, gain };
+  }
+
   private fadeOutMusic(): void {
     const ctx = this.ctx;
     const m = this.musicSource;
@@ -308,6 +421,45 @@ class AudioManager {
     this.musicSource = { source, gain };
   }
 
+  /**
+   * One heartbeat ("lub-dub"), synthesised: two low thumps through the sound bus. The low-health
+   * warning calls it on its own beat.
+   */
+  heartbeat(volume = 1): void {
+    const ctx = this.ctx;
+    if (!ctx || this.muted || !this.unlocked || ctx.state !== "running" || !this.sfx) return;
+    const thump = (at: number, hz: number, level: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(hz, at);
+      osc.frequency.exponentialRampToValueAtTime(hz * 0.55, at + 0.14);
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(level, at + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.2);
+      osc.connect(gain);
+      gain.connect(this.sfx!);
+      osc.start(at);
+      osc.stop(at + 0.22);
+      osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+    };
+    const now = ctx.currentTime;
+    thump(now, 78, 0.9 * volume);
+    thump(now + 0.16, 62, 0.65 * volume);
+  }
+
+  /**
+   * The game's pause menu: suspends all sound; unpausing resumes it at once. Call `setPaused(false)`
+   * from the tap / click handler, so Safari treats the resume as part of the user gesture.
+   */
+  setPaused(paused: boolean): void {
+    if (this.paused === paused) return;
+    this.paused = paused;
+    if (!this.ctx) return;
+    if (paused) void this.ctx.suspend().catch(() => {});
+    else if (!document.hidden) this.kick();
+  }
+
   /** Mutes / unmutes everything (remembered). */
   setMuted(muted: boolean): void {
     this.muted = muted;
@@ -317,8 +469,14 @@ class AudioManager {
       /* storage unavailable */
     }
     if (this.master && this.ctx) this.master.gain.setTargetAtTime(muted ? 0 : 1, this.ctx.currentTime, 0.05);
-    if (muted) this.fadeOutMusic();
-    else if (this.musicId && !this.musicSource && this.unlocked) this.startMusic(this.musicId);
+    if (muted) {
+      this.fadeOutMusic();
+      this.fadeOut(this.ambienceSource);
+      this.ambienceSource = null;
+    } else if (this.unlocked) {
+      if (this.musicId && !this.musicSource) this.startMusic(this.musicId);
+      if (this.ambienceId && !this.ambienceSource) this.startAmbience(this.ambienceId);
+    }
   }
 }
 

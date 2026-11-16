@@ -169,6 +169,9 @@ export class ModelKit<Id extends string> {
         material.diffuseVertexColorChannel = "rgb";
       }
       material.diffuse = new Color(k, k, k);
+      // Winter kit: soot-dark burnt-out variants, and the snow caps a cold white.
+      if (material.name.endsWith("_charred")) material.diffuse = new Color(k * 0.2, k * 0.18, k * 0.17);
+      if (material.name === "snow") material.diffuse = new Color(k * 0.9, k * 0.94, k);
     }
     if (material.name === "accent") {
       // Painted trim that also glows a little: the level tints it (ShipLevel: one colour per sector).

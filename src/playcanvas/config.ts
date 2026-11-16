@@ -29,12 +29,28 @@ export interface CharacterModel {
    * to its first joint (bend only there, measure contact at the chain's tip). `curlAxis`: the local
    * axis that bends a finger toward the palm. `thickness`: finger half-thickness (m, bone space).
    */
-  fingers?: { rigid: boolean; curlAxis: Vec3Tuple; thickness: number };
+  fingers?: { rigid: boolean; curlAxis: Vec3Tuple; thickness: number; trigger?: boolean; supportJoints?: boolean };
+  /**
+   * Extra roll of the support hand about the handguard axis (degrees). The CC0 avatars' palms sit at a
+   * different roll on the hand bone than the Survivor's: without it their palm faces out, not up into
+   * the handguard, and the fingers curl beside the gun.
+   */
+  supportRollDeg?: number;
+  /** The left hand as a gun hand (dual guns: the left gun's pistol grip), if it differs from `hands.left`. */
+  leftGunHand?: GripFrame;
   /**
    * Legacy weapon placement only (weapons without `grips`): this rig's hand-bone roll about +Y
    * relative to the Vanguard's hand, which those transforms were authored on (degrees).
    */
   handRollDeg?: { left: number; right: number };
+  /**
+   * Posture on top of the clips (degrees, tilting back about the hero's own right axis): big-headed
+   * bodies lift the chest and head so the head clears the gun in the aiming and running poses.
+   */
+  posture?: { chestLiftDeg: number; headLiftDeg: number };
+  /** Arm length relative to the Survivor's (upper arm + forearm): scales the weapon stances' hand
+   *  positions, which are tuned on his long arms. */
+  reach?: number;
 }
 
 export type Vec3Tuple = [number, number, number];
@@ -58,12 +74,63 @@ export interface WeaponGrip extends GripFrame {
   rollRangeDeg?: number;
 }
 
+/**
+ * A hero model built by scripts/build-heroes.mjs: a VRM Avatar Maker person (CC0 MakeHuman assets) on
+ * the Survivor's skeleton, so it shares his clips, hand rig and grips. Its hips sit lower or higher
+ * than his, so the walk / run clips' native speeds scale with the hips height.
+ */
+/**
+ * `reach`: arm length / his; `palm`: palm-surface offset factor; `fingerK`: finger thickness factor for
+ * the grip's contact test (negative: the probe at the short finger chain's tip has to pass into the
+ * handle before it counts as touching, because these realistic fingers reach well past it).
+ */
+/** docs/HERO_HOLD.md §3: the avatar heroes' support palm point, as a share of the scaled one. */
+let SUPPORT_ALONG = 0.35;
+/** The avatar heroes' support palm surface offset (their hands are thinner than the Survivor's). */
+let SUPPORT_PALM = -1;
+let SUPPORT_ROLL = -75;
+let SUPPORT_CURL_AXIS: Vec3Tuple | null = null;
+if (typeof location !== "undefined") {
+  const q = new URLSearchParams(location.search);
+  const v = Number(q.get("support"));
+  if (v > 0) SUPPORT_ALONG = v;
+  const ax = q.get("caxis");
+  if (ax) SUPPORT_CURL_AXIS = ({ x: [1, 0, 0], "-x": [-1, 0, 0], z: [0, 0, 1], "-z": [0, 0, -1], y: [0, 1, 0], "-y": [0, -1, 0] } as Record<string, Vec3Tuple>)[ax] ?? null;
+  const rv = q.get("sroll");
+  if (rv !== null && !Number.isNaN(Number(rv))) SUPPORT_ROLL = Number(rv);
+  const pv = q.get("spalm");
+  if (pv !== null && !Number.isNaN(Number(pv))) SUPPORT_PALM = Number(pv);
+}
+
+function avatarHero(label: string, url: string, hipsY: number, knuckle: number, reach: number, palm = 1, fingerK = 1, support = SUPPORT_ALONG): CharacterModel {
+  const s = CHARACTERS_BASE.survivor;
+  const k = hipsY / 1.133;
+  // The palm grip sits at the same share of the hand (wrist to knuckles) as on his 12.2 cm hand.
+  const h = knuckle / 0.122;
+  const hand = (g: GripFrame): GripFrame => ({ ...g, position: [g.position[0] * h, g.position[1] * h, g.position[2] * palm] });
+  return {
+    ...s, label, url, walkNativeSpeed: s.walkNativeSpeed * k, runNativeSpeed: s.runNativeSpeed * k,
+    // The support palm point sits nearer the wrist (`support` of the scaled distance along the hand) so
+    // the hand spans the handguard - knuckles past its far side - and the fingers close round it.
+    hands: { right: hand(s.hands.right), left: (() => { const l = hand(s.hands.left); return { ...l, position: [l.position[0], l.position[1] * support, l.position[2] * SUPPORT_PALM] }; })() },
+    // The four fingers are bound joint for joint to the Index chain: curl every joint, and no separate
+    // trigger finger (the index moves with the others).
+    // The gun hand keeps the rigid knuckle curl (a clean block round the grip); the support hand curls
+    // every joint (supportJoints) so it closes round the handguard.
+    fingers: { ...s.fingers, supportJoints: true, trigger: false, thickness: s.fingers.thickness * fingerK, curlAxis: SUPPORT_CURL_AXIS ?? s.fingers.curlAxis },
+    reach,
+    supportRollDeg: SUPPORT_ROLL,
+    // The left gun of a dual pair is held like the right one: the plain palm, no handguard roll.
+    leftGunHand: hand(s.hands.left),
+  };
+}
+
 /** Character GLBs selectable from the tune panel. All use a Mixamo-style rig with Walking / Running clips. */
-export const CHARACTERS = {
+const CHARACTERS_BASE = {
   survivor: {
     label: "Survivor (V3)",
-    // "Zombie Apocalypse Survivor" (Mixamo rig) built by scripts/build-survivor.mjs: its own three
-    // Mixamo idles plus every Vanguard clip retargeted onto it (same bone names, bone directions
+    // "Zombie Apocalypse Survivor" by Codersan (Mixamo rig) built by scripts/build-survivor.mjs: its
+    // own three Mixamo idles plus the clips of a Meshy AI-generated rig (Meshy, CC BY 4.0) retargeted onto it (same bone names, bone directions
     // matched, so the weapon poses carry over). Texture resized to 2048 WebP.
     url: "models/survivor/survivor.glb",
     // Vanguard's clips on ~3% longer legs.
@@ -83,49 +150,20 @@ export const CHARACTERS = {
     fingers: { rigid: true, curlAxis: [1, 0, 0], thickness: 0.011 },
     handRollDeg: { left: -237.0, right: -116.8 },
   },
-  vanguard: {
-    label: "Ironclad Vanguard",
-    // Unmodified mesh, rig and all 17 animations; textures resized to max 2048 and stored as WebP
-    // (22.6 MB -> 5.4 MB).
-    url: "models/vanguard/Meshy_AI_Ironclad_Vanguard_All_Animations_2k.glb",
-    walkNativeSpeed: 1.45,
-    runNativeSpeed: 4.6,
-    // Has a real idle, so no procedural breathing. The weapon clips (Run_and_Shoot,
-    // Rifle_Charge_inplace, Running_Reload, Axe_Spin_Attack, ...) are loaded but not used yet.
-    clips: { idle: "Idle_10" },
-    proceduralIdle: false,
-    // Sculpted fists (no finger bones). Palm frames derived from the rifle hold verified on this
-    // model (grip in the right fist, left fist under the handguard).
-    hands: {
-      right: { position: [0.036, 0.026, 0.023], axis: [-0.661, 0.464, 0.589], palm: [0.499, -0.314, 0.808] },
-      left: { position: [0.067, 0.071, 0.051], axis: [0.625, -0.026, 0.78], palm: [-0.775, -0.143, 0.616] },
-    },
-  },
-  brawler2k: {
-    label: "Brawler (2K tex)",
-    // Unmodified mesh, rig, animations and materials; only textures resized 4096 -> 2048.
-    url: "models/brawler/Meshy_AI_Wasteland_Brawler_All_Animations_2k.glb",
-    walkNativeSpeed: 1.2,
-    runNativeSpeed: 3.9,
-  },
-  brawler4k: {
-    label: "Brawler (original 4K)",
-    url: "models/brawler/Meshy_AI_Wasteland_Brawler_All_Animations.glb",
-    walkNativeSpeed: 1.2,
-    runNativeSpeed: 3.9,
-  },
-  orc: {
-    label: "Iron Shoulder Orc",
-    url: "models/orc/Meshy_AI_Iron_Shoulder_Orc_All_Animations.glb",
-    walkNativeSpeed: 1.3,
-    runNativeSpeed: 3.9,
-  },
+} satisfies Record<string, CharacterModel>;
+
+export const CHARACTERS = {
+  ...CHARACTERS_BASE,
+  medic: avatarHero("Medic", "models/heroes/medic.glb", 0.831, 0.093, 0.826, 1, -1.4),
+  demolitionist: avatarHero("Demolitionist", "models/heroes/demolitionist.glb", 0.947, 0.111, 0.955, 1, -1.4),
+  drifter: avatarHero("Drifter", "models/heroes/drifter.glb", 0.933, 0.109, 0.94, 0.6, -1.4),
 } satisfies Record<string, CharacterModel>;
 
 export type CharacterId = keyof typeof CHARACTERS;
 
 /**
- * Hand-held weapons ("assetpack-free", merged by scripts/build-weapons.mjs). The chosen weapon is
+ * Hand-held weapons (Pichuliru "Flat Guns East", CC0; merged by scripts/build-weapons.mjs, made
+ * CC0-only by scripts/cc0-weapons.mjs). The chosen weapon is
  * parented to the hero's right-hand bone. Weapons point their muzzle along -Z with the origin at
  * the grip; the Mixamo hand bone points its +Y along the fingers, so +90° about X lays the barrel
  * along the hand with the weapon's top facing the back of the hand. `rollDeg` then turns the weapon
@@ -151,48 +189,40 @@ export const WEAPONS = {
   // Grip frames below were measured on each model (weapon space: muzzle -Z, top +Y; metres). `stock`
   // is the centre of the butt plate (shoulder-held classes).
   list: {
-    // "assetpack-free" (textured)
-    // Pistol grip 4.2 cm wide, slanting back from (y 0, z 0.04) to (y -0.07, z 0.075); handguard a
-    // 3 x 7 cm slab (y 0.063-0.13) from z -0.32 to -0.14. Right palm on the right side of the pistol
-    // grip, left palm under and to the left of the handguard.
+    // Every gun is Pichuliru's "Flat Guns East" (CC0). The campaign's three base guns:
+    // AK-style rifle: pistol grip slanting back (y -0.07 at z ~0.13), handguard z -0.07..-0.23
+    // (bottom y -0.02); attachment bones line up with the CC0 Flat Gun Attachments.
     rifle: {
-      label: "Assault rifle", class: "rifle", node: "assault_rifle_2", position: [-0.0057, 0.0893, 0.0247], rotation: [80.8, -42.19, 13.56], rollDeg: 0, attack: null,
+      label: "Assault rifle", class: "rifle", node: "Rifle_Assault_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
-        right: { position: [0, -0.035, 0.058], axis: [0, 0.88, -0.47], palm: [0.85, 0.25, 0.47], radius: 0.021 },
-        left: { position: [0, 0.096, -0.23], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
+        right: { position: [0, -0.073, 0.09], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
+        left: { position: [0, -0.02, -0.17], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
       },
-      magazineNode: "ar_magazine_2",
+      magazineNode: "Magazine",
+      magazineAxis: "z",
       modMounts: {
-        suppressor: { position: [0, 0.0855, -0.614] },
-        reflex: { position: [0, 0.15, -0.12] },
-        foregrip: { position: [0, 0.035, -0.3] },
+        suppressor: { anchor: "Attach_Muzzle" }, reflex: { anchor: "Attach_Scope" }, foregrip: { anchor: "Attach_Rail.Bottom" },
       },
     },
-    // 86 cm pump gun: pistol grip y -0.08..-0.01 (z 0.05-0.13, top further back), pump / fore-end
-    // under the barrel z -0.26..-0.09 (y 0-0.05), butt plate at z 0.29.
+    // Straight-stock pump gun (no pistol grip): the right hand takes the stock's wrist at z ~0.2;
+    // pump z -0.29..-0.08 under the barrel; butt z 0.42, low (y -0.045).
     shotgun: {
-      label: "Shotgun", class: "shotgun", node: "shotgun_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      label: "Shotgun", class: "shotgun", node: "Shotgun_Pump_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
-        right: { position: [0, -0.04, 0.083], axis: [0, 0.864, 0.504], palm: [0.85, -0.26, 0.45], radius: 0.02 },
-        left: { position: [0, 0.025, -0.15], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
+        right: { position: [0, -0.02, 0.2], axis: [0, 0.97, 0.24], palm: [0.85, -0.13, 0.5], radius: 0.02 },
+        left: { position: [0, 0, -0.18], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
       },
-      stock: [0, 0.005, 0.28],
+      stock: [0, -0.045, 0.42],
     },
-    sniper: { label: "Sniper rifle", class: "rifle", node: "sniper_2", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
-    // Grip y -0.06..0, z ~0.03-0.09, 2.8 cm wide; slide above it. Two-handed support grip: the left
-    // palm sits on the FRONT-LEFT of the grip, a little low (under the trigger guard), over the right
-    // hand's fingers, facing back-right into the grip; its fingers point forward-right and wrap around
-    // the front of the shooting hand. (A support palm flat on the grip's left side left the fingers
-    // sticking straight forward past the gun: an open hand floating beside it from the top camera.)
+    // Grip y -0.11..-0.03 at z ~0.06. Two-handed support grip: the left palm sits on the FRONT-LEFT
+    // of the grip, a little low, over the right hand's fingers, facing back-right into the grip.
     pistol: {
-      label: "Pistol", class: "pistol", node: "pistol_1", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      label: "Pistol", class: "pistol", node: "Pistol_Full_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
-        right: { position: [0, -0.03, 0.06], axis: [0, 0.96, -0.28], palm: [0.9, 0.08, 0.28], radius: 0.016 },
-        left: { position: [0, -0.045, 0.05], axis: [0, 0.96, -0.28], palm: [-0.7, -0.05, -0.7], radius: 0.045, rollRangeDeg: 15 },
+        right: { position: [0, -0.07, 0.06], axis: [0, 0.98, -0.21], palm: [0.9, 0.09, 0.42], radius: 0.016 },
+        left: { position: [0, -0.085, 0.055], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.026, rollRangeDeg: 15 },
       },
     },
-    knife: { label: "Knife", class: "axe", node: "tactical_knife", position: [0, 0.08, 0.01], rotation: [90, 0, 0], rollDeg: 0, attack: "Attack" },
-    grenade: { label: "Grenade", class: "axe", node: "frag_grenade", position: [0, 0.09, -0.01], rotation: [90, 0, 0], rollDeg: 0, attack: null },
     // "Flat Guns East" (flat colours)
     eastRifle: { label: "Rifle (East)", class: "rifle", node: "Rifle_Assault_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
     eastBattleRifle: { label: "Battle rifle (East)", class: "rifle", node: "Rifle_Battle_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null },
@@ -228,7 +258,7 @@ export const WEAPONS = {
       label: "Auto shotgun (East)", class: "shotgun", node: "Shotgun_Auto_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.07, 0.205], axis: [0, 0.98, -0.2], palm: [0.85, 0.1, 0.5], radius: 0.02 },
-        left: { position: [0, 0.02, -0.11], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
+        left: { position: [0, 0.02, -0.13], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
       },
       stock: [0, 0, 0.39],
     },
@@ -238,7 +268,7 @@ export const WEAPONS = {
       label: "Pump shotgun (East)", class: "shotgun", node: "Shotgun_Pump_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.02, 0.2], axis: [0, 0.97, 0.24], palm: [0.85, -0.13, 0.5], radius: 0.02 },
-        left: { position: [0, 0, -0.12], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+        left: { position: [0, 0, -0.18], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
       },
       stock: [0, -0.045, 0.42],
     },
@@ -249,39 +279,88 @@ export const WEAPONS = {
       label: "Pistol (East)", class: "pistol", node: "Pistol_Full_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.07, 0.06], axis: [0, 0.98, -0.21], palm: [0.9, 0.09, 0.42], radius: 0.016 },
-        left: { position: [0, -0.085, 0.055], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.045, rollRangeDeg: 15 },
+        left: { position: [0, -0.085, 0.055], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.026, rollRangeDeg: 15 },
       },
     },
     eastPistolCompact: {
       label: "Compact pistol (East)", class: "pistol", node: "Pistol_Compact_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
         right: { position: [0, -0.055, 0.03], axis: [0, 0.98, -0.21], palm: [0.9, 0.09, 0.42], radius: 0.016 },
-        left: { position: [0, -0.07, 0.025], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.045, rollRangeDeg: 15 },
+        left: { position: [0, -0.07, 0.025], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.026, rollRangeDeg: 15 },
       },
     },
-    // Low poly axe (handle along -Y, head at the top, blade toward -X), held ~0.62 m down the handle
-    // with the legacy placement: that carry keeps the head away from the body in idle and run, while a
-    // grip-fitted hold swung the head up by the character's head. Locomotion and attack clips move it.
-    axe: { label: "Axe", class: "axe", node: "low_poly_axe", position: [0, 0.08, 0.62], rotation: [90, 0, 0], rollDeg: 0, attack: "Axe_Spin_Attack" },
-    // Hell-chapter rifles (AR_2 / AR_3, added by scripts/add-weapons.mjs): origin at the pistol grip
-    // centre, accents on their own emissive material.
-    // Plasma: 78 cm bullpup; the support hand takes the fore-grip under the thumb hole (z -0.21).
-    plasma: {
-      // Bullpup: the hand goes through the thumb-hole round the strut behind it, so the model is scaled
-      // up (the hole must fit the fingers) and the grip sits mid-strut, not at its foot.
-      label: "Plasma rifle", class: "rifle", node: "Plasma_Rifle", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null, scale: 1.3,
+    // The arsenal's other guns (gameplay ids; the east* entries above are the raw models).
+    handCannon: {
+      label: "Hand Cannon", class: "pistol", node: "Pistol_Compact_East", position: [0, 0.08, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
-        right: { position: [0, 0.022, 0.006], axis: [0, 0.94, -0.34], palm: [0.85, 0.18, 0.49], radius: 0.02 },
-        left: { position: [0, 0.004, -0.214], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.022, rollRangeDeg: 35 },
+        right: { position: [0, -0.055, 0.03], axis: [0, 0.98, -0.21], palm: [0.9, 0.09, 0.42], radius: 0.016 },
+        left: { position: [0, -0.07, 0.025], axis: [0, 0.98, -0.21], palm: [-0.7, -0.05, -0.7], radius: 0.026, rollRangeDeg: 15 },
+      },
+      magazineNode: "Magazine", magazineAxis: "z",
+      modMounts: { suppressor: { anchor: "Attach_Muzzle" }, reflex: { anchor: "Attach_Scope" } },
+    },
+    autoShotgun: {
+      label: "Auto Shotgun", class: "shotgun", node: "Shotgun_Auto_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.07, 0.205], axis: [0, 0.98, -0.2], palm: [0.85, 0.1, 0.5], radius: 0.02 },
+        left: { position: [0, 0.02, -0.13], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.03, rollRangeDeg: 35 },
+      },
+      stock: [0, 0, 0.39],
+      magazineNode: "Magazine", magazineAxis: "z",
+      modMounts: { reflex: { anchor: "Attach_Scope" }, foregrip: { anchor: "Attach_Rail.Bottom" } },
+    },
+    // Battle rifle: grip y -0.07 at z ~0.165, handguard z -0.05..-0.235 (the plasma's frame).
+    battleRifle: {
+      label: "Battle Rifle", class: "rifle", node: "Rifle_Battle_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.073, 0.122], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
+        left: { position: [0, -0.015, -0.18], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+      },
+      magazineNode: "Magazine", magazineAxis: "z",
+      modMounts: { suppressor: { anchor: "Attach_Muzzle" }, reflex: { anchor: "Attach_Scope" }, foregrip: { anchor: "Attach_Rail.Bottom" } },
+    },
+    // Bullpup marksman rifle: the pistol grip forward (y -0.07 at z ~0), the magazine behind it,
+    // handguard z -0.12..-0.28 (bottom y -0.015).
+    marksman: {
+      label: "Marksman Rifle", class: "rifle", node: "Sniper_Material_East", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.073, -0.048], axis: [0, 0.97, -0.24], palm: [0.86, 0.14, 0.49], radius: 0.019 },
+        left: { position: [0, -0.02, -0.25], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+      },
+      magazineNode: "Magazine", magazineAxis: "z",
+      modMounts: { suppressor: { anchor: "Attach_Muzzle" }, reflex: { anchor: "Attach_Scope" }, foregrip: { anchor: "Attach_Rail.Bottom" } },
+    },
+    // Space guns (recolours by scripts/cc0-weapons.mjs, static meshes): the MP5's and the marksman's frames.
+    pulseSmg: {
+      label: "Pulse SMG", class: "rifle", node: "Pulse_SMG", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.073, 0.073], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
+        left: { position: [0, -0.006, -0.115], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.026, rollRangeDeg: 35 },
       },
     },
-    // Hellfire: 72 cm, slanted pistol grip; box magazine ahead of it; the support hand under the
-    // front of the receiver (z -0.27).
+    railgun: {
+      label: "Railgun", class: "rifle", node: "Railgun", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.073, -0.048], axis: [0, 0.97, -0.24], palm: [0.86, 0.14, 0.49], radius: 0.019 },
+        left: { position: [0, -0.02, -0.25], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+      },
+    },
+    // Hell-chapter rifles (scripts/cc0-weapons.mjs): static recolours of two East rifles, their
+    // detail parts on an emissive material. Plasma = the battle rifle in gunmetal with cyan light
+    // (grip y -0.07 at z ~0.165, handguard z -0.05..-0.235); Hellfire = the long rifle in crimson
+    // iron with ember light (grip at z ~0.18, a thin handguard z -0.04..-0.32).
+    plasma: {
+      label: "Plasma rifle", class: "rifle", node: "Plasma_Rifle", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
+      grips: {
+        right: { position: [0, -0.073, 0.122], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
+        left: { position: [0, -0.015, -0.18], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.028, rollRangeDeg: 35 },
+      },
+    },
     hellfire: {
       label: "Hellfire rifle", class: "rifle", node: "Hellfire_Rifle", position: [0, 0.09, 0.03], rotation: [90, 0, 0], rollDeg: -43, attack: null,
       grips: {
-        right: { position: [0, 0, 0], axis: [0, 0.905, -0.425], palm: [0.85, 0.22, 0.47], radius: 0.02 },
-        left: { position: [0, 0.056, -0.273], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.02, rollRangeDeg: 35 },
+        right: { position: [0, -0.073, 0.137], axis: [0, 0.96, -0.28], palm: [0.86, 0.14, 0.49], radius: 0.019 },
+        left: { position: [0, -0.005, -0.2], axis: [0, 0, -1], palm: [-0.5, -0.866, 0], radius: 0.022, rollRangeDeg: 35 },
       },
     },
   },
@@ -345,21 +424,29 @@ export const WEAPON_CLASSES: Record<WeaponClass, WeaponClassProfile> = {
     pose: "@idle", hold: "chest", anchor: [-0.02, -0.01, 0.44], pitchDeg: -4, runPitchDeg: -4, elbows: [0.8, -0.55, 0.3], elbowsLeft: [0.2, -0.9, 0.5], elbowWeight: 2,
     leftHandIK: true, fingerGrip: true, aimTwist: false,
   },
-  // The aiming clip drives the arms; hands are fitted to the rifle.
-  rifle: { pose: "Run_and_Shoot", hold: "clip", leftHandIK: true, fingerGrip: true, aimTwist: true },
+  // Rifles and SMGs the way shooters (and Battlefield / Call of Duty / GTA V heroes) hold them: the
+  // butt in the right shoulder pocket, the gun level at eye line and the head upright behind it; the
+  // gun arm's elbow out and down (~45 deg), the support elbow tucked under the gun, the support hand
+  // well forward on the handguard. At a run the stock drops off the shoulder into a low ready.
+  rifle: {
+    pose: "@idle", hold: "shoulder", anchor: [-0.05, 0.025, 0.04], pitchDeg: -2, runPitchDeg: -16, runAnchorShift: [-0.07, -0.06, 0.02],
+    elbows: [0.45, -0.85, 0.1], elbowsLeft: [0.1, -1, 0.25], elbowWeight: 1,
+    leftHandIK: true, fingerGrip: true, aimTwist: false,
+  },
   // Two compact guns held apart and pushed forward.  The hands sit close to the arms' maximum
   // reach (ArmIK keeps a small 4% safety bend), which gives the classic almost-straight dual-SMG
   // silhouette instead of tucking both elbows beside the ribs.  The light pole influence only
   // decides which way that remaining bend points.
   dual: {
-    pose: "@idle", hold: "chest", anchor: [0.17, -0.055, 0.57], pitchDeg: -3, runPitchDeg: -6,
-    runAnchorShift: [0, -0.025, -0.015], elbows: [0.35, -0.3, 0.85], elbowWeight: 0.55,
+    pose: "@idle", hold: "chest", anchor: [0.17, -0.055, 0.7], pitchDeg: -3, runPitchDeg: -6,
+    runAnchorShift: [0, -0.025, -0.015], elbows: [0.15, -1, 0.1], elbowWeight: 1,
     leftHandIK: true, fingerGrip: true, aimTwist: false,
   },
   // Stock in the right shoulder pocket (inside the shoulder joint), level; at a run the stock drops
   // off the shoulder toward the chest and the muzzle dips into a low ready carry across the body.
   shotgun: {
-    pose: "@idle", hold: "shoulder", anchor: [-0.05, -0.03, 0.04], pitchDeg: -2, runPitchDeg: -16, runAnchorShift: [-0.07, -0.06, 0.02],
+    pose: "@idle", hold: "shoulder", anchor: [-0.05, 0.025, 0.04], pitchDeg: -2, runPitchDeg: -16, runAnchorShift: [-0.07, -0.06, 0.02],
+    elbows: [0.45, -0.85, 0.1], elbowsLeft: [0.1, -1, 0.25], elbowWeight: 1,
     leftHandIK: true, fingerGrip: true, aimTwist: false,
   },
   // One-handed melee: locomotion (and attack clips) move the arm; the fingers close on the handle.
@@ -392,6 +479,18 @@ export interface WeaponDef {
 
 export type WeaponId = keyof typeof WEAPONS.list;
 export const DEFAULT_WEAPON: WeaponId | null = "rifle";
+
+/**
+ * Butt-plate centres (weapon space: muzzle -Z, top +Y; metres) of the shoulder-held guns, by model
+ * node - measured from the models (the furthest-back 1.5 cm of each, mid height). A weapon's own
+ * `stock` wins.
+ */
+export const BUTTS: Record<string, Vec3Tuple> = {
+  Rifle_Assault_East: [0, -0.03, 0.38], Rifle_Battle_East: [0, -0.041, 0.39], SMG_Full_East: [0, -0.027, 0.315],
+  Shotgun_Auto_East: [0, -0.007, 0.385], Shotgun_Pump_East: [0, -0.046, 0.418], Sniper_Material_East: [0, -0.018, 0.37],
+  Sniper_Rifle_East: [0, -0.027, 0.434], Plasma_Rifle: [0, -0.041, 0.39], Hellfire_Rifle: [0, -0.027, 0.434], Pulse_SMG: [0, -0.027, 0.315],
+  Railgun: [0, -0.018, 0.37],
+};
 export const DEFAULT_CHARACTER: CharacterId = "survivor";
 
 import type { SurfaceTextures } from "./world/Surface";
@@ -472,6 +571,16 @@ export const GROUND = {
     ghostdeck: { base: "#4a5a50", dark: "#3e4c44", light: "#56675c", speckDark: "#2a342e", speckLight: "#7fbf9a", specks: 600, slabs: 8, seam: "#1f2823", boards: true },
     /** Black Tide: the fort's worn stone and the skull rock's ledges. */
     fortstone: { base: "#a09380", dark: "#938672", light: "#ad9f8c", speckDark: "#7a6e5e", speckLight: "#c4b7a2", specks: 600, slabs: 5, seam: "#7d715f" },
+    /** Whiteout: fresh snow, blue-white with faint drift ridges. */
+    snow: { base: "#c9d1dc", dark: "#b7c0cd", light: "#dbe2ea", speckDark: "#a5afbe", speckLight: "#eef2f7", specks: 600 },
+    /** Whiteout: trodden snow and frozen mud on tracks and yards. */
+    snowpack: { base: "#9ea5ad", dark: "#8c939b", light: "#acb3ba", speckDark: "#6c6a66", speckLight: "#c3c9cf", specks: 800 },
+    /** Whiteout: grey slush over the town's asphalt, tyre-dark seams. */
+    slush: { base: "#6f747b", dark: "#62676e", light: "#7d8289", speckDark: "#4d5157", speckLight: "#a9b0b8", specks: 700, slabs: 3, seam: "#53575d" },
+    /** Whiteout: black ice on the pond and the frozen puddles. */
+    ice: { base: "#5c6f80", dark: "#526373", light: "#687c8e", speckDark: "#435260", speckLight: "#a8c0d4", specks: 300 },
+    /** Whiteout: snow soaked dark red where the dead fed. */
+    bloodsnow: { base: "#7a3b3e", dark: "#652f32", light: "#8d4a4b", speckDark: "#4a2224", speckLight: "#b9a9ad", specks: 900 },
     /** Oil, soot and dried blood trodden into the facility floor. */
     grime: { base: "#48463f", dark: "#3d3b35", light: "#524f47", speckDark: "#2e2926", speckLight: "#5e3a33", specks: 700 },
   },
@@ -678,6 +787,11 @@ export const ANIMATION = {
  * the hero faces. `share` splits the twist over the spine bones (lower back to chest).
  */
 export const AIM = {
+  /**
+   * Weapon classes held in the gun hand only (pistols): the other arm hangs relaxed at the side
+   * (player/WeaponHands.ts relaxLeft). SMGs, rifles and shotguns keep both hands on the gun.
+   */
+  oneHanded: ["pistol"] as WeaponClass[],
   maxTwistDeg: 40,
   /** Share of a gripping hand's extra roll that the forearm takes as a twist about its own axis
    * (pronation / supination) instead of the wrist (player/ArmIK.ts). */
@@ -696,6 +810,57 @@ export const AIM = {
 };
 
 /**
+ * Long-gun stance (player/WeaponHands.ts), the way Battlefield / Call of Duty / GTA V heroes stand:
+ * side-on to the target (the hips turned the gun side back), the chest turned part way back to it,
+ * leaning into the gun; the head nods onto the stock and leans to it (cheek weld). Fades at a run.
+ */
+export const AIM_STANCE = {
+  bladeDeg: 24,
+  /** Share of the blade the chest turns back toward the target. */
+  chestBack: 0.55,
+  leanDeg: 7,
+  headNodDeg: 9,
+  headTiltDeg: 8,
+};
+
+/**
+ * One-handed pistol aim (GTA V / Call of Duty / Battlefield third person): the gun out in line with the
+ * right shoulder at shoulder height, the arm nearly straight (the elbow ~20 deg, pointing down, not out);
+ * at a run the arm drops to a low ready, muzzle down. Anchor: [right, up, ahead] from the right
+ * shoulder joint, metres on the Survivor's arms (scaled by each hero's reach).
+ */
+export const ONE_HAND = {
+  anchor: [-0.05, -0.05, 0.655] as Vec3Tuple,
+  runAnchorShift: [0.02, -0.22, -0.16] as Vec3Tuple,
+  pitchDeg: -3,
+  runPitchDeg: -32,
+  elbow: [0.2, -1, 0] as Vec3Tuple,
+  /** The arm may straighten to this share of its length (elbow ~20 deg; long guns keep 0.96, ~33 deg). */
+  maxReach: 0.985,
+};
+
+/** Shot recoil on the held gun: per full kick (WeaponHolder.recoil 1) the muzzle flips and the gun drives back. */
+export const RECOIL = { pitchDeg: 7, backMetres: 0.045 };
+
+/**
+ * Reload pose: the gun tips down and rolls, the support hand goes to the magazine and to the belt.
+ * Every gun with a magazine drops the spent one early in the reload (it falls out of the well and
+ * lies on the ground a moment). Like GTA / CoD:
+ * - one-handed pistols come in from arm's length to `pistolAnchor` (from the right shoulder, metres
+ *   right / up / forward), so the free hand can reach the grip with a fresh magazine;
+ * - dual guns both come in to `dualAnchor` (from the chest, like the dual hold's anchor), muzzles
+ *   tipped up `dualTipDeg`; both magazines drop and refill, and neither hand leaves its gun.
+ */
+export const RELOAD = {
+  tipDeg: 14, rollDeg: 28, dropMetres: 0.05, pouchMetres: 0.09,
+  /** Spent magazine: dropped at this reload phase, its box (thick, long, deep in metres), seconds on the ground. */
+  ejectAt: 0.18, magSize: [0.026, 0.11, 0.034] as Vec3Tuple, magLife: 2.2,
+  pistolAnchor: [-0.12, -0.2, 0.36] as Vec3Tuple,
+  dualAnchor: [0.17, -0.1, 0.44] as Vec3Tuple,
+  dualTipDeg: 32,
+};
+
+/**
  * Procedural finger grip (player/FingerGrip.ts): each finger joint bends toward the palm, after the
  * animation, until the finger meets the held handle (a cylinder around the weapon grip's axis).
  */
@@ -706,7 +871,13 @@ export const FINGER_GRIP = {
   stepDeg: 3,
   /** Right index finger on a trigger: bent this fraction of its wrap (only rigs with separate fingers). */
   triggerCurl: 0.55,
+  /** Least bend per joint of a support hand's fingers on a long gun (degrees): closed round the handguard. */
+  supportMinDeg: 60,
 };
+if (typeof location !== "undefined") {
+  const v = new URLSearchParams(location.search).get("curl");
+  if (v !== null && Number(v) >= 0) FINGER_GRIP.supportMinDeg = Number(v);
+}
 
 /** Procedural breathing idle generated from the rest pose (see player/BreathingIdle.ts). */
 export const IDLE = {
@@ -873,6 +1044,40 @@ export const PIRATE_LIGHTING: LightingSpec = {
 export const PIRATE = {
   url: "models/pirate/pirate-kit.glb",
   brightness: 1.05,
+  batchCellMetres: 14,
+};
+
+/**
+ * Whiteout (the winter chapter): a cold blue dusk going to night, low pale moon for long shadows,
+ * thick snow haze that swallows everything past ~30 m. Each zone darkens (WINTER moods in
+ * WinterLevel.ts); fires, street lamps and the hero's flashlight are the warm points in it.
+ */
+export const WINTER_LIGHTING: LightingSpec = {
+  sun: {
+    color: [0.62, 0.72, 1.0],
+    intensity: 1.5,
+    elevationDeg: 30,
+    azimuthDeg: 320,
+    shadowResolution: 1024,
+    shadowDistance: 38,
+    shadowBias: 0.2,
+    normalOffsetBias: 0.04,
+    shadowIntensity: 0.85,
+  },
+  fill: { color: [0.45, 0.55, 0.9], intensity: 0.35, elevationDeg: 25, azimuthDeg: 140 },
+  rim: { color: [1.0, 0.7, 0.45], intensity: 1.1, elevationDeg: 30, azimuthDeg: 190 },
+  environment: { zenith: [0.14, 0.17, 0.27], horizon: [0.42, 0.46, 0.58], ground: [0.5, 0.54, 0.62], intensity: 0.5 },
+  exposure: 1.0,
+  groundAmbient: [0.5, 0.58, 0.78],
+  clearColor: [0.22, 0.25, 0.32],
+  fogStart: 14,
+  fogEnd: 46,
+};
+
+/** The winter chapter's kit: Kenney CC0 packs merged (with snow caps) by scripts/build-winter-kit.mjs. */
+export const WINTER = {
+  url: "models/winter/winter-kit.glb",
+  brightness: 0.95,
   batchCellMetres: 14,
 };
 

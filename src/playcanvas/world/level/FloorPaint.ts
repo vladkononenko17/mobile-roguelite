@@ -118,6 +118,7 @@ export class FloorPaint {
       material.emissiveVertexColorChannel = "rgb";
       material.useLighting = false;
       material.blendType = BLEND_ADDITIVE;
+    material.useFog = false; // additive: fog would add its colour over the whole quad
     } else {
       material.diffuseMap = texture;
       material.diffuseVertexColor = true;

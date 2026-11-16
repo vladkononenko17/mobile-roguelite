@@ -7,6 +7,8 @@ function flat(color: Color, opacity: number, additive = false): StandardMaterial
   material.useLighting = false;
   material.opacity = opacity;
   material.blendType = additive ? BLEND_ADDITIVE : BLEND_NORMAL;
+  // Additive: fog would add its colour over the whole quad.
+  if (additive) material.useFog = false;
   material.depthWrite = false;
   material.update();
   return material;

@@ -43,7 +43,7 @@ test("black tide: every look's model, gear and skins exist", () => {
   }
   for (const [id, url] of Object.entries(PIRATE_SKINS)) assert.ok(fs.existsSync(pub(url)), `${id}: ${url}`);
   for (const [type, skins] of Object.entries(PIRATE_TYPE_SKINS)) for (const s of skins) assert.ok(PIRATE_SKINS[s], `${type}: ${s}`);
-  for (const e of Object.values(PIRATE_ENEMIES)) for (const v of e.visuals) assert.ok(PIRATE_VISUALS[v] || v.startsWith("zombie"), `${e.label}: ${v}`);
+  for (const e of Object.values(PIRATE_ENEMIES)) for (const v of e.visuals) assert.ok(PIRATE_VISUALS[v] || v.startsWith("zombie") || v === "drownedRotter" || /^zs[A-Z]/.test(v), `${e.label}: ${v}`);
   for (const f of ["models/pirate/pirate-kit.glb", "models/pirate/water.webp", "menu/pirate.webp"]) assert.ok(fs.existsSync(pub(f)), f);
 });
 

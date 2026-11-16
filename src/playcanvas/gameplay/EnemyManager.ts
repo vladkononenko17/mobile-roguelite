@@ -1,5 +1,5 @@
 import { BLEND_ADDITIVE, Color, Entity, StandardMaterial, Vec3, type AnimTrack, type Texture, type AppBase, type ContainerResource, type MeshInstance, type RenderComponent } from "playcanvas";
-import { ENEMIES, ENEMY_LIMITS, ENEMY_VISUALS, TARGETING, type EnemyClips, type EnemyDef, type EnemyId, type EnemySkinId, type EnemyVisualId } from "./config";
+import { BALANCE, ENEMIES, ENEMY_LIMITS, ENEMY_VISUALS, TARGETING, type EnemyClips, type EnemyDef, type EnemyId, type EnemySkinId, type EnemyVisualId } from "./config";
 import { TYPE_SKINS } from "./campaigns";
 import type { BossBrain, BossState } from "./BossBrain";
 import type { Hazards } from "./Hazards";
@@ -87,6 +87,8 @@ export interface Enemy {
   orbit: number;
   /** Enraged (berserker below half HP). */
   enraged: boolean;
+  /** An elite champion (gold glow, tougher, drops a chest). */
+  elite: boolean;
   /** Bone attachments (enabled per type). */
   attachments: { entity: Entity; only?: EnemyId[] }[];
   /** Boss script state (bosses only). */
@@ -212,6 +214,7 @@ export class EnemyManager {
           m.diffuse.set(0, 0, 0);
           m.useLighting = false;
           m.blendType = BLEND_ADDITIVE;
+          m.useFog = false; // additive: fog would add its colour over the whole quad
           m.depthWrite = false;
           m.emissive = new Color(1.6, 0.55, 0.12);
           m.update();
@@ -236,7 +239,7 @@ export class EnemyManager {
       active: false, hp: 1, maxHp: 1, damageScale: 1, position: new Vec3(), push: new Vec3(),
       state: "move", stateTime: 0, cooldown: 0, specialCooldown: 0, flash: 0, yaw: 0, dirX: 0, dirZ: 1, hitDone: false, marker: null, stuck: 0,
       hitReact: 0, hitCooldown: 0, deaths: 0, burnTime: 0, burnDps: 0, burnTick: 0, slowTime: 0, slowPct: 0,
-      lift: 0, orbit: 0, enraged: false, attachments, brain: null,
+      lift: 0, orbit: 0, enraged: false, elite: false, attachments, brain: null,
     };
     pool.bodies.add(enemy);
     return enemy;
@@ -293,8 +296,8 @@ export class EnemyManager {
     enemy.def = def;
     enemy.clips = def.clips ? { ...visual.clips, ...def.clips } : visual.clips;
     enemy.scale = def.scale * visual.scale * (1 + (Math.random() * 2 - 1) * (def.scaleJitter ?? 0));
-    enemy.maxHp = enemy.hp = Math.round(def.maxHp * hpScale);
-    enemy.damageScale = damageScale;
+    enemy.maxHp = enemy.hp = Math.round(def.maxHp * hpScale * BALANCE.enemyHp);
+    enemy.damageScale = damageScale * BALANCE.enemyDamage;
     enemy.active = true;
     enemy.position.set(x, 0, z);
     enemy.push.set(0, 0, 0);
@@ -313,10 +316,11 @@ export class EnemyManager {
     enemy.lift = def.fly ? def.fly.height : 0;
     enemy.orbit = Math.random() * Math.PI * 2;
     enemy.enraged = false;
+    enemy.elite = false;
     enemy.brain = def.script && this.brain ? this.brain.create(enemy) : null;
     for (const a of enemy.attachments) a.entity.enabled = !a.only || a.only.includes(id);
     // Materials (per type) and animation clips.
-    const skins = (TYPE_SKINS[id] ?? visual.skins ?? []).filter((k) => this.skins.has(k));
+    const skins = ((visual.ownSkins ? undefined : TYPE_SKINS[id]) ?? visual.skins ?? []).filter((k) => this.skins.has(k));
     enemy.skin = skins.length ? skins[Math.floor(Math.random() * skins.length)] : null;
     const mats = this.materialsFor(id, pool.baseMaterial!, enemy.skin);
     enemy.normalMaterial = mats.normal;
@@ -348,6 +352,33 @@ export class EnemyManager {
     this.alive.push(enemy);
     return enemy;
   }
+
+  /**
+   * Turns a fresh spawn into an elite champion: `hp` x the health, `scale` x the size, `damage` x the
+   * blows, and a gold glow over its skin (its own cached material).
+   */
+  makeElite(enemy: Enemy, hp: number, scale: number, damage: number): void {
+    enemy.elite = true;
+    enemy.maxHp = enemy.hp = Math.round(enemy.maxHp * hp);
+    enemy.damageScale *= damage;
+    enemy.scale *= scale;
+    const bulk = ENEMY_VISUALS[enemy.visual].bulk ?? 1;
+    enemy.root.setLocalScale(enemy.scale * bulk, enemy.scale, enemy.scale * bulk);
+    const key = `elite/${enemy.normalMaterial.id}`;
+    let gold = this.eliteMaterials.get(key);
+    if (!gold) {
+      gold = enemy.normalMaterial.clone() as StandardMaterial;
+      gold.emissive.set(0.55, 0.38, 0.06);
+      gold.emissiveMap = null;
+      gold.update();
+      this.eliteMaterials.set(key, gold);
+    }
+    enemy.normalMaterial = gold;
+    for (const mi of enemy.meshes) mi.material = gold;
+    enemy.model.anim!.speed = this.moveRate(enemy);
+  }
+
+  private readonly eliteMaterials = new Map<string, StandardMaterial>();
 
   /** Damage from the player. Returns true if it killed the enemy. */
   damage(enemy: Enemy, amount: number, fromX: number, fromZ: number, knockback: number): boolean {

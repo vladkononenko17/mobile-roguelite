@@ -1,6 +1,6 @@
 import { Vec3 } from "playcanvas";
 import type { ScreenProjector } from "../camera/ScreenProjector";
-import { SPAWNING, type EnemyId, type WaveDef, type WaveEnemyId, type WavePhase } from "./config";
+import { BALANCE, setBalanceFor, SPAWNING, type EnemyId, type WaveDef, type WaveEnemyId, type WavePhase } from "./config";
 import { isAlive, type Enemy, type EnemyManager } from "./EnemyManager";
 import type { NavField } from "./NavField";
 
@@ -52,6 +52,7 @@ export class SpawnDirector {
   start(waveIndex: number): void {
     this.waveIndex = waveIndex;
     this.wave = this.levels[waveIndex];
+    setBalanceFor(waveIndex, this.levels.length);
     this.time = 0;
     this.phase = "waves";
     this.boss = null;
@@ -72,7 +73,7 @@ export class SpawnDirector {
   }
 
   /** The pacing step in effect. */
-  private get step(): WavePhase {
+  get step(): WavePhase {
     const phases = this.wave.phases;
     const t = this.time / this.durationScale;
     let current = phases[0];
@@ -104,7 +105,7 @@ export class SpawnDirector {
     this.nextGroup -= dt;
     if (this.nextGroup > 0) return;
     this.nextGroup = interval;
-    const room = step.maxAlive - this.enemies.livingCount;
+    const room = Math.round(step.maxAlive * BALANCE.density) - this.enemies.livingCount;
     if (room <= 0) return;
     const size = step.group[0] + Math.floor(Math.random() * (step.group[1] - step.group[0] + 1));
     this.spawnGroup(Math.min(size, room), step, player, camera);
@@ -162,6 +163,11 @@ export class SpawnDirector {
   }
 
   /** Moves a stranded enemy (a boss) to a fresh spawn point. */
+  /** A reachable spawn point just outside the view (null: none found this frame). */
+  offscreenSpot(player: Vec3, camera: ScreenProjector): { x: number; z: number } | null {
+    return this.findSpot(player, camera, SPAWNING.extra);
+  }
+
   relocate(enemy: Enemy, player: Vec3, camera: ScreenProjector): void {
     const spot = this.findSpot(player, camera, SPAWNING.extra);
     if (spot) enemy.position.set(spot.x, 0, spot.z);

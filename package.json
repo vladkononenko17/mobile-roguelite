@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build && node scripts/build-sw.mjs",
+    "build:itch": "tsc --noEmit && vite build -c vite.itch.config.ts && node scripts/package-itch.mjs",
     "test": "node --test tests/*.test.mjs",
     "preview": "vite preview",
     "voices": "node scripts/gen-voices.mjs",
@@ -15,7 +16,9 @@
     "@fontsource/barlow-condensed": "^5.2.6",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/oswald": "^5.3.0",
+    "@fontsource/permanent-marker": "^5.3.0",
     "@fontsource/rubik": "^5.3.0",
+    "@fontsource/special-elite": "^5.3.0",
     "phaser": "^3.90.0",
     "playcanvas": "~2.22.4",
     "qrcode-generator": "^2.0.4",

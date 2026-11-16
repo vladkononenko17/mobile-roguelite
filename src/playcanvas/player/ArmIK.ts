@@ -18,6 +18,8 @@ const SWIVEL_STEP_DEG = 5;
  * untouched. Call `apply` every frame after animation.
  */
 export class ArmIK {
+  /** Share of the full arm length the solve may reach (one-handed pistols straighten further). */
+  maxReach = MAX_REACH;
   private readonly clavicle: GraphNode | null;
   private readonly upperArm: GraphNode | null;
   private readonly foreArm: GraphNode | null;
@@ -86,12 +88,12 @@ export class ArmIK {
     this.handRotation.slerp(hand.getRotation(), rotation, weight);
     const l1 = foreArm.getPosition().distance(upperArm.getPosition());
     const l2 = hand.getPosition().distance(foreArm.getPosition());
-    if (this.clavicle) this.reachWithClavicle(this.clavicle, upperArm.getPosition(), t, (l1 + l2) * MAX_REACH);
+    if (this.clavicle) this.reachWithClavicle(this.clavicle, upperArm.getPosition(), t, (l1 + l2) * this.maxReach);
 
     const a = this.a.copy(upperArm.getPosition());
     const b = this.b.copy(foreArm.getPosition());
     const toTarget = this.toTarget.sub2(t, a);
-    const d = math.clamp(toTarget.length(), Math.abs(l1 - l2) + EPSILON, (l1 + l2) * MAX_REACH);
+    const d = math.clamp(toTarget.length(), Math.abs(l1 - l2) + EPSILON, (l1 + l2) * this.maxReach);
     toTarget.normalize();
 
     // Bend plane from the animated elbow; fall back to last frame's if the arm is straight.

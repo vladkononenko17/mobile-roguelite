@@ -5,12 +5,12 @@ import { aimY, isAlive, type Enemy, type EnemyManager } from "./EnemyManager";
 import type { PlayerStats } from "./PlayerStats";
 
 /** What dealt a hit (decides which upgrades apply and how the number is shown). */
-export type HitSource = "bullet" | "ricochet" | "chain" | "explosion" | "burn" | "drone" | "shock";
+export type HitSource = "bullet" | "ricochet" | "chain" | "explosion" | "burn" | "drone" | "shock" | "gadget";
 
 /** Damage-number style for the HUD. */
 export type HitStyle = "normal" | "crit" | "burn" | "tech";
 
-const TECH: ReadonlySet<HitSource> = new Set(["chain", "drone", "shock"]);
+const TECH: ReadonlySet<HitSource> = new Set(["chain", "drone", "shock", "gadget"]);
 /** Sources that apply on-hit statuses (burn, slow) and can arc chain lightning. */
 const WEAPON: ReadonlySet<HitSource> = new Set(["bullet", "ricochet"]);
 
@@ -31,6 +31,8 @@ interface PendingExplosion {
 export class Combat {
   /** Damage number hook: (world position, amount, style). */
   onHit: (position: Vec3, amount: number, style: HitStyle, enemy: Enemy) => void = () => {};
+  /** Damage dealt by source (the run summary). */
+  onDealt: (source: HitSource, amount: number) => void = () => {};
   private readonly explosions: PendingExplosion[] = [];
   private readonly point = new Vec3();
   private readonly from = new Vec3();
@@ -61,7 +63,9 @@ export class Combat {
     if (this.enemies.vulnerable(e)) amount *= 1.5;
     amount = Math.max(1, Math.round(amount));
     const wasBurning = e.burnTime > 0;
+    const before = e.hp;
     const killed = this.enemies.damage(e, amount, fromX, fromZ, knockback);
+    this.onDealt(source, Math.max(0, before - Math.max(0, e.hp)));
     this.onHit(this.chest(e, this.point), amount, source === "burn" ? "burn" : crit ? "crit" : TECH.has(source) ? "tech" : "normal", e);
     if (killed) {
       this.onKilled(e, wasBurning);
@@ -119,7 +123,7 @@ export class Combat {
   }
 
   /** Up to `count` living enemies nearest to (x, z) within `range`, excluding `skip`. */
-  private nearest(x: number, z: number, range: number, count: number, skip: Enemy[]): Enemy[] {
+  nearest(x: number, z: number, range: number, count: number, skip: Enemy[]): Enemy[] {
     const found: { e: Enemy; d: number }[] = [];
     for (const e of this.enemies.alive) {
       if (!isAlive(e) || skip.includes(e)) continue;
@@ -157,6 +161,13 @@ export class Combat {
     e.burnTime = COMBAT_FX.burnSeconds;
     e.burnDps = Math.max(e.burnDps, dps);
     if (e.burnTick <= 0) e.burnTick = COMBAT_FX.burnTick;
+  }
+
+  /** A blast of `damage` to everything within `radius` of (x, z) (the hero's second wind). */
+  blast(x: number, z: number, radius: number, damage: number): void {
+    this.effects.ring(this.point.set(x, 0, z), radius, true);
+    this.effects.explosion(this.point.set(x, 0.4, z), radius * 0.5);
+    for (const e of this.nearest(x, z, radius, 128, [])) this.hit(e, damage, "explosion", x, z, 0.9);
   }
 
   /** Reload shock pulse around the hero (Shock Reload). */

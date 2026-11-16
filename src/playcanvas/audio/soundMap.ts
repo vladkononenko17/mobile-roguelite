@@ -2,14 +2,23 @@ import type { EnemyDef, EnemyId } from "../gameplay/config";
 import type { GroundSurface } from "../config";
 import type { GroundSpec } from "../world/Ground";
 
-/** Music and zone-seal sound per map. */
-export const BIOME_AUDIO: Record<string, { music: string; gate: string }> = {
-  outpost: { music: "music_wasteland", gate: "gate_wood" },
-  facility: { music: "music_station", gate: "gate_space" },
-  hell: { music: "music_hell", gate: "gate_hell" },
-  medieval: { music: "music_hell", gate: "gate_wood" },
-  pirate: { music: "music_wasteland", gate: "gate_wood" },
+/** Music, ambience bed and zone-seal sound per map. */
+export const BIOME_AUDIO: Record<string, { music: string; ambience: string; gate: string }> = {
+  outpost: { music: "music_wasteland", ambience: "amb_wind", gate: "gate_wood" },
+  facility: { music: "music_station", ambience: "amb_station", gate: "gate_space" },
+  hell: { music: "music_hell", ambience: "amb_hell", gate: "gate_hell" },
+  medieval: { music: "music_graveyard", ambience: "amb_night", gate: "gate_wood" },
+  pirate: { music: "music_pirate", ambience: "amb_sea", gate: "gate_wood" },
+  winter: { music: "music_whiteout", ambience: "amb_blizzard", gate: "gate_wood" },
 };
+
+/** The reload sound of a gun: shells for shotguns, a cell for energy guns, a magazine and bolt for long guns, else a pistol's. */
+export function reloadSound(weapon: string): string {
+  if (/shotgun/i.test(weapon)) return "reload_shotgun";
+  if (/plasma|pulse|railgun|hellfire/i.test(weapon)) return "reload_energy";
+  if (/rifle|marksman|mp5|uzi/i.test(weapon)) return "reload_rifle";
+  return "reload";
+}
 export const BOSS_MUSIC = "music_boss";
 
 /** Footstep sound per ground surface (unknown surfaces: concrete). */
@@ -22,6 +31,7 @@ const STEP: Partial<Record<GroundSurface, string>> = {
   beach: "step_sand", wetsand: "step_sand", jungle: "step_grass", grotto: "step_stone", fortstone: "step_stone", planks: "step_concrete", ghostdeck: "step_concrete",
   deck: "step_metal", hangardeck: "step_metal", stationdeck: "step_metal", labdeck: "step_metal", quarantine: "step_metal",
   grate: "step_metal", gatefloor: "step_metal", dockdeck: "step_metal",
+  snow: "step_grass", snowpack: "step_sand", slush: "step_sand", ice: "step_stone", bloodsnow: "step_grass",
 };
 
 const inside = (r: { x0: number; z0: number; x1: number; z1: number }, x: number, z: number) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1;
@@ -55,8 +65,8 @@ export function footstepsOf({ ground, stepAreas = [] }: StepGround): Set<string>
 export type Voice = "zombie" | "runner" | "brute" | "bloater" | "demon" | "alien" | "hound" | "mech";
 const VOICES: Partial<Record<EnemyId, Voice>> = {
   hound: "hound", stray: "hound",
-  runner: "runner", ripper: "runner", sprinter: "runner",
-  brute: "brute", charger: "brute", tank: "brute", abomination: "brute",
+  runner: "runner", ripper: "runner", sprinter: "runner", stalker: "runner",
+  brute: "brute", charger: "brute", tank: "brute", abomination: "brute", ravager: "brute",
   bloater: "bloater",
 };
 
@@ -70,4 +80,5 @@ export function voiceRate(scale: number): number {
 }
 
 /** Sounds every map uses. */
-export const COMMON_SOUNDS = ["reload", "hurt", "die", "cash", "heal", "upgrade", "levelup", "ui", "explosion", "slam"];
+export const COMMON_SOUNDS = ["reload", "reload_shotgun", "reload_rifle", "reload_energy", "hurt", "die", "cash", "heal", "upgrade", "levelup", "ui", "explosion", "slam",
+  "dash", "hit_flesh", "hit_metal", "pickup", "chest", "ui_open", "banish", "buy", "deny", "reroll", "lock", "bell", "sting_clear", "sting_win", "sting_dead"];

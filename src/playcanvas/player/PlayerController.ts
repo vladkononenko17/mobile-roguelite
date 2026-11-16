@@ -37,6 +37,10 @@ export class PlayerController {
   /** Safety clamp for the player position (the level's own colliders are the real edge). */
   bounds = { minX: -PLAYER.arenaHalfSize, maxX: PLAYER.arenaHalfSize, minZ: -PLAYER.arenaHalfSize, maxZ: PLAYER.arenaHalfSize };
 
+  /** A dash in progress: seconds left and its velocity (m/s). */
+  dashTime = 0;
+  private readonly dashVelocity = new Vec3();
+
   private readonly input = new Vec2();
   private readonly targetVelocity = new Vec3();
   private readonly position = new Vec3();
@@ -48,6 +52,22 @@ export class PlayerController {
     private readonly collision: CollisionWorld | null = null,
   ) {
     this.yawDeg = entity.getEulerAngles().y;
+  }
+
+  /**
+   * Dashes along (dirX, dirZ) (normalised here; zero: the way the hero faces) at `speed` m/s for
+   * `seconds`; collisions still apply.
+   */
+  dash(dirX: number, dirZ: number, speed: number, seconds: number): void {
+    let len = Math.hypot(dirX, dirZ);
+    if (len < 1e-3) {
+      const yaw = this.yawDeg * math.DEG_TO_RAD;
+      dirX = Math.sin(yaw);
+      dirZ = Math.cos(yaw);
+      len = 1;
+    }
+    this.dashVelocity.set((dirX / len) * speed, 0, (dirZ / len) * speed);
+    this.dashTime = seconds;
   }
 
   get speed(): number {
@@ -76,10 +96,17 @@ export class PlayerController {
     else this.moveDirection.set(0, 0, 0);
     this.targetVelocity.set(dirX * targetSpeed, 0, dirZ * targetSpeed);
 
-    const sharpness = targetSpeed > this.velocity.length() ? PLAYER.acceleration : PLAYER.deceleration;
-    const blend = 1 - Math.exp(-sharpness * dt);
-    this.velocity.lerp(this.velocity, this.targetVelocity, blend);
-    if (magnitude === 0 && this.velocity.lengthSq() < 1e-4) this.velocity.set(0, 0, 0);
+    if (this.dashTime > 0) {
+      this.dashTime -= dt;
+      this.velocity.copy(this.dashVelocity);
+      // Out of the dash at run speed, not dash speed.
+      if (this.dashTime <= 0) this.velocity.mulScalar(Math.min(1, (PLAYER.runSpeed * this.speedMultiplier) / Math.max(1e-3, this.dashVelocity.length())));
+    } else {
+      const sharpness = targetSpeed > this.velocity.length() ? PLAYER.acceleration : PLAYER.deceleration;
+      const blend = 1 - Math.exp(-sharpness * dt);
+      this.velocity.lerp(this.velocity, this.targetVelocity, blend);
+    }
+    if (magnitude === 0 && this.dashTime <= 0 && this.velocity.lengthSq() < 1e-4) this.velocity.set(0, 0, 0);
 
     // Face the aim target while shooting; otherwise where the player is asking to go (not where
     // momentum carries them).

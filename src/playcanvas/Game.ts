@@ -8,12 +8,17 @@ import {
   TONEMAP_NEUTRAL,
   FOG_LINEAR,
   FOG_NONE,
+  Quat,
+  Vec3,
+  math,
+  type GraphNode,
   type RenderComponent,
 } from "playcanvas";
 import { audio } from "./audio/Audio";
+import { onSettings, settings } from "./settings";
 import { CameraController } from "./camera/CameraController";
 import { Gameplay } from "./gameplay/Gameplay";
-import { CAMERA, CHARACTER, CHARACTERS, DEBUG, DEFAULT_WEAPON, PLAYER, WEAPONS, type CharacterId, type CharacterModel, type WeaponId } from "./config";
+import { CAMERA, CHARACTER, CHARACTERS, DEBUG, DEFAULT_WEAPON, PLAYER, RENDER, WEAPONS, type CharacterId, type CharacterModel, type WeaponId } from "./config";
 import { KeyboardMoveInput } from "./input/KeyboardMoveInput";
 import { TouchJoystickInput } from "./input/TouchJoystickInput";
 import { CombinedMoveInput, type MoveInputSource } from "./input/MoveInput";
@@ -51,6 +56,8 @@ export interface GameOptions {
 
 /** Longest frame step we simulate; avoids teleporting after a background tab resumes. */
 const MAX_DT = 1 / 15;
+/** Battery saver: a drawn frame at most every `frameSeconds` (just under 1/30 s), resolution capped. */
+const SAVER = { frameSeconds: 1 / 31, maxPixelRatio: 1.5 };
 const DEBUG_INTERVAL = 0.25;
 
 /** Bootstraps the PlayCanvas app, builds the arena and wires the player systems together. */
@@ -63,6 +70,10 @@ export class Game {
   private input!: MoveInputSource;
   private model!: Entity;
   private aimTwist: AimTwist | null = null;
+  /** CharacterModel.posture: the chest and head bones it lifts, and the angles. */
+  private posture: { chest: GraphNode | null; head: GraphNode | null; chestDeg: number; headDeg: number } | null = null;
+  private readonly postureQ = new Quat();
+  private readonly postureAxis = new Vec3();
   private legTurn: LegTurn | null = null;
   private weaponHands: WeaponHands | null = null;
   private weaponTuner: WeaponTuner | null = null;
@@ -102,6 +113,14 @@ export class Game {
     app.start();
 
     this.resolution = new ResolutionGovernor(app);
+    // Battery saver (settings menu): the scene is drawn 30 times a second at a lower resolution; the
+    // game itself still steps every frame, so it plays the same.
+    const applySaver = () => {
+      app.autoRender = !settings.saver;
+      this.resolution.setMaxRatio(settings.saver ? SAVER.maxPixelRatio : RENDER.maxPixelRatio);
+    };
+    applySaver();
+    onSettings(applySaver);
     const biome = this.biome;
     createLighting(app, biome.lighting);
     this.kit = new ModelKit(app, biome.kit.models, { name: biome.id, ...biome.kit });
@@ -207,6 +226,8 @@ export class Game {
     const rig: CharacterModel = characterModel;
     this.weapons.attachTo(character.model, rig);
     this.aimTwist = new AimTwist(character.model);
+    const posture = (characterModel as CharacterModel).posture;
+    this.posture = posture ? { chest: character.model.findByName("mixamorig:Spine2"), head: character.model.findByName("mixamorig:Head"), chestDeg: posture.chestLiftDeg, headDeg: posture.headLiftDeg } : null;
     this.legTurn = new LegTurn(character.model);
     this.weaponHands = new WeaponHands(app, character.model, rig);
     this.weaponHands.debug = DEBUG.DEBUG_GRIPS || new URLSearchParams(location.search).get("grips") === "1";
@@ -245,20 +266,31 @@ export class Game {
     // The roguelite run on this arena (enemies, combat, levels). ?sandbox=1 skips it.
     if (new URLSearchParams(location.search).get("sandbox") !== "1") {
       this.gameplay = new Gameplay(app, this.camera.entity, this.collision, biome, this.player, this.weapons, new Hud(), () => this.characterScale, () => this.camera.snap());
-      this.gameplay.onShake = (amount) => this.camera.shake(amount);
+      this.gameplay.onShake = (amount) => { if (settings.shake) this.camera.shake(amount); };
       this.gameplay.init().catch((error: unknown) => console.error("[Gameplay] failed to start.", error));
     }
     app.on("update", this.update, this);
   }
 
+  /** Battery saver: time since the last drawn frame. */
+  private saverClock = 0;
+
   private update(rawDt: number): void {
     const dt = Math.min(rawDt, MAX_DT);
     this.resolution.update(rawDt);
+    if (settings.saver) {
+      this.saverClock += rawDt;
+      if (this.saverClock >= SAVER.frameSeconds) {
+        this.saverClock = Math.min(this.saverClock - SAVER.frameSeconds, SAVER.frameSeconds);
+        this.app.renderNextFrame = true;
+      }
+    }
     this.player.update(dt);
     // Legs first (the skeleton is posed): turn the hips toward the movement, backpedal when moving
     // away from the facing; the animation reverses the cycle from the next frame.
     const backward = this.legTurn?.update(this.player.velocity, this.player.yawDeg, dt) ?? false;
     this.animation.update(this.player.speed, dt, backward);
+    this.applyPosture(this.weapons.profile?.hold === "clip" ? this.animation.upperBodyWeight : 0, Math.min(1, this.player.speed / PLAYER.runSpeed));
     // After the anim system has posed the skeleton this frame: turn the chest so the gun points
     // where the hero faces (the weapon follows the right hand's WeaponSocket), then left-arm IK onto
     // the weapon's LeftHandGrip and the finger grip on both hands.
@@ -303,6 +335,23 @@ export class Game {
   }
 
   /** Scales the GLB root uniformly; camera pivot and stride matching follow the new size. */
+  /** Tilts the chest and head back about the hero's right axis (after the clips, before aim and IK). */
+  private applyPosture(aimClip: number, run: number): void {
+    const p = this.posture;
+    if (!p) return;
+    // Only the clip-aimed (rifle) stance and running bend the big head into the gun.
+    const k = Math.max(aimClip, run);
+    if (k <= 0.01) return;
+    const yaw = this.player.yawDeg * math.DEG_TO_RAD;
+    // Facing (sin, 0, cos): its right is (-cos, 0, sin); a positive turn about it tips the top back.
+    this.postureAxis.set(-Math.cos(yaw), 0, Math.sin(yaw));
+    for (const [node, deg] of [[p.chest, p.chestDeg * k + 10 * run], [p.head, p.headDeg * k]] as const) {
+      if (!node || !deg) continue;
+      this.postureQ.setFromAxisAngle(this.postureAxis, deg);
+      node.setRotation(this.postureQ.mul(node.getRotation()));
+    }
+  }
+
   private setCharacterScale(scale: number): void {
     this.characterScale = scale;
     this.model.setLocalScale(scale, scale, scale);

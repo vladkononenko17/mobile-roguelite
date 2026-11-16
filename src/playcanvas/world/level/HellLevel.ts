@@ -356,6 +356,7 @@ function sealMaterial(app: AppBase): StandardMaterial {
   m.emissiveMap = pentagram(app);
   m.useLighting = false;
   m.blendType = BLEND_ADDITIVE;
+  m.useFog = false; // additive: fog would add its colour over the whole quad
   m.depthWrite = false;
   m.cull = 0;
   m.update();
@@ -767,6 +768,7 @@ function sigil(root: Entity, app: AppBase, x: number, z: number, radius: number,
   m.useLighting = false;
   m.useSkybox = false;
   m.blendType = BLEND_ADDITIVE;
+  m.useFog = false; // additive: fog would add its colour over the whole quad
   m.depthWrite = false;
   m.update();
   const e = new Entity("sigil");

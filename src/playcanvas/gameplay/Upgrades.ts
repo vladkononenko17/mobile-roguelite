@@ -1,4 +1,4 @@
-import { SYNERGIES, UPGRADES, type SynergyTier, type UpgradeDef, type UpgradeEffect, type UpgradeId, type UpgradePool, type UpgradeTag } from "./config";
+import { SYNERGIES, UPGRADES, XP, type SynergyTier, type UpgradeDef, type UpgradeEffect, type UpgradeId, type UpgradePool, type UpgradeTag } from "./config";
 import type { PlayerStats } from "./PlayerStats";
 
 /**
@@ -100,7 +100,7 @@ export function availableUpgrades(stats: PlayerStats, pool: UpgradePool): Upgrad
  */
 export function rollUpgrades(stats: PlayerStats, count: number, pool: UpgradePool, exclude: UpgradeId[] = []): UpgradeDef[] {
   const options = availableUpgrades(stats, pool).filter((u) => !exclude.includes(u.id));
-  shuffle(options);
+  weightedShuffle(options, (u) => XP.rarityWeight[u.rarity] * (u.rarity === "common" ? 1 : 1 + stats.luck));
   const picked: UpgradeDef[] = options.filter((u) => u.requires).slice(0, count);
   const categories = new Set<string>(picked.map((u) => u.category));
   for (const u of options) {
@@ -116,9 +116,8 @@ export function rollUpgrades(stats: PlayerStats, count: number, pool: UpgradePoo
   return picked;
 }
 
-function shuffle<T>(items: T[]): void {
-  for (let i = items.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [items[i], items[j]] = [items[j], items[i]];
-  }
+/** Random order where heavier items tend to come first (Efraimidis-Spirakis keys). */
+function weightedShuffle<T>(items: T[], weight: (item: T) => number): void {
+  const keys = new Map(items.map((item) => [item, Math.random() ** (1 / Math.max(0.01, weight(item)))]));
+  items.sort((a, b) => keys.get(b)! - keys.get(a)!);
 }

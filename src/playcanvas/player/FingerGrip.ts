@@ -57,14 +57,18 @@ export class FingerGrip {
     return this.chains.map((c) => c.finger);
   }
 
-  /** Wraps the fingers around the cylinder through `origin` along unit `direction` with `radius`. */
-  apply(origin: Vec3, direction: Vec3, radius: number, weight: number): void {
+  /**
+   * Wraps the fingers around the cylinder through `origin` along unit `direction` with `radius`;
+   * every joint bends at least `minDeg` (a support hand always closes round its handguard, even when
+   * the nearest-approach search would leave a long finger block nearly straight).
+   */
+  apply(origin: Vec3, direction: Vec3, radius: number, weight: number, minDeg = 0): void {
     if (weight <= 0 || !this.chains.length) return;
     weight = Math.min(1, weight);
     const contact = radius + this.rig.thickness;
     for (const chain of this.chains) {
       const joints = this.rig.rigid ? chain.joints.slice(0, 1) : chain.joints;
-      const scale = this.side === "Right" && chain.finger === "Index" && !this.rig.rigid ? FINGER_GRIP.triggerCurl : 1;
+      const scale = this.side === "Right" && chain.finger === "Index" && !this.rig.rigid && this.rig.trigger !== false ? FINGER_GRIP.triggerCurl : 1;
       joints.forEach((joint, i) => {
         const probe = this.rig.rigid || i === joints.length - 1 ? chain.tip : joints[i + 1];
         this.base.copy(joint.getLocalRotation());
@@ -79,6 +83,7 @@ export class FingerGrip {
           }
           if (distance <= contact) break;
         }
+        best = Math.max(best, minDeg);
         joint.setLocalRotation(this.posed.copy(this.base).mul(this.bend.setFromAxisAngle(this.axis, best * scale * weight)));
       });
     }
