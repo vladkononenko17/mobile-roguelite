@@ -5,11 +5,13 @@ import { DEV_MODE } from "./devMode";
 import { TEST_ARSENAL } from "./ui/ArsenalPanel";
 import { menuWanted, showMainMenu } from "./ui/MainMenu";
 import { LoadingScreen } from "./ui/LoadingScreen";
+import { installPaperTheme } from "./ui/paperTheme";
 import { pickBiome, type BiomeId } from "./world/level/Biomes";
 import { heroFor } from "./gameplay/profile";
 import { pendingDaily } from "./gameplay/daily";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#app-canvas")!;
+installPaperTheme();
 const loadingScreen = new LoadingScreen();
 const modelSelect = document.querySelector<HTMLSelectElement>("[data-model]")!;
 
