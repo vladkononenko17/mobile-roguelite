@@ -9,7 +9,7 @@
 // Usage: FFMPEG=/path/to/ffmpeg node scripts/build-audio.mjs   (ffmpeg with libmp3lame; the
 // ffmpeg-static npm package works). REPO_ROOT overrides the repository root.
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -24,6 +24,8 @@ const K = {
   rpg: "kenney-rpg-audio",
   ui: "kenney-interface-sounds",
   digital: "kenney-digital-audio",
+  foley: "kenney-foley-sounds",
+  casino: "kenney-casino-audio",
 };
 const kenney = (pack, name, extra = {}) => ({ src: `${K[pack]}/${name}.ogg`, ...extra });
 const range = (n, f) => Array.from({ length: n }, (_, i) => f(i));
@@ -94,6 +96,54 @@ const SOUNDS = {
     fade: 0.3,
   },
 
+
+  // More guns, each from its own recording (The Free Firearm Sound Library, near microphones):
+  // .38 revolver and .45 pistol (Hand Cannon), Carl Gustav M45 (MP5), PPSh (the Uzis), Mossberg
+  // (auto shotgun), SKS (battle rifle), Mosin Nagant (marksman).
+  shot_handcannon: { variants: [...cuts("firearms/V_27P.wav", [0.81, 6.22], 0.6), ...cuts("firearms/A_42P.wav", [0.94, 5.0], 0.6)], fade: 0.35 },
+  shot_smg: { variants: cuts("firearms/G_31P.wav", [0.31, 3.5, 6.73], 0.3), fade: 0.2 },
+  shot_uzi: { variants: cuts("firearms/P_30P.wav", [0.97, 4.39, 8.25, 11.43], 0.26), fade: 0.17 },
+  shot_autoshotgun: { variants: [...cuts("firearms/N_30P.wav", [1.7, 4.96], 0.7), ...cuts("firearms/N_30P.wav", [1.7, 4.96], 0.7, { rate: 0.93 })], fade: 0.4 },
+  shot_battle: { variants: cuts("firearms/U_14P.wav", [3.58, 6.76, 10.21, 13.29, 16.78], 0.45), fade: 0.3 },
+  shot_marksman: { variants: cuts("firearms/M_21P.wav", [1.03, 5.02, 9.16, 14.14], 0.9), fade: 0.55 },
+  // Space guns: the pulse SMG's blip, the railgun's crack over a falling charge.
+  shot_pulse: { variants: [1, 2, 3].map((i) => one(kenney("digital", `laser${i}`, { dur: 0.16 }))), fade: 0.08 },
+  shot_railgun: {
+    variants: [1.03, 9.16].map((t, i) => [
+      { src: "firearms/M_21P.wav", start: t - 0.02, dur: 0.8, rate: 1.1, volume: 0.7 },
+      kenney("scifi", `laserLarge_${pad(i + 2)}`, { rate: 0.55 }),
+      kenney("digital", `phaserDown${i + 1}`, { rate: 0.7, volume: 0.6 }),
+    ]),
+    fade: 0.5,
+  },
+  // Reloads by kind of gun: shells pushed in one by one; a rifle magazine and bolt; an energy cell.
+  reload_shotgun: { variants: [[kenney("rpg", "metalClick"), kenney("rpg", "metalClick", { delay: 0.24, rate: 1.06 }), kenney("rpg", "metalClick", { delay: 0.48, rate: 0.96 }), kenney("rpg", "metalLatch", { delay: 0.78, rate: 0.85 })]] },
+  reload_rifle: { variants: [[kenney("rpg", "metalLatch", { rate: 0.8 }), kenney("impact", "impactMetal_light_002", { delay: 0.36, volume: 0.5, dur: 0.2 }), kenney("rpg", "metalClick", { delay: 0.62, rate: 0.85 })]] },
+  reload_energy: { variants: [[kenney("scifi", "doorClose_000", { rate: 1.3, volume: 0.7 }), kenney("digital", "phaserUp3", { delay: 0.3, volume: 0.5 })]] },
+
+  // The hero's dash; bullets landing (flesh, metal).
+  dash: { variants: [1, 3, 5, 7].map((i) => one(kenney("foley", `woosh${i}`, { rate: 1.15 }))) },
+  hit_flesh: { variants: range(5, (i) => one(kenney("impact", `impactSoft_medium_${pad(i)}`, { dur: 0.16 }))), fade: 0.08 },
+  hit_metal: { variants: range(5, (i) => one(kenney("impact", `impactMetal_light_${pad(i)}`, { dur: 0.16 }))), fade: 0.08 },
+
+  // Pickups: an upgrade lifted off the ground; a chest's latch, lid and coins.
+  pickup: { variants: [1, 2, 3, 4].map((i) => one(kenney("foley", `pickup${i}`, { dur: 0.35 }))), fade: 0.15 },
+  chest: { variants: [[kenney("rpg", "metalLatch"), kenney("rpg", "doorOpen_1", { delay: 0.12 }), kenney("rpg", "handleCoins", { delay: 0.5 })]] },
+
+  // Menus are a paper notebook: pages turn, the book shuts, a pencil strikes a card out, a stamp lands.
+  ui_open: { variants: [1, 2, 3].map((i) => one(kenney("rpg", `bookFlip${i}`))) },
+  ui_close: { variants: [one(kenney("rpg", "bookClose")), one(kenney("rpg", "bookPlace1"))] },
+  banish: { variants: [[kenney("ui", "scratch_001"), kenney("ui", "scratch_003", { delay: 0.1 })], [kenney("ui", "scratch_002"), kenney("ui", "scratch_004", { delay: 0.1 })]] },
+  stamp: { variants: [[kenney("impact", "impactWood_heavy_000"), kenney("impact", "impactPlank_medium_001", { rate: 0.7, volume: 0.7 })], [kenney("impact", "impactWood_heavy_002"), kenney("impact", "impactPlank_medium_003", { rate: 0.7, volume: 0.7 })]] },
+  // The shop: coins down for a buy, a dull knock when the cash is short, dice for a reroll, a latch for a lock.
+  buy: { variants: [1, 2, 3].map((i) => [kenney("casino", `chip-lay-${i}`), kenney("rpg", i === 2 ? "handleCoins2" : "handleCoins", { delay: 0.06, volume: 0.8 })]) },
+  deny: { variants: [one(kenney("impact", "impactWood_light_001", { rate: 0.7 })), one(kenney("impact", "impactWood_light_003", { rate: 0.7 }))] },
+  reroll: { variants: [1, 2, 3].map((i) => [kenney("casino", `dice-shake-${i}`, { dur: 0.45 }), kenney("casino", `dice-throw-${i}`, { delay: 0.4 })]) },
+  lock: { variants: [one(kenney("rpg", "metalClick", { rate: 1.2 }))] },
+
+  // A bell tolls when a champion walks in, lower and longer for a boss.
+  bell: { variants: range(3, (i) => one(kenney("impact", `impactBell_heavy_${pad(i)}`, { rate: 0.62 }))), fade: 1.2 },
+
   // Enemy voices (Zombies Sound Pack and Monster Sound Pack, CC0; Kenney for machines).
   // Walkers: the zombie pack, the long moans, pained grunts.
   zombie_groan: { variants: [...[16, 17, 18, 21, 12, 15].map((n) => one(zombie(n))), ...MOANS.map((m) => one(moan(m))), ...MOANS.slice(0, 3).map((m) => one(moan(m, 0.85)))], fade: 0.3 },
@@ -142,12 +192,17 @@ const SOUNDS = {
 };
 
 /** Background loops per chapter and the boss theme (loudness-normalised, looped by AudioManager). */
+/** Phone speakers play little under ~150 Hz: these loops were mostly sub-bass, so it is cut and the mids lifted. */
+const PHONE_EQ = "highpass=f=55,equalizer=f=90:t=q:w=0.8:g=-8,equalizer=f=1800:t=q:w=1:g=3";
 const MUSIC = {
-  music_wasteland: { src: "music/wasteland.ogg", bitrate: "48k" }, // Juhani Junkala - Post Apocalyptic Wastelands (CC0)
-  music_station: { src: "music/station.mp3", bitrate: "48k" }, // Ambience Pack 1 - Infestation in the Control Room (CC0)
+  music_wasteland: { src: "music/wasteland.ogg", bitrate: "56k", eq: PHONE_EQ }, // Juhani Junkala - Post Apocalyptic Wastelands (CC0)
+  music_station: { src: "music/station.mp3", bitrate: "56k", eq: "highpass=f=55,equalizer=f=90:t=q:w=0.8:g=-6,equalizer=f=250:t=q:w=1.2:g=5,treble=g=-8:f=3000" }, // Ambience Pack 1 - Infestation in the Control Room (CC0)
   music_hell: { src: "music/hell.mp3", bitrate: "48k" }, // Ambience Pack 1 - The Depths of Hell (CC0)
-  music_boss: { src: "music/boss.wav", bitrate: "56k" }, // Juhani Junkala - Epic Boss Battle (CC0)
+  music_boss: { src: "music/boss.wav", bitrate: "64k", eq: PHONE_EQ }, // Juhani Junkala - Epic Boss Battle (CC0)
 };
+
+/** Made by the synth scripts (music_*: one file; the others: `${id}-0.mp3`). */
+const SYNTH = ["music_whiteout", "music_graveyard", "music_pirate", "amb_wind", "amb_station", "amb_hell", "amb_night", "amb_sea", "amb_blizzard", "sting_clear", "sting_win", "sting_dead"];
 
 const SR = 44100;
 
@@ -190,11 +245,17 @@ function encode(wav, file, bitrate, extraFilter) {
   if (r.status !== 0) throw new Error(`${file}: ${r.stderr}`);
 }
 
-rmSync(OUT, { recursive: true, force: true });
+// ONLY=id,id builds just those sounds into the existing folder (the other packs need not be there).
+const ONLY = (process.env.ONLY ?? "").split(",").filter(Boolean);
+const want = (id) => !ONLY.length || ONLY.includes(id);
+let counts = {};
+if (ONLY.length) counts = JSON.parse(readFileSync(join(OUT, "sounds.json"), "utf8"));
+else rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
-const counts = {};
 let total = 0;
 for (const [id, sound] of Object.entries(SOUNDS)) {
+  if (!want(id)) continue;
+  for (let i = 0; i < (counts[id] ?? 0); i++) rmSync(join(OUT, `${id}-${i}.mp3`), { force: true });
   sound.variants.forEach((layers, i) => {
     const wav = buildVariant(layers, sound);
     const peak = detectPeak(wav);
@@ -205,18 +266,20 @@ for (const [id, sound] of Object.entries(SOUNDS)) {
   counts[id] = sound.variants.length;
 }
 for (const [id, m] of Object.entries(MUSIC)) {
+  if (!want(id)) continue;
   const file = join(OUT, `${id}.mp3`);
-  const r = spawnSync(FFMPEG, ["-v", "error", "-y", "-i", join(SRC, m.src), "-af", "loudnorm=I=-20:TP=-2:LRA=11", "-ac", "1", "-ar", String(SR), "-c:a", "libmp3lame", "-b:a", m.bitrate, file]);
+  const r = spawnSync(FFMPEG, ["-v", "error", "-y", "-i", join(SRC, m.src), "-af", `${m.eq ? `${m.eq},` : ""}loudnorm=I=-20:TP=-2:LRA=9`, "-ac", "1", "-ar", String(SR), "-c:a", "libmp3lame", "-b:a", m.bitrate, file]);
   if (r.status !== 0) throw new Error(`${file}: ${r.stderr}`);
   counts[id] = 1;
   total += statSync(file).size;
 }
 // A blank clip AudioManager plays once through an HTML audio element (older iOS: playback session).
-{
+if (!ONLY.length) {
   const r = spawnSync(FFMPEG, ["-v", "error", "-y", "-f", "lavfi", "-i", `anullsrc=r=${SR}:cl=mono`, "-t", "0.2", "-c:a", "libmp3lame", "-b:a", "32k", join(OUT, "silence.mp3")]);
   if (r.status !== 0) throw new Error(`silence.mp3: ${r.stderr}`);
 }
-// Whiteout's loop is synthesised by scripts/build-whiteout-music.py (not from a source file).
-counts.music_whiteout = 1;
+// Synthesised loops and stings (no source files): scripts/build-whiteout-music.py and
+// scripts/build-synth-audio.py write them; they are listed here so a full rebuild keeps them.
+for (const id of SYNTH) counts[id] = 1;
 writeFileSync(join(OUT, "sounds.json"), JSON.stringify(counts));
-console.log(`${Object.keys(counts).length} sounds, ${Object.values(counts).reduce((a, b) => a + b, 0)} files, ${(total / 1024).toFixed(0)} KB`);
+console.log(`${Object.keys(counts).length} sounds, ${Object.values(counts).reduce((a, b) => a + b, 0)} files, ${(total / 1024).toFixed(0)} KB built`);

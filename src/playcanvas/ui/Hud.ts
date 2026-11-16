@@ -572,7 +572,10 @@ export class Hud {
     });
     // Every modal button clicks.
     this.overlay.addEventListener("click", (e) => {
-      if ((e.target as Element).closest("button")) audio.play("ui");
+      // (Shop cards make their own sound: coins, or a knock when the cash is short.)
+      const button = (e.target as Element).closest("button");
+      if (!button || button.closest(".panel.shop .cards")) return;
+      audio.play(button.classList.contains("reroll") || button.textContent?.startsWith("↻") ? "reroll" : button.classList.contains("banish") ? "banish" : "ui");
     });
     for (let i = 0; i < 24; i++) {
       const el = document.createElement("div");
@@ -949,6 +952,7 @@ export class Hud {
 
   /** Opens the modal with a title, text, optional cards (each a button) and optional actions. */
   openModal(options: { title: string; text?: string; image?: string; cards?: Card[]; compact?: boolean; levelUp?: boolean; className?: string; hint?: string; onCard?: (index: number) => void; actions?: { label: string; onClick: () => void; minor?: boolean }[] }): void {
+    if (!this.modalOpen) audio.play("ui_open");
     const panel = document.createElement("div");
     panel.className = options.levelUp ? "panel levelup" : `panel${options.className ? ` ${options.className}` : ""}`;
     const h = document.createElement("h2");
@@ -1017,7 +1021,7 @@ export class Hud {
           const toggle = card.lock.onToggle;
           lock.addEventListener("click", (e) => {
             e.stopPropagation();
-            audio.play("ui");
+            audio.play("lock");
             toggle();
           });
           b.append(lock);

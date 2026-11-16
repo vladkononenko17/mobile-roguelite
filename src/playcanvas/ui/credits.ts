@@ -39,7 +39,7 @@ export const CREDITS: { group: string; lines: string[] }[] = [
       "\"The Free Firearm Sound Library\", \"Zombies Sound Pack\", \"80 CC0 creature SFX\", \"Monster Sound Pack Vol. 1\" (OpenGameArt), CC0",
       "\"Gunshot with silencer\" by hotpin7 (Freesound), CC0; \"Zombie moans\" by darsycho, CC0",
       "Music: Juhani Junkala \"Post Apocalyptic Wastelands\", \"Epic Boss Battle\"; \"Ambience Pack 1 - Sci Fi Horror\" (OpenGameArt), CC0",
-      "Whiteout's music: original, synthesised for this game",
+      "Whiteout, Graveyard and Pirate music, the ambience of every chapter and the stings: original, synthesised for this game",
     ],
   },
   {

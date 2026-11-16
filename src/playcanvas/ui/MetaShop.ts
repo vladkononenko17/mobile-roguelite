@@ -65,6 +65,7 @@ export function showMetaShop(onClose: () => void = () => {}): void {
   const done = () => {
     window.removeEventListener("keydown", onKey, true);
     root.remove();
+    audio.play("ui_close");
     onClose();
   };
   const onKey = (e: KeyboardEvent) => {

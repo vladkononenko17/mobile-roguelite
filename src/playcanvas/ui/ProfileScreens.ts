@@ -56,6 +56,7 @@ export function sheet(fill: (box: HTMLElement, redraw: () => void) => void, onCl
   const done = () => {
     window.removeEventListener("keydown", onKey, true);
     root.remove();
+    audio.play("ui_close");
     onClose();
   };
   const onKey = (e: KeyboardEvent) => {

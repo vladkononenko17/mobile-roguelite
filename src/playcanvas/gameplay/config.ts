@@ -100,31 +100,31 @@ export const WEAPON_STATS: Partial<Record<WeaponId, WeaponStats>> = {
   // Tier 1: a heavy revolver-class pistol (pierces) or the pump gun.
   handCannon: {
     damage: 40, fireRate: 1.8, range: 13, spreadDeg: 1, pellets: 1, penetration: 1, magazine: 7, reloadSeconds: 1.3, knockback: 0.32,
-    audio: { id: "shot_pistol", volume: 1.25, rate: 0.78 },
+    audio: { id: "shot_handcannon", volume: 1, rate: 0.95 },
   },
   shotgun: { damage: 9, fireRate: 1.25, range: 7, spreadDeg: 11, pellets: 7, penetration: 0, magazine: 6, reloadSeconds: 1.6, knockback: 0.35 },
   // Tier 2: the SMGs and the box-magazine auto shotgun.
   mp5: {
     damage: 7.5, fireRate: 11, range: 11.5, spreadDeg: 4.2, pellets: 1, penetration: 0, magazine: 30, reloadSeconds: 1.45, knockback: 0.055,
-    audio: { id: "shot_rifle", volume: 0.72, rate: 1.13 },
+    audio: { id: "shot_smg", volume: 1, rate: 1 },
   },
   dualUzi: {
     damage: 6.8, fireRate: 15, range: 8.5, spreadDeg: 7, pellets: 1, penetration: 0, magazine: 40, reloadSeconds: 2, knockback: 0.045,
-    audio: { id: "shot_pistol", volume: 0.62, rate: 1.18 },
+    audio: { id: "shot_uzi", volume: 1, rate: 1.05 },
   },
   autoShotgun: {
     damage: 6.5, fireRate: 3, range: 7.5, spreadDeg: 13, pellets: 6, penetration: 0, magazine: 8, reloadSeconds: 2, knockback: 0.3,
-    audio: { id: "shot_shotgun", volume: 0.85, rate: 1.12 },
+    audio: { id: "shot_autoshotgun", volume: 1, rate: 1.05 },
   },
   // Tier 3: rifles. Assault (all-round, pierces), battle (heavier, pierce 2), marksman (long, pierce 3).
   rifle: { damage: 12, fireRate: 7.5, range: 14, spreadDeg: 3, pellets: 1, penetration: 1, magazine: 30, reloadSeconds: 1.8, knockback: 0.08 },
   battleRifle: {
     damage: 24, fireRate: 4.2, range: 15, spreadDeg: 2.2, pellets: 1, penetration: 2, magazine: 20, reloadSeconds: 2, knockback: 0.16,
-    audio: { id: "shot_rifle", volume: 1.05, rate: 0.84 },
+    audio: { id: "shot_battle", volume: 1, rate: 0.95 },
   },
   marksman: {
     damage: 40, fireRate: 2.4, range: 18, spreadDeg: 0.8, pellets: 1, penetration: 3, magazine: 10, reloadSeconds: 1.9, knockback: 0.25,
-    audio: { id: "shot_rifle", volume: 1.2, rate: 0.7 },
+    audio: { id: "shot_marksman", volume: 1, rate: 0.92 },
   },
   // Tier 4: space guns. Plasma: a hose of bolts; Pulse SMG: splashing pulses; Railgun: one slug through a line.
   plasma: {
@@ -133,12 +133,12 @@ export const WEAPON_STATS: Partial<Record<WeaponId, WeaponStats>> = {
   },
   pulseSmg: {
     damage: 6, fireRate: 18, range: 12, spreadDeg: 3.5, pellets: 1, penetration: 0, magazine: 54, reloadSeconds: 1.5, knockback: 0.04,
-    audio: { id: "shot_plasma", volume: 0.8, rate: 1.25 },
+    audio: { id: "shot_pulse", volume: 1, rate: 1 },
     fx: { tracer: [0.3, 1, 0.75], tracerWidth: 0.045, tracerLife: 0.05, muzzle: [0.35, 1, 0.75], muzzleSize: 0.16, shot: { speed: 55, size: 0.09, color: [0.35, 1, 0.75] }, splash: { radius: 0.9, fraction: 0.4 } },
   },
   railgun: {
     damage: 110, fireRate: 0.9, range: 22, spreadDeg: 0.3, pellets: 1, penetration: 8, magazine: 4, reloadSeconds: 2.2, knockback: 0.5,
-    audio: { id: "shot_hellfire", volume: 0.9, rate: 1.35 },
+    audio: { id: "shot_railgun", volume: 1, rate: 1 },
     fx: { tracer: [0.6, 0.65, 1], tracerWidth: 0.16, tracerLife: 0.22, muzzle: [0.65, 0.7, 1], muzzleSize: 0.4, shot: { speed: 120, size: 0.16, color: [0.75, 0.8, 1] } },
   },
   // Hellfire: slow, heavy soul rounds that pierce, burst and burn (damage and fire builds).

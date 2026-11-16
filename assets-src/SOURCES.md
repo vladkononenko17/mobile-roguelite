@@ -69,7 +69,7 @@ Quaternius "Ultimate Space Kit" (quaternius.com, CC0; its public Google Drive fo
 
 ## Audio (all CC0)
 
-Raw packs in `assets-src/audio/` (git-ignored; re-download to rebuild). `scripts/build-audio.mjs` (needs an ffmpeg with libmp3lame, e.g. the `ffmpeg-static` npm package via `FFMPEG=`) cuts, layers, pitches, trims, fades and peak-normalises them into mono mp3 variants in `public/audio/` (plus `sounds.json`), ~4 MB in all, most of it music:
+Raw packs in `assets-src/audio/` (git-ignored; re-download to rebuild). `scripts/build-audio.mjs` (needs an ffmpeg with libmp3lame, e.g. the `ffmpeg-static` npm package via `FFMPEG=`) cuts, layers, pitches, trims, fades and peak-normalises them into mono mp3 variants in `public/audio/` (plus `sounds.json`), ~8 MB in all, most of it music:
 
 - Kenney "Impact Sounds", "Sci-fi Sounds", "RPG Audio", "Interface Sounds", "Digital Audio" (www.kenney.nl, CC0; `License.txt` kept): footsteps (sand, concrete, grass; plates for station decks, pitched-down concrete for Hell stone), hero hits, lasers (plasma rifle, the Hellfire rifle's layer, mech shots), explosions and slams, slime (alien hits, the bloater's burst), doors / barricades / seals, coins, power-ups, UI clicks, metal latch and click (reload).
 - Freesound 819269, "Gunshot with silencer" by hotpin7 (CC0): short game-style suppressed Uzi shot; three pitch variants.
@@ -79,6 +79,11 @@ Raw packs in `assets-src/audio/` (git-ignored; re-download to rebuild). `scripts
 - "Zombie moans" by darsycho (opengameart.org/content/zombie-moans, CC0; seven moans cut from one take) and "Zombie pain" (opengameart.org/content/zombie-pain, offered under CC0): more walker groans, hits and deaths.
 - "Monster Sound Pack, Volume 1" (opengameart.org/content/monster-sound-pack-volume-1, CC0): demon voices (pitched down), alien and hound voices (pitched up), boss roars.
 - Music: Juhani Junkala "Post Apocalyptic Wastelands" (opengameart.org/content/horror-atmosphere) for the Wasteland, "Infestation in the Control Room" and "The Depths of Hell" from "Ambience Pack 1 - Sci Fi Horror" (opengameart.org/content/ambience-pack-1-sci-fi-horror) for ORION and Hell, Juhani Junkala "Epic Boss Battle" (opengameart.org/content/boss-battle-music) for bosses; loudness-normalised, mono.
+- Kenney "Foley Sounds" and "Casino Audio" (www.kenney.nl, CC0): the dash (whooshes), upgrade pickups, shop buys (chips and coins) and rerolls (dice). The paper menus use "RPG Audio" pages and book, "Interface Sounds" pencil scratches (banish) and "Impact Sounds" wood (the SET OUT stamp, a knock when the cash is short) and bell (a champion or boss arrives).
+- More guns from "The Free Firearm Sound Library" (near microphones): Smith & Wesson 642 and 1911 (Hand Cannon), Carl Gustav M45 (MP5), PPSh (Uzis), Mossberg (auto shotgun), SKS (battle rifle), Mosin Nagant (marksman, and the crack under the railgun).
+- `ONLY=id,id node scripts/build-audio.mjs` rebuilds just those sounds into the existing folder (the other packs need not be on disk).
+- The three oldest music loops were mostly sub-bass, which a phone speaker cannot play: the build cuts it and lifts the mids (`PHONE_EQ` in the script), then normalises loudness.
+- `scripts/build-synth-audio.py` synthesises, with no source files (original work): the Graveyard and Pirate themes (`music_graveyard`, `music_pirate`; 64 s, seamless), an ambience bed per chapter (`amb_*`, 24 s loops played quietly under the music) and three stings (`sting_clear`, `sting_win`, `sting_dead`).
 - Whiteout's loop (`music_whiteout.mp3`) has no source file: `scripts/build-whiteout-music.py` synthesises it (wind, a low drone, glassy bells in D minor, a distant boom; 64 s, seamless), original work.
 
 ## Quaternius Ultimate Monsters (CC0)

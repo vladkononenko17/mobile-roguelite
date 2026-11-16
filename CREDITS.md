@@ -25,11 +25,12 @@ Game by Neon Hollow. Third-party assets below; details and build steps in `asset
 - Textures: Poly Haven (polyhaven.com), CC0.
 
 ## Sound and music
-- Kenney "Impact Sounds", "Sci-fi Sounds", "RPG Audio", "Interface Sounds", "Digital Audio", CC0.
+- Kenney "Impact Sounds", "Sci-fi Sounds", "RPG Audio", "Interface Sounds", "Digital Audio", "Foley Sounds", "Casino Audio", CC0.
 - "The Free Firearm Sound Library" (OpenGameArt), CC0. "Gunshot with silencer" by hotpin7 (Freesound 819269), CC0.
 - "Zombies Sound Pack", "80 CC0 creature SFX", "Monster Sound Pack, Volume 1", "Zombie pain" (OpenGameArt), CC0. "Zombie moans" by darsycho, CC0.
 - Music: Juhani Junkala "Post Apocalyptic Wastelands" and "Epic Boss Battle"; "Ambience Pack 1 - Sci Fi Horror" (OpenGameArt), CC0.
 - Whiteout's music: original, synthesised for this game (`scripts/build-whiteout-music.py`); no third-party material.
+- The Graveyard and Pirate themes, the six ambience beds (wind, station hum, fire, night, surf, blizzard) and the level-clear, victory and death stings: original, synthesised for this game (`scripts/build-synth-audio.py`); no third-party material.
 
 ## Code and fonts
 - PlayCanvas engine, MIT licence.

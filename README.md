@@ -188,7 +188,7 @@ the Abbey (boss: **the Mad Abbot**), the Bridge, the Outer Bailey, the Great Hal
   `public/models/medieval/medieval-kit.glb`, 139 models, 3 materials) and Adventurers / Skeletons
   (creatures with their clips and colour skins, `scripts/build-medieval-creatures.mjs`). The raw packs
   stay local in `assets-src/medieval/` (git-ignored).
-- Tests: `tests/medieval.test.mjs`. Music for now reuses the Hell track.
+- Tests: `tests/medieval.test.mjs`. Its own theme (`music_graveyard`) and night ambience are synthesised by `scripts/build-synth-audio.py`.
 
 ## Dustline 3D — Chapter V: The Black Tide (pirates)
 
@@ -228,7 +228,7 @@ The last and largest chapter of the 3D game at `/playcanvas.html`: open it from 
   with the crab, tricorn, musket, pistol and anchor modelled in code (`scripts/build-pirate-creatures.mjs`);
   the sea texture is painted by `scripts/build-pirate-water.mjs`. Raw packs stay local in `assets-src/pirate/`
   and `assets-src/medieval/` (git-ignored).
-- Tests: `tests/pirate.test.mjs`. Music for now reuses the Wasteland track.
+- Tests: `tests/pirate.test.mjs`. Its own theme (`music_pirate`) and surf ambience are synthesised by `scripts/build-synth-audio.py`.
 
 ## Dustline 3D — Chapter VI: Whiteout (snow horror)
 

@@ -225,10 +225,10 @@ export function showMainMenu(): Promise<BiomeId> {
       chapterEl.style.animation = "";
     }
     audio.music(BIOME_AUDIO[c.id]?.music ?? null);
-    if (sound) audio.play("ui");
+    if (sound) audio.play("ui_open");
   };
   // Menu sounds and the chapter's music load right away, so the first tap already plays them.
-  audio.preload(["ui", "upgrade", BIOME_AUDIO[CHAPTERS[index].id]?.music].filter((id): id is string => !!id));
+  audio.preload(["ui", "ui_open", "ui_close", "stamp", "upgrade", BIOME_AUDIO[CHAPTERS[index].id]?.music].filter((id): id is string => !!id));
   select(index, false);
 
   root.querySelectorAll<HTMLElement>("[data-tab]").forEach((el, i) => el.addEventListener("click", () => select(i)));
@@ -240,7 +240,7 @@ export function showMainMenu(): Promise<BiomeId> {
   };
   showDust();
   metaButton.addEventListener("click", () => {
-    audio.play("ui");
+    audio.play("ui_open");
     showMetaShop(showDust);
   });
   // Quests completed outside a run (none yet) and the hero / quests / daily buttons.
@@ -262,15 +262,15 @@ export function showMainMenu(): Promise<BiomeId> {
   heroRefresh = showProfile;
   showProfile();
   heroButton.addEventListener("click", () => {
-    audio.play("ui");
+    audio.play("ui_open");
     showHeroes(showProfile);
   });
   questButton.addEventListener("click", () => {
-    audio.play("ui");
+    audio.play("ui_open");
     showQuests(showProfile);
   });
   root.querySelector(".cog")!.addEventListener("click", () => {
-    audio.play("ui");
+    audio.play("ui_open");
     showSettings(() => {}, [{ label: "Credits", note: "Third-party art, sound and music", onClick: showCredits }]);
   });
   const soundButton = root.querySelector<HTMLElement>(".snd")!;
@@ -307,7 +307,7 @@ export function showMainMenu(): Promise<BiomeId> {
       }
       // A tap on Play: ask the browser to keep this site's saves.
       keepSaves();
-      audio.play("upgrade");
+      audio.play("stamp");
       root.classList.add("gone");
       setTimeout(() => root.remove(), 500);
       resolve(id);

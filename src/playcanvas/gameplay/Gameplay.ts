@@ -225,7 +225,11 @@ export class Gameplay {
     this.combat.onDealt = (source, amount) => { this.log.dealt[source] = (this.log.dealt[source] ?? 0) + amount; };
     this.combat.onHit = (position, amount, style, enemy) => {
       this.hud.damageNumber(position, String(amount), style);
-      if (style !== "burn") audio.voice(voiceOf(enemy.id, enemy.def), "hit", { x: position.x, z: position.z, rate: voiceRate(enemy.scale) });
+      if (style !== "burn") {
+        const voice = voiceOf(enemy.id, enemy.def);
+        audio.play(voice === "mech" ? "hit_metal" : "hit_flesh", { x: position.x, z: position.z });
+        audio.voice(voice, "hit", { x: position.x, z: position.z, rate: voiceRate(enemy.scale) });
+      }
     };
     this.gun = new PlayerGun(this.enemies, this.effects, collision, this.stats, this.projector, this.combat);
     this.drones = new Drones(app, this.effects, this.combat, this.gun);
@@ -565,6 +569,7 @@ export class Gameplay {
     reachedLevel(this.biome.id, index + 1);
     this.bossMusic = false;
     audio.music(BIOME_AUDIO[this.biome.id]?.music ?? null);
+    audio.ambience(BIOME_AUDIO[this.biome.id]?.ambience ?? null);
     this.campaign?.arena?.(0);
     this.burn = 0;
     this.meteorTimer = this.levels[index].meteors?.every ?? 0;
@@ -733,6 +738,7 @@ export class Gameplay {
     this.endTutorial();
     this.hud.setLowHealth(false);
     audio.play("die");
+    audio.play("sting_dead");
     this.player.controlsEnabled = false;
     this.player.aimYawDeg = null;
     const dust = this.bankDust(false);
@@ -819,6 +825,7 @@ export class Gameplay {
   /** The wave is over: the rest of the horde drops (no rewards), leftover pickups fly to the hero. */
   private waveComplete(): void {
     this.phase = "cleared";
+    audio.play("sting_clear");
     this.log.levels++;
     const s = this.stats;
     // Untouchable bounties pay when the level ends unbroken; interest on the cash he kept.
@@ -907,6 +914,7 @@ export class Gameplay {
     this.player.controlsEnabled = false;
     this.player.aimYawDeg = null;
     const victory = this.campaign?.victory ?? { title: "RUN COMPLETE", text: "The outpost is quiet." };
+    audio.play("sting_win");
     clearedCampaign(this.biome.id, this.difficulty?.label ?? "Normal");
     if (this.difficultyId !== "easy") recordWin(this.biome.id, this.danger);
     const dust = this.bankDust(true);
@@ -1169,7 +1177,9 @@ export class Gameplay {
       onCard: (i) => {
         const item = items[i];
         const price = this.shopPrice(item);
-        if (s.cash < price || soldOut(item)) return;
+        if (soldOut(item)) return;
+        if (s.cash < price) { audio.play("deny"); return; }
+        audio.play("buy");
         s.cash -= price;
         s.bought.set(item.id, count(item) + 1);
         s.lockedShop.delete(item.id);
@@ -1556,7 +1566,7 @@ export class Gameplay {
 
   private collect(kind: PickupKind, value: number, upgrade: UpgradeId | null): void {
     const s = this.stats;
-    audio.play(kind === "cash" ? "cash" : kind === "health" ? "heal" : kind === "chest" ? "levelup" : "upgrade");
+    audio.play(kind === "cash" ? "cash" : kind === "health" ? "heal" : kind === "chest" ? "chest" : "pickup");
     if (kind === "cash") {
       value = Math.round(value * s.cashMult * (this.route?.cash ?? 1));
       s.cash += value;
@@ -1624,13 +1634,14 @@ export class Gameplay {
     if (!e) return;
     this.enemies.makeElite(e, ELITES.hp * this.dmods.eliteHp, ELITES.scale, ELITES.damage);
     this.hud.showBanner(`Champion ${e.def.label}`, 2, "Incoming");
+    audio.play("bell");
     audio.voice(voiceOf(e.id, e.def), "attack", { x: spot.x, z: spot.z, rate: 0.8, volume: 1.3 });
   }
 
   /** Starts loading the sounds this run can play: the map's, the weapons', its enemies' voices. */
   private preloadSounds(types: Set<EnemyId>): void {
     const weaponSounds = Object.entries(WEAPON_STATS).map(([id, stats]) => stats?.audio?.id ?? `shot_${id}`);
-    const sounds = new Set<string>([...COMMON_SOUNDS, ...footstepsOf(this.biome), ...weaponSounds, "shot_suppressed"]);
+    const sounds = new Set<string>([...COMMON_SOUNDS, ...footstepsOf(this.biome), ...weaponSounds, "shot_suppressed", BIOME_AUDIO[this.biome.id]?.ambience ?? "amb_wind"]);
     for (const id of types) {
       const def = ENEMIES[id];
       const voice = voiceOf(id, def);
@@ -1668,7 +1679,10 @@ export class Gameplay {
     const up = combat && !!boss && isAlive(boss);
     if (up !== this.bossMusic) {
       this.bossMusic = up;
-      if (up) audio.voice(voiceOf(boss!.id, boss!.def), "roar", { x: boss!.position.x, z: boss!.position.z });
+      if (up) {
+        audio.voice(voiceOf(boss!.id, boss!.def), "roar", { x: boss!.position.x, z: boss!.position.z });
+        audio.play("bell", { rate: 0.7, volume: 1.3 });
+      }
       audio.music(up ? BOSS_MUSIC : BIOME_AUDIO[this.biome.id]?.music ?? null);
     }
   }
@@ -1867,7 +1881,7 @@ export class Gameplay {
     s.invulnerable = Math.max(s.invulnerable, DASH.iframes);
     const p = this.player.entity.getPosition();
     this.effects.ring(this.tmp.set(p.x, 0.05, p.z), 1.1, true);
-    audio.play("reload", { rate: 1.8, volume: 0.6 });
+    audio.play("dash");
     this.dashBlastIn = s.dashBlast > 0 ? DASH.seconds : 0;
     this.dashes++;
     bump("dashes");
