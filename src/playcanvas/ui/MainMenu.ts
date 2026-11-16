@@ -1,5 +1,7 @@
 import "@fontsource/barlow-condensed/latin-700.css";
 import "@fontsource/barlow-condensed/latin-800.css";
+import "@fontsource/special-elite/latin-400.css";
+import "@fontsource/permanent-marker/latin-400.css";
 import { audio } from "../audio/Audio";
 import { BIOME_AUDIO } from "../audio/soundMap";
 import { ENEMIES } from "../gameplay/config";
@@ -8,8 +10,6 @@ import { showCredits } from "./credits";
 import { showMetaShop } from "./MetaShop";
 import { loadMeta } from "../gameplay/meta";
 import { loadProgress } from "./progress";
-import { iconSvg } from "./UpgradeIcons";
-import { CHARACTERS } from "../config";
 import { showHeroes, showQuests } from "./ProfileScreens";
 import { showSettings } from "./SettingsScreen";
 import { keepSaves } from "./Install";
@@ -19,110 +19,113 @@ import { heroDef } from "../gameplay/heroes";
 import { clearDaily, dailySetup, markDaily, todayKey } from "../gameplay/daily";
 
 /** What the menu says about each chapter (the rest comes from the campaign data). */
-const CHAPTERS: { id: BiomeId; numeral: string; name: string; tagline: string; accent: string }[] = [
-  { id: "outpost", numeral: "I", name: "The Wasteland", tagline: "The dead own the city. Hold the outpost, cross the Dead Streets, and bring down what waits in the Plaza.", accent: "#d6a23c" },
-  { id: "facility", numeral: "II", name: "Station ORION", tagline: "A research station gone silent. Fight through seven sectors to Project Gate, and whatever came through it.", accent: "#4fd8ff" },
-  { id: "medieval", numeral: "III", name: "The Dark Kingdom", tagline: "A plague-struck realm where the dead rise. Cross the graveyard and the abbey, storm the castle, and face the Fallen King.", accent: "#c9a25a" },
-  { id: "hell", numeral: "IV", name: "Hell", tagline: "Nine circles of fire and ash. Descend past the Citadel to the Archfiend's throne.", accent: "#ff6a2e" },
-  { id: "pirate", numeral: "V", name: "The Black Tide", tagline: "Cursed gold woke the drowned. Escape the treasure grotto, cross the wrecks and the reef, and sink the ghost flagship.", accent: "#3fc7b0" },
-  { id: "winter", numeral: "VI", name: "Whiteout", tagline: "One night of snow and the dead. Cross the black pines and a farm in the blizzard, walk the dark suburb, and survive the burning town of Ashford.", accent: "#9fc4ff" },
+/** `caption`: the note under the chapter's photo on the map. */
+const CHAPTERS: { id: BiomeId; numeral: string; name: string; tagline: string; accent: string; caption: string }[] = [
+  { id: "outpost", numeral: "I", name: "The Wasteland", tagline: "The dead own the city. Hold the outpost, cross the Dead Streets, and bring down what waits in the Plaza.", accent: "#d6a23c", caption: "the Plaza. don't stop here" },
+  { id: "facility", numeral: "II", name: "Station ORION", tagline: "A research station gone silent. Fight through seven sectors to Project Gate, and whatever came through it.", accent: "#4fd8ff", caption: "deck 7. the lights are still on" },
+  { id: "medieval", numeral: "III", name: "The Dark Kingdom", tagline: "A plague-struck realm where the dead rise. Cross the graveyard and the abbey, storm the castle, and face the Fallen King.", accent: "#c9a25a", caption: "the king's road. he isn't dead enough" },
+  { id: "hell", numeral: "IV", name: "Hell", tagline: "Nine circles of fire and ash. Descend past the Citadel to the Archfiend's throne.", accent: "#ff6a2e", caption: "ninth circle. bring water" },
+  { id: "pirate", numeral: "V", name: "The Black Tide", tagline: "Cursed gold woke the drowned. Escape the treasure grotto, cross the wrecks and the reef, and sink the ghost flagship.", accent: "#3fc7b0", caption: "the tide came back with them" },
+  { id: "winter", numeral: "VI", name: "Whiteout", tagline: "One night of snow and the dead. Cross the black pines and a farm in the blizzard, walk the dark suburb, and survive the burning town of Ashford.", accent: "#9fc4ff", caption: "Ashford. follow the fires" },
 ];
 
 const LAST_KEY = "dustline3d.chapter";
 
 const CSS = `
-#menu { position: fixed; inset: 0; z-index: 30; overflow: hidden; background: #0d0a08; color: #ece3cf;
-  font: 700 14px/1.25 "Barlow Condensed", system-ui, sans-serif; -webkit-user-select: none; user-select: none; touch-action: pan-y;
-  transition: opacity 0.45s; --accent: #d6a23c; }
+/* The start screen is a survivor's road map: paper, a pencilled route with a stop per chapter, a
+   photo taped on, the chapter on an index card, and the notes (difficulty, hero, upgrades) in the
+   margins. Type: a typewriter for what is written down, a marker for names. */
+#menu { position: fixed; inset: 0; z-index: 30; overflow: hidden; color: #2a2118; --ink: #2a2118; --red: #a3271c; --card: #f6f1e4;
+  font: 400 15px/1.3 "Special Elite", "Courier New", monospace; -webkit-user-select: none; user-select: none; touch-action: pan-y; transition: opacity 0.45s;
+  background: #d8c9a3;
+  background-image: radial-gradient(ellipse at 28% 16%, rgba(255, 250, 230, 0.65), transparent 60%), radial-gradient(ellipse at 82% 92%, rgba(120, 90, 40, 0.38), transparent 55%),
+    repeating-linear-gradient(0deg, rgba(60, 45, 20, 0.055) 0 1px, transparent 1px 28px), repeating-linear-gradient(90deg, rgba(60, 45, 20, 0.055) 0 1px, transparent 1px 28px); }
 #menu.gone { opacity: 0; pointer-events: none; }
-#menu .art { position: absolute; inset: 0; background: center 40% / cover no-repeat; opacity: 0; transition: opacity 0.6s; transform: scale(1.08);
-  animation: menu-drift 24s ease-in-out infinite alternate; }
-#menu .art.on { opacity: 1; }
-@keyframes menu-drift { from { transform: scale(1.08) translateY(0); } to { transform: scale(1.16) translateY(-2%); } }
-#menu .shade { position: absolute; inset: 0; background:
-  linear-gradient(180deg, rgba(10, 7, 5, 0.85) 0%, rgba(10, 7, 5, 0.2) 16%, rgba(10, 7, 5, 0.1) 38%, rgba(10, 7, 5, 0.7) 54%, rgba(10, 7, 5, 0.86) 66%, rgba(10, 7, 5, 0.97) 86%),
-  radial-gradient(ellipse 90% 60% at 50% 45%, transparent 40%, rgba(0, 0, 0, 0.5) 100%); }
-#menu .grain { position: absolute; inset: -50%; opacity: 0.05; pointer-events: none;
-  background-image: repeating-radial-gradient(circle at 17% 32%, #fff 0 0.6px, transparent 0.6px 3px); animation: menu-grain 1.2s steps(4) infinite; }
-@keyframes menu-grain { 0% { transform: translate(0, 0); } 25% { transform: translate(-3%, 2%); } 50% { transform: translate(2%, -3%); } 75% { transform: translate(-2%, -1%); } }
-#menu .ui { position: absolute; inset: 0; display: flex; flex-direction: column; box-sizing: border-box;
-  padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
-  max-width: 560px; margin: 0 auto; }
+/* The map's folds. */
+#menu::before, #menu::after { content: ""; position: absolute; background: rgba(60, 40, 10, 0.22); box-shadow: 1px 1px 0 rgba(255, 255, 255, 0.35); pointer-events: none; }
+#menu::before { top: 0; bottom: 0; left: 50%; width: 1px; }
+#menu::after { left: 0; right: 0; top: 37%; height: 1px; }
+#menu button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+#menu .ui { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; box-sizing: border-box; max-width: 520px; margin: 0 auto;
+  padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left)); }
 #menu .top { display: flex; align-items: flex-start; justify-content: space-between; }
-#menu .logo { margin-top: 4px; }
-#menu .logo small { display: block; font-size: 12px; letter-spacing: 0.42em; color: var(--accent); transition: color 0.5s; }
-#menu .logo h1 { margin: 2px 0 0; font-size: clamp(46px, 15vw, 72px); font-weight: 800; line-height: 0.9; letter-spacing: 0.06em;
-  background: linear-gradient(180deg, #fff6e2 20%, #c9b48f 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.6)); }
-#menu .logo p { margin: 6px 0 0; font-size: 13px; letter-spacing: 0.24em; opacity: 0.7; }
-#menu .icon { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid rgba(236, 227, 207, 0.35); border-radius: 10px;
-  background: rgba(13, 10, 8, 0.5); color: inherit; padding: 0; }
-#menu .icons { display: flex; gap: 8px; }
-#menu .icon svg { width: 20px; height: 20px; }
-#menu .icon.off { opacity: 0.45; }
-#menu .icon.off .wave, #menu .icon:not(.off) .mute { display: none; }
-#menu .grow { flex: 1; }
-#menu .chapter { animation: menu-in 0.45s ease-out; }
-@keyframes menu-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-#menu .kicker { font-size: 13px; letter-spacing: 0.3em; color: var(--accent); transition: color 0.5s; }
-#menu .chapter h2 { margin: 2px 0 6px; font-size: clamp(34px, 10vw, 46px); font-weight: 800; letter-spacing: 0.03em; line-height: 1; text-transform: uppercase;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8); }
-#menu .chapter p { margin: 0; font: 500 14px/1.35 system-ui, sans-serif; opacity: 0.85; max-width: 42ch; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-#menu .chips { display: flex; flex-wrap: nowrap; overflow: hidden; gap: 6px; margin-top: 10px; white-space: nowrap; }
-#menu .chips span { padding: 4px 8px 3px; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; border-radius: 4px;
-  background: rgba(236, 227, 207, 0.1); border: 1px solid rgba(236, 227, 207, 0.18); }
-#menu .chips .done { color: #12100c; background: var(--accent); border-color: transparent; }
-/* The chapters: one strip of six small pictures with their numerals. */
-#menu .tabs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 14px 0 12px; }
-#menu .tab { position: relative; height: 50px; padding: 0; border: 2px solid rgba(236, 227, 207, 0.16); border-radius: 10px; overflow: hidden;
-  background: #1a1410 center 42% / cover no-repeat; color: inherit; font: inherit; filter: saturate(0.55) brightness(0.65); transition: filter 0.25s, border-color 0.25s, transform 0.25s; }
-#menu .tab::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 30%, rgba(0, 0, 0, 0.85)); }
-#menu .tab i { position: absolute; left: 0; right: 0; bottom: 5px; z-index: 1; text-align: center; font-style: normal; font-size: 14px; letter-spacing: 0.12em; }
-#menu .tab.on { filter: none; border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5); }
-#menu .go { display: grid; gap: 8px; }
-#menu .row4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-#menu .mini { position: relative; height: 54px; border: 1px solid rgba(236, 227, 207, 0.3); border-radius: 10px; background: rgba(13, 10, 8, 0.6); color: #ece3cf; padding: 0;
-  display: grid; place-items: center; align-content: center; gap: 2px; font: 800 15px/1 "Barlow Condensed", system-ui, sans-serif; }
-#menu .mini small { font-size: 10px; letter-spacing: 0.16em; opacity: 0.75; }
-#menu .mini svg { width: 18px; height: 18px; fill: currentColor; }
-#menu .mini .face { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 2px currentColor; }
-#menu .mini .dot { position: absolute; top: 5px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: #8fd8ff; box-shadow: 0 0 6px #8fd8ff; }
-#menu .mini.daily { border-color: rgba(214, 162, 60, 0.7); color: #f2c66b; }
-/* Difficulty: a three-way switch under the chapter's chips, its one-line rule under it. */
-#menu .diff { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0; margin-top: 10px; border: 1px solid rgba(236, 227, 207, 0.3); border-radius: 8px; overflow: hidden; background: rgba(13, 10, 8, 0.6); }
-#menu .diff button { height: 34px; padding: 0 4px; border: 0; border-left: 1px solid rgba(236, 227, 207, 0.18); background: none; color: inherit; font: 800 14px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.7; }
-#menu .diff button:first-child { border-left: 0; }
-#menu .diff button.on { background: var(--accent); color: #140f0b; opacity: 1; }
-#menu .diff button.nm.on { background: #b773ff; }
-#menu .diff-note { margin-top: 5px; font: 500 11px/1.25 system-ui, sans-serif; opacity: 0.7; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#menu .danger { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-#menu .danger button { width: 34px; height: 30px; border-radius: 6px; border: 1px solid rgba(236, 227, 207, 0.3); background: rgba(13, 10, 8, 0.6); color: inherit; font: 800 18px/1 system-ui; padding: 0; }
-#menu .danger button:disabled { opacity: 0.3; }
-#menu .danger b { min-width: 92px; text-align: center; font-size: 17px; letter-spacing: 0.12em; color: var(--accent); }
-#menu .danger small { flex: 1; font: 500 11px/1.25 system-ui, sans-serif; opacity: 0.75; }
-#menu .meta { height: 54px; border: 1px solid rgba(143, 216, 255, 0.55); border-radius: 12px; background: rgba(10, 18, 24, 0.6); color: #8fd8ff;
-  display: grid; grid-template-columns: auto auto; justify-content: center; align-items: center; column-gap: 4px; padding: 0; font: 800 18px/1 "Barlow Condensed", system-ui, sans-serif; }
-#menu .meta i { font-style: normal; font-size: 15px; }
-#menu .meta small { grid-column: 1 / -1; font-size: 11px; letter-spacing: 0.16em; color: #ece3cf; opacity: 0.75; margin-top: 3px; }
-#menu .meta.fresh { box-shadow: 0 0 14px rgba(143, 216, 255, 0.45); }
-#menu .play { position: relative; width: 100%; height: 62px; border: 0; border-radius: 12px; background: var(--accent); color: #140f0b;
-  font: 800 24px/1 "Barlow Condensed", system-ui, sans-serif; letter-spacing: 0.3em; text-indent: 0.3em; overflow: hidden;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55), inset 0 -3px 0 rgba(0, 0, 0, 0.2); transition: background 0.5s, transform 0.1s; }
-#menu .play::before { content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -60%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent); animation: menu-shine 3.2s ease-in-out infinite; }
-@keyframes menu-shine { 0%, 55% { left: -60%; } 100% { left: 130%; } }
-#menu .play:active { transform: scale(0.98); }
-/* Short screens (a phone browser with its bars showing): the story line gives way first. */
-@media (max-height: 700px) { #menu .chapter p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } #menu .logo h1 { font-size: clamp(38px, 12vw, 56px); } }
-@media (max-height: 660px) { #menu .logo p { display: none; } }
-@media (max-height: 600px) { #menu .chapter p { display: none; } #menu .tabs { margin: 10px 0 8px; } }
+#menu .logo h1 { margin: 4px 0 0; font: 400 clamp(40px, 12.5vw, 54px)/0.9 "Permanent Marker", cursive; transform: rotate(-2deg); transform-origin: 0 100%; }
+#menu .logo p { margin: 8px 0 0; font-size: 13px; }
+#menu .links { display: grid; justify-items: end; }
+#menu .links button { min-height: 30px; padding: 4px 0 4px 14px; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+/* The map: the route on the left, the photo on the right. */
+#menu .map { position: relative; flex: 1; min-height: 150px; margin: 6px 0 4px; }
+#menu .route { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+#menu .route path { fill: none; stroke: var(--red); stroke-width: 3; stroke-dasharray: 2 9; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+#menu .stop { position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px; display: grid; place-items: center; }
+#menu .stop b { font: 400 19px/1 "Permanent Marker", cursive; opacity: 0.55; }
+/* A pencilled cross at every stop; the chosen one is ringed in red; a cleared one is ticked. */
+#menu .stop::before { content: ""; position: absolute; left: 50%; top: 50%; width: 15px; height: 15px; margin: -8px 0 0 -8px; opacity: 0.4;
+  background: linear-gradient(45deg, transparent 44%, var(--ink) 44% 56%, transparent 56%), linear-gradient(-45deg, transparent 44%, var(--ink) 44% 56%, transparent 56%); }
+#menu .stop b { position: relative; transform: translate(15px, -13px); }
+#menu .stop.done::after { content: "✓"; position: absolute; left: 4px; bottom: 0; font: 400 17px/1 "Permanent Marker", cursive; color: #2f6b3a; }
+#menu .stop.on::before { width: 30px; height: 30px; margin: -15px 0 0 -15px; opacity: 1; border-radius: 50%; border: 2.5px solid var(--red);
+  background: radial-gradient(circle, var(--red) 0 34%, transparent 37%); transform: rotate(-8deg) scale(1.04, 0.96); }
+#menu .stop.on b { opacity: 1; color: var(--red); transform: translate(21px, -17px); font-size: 23px; }
+#menu .photo { position: absolute; right: 2%; top: 3%; height: 86%; aspect-ratio: 0.8; max-width: 60%; box-sizing: border-box; padding: 8px 8px 44px; background: var(--card);
+  box-shadow: 0 8px 18px rgba(40, 25, 5, 0.45); transform: rotate(3deg); }
+#menu .photo .frame { position: relative; width: 100%; height: 100%; overflow: hidden; background: #1a1410; }
+#menu .shot { position: absolute; inset: 0; background: center 42% / cover no-repeat; filter: sepia(0.22) contrast(1.05); opacity: 0; transition: opacity 0.35s; }
+#menu .shot.on { opacity: 1; }
+#menu .photo .cap { position: absolute; left: 10px; right: 8px; bottom: 6px; height: 32px; display: flex; align-items: center; font: 400 14px/1.12 "Permanent Marker", cursive; overflow: hidden; }
+#menu .photo .tape { position: absolute; left: 50%; top: -11px; width: 76px; height: 22px; margin-left: -46px; background: rgba(232, 214, 140, 0.78); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); transform: rotate(-5deg); }
+/* The chapter's index card: ruled, with a stamp for this browser's progress. */
+#menu .chapter { position: relative; margin: 6px 0 0; padding: 12px 16px 10px; background: var(--card); box-shadow: 0 6px 14px rgba(40, 25, 5, 0.4); transform: rotate(-1.1deg);
+  background-image: linear-gradient(180deg, transparent 39px, rgba(190, 60, 50, 0.6) 39px 40.5px, transparent 40.5px), repeating-linear-gradient(180deg, transparent 0 23px, rgba(70, 110, 160, 0.28) 23px 24px); background-position: 0 0, 0 41px;
+  animation: menu-card 0.3s ease-out; }
+@keyframes menu-card { from { transform: rotate(-3deg) translateY(10px); opacity: 0.4; } to { transform: rotate(-1.1deg); opacity: 1; } }
+#menu .chapter h2 { margin: 0; font: 400 clamp(22px, 6.8vw, 28px)/1.15 "Permanent Marker", cursive; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#menu .chapter p { margin: 9px 0 0; font-size: 14.5px; line-height: 24px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+#menu .chapter .last { display: flex; justify-content: space-between; gap: 10px; font-size: 14.5px; line-height: 24px; white-space: nowrap; }
+#menu .chapter .last span:last-child { overflow: hidden; text-overflow: ellipsis; }
+#menu .stamp { position: absolute; right: 12px; top: -15px; padding: 5px 8px 1px; font-size: 14px; color: var(--red); border: 2.5px solid currentColor; border-radius: 3px; background: rgba(246, 241, 228, 0.7); transform: rotate(6deg); }
+#menu .stamp.ok { color: #2f6b3a; }
+/* The margins: difficulty ticked off on the left, the kit list on the right. */
+#menu .notes { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; }
+#menu .diffs { display: grid; align-content: start; }
+#menu .diffs button { display: flex; align-items: center; gap: 9px; min-height: 30px; font-size: 15px; text-align: left; }
+#menu .diffs button i { position: relative; width: 15px; height: 15px; border: 1.5px solid var(--ink); flex: none; }
+#menu .diffs button.on i::after { content: "✗"; position: absolute; left: -2px; top: -9px; font: 400 23px/1 "Permanent Marker", cursive; font-style: normal; color: var(--red); }
+#menu .danger { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 15px; }
+#menu .danger button { width: 30px; height: 30px; font: 400 20px/1 "Permanent Marker", cursive; }
+#menu .danger button:disabled { opacity: 0.25; }
+#menu .danger b { font: 400 16px/1 "Permanent Marker", cursive; color: var(--red); }
+#menu .kit { display: grid; justify-items: end; align-content: start; }
+#menu .kit button { min-height: 30px; font-size: 14.5px; text-align: right; white-space: nowrap; }
+#menu .kit b { margin-left: 6px; font: 400 16px/1 "Permanent Marker", cursive; }
+#menu .kit .fresh b, #menu .kit .new b { color: var(--red); }
+#menu .rule { min-height: 2.5em; margin-top: 6px; font-size: 12.5px; line-height: 1.25; opacity: 0.75; }
+#menu .rule:empty { min-height: 0; }
+/* PLAY is the stamp. */
+#menu .play { align-self: center; margin: 4px 0 2px; padding: 11px 36px 5px; font-size: 30px; line-height: 1; letter-spacing: 0.06em; color: var(--red); border: 4px solid var(--red); border-radius: 6px;
+  background: rgba(246, 241, 228, 0.4); box-shadow: inset 0 0 0 2px #d8c9a3, inset 0 0 0 4px var(--red); transform: rotate(-3deg); transition: transform 0.08s; }
+#menu .play:active { transform: rotate(-3deg) scale(0.95); }
+#menu button:focus-visible { outline: 2px dashed var(--red); outline-offset: 3px; }
+@media (max-height: 720px) { #menu .chapter p { -webkit-line-clamp: 2; } #menu .rule { display: none; } }
+@media (max-height: 620px) { #menu .logo p { display: none; } #menu .chapter p { display: none; } }
+@media (prefers-reduced-motion: reduce) { #menu .chapter { animation: none; } #menu .shot { transition: none; } }
 `;
+
+/**
+ * The stops of the route on the map (% of the map area: across, down), one per chapter, and the
+ * pencilled line through them (a smooth curve; drawn in a 100 x 100 box stretched over the map).
+ */
+const STOPS: [number, number][] = [[9, 9], [27, 26], [25, 45], [9, 60], [18, 78], [33, 95]];
+const ROUTE = STOPS.map(([x, y], i) => {
+  if (i === 0) return `M${x} ${y}`;
+  const [px, py] = STOPS[i - 1], [ppx, ppy] = STOPS[i - 2] ?? STOPS[i - 1], [nx, ny] = STOPS[i + 1] ?? STOPS[i];
+  // Catmull-Rom through the stops, as cubic Beziers.
+  return `C${(px + (x - ppx) / 6).toFixed(1)} ${(py + (y - ppy) / 6).toFixed(1)} ${(x - (nx - px) / 6).toFixed(1)} ${(y - (ny - py) / 6).toFixed(1)} ${x} ${y}`;
+}).join("");
 
 /** Settings cog: a ring, a hub, and a dashed outer ring for the teeth. */
 export const COG_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="2.6" stroke-width="2.2"/><circle cx="12" cy="12" r="6.6" stroke-width="2.4"/><circle cx="12" cy="12" r="9.3" stroke-width="3" stroke-dasharray="3.65 3.654"/></svg>`;
 
-const SOUND_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5H7L12 5V19L7 14.5H3Z" fill="currentColor"/><path class="wave" d="M15.5 9A4.5 4.5 0 0 1 15.5 15M18.5 6.5A8 8 0 0 1 18.5 17.5"/><path class="mute" d="M16 9.5L21 14.5M21 9.5L16 14.5"/></svg>`;
 
 /** Level count and bosses of a chapter, from its campaign. */
 function facts(id: BiomeId): { levels: number; bosses: string[] } {
@@ -146,17 +149,23 @@ export function showMainMenu(): Promise<BiomeId> {
   const root = document.createElement("div");
   root.id = "menu";
   root.innerHTML = `
-    ${CHAPTERS.map((c) => `<div class="art" data-art="${c.id}" style="background-image:url('${base}menu/${c.id}.webp')"></div>`).join("")}
-    <div class="shade"></div><div class="grain"></div>
     <div class="ui">
       <div class="top">
-        <div class="logo"><small>NEON HOLLOW</small><h1>DUSTLINE</h1><p>SURVIVE THE HORDE</p></div>
-        <div class="icons"><button type="button" class="icon snd" aria-label="sound">${SOUND_SVG}</button><button type="button" class="icon cog" aria-label="settings">${COG_SVG}</button></div>
+        <div class="logo"><h1>Dustline</h1><p>road notes, kept by a survivor</p></div>
+        <div class="links"><button type="button" class="cog">settings</button><button type="button" class="snd"></button></div>
       </div>
-      <div class="grow"></div>
+      <div class="map">
+        <svg class="route" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path d="${ROUTE}"/></svg>
+        ${CHAPTERS.map((c, i) => `<button type="button" class="stop" data-tab="${c.id}" aria-label="chapter ${i + 1}: ${c.name}" style="left:${STOPS[i][0]}%;top:${STOPS[i][1]}%"><b>${i + 1}</b></button>`).join("")}
+        <div class="photo"><div class="frame">${CHAPTERS.map((c) => `<div class="shot" data-art="${c.id}" style="background-image:url('${base}menu/${c.id}.webp')"></div>`).join("")}</div><i class="tape"></i><span class="cap"></span></div>
+      </div>
       <div class="chapter"></div>
-      <div class="tabs">${CHAPTERS.map((c) => `<button type="button" class="tab" data-tab="${c.id}" style="background-image:url('${base}menu/${c.id}.webp')"><i>${c.numeral}</i></button>`).join("")}</div>
-      <div class="go"><div class="row4"><button type="button" class="meta"><i>◆</i><b></b><small>UPGRADES</small></button><button type="button" class="mini hero"></button><button type="button" class="mini quests"></button><button type="button" class="mini daily"></button></div><button type="button" class="play">PLAY</button></div>
+      <div class="notes">
+        <div class="diffs"></div>
+        <div class="kit"><button type="button" class="meta">upgrades<b></b></button><button type="button" class="hero"></button><button type="button" class="quests"></button><button type="button" class="daily"></button></div>
+      </div>
+      <div class="rule"></div>
+      <button type="button" class="play">SET OUT</button>
     </div>`;
   document.body.append(root);
 
@@ -180,38 +189,36 @@ export function showMainMenu(): Promise<BiomeId> {
     root.querySelectorAll<HTMLElement>("[data-tab]").forEach((el) => el.classList.toggle("on", el.dataset.tab === c.id));
     const f = facts(c.id);
     const p = loadProgress(c.id);
-    // One line of facts: progress (if any), the length, the last boss.
-    const chips = [`<span>${f.levels} levels</span>`, `<span>Boss · ${f.bosses[f.bosses.length - 1]}</span>`];
-    if (p.cleared) chips.unshift(`<span class="done">Cleared · ${p.cleared}</span>`);
-    else if (p.best) chips.unshift(`<span class="done">Best · ${p.best}/${f.levels}</span>`);
     const top = dangerUnlocked(c.id), danger = chosenDanger(c.id);
-    const dangerRow = top > 0 ? `<div class="danger"><button type="button" class="dn" ${danger <= 0 ? "disabled" : ""}>‹</button><b>DANGER ${danger}</b><button type="button" class="up" ${danger >= top ? "disabled" : ""}>›</button><small></small></div>` : "";
-    // Difficulty: picked here once per chapter (remembered), not asked again before every run.
+    // The card: the chapter's name and story, its length and last boss, and a stamp for progress.
+    const stamp = p.cleared ? `<span class="stamp ok">CLEARED, ${p.cleared.toUpperCase()}</span>` : p.best ? `<span class="stamp">REACHED ${p.best} OF ${f.levels}</span>` : `<span class="stamp">NOT CLEARED</span>`;
+    chapterEl.innerHTML = `${stamp}<h2></h2><p></p><div class="last"><span>${f.levels} levels</span><span></span></div>`;
+    chapterEl.querySelector("h2")!.textContent = `${index + 1}. ${c.name}`;
+    chapterEl.querySelector("p")!.textContent = c.tagline;
+    chapterEl.querySelector(".last span:last-child")!.textContent = `boss: ${f.bosses[f.bosses.length - 1]}`;
+    root.querySelector(".cap")!.textContent = c.caption;
+    root.querySelectorAll<HTMLElement>(".stop").forEach((el) => el.classList.toggle("done", !!loadProgress(el.dataset.tab as BiomeId).cleared));
+    // Difficulty: ticked here once per chapter (remembered), not asked again before every run.
     const all = BIOMES[c.id].campaign?.difficulties;
     const ids = all ? Object.keys(all) : [];
-    const intended = BIOMES[c.id].campaign?.defaultDifficulty;
-    const difficulty = ids.length ? chosenDifficulty(c.id, ids, intended) : "";
-    const diffRow = ids.length > 1 ? `<div class="diff" role="radiogroup" aria-label="difficulty">${ids.map((id) => `<button type="button" role="radio" aria-checked="${id === difficulty}" class="${id === difficulty ? "on" : ""}${id === "nightmare" ? " nm" : ""}" data-diff="${id}">${all![id].label}</button>`).join("")}</div><div class="diff-note"></div>` : "";
-    chapterEl.innerHTML = `<div class="kicker">CHAPTER ${c.numeral}</div><h2></h2><p></p><div class="chips">${chips.join("")}</div>${diffRow}${dangerRow}`;
-    if (diffRow) {
-      chapterEl.querySelector(".diff-note")!.textContent = all![difficulty].text;
-      chapterEl.querySelectorAll<HTMLElement>("[data-diff]").forEach((el) => el.addEventListener("click", () => {
-        if (el.dataset.diff === difficulty) return;
-        chooseDifficulty(c.id, el.dataset.diff!);
-        refresh = true;
-        select(index);
-        refresh = false;
-      }));
-    }
+    const difficulty = ids.length ? chosenDifficulty(c.id, ids, BIOMES[c.id].campaign?.defaultDifficulty) : "";
+    const redraw = () => { refresh = true; select(index); refresh = false; };
+    const diffs = root.querySelector<HTMLElement>(".diffs")!;
+    diffs.innerHTML = `${ids.length > 1 ? ids.map((id) => `<button type="button" role="radio" aria-checked="${id === difficulty}" class="${id === difficulty ? "on" : ""}" data-diff="${id}"><i></i>${all![id].label.toLowerCase()}</button>`).join("") : ""}${
+      top > 0 ? `<div class="danger">danger <button type="button" class="dn" aria-label="less danger" ${danger <= 0 ? "disabled" : ""}>‹</button><b>${danger}</b><button type="button" class="up" aria-label="more danger" ${danger >= top ? "disabled" : ""}>›</button></div>` : ""}`;
+    diffs.querySelectorAll<HTMLElement>("[data-diff]").forEach((el) => el.addEventListener("click", () => {
+      if (el.dataset.diff === difficulty) return;
+      chooseDifficulty(c.id, el.dataset.diff!);
+      redraw();
+    }));
     if (top > 0) {
-      chapterEl.querySelector(".danger small")!.textContent = `${dangerSummary(danger)}${danger > 0 ? ` · Dust x${dangerMods(danger).dust.toFixed(2)}` : ""}`;
-      const redraw = () => { refresh = true; select(index); refresh = false; };
-      chapterEl.querySelector(".dn")!.addEventListener("click", () => { chooseDanger(c.id, danger - 1); redraw(); });
-      chapterEl.querySelector(".up")!.addEventListener("click", () => { chooseDanger(c.id, danger + 1); redraw(); });
+      diffs.querySelector(".dn")!.addEventListener("click", () => { chooseDanger(c.id, danger - 1); redraw(); });
+      diffs.querySelector(".up")!.addEventListener("click", () => { chooseDanger(c.id, danger + 1); redraw(); });
     }
-    chapterEl.querySelector("h2")!.textContent = c.name;
-    chapterEl.querySelector("p")!.textContent = c.tagline;
-    // Restart the entry animation (not when only a setting of this chapter changed).
+    // The chosen difficulty's rule (and the danger's), pencilled under the notes.
+    const rules = [difficulty ? all![difficulty].text : "", top > 0 && danger > 0 ? `Danger ${danger}: ${dangerSummary(danger)}, Dust x${dangerMods(danger).dust.toFixed(2)}.` : ""].filter(Boolean);
+    root.querySelector(".rule")!.textContent = rules.join(" ");
+    // The card drops in again (not when only a setting of this chapter changed).
     if (!refresh) {
       chapterEl.style.animation = "none";
       void chapterEl.offsetWidth;
@@ -228,7 +235,7 @@ export function showMainMenu(): Promise<BiomeId> {
   const metaButton = root.querySelector<HTMLElement>(".meta")!;
   const showDust = () => {
     const m = loadMeta();
-    metaButton.querySelector("b")!.textContent = String(m.dust);
+    metaButton.querySelector("b")!.textContent = `◆ ${m.dust}`;
     metaButton.classList.toggle("fresh", m.dust >= 15);
   };
   showDust();
@@ -243,13 +250,14 @@ export function showMainMenu(): Promise<BiomeId> {
   const dailyButton = root.querySelector<HTMLElement>(".daily")!;
   const showProfile = () => {
     const h = heroDef(heroFor(CHAPTERS[index].id));
-    heroButton.innerHTML = `${h.id in CHARACTERS ? `<img class="face" alt="" src="${base}ui/heroes/${h.id}.webp">` : iconSvg(h.icon)}<small>${h.name.toUpperCase()}</small>`;
-    heroButton.style.color = h.color;
+    heroButton.innerHTML = `hero<b></b>`;
+    heroButton.querySelector("b")!.textContent = h.name;
     const p = profile();
-    questButton.innerHTML = `<b>${p.quests.length}/${QUESTS.length}</b><small>QUESTS</small>`;
+    questButton.innerHTML = `quests<b>${p.quests.length} of ${QUESTS.length}</b>`;
     const d = dailySetup();
     const bestToday = p.daily[d.key];
-    dailyButton.innerHTML = `<b>${bestToday ? bestToday.toLocaleString("en-US") : "NEW"}</b><small>DAILY</small>${bestToday ? "" : `<i class="dot"></i>`}`;
+    dailyButton.innerHTML = `daily run<b>${bestToday ? bestToday.toLocaleString("en-US") : "new"}</b>`;
+    dailyButton.classList.toggle("new", !bestToday);
   };
   heroRefresh = showProfile;
   showProfile();
@@ -266,10 +274,11 @@ export function showMainMenu(): Promise<BiomeId> {
     showSettings(() => {}, [{ label: "Credits", note: "Third-party art, sound and music", onClick: showCredits }]);
   });
   const soundButton = root.querySelector<HTMLElement>(".snd")!;
-  soundButton.classList.toggle("off", audio.muted);
+  const showSound = () => { soundButton.textContent = audio.muted ? "sound off" : "sound on"; };
+  showSound();
   soundButton.addEventListener("click", () => {
     audio.setMuted(!audio.muted);
-    soundButton.classList.toggle("off", audio.muted);
+    showSound();
   });
 
   // Swipe left / right on the art to change chapter.

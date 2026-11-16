@@ -34,3 +34,4 @@ Game by Neon Hollow. Third-party assets below; details and build steps in `asset
 ## Code and fonts
 - PlayCanvas engine, MIT licence.
 - Barlow Condensed and Inter, SIL Open Font Licence 1.1 (`licenses/`).
+- Special Elite (Astigmatic) and Permanent Marker (Font Diner), the start screen's typewriter and marker: Apache Licence 2.0 (`licenses/`).

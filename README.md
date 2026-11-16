@@ -281,6 +281,10 @@ the Ravager).
 - **Banners** queue (one at a time, a small kicker over one or two big lines, above the hero); interest
   shows as "+N INTEREST" on the cash plate. Level-up cards carry their tag on its own line and take the
   rarity's colour; shop cards have a price chip (amber, red-outlined when short of cash, green on sale).
+- **Start screen** (`ui/MainMenu.ts`): a survivor's road map. A pencilled route with a stop per chapter
+  (tap a stop, or swipe), the chapter's key art as a taped photo, the chapter on an index card with a
+  progress stamp, difficulty ticked in the margin, the kit list (upgrades, hero, quests, daily) and a
+  SET OUT stamp. Type: Special Elite (typewriter) and Permanent Marker. Install and Credits are in Settings.
 - **Install** (`public/dustline.webmanifest`, `public/app/` icons from `scripts/build-app-icons.mjs`,
   `ui/Install.ts`): the game can be added to the Home Screen (full screen, own icon). The title screen
   shows an install pill where that is possible: the browser's prompt on Android / desktop Chrome, the three

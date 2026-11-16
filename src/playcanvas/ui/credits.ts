@@ -44,7 +44,7 @@ export const CREDITS: { group: string; lines: string[] }[] = [
   },
   {
     group: "Code and fonts",
-    lines: ["PlayCanvas engine (MIT)", "Barlow Condensed and Inter fonts (SIL Open Font Licence)"],
+    lines: ["PlayCanvas engine (MIT)", "Barlow Condensed and Inter fonts (SIL Open Font Licence)", "Special Elite and Permanent Marker fonts (Apache Licence 2.0)"],
   },
 ];
 
