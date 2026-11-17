@@ -122,4 +122,17 @@ By Kenney (www.kenney.nl), Creative Commons Zero (`License.txt` kept per pack). 
 
 `scripts/build-orion-additions.mjs` adds these to `public/models/facility/facility-kit.glb` (via `scripts/kit-additions.mjs`, shared with the Wasteland's script):
 - KayKit "Space Base Bits" by Kay Lousberg: dropship, landers, landing pads, cargo, cargo depots, trucks, gantries, base modules, tunnels, drill, solar panels, rocks and cliffs (the orange stone graded violet grey) (kaylousberg.com/game-assets; jam-ready-assets `kaykit-space-base`).
-- Kenney "Space Station Kit" furniture: workstations, holo tables, beds, tables, chairs, containers, frames (kenney.nl/assets/space-station-kit; jam-ready-assets `kenney-space-station-kit`).
+- Kenney "Space Station Kit" furniture: workstations, holo tables, beds, tables, chairs, containers, frames, carts, rails, wall screens, sealed crates (kenney.nl/assets/space-station-kit; jam-ready-assets `kenney-space-station-kit`).
+- The same script removes the Kenney Space Kit craft, rockets, hangar, rover, meteors, rocks and craters nothing places any more.
+
+## Dark Kingdom rework (assets-src/medieval-additions/, git-ignored; CC0)
+
+`scripts/build-medieval-additions.mjs` adds these to `public/models/medieval/medieval-kit.glb` (via `scripts/kit-additions.mjs`; textures graded to the dusk palette, skins and animations stripped) and scales down the kit's skull, ribcage and rubble:
+- Kenney "Castle Kit": siege engines whole and wrecked (catapult, trebuchet, ram, ballista, siege tower), long banners, rocks (kenney.nl/assets/castle-kit; jam-ready-assets `kenney-castle-kit`) in `kenney-castle/`.
+- Kenney "Fantasy Town Kit": market stalls, carts, a fountain, lanterns (kenney.nl/assets/fantasy-town-kit; jam-ready-assets `kenney-fantasy-town-kit`) in `kenney-town/`.
+- Quaternius "Fantasy Props MegaKit" (free/standard version): training dummies, weapon stands, workbench, anvil, feast tables and benches, bookcases, candle stands, a chandelier, barrels, crates, a cauldron, books (quaternius.com/packs/fantasypropsmegakit.html; jam-ready-assets `quaternius-fantasy-props`) in `quaternius-fantasy/`.
+
+## Hell and Whiteout additions (CC0; the Wasteland's sources in assets-src/city-overgrowth/)
+
+- `scripts/build-hell-additions.mjs`: Quaternius "Stylized Nature MegaKit" dead trees (charred) in place of the Hell kit's flat ones, and its rocks graded to basalt (`hRock1..3`).
+- `scripts/build-winter-additions.mjs`: Quaternius "Zombie Apocalypse Kit" vehicles and KayKit "City Builder Bits" cars, frosted (and the wrecks graded to soot), in place of the Kenney Car Kit's sedans, sports car, hatchback, SUVs, truck, taxi and police car; Quaternius pines with their needles dusted white in place of the Kenney pines; snowed-on bushes, grass, ferns and stones (`w*`) for near-field detail.

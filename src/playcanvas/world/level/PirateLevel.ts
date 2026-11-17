@@ -368,6 +368,7 @@ export function buildPirateLevel(kit: ModelKit<PirateModel>): Entity {
   buildFoam(root);
   buildKraken(root);
   buildColour(ctx);
+  buildShipDressing(ctx);
   buildSeaFx(kit.app, root, SHORELINES, SEA_POOLS.slice(0, 2).map((p) => ({ x: p.x, z: p.z, w: p.w, d: p.d, y: p.y ?? SEA_Y })));
   buildSeals(kit, root);
   return root;
@@ -785,6 +786,60 @@ function buildFlagship({ place, placeAll, wall, random }: Ctx): void {
     ["shipWreck", X + 50, Z + 50, 300, { noCollider: true, scale: 2.4, y: DEEP_Y - 1, tiltZ: 18 }],
   ]);
   for (let i = 0; i < 10; i++) place(random() < 0.5 ? "rocksA" : "rocksB", X + (random() < 0.5 ? -1 : 1) * (halfW + 14 + random() * 20), Z + 40 - random() * 90, random() * 360, { noCollider: true, y: DEEP_Y - 1.5, scale: 1 + random() });
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Close-up dressing for the pier and the two decks: the camera shows a few metres either side of
+ * the hero, and these zones are long walks over bare boards. Rotten boards, cargo, the dead, along
+ * the way through and across each floor. Its own random stream, so the older layout keeps its places.
+ * ---------------------------------------------------------------------------------------------- */
+function buildShipDressing({ place }: Ctx): void {
+  const random = rng(5150);
+  const litter = (b: Box, ids: PirateModel[], n: number, lane: number) => {
+    for (let i = 0; i < n; i++) {
+      const x = b.x0 + 1.5 + random() * (b.x1 - b.x0 - 3), z = b.z0 + 2 + random() * (b.z1 - b.z0 - 4);
+      if (Math.abs(x - lane) < 1.2) continue;
+      place(ids[Math.floor(random() * ids.length)], x, z, random() * 360, { noCollider: true, scale: 0.9 + random() * 0.4 });
+    }
+  };
+  // 4 The rotten pier: loose boards, a boat hauled up and turned over,
+  // oars, nets of cargo (sacks), buckets, lantern stands by the way.
+  const p = B.pier;
+  for (let i = 0, zz = p.z1 - 6; zz > p.z0 + 6; zz -= 18, i++) {
+    const sd = i % 2 ? 1 : -1;
+    place("planks", 6 - sd * (3 + random()), zz - 4, random() * 60 - 30, { noCollider: true, tiltZ: 6, y: 0.08, scale: 0.45 });
+  }
+  const pier: [PirateModel, number, number, number, SpawnOptions?][] = [
+    ["rowboatSmall", 9.6, p.z1 - 12, 70, { tiltZ: 180, y: 0.7 }], ["paddle", 8.2, p.z1 - 15, 20], ["paddle", 3.2, p.z1 - 40, 140],
+    ["lanternStanding", 2.8, p.z1 - 20, 0], ["lanternStanding", 9.2, p.z1 - 48, 0], ["lanternStanding", 2.8, p.z1 - 76, 0],
+    ["sack", 9.4, p.z1 - 30, 20], ["sack", 9.9, p.z1 - 31, 70], ["bucket", 3, p.z1 - 58, 0], ["crateLong", 9.6, p.z1 - 64, 90],
+    ["barrel", 3.2, p.z1 - 88, 0], ["crateOpen", 9.4, p.z1 - 92, 20], ["shovel", 3.4, p.z1 - 26, 60, { tiltZ: 85, y: 0.05 }],
+  ];
+  for (const [id, x, z, yaw, o] of pier) place(id, x, z, yaw, o ?? {});
+  litter(p, ["sack", "bucket", "bottlesBrown", "shells", "coinsSmall", "bottlesGreen"], 26, 6);
+
+  // 5 The broken deck: shot by the guns, powder kegs, coiled cargo, the crew where they fell,
+  // swords left in the planks.
+  const d = B.deck, X = WRECK.x;
+  const deck: [PirateModel, number, number, number, SpawnOptions?][] = [
+    ["bonesB", X + 2.8, d.z1 - 5, 30], ["bones", X - 3, d.z1 - 15, 0], ["ribcage", X + 3.2, d.z1 - 22, 80], ["skull", X - 2.6, d.z0 + 6, 0],
+    ["swordShieldBroken", X - 3.4, d.z1 - 4, 160], ["kegs", X + 3.6, d.z1 - 12, 0], ["cannonBall", X - 3.2, d.z1 - 20, 0], ["cannonBall", X - 2.8, d.z1 - 20.4, 0],
+    ["crateLong", X - 3.8, d.z0 + 12, 80], ["sack", X + 3.4, d.z0 + 14, 10], ["bucket", X + 2.6, d.z0 + 13, 0], ["paddle", X - 2.4, d.z0 + 3, 100],
+  ];
+  for (const [id, x, z, yaw, o] of deck) place(id, x, z, yaw, o ?? {});
+  litter(d, ["cannonBall", "sack", "bottlesGreen", "bones", "swordShieldBroken", "bucket", "coinsSmall"], 34, X);
+
+  // 10 The ghost flagship: the drowned crew's coffins along the way, candles burning on them,
+  // skull posts, bones and the Captain's spilt gold.
+  const f = B.flagship, G = GHOST.x;
+  const ghost: [PirateModel, number, number, number, SpawnOptions?][] = [
+    ["coffin", G - 3.6, f.z1 - 8, 0], ["candles", G - 3.6, f.z1 - 8, 0, { y: 0.55 }], ["coffin", G + 3.8, f.z1 - 17, 10], ["candles", G + 3.8, f.z1 - 17, 0, { y: 0.55 }],
+    ["coffin", G - 3.8, f.z1 - 27, -8], ["postSkull", G + 3.2, f.z1 - 4, 0], ["postSkull", G - 3.2, f.z1 - 21, 0], ["postSkull", G + 3.2, f.z1 - 31, 0],
+    ["ribcage", G + 2.6, f.z1 - 11, 50], ["skull", G - 2.4, f.z1 - 14, 0], ["bones", G + 2.8, f.z1 - 24, 20], ["coinsSmall", G - 2.6, f.z0 + 6, 0],
+    ["bottlesGreen", G + 2.4, f.z0 + 8, 0], ["lanternStanding", G - 3, f.z0 + 9, 0],
+  ];
+  for (const [id, x, z, yaw, o] of ghost) place(id, x, z, yaw, o ?? {});
+  litter(f, ["bones", "bonesB", "skull", "candles", "coinsSmall", "bottlesGreen", "ribcage"], 34, G);
 }
 
 /* ------------------------------------------------------------------------------------------------

@@ -118,6 +118,10 @@ export const HELL_MODELS = {
   urn: clutter,
   candlesMany: clutter,
   altarStone: box(0.9),
+  // Basalt boulders and stones (Quaternius rock graded dark) for the road scenes and the litter
+  hRock1: circle(0.7),
+  hRock2: clutter,
+  hRock3: circle(0.9),
   // Charred dead trees and wood (trunks block, the crowns overhang)
   treeDead: circle(0.45),
   treeDead2: circle(0.45),

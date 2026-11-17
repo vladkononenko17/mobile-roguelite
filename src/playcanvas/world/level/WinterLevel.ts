@@ -401,8 +401,46 @@ export function buildWinterLevel(kit: ModelKit<WinterModel>): Entity {
   lowEdge(t.x0, t.x1, t.z1 + 0.8);
   scatterSnow(t, 4);
 
+  dressNear(place);
   buildSeals(kit, root);
   return root;
+}
+
+/**
+ * Detail near the hero. The camera shows only a few metres either side of him, so every zone gets
+ * walk-over leftovers and snowed-on undergrowth across its floor, and a few small props by the way
+ * through. Its own random stream, so the older layout keeps its places.
+ */
+function dressNear(place: (id: WinterModel, x: number, z: number, yaw?: number, options?: SpawnOptions) => unknown): void {
+  const random = rng(7311);
+  const litter = (r: Rect, ids: WinterModel[], n: number, keepOff = 0) => {
+    for (let i = 0; i < n; i++) {
+      const x = r.x0 + 2 + random() * (r.x1 - r.x0 - 4), z = r.z0 + 2 + random() * (r.z1 - r.z0 - 4);
+      if (Math.abs(x) < keepOff) continue;
+      const id = ids[Math.floor(random() * ids.length)];
+      const flat = id === "debrisDoor" ? { tiltZ: 90, y: 0.15 } : id === "wheel" ? { tiltZ: 90, y: 0.3 } : {};
+      place(id, x, z, random() * 360, { noCollider: true, scale: 0.8 + random() * 0.4, ...flat });
+    }
+  };
+  const NATURE: WinterModel[] = ["wBush", "wGrass", "wGrass", "wFern", "wRock1", "wRock2"];
+  litter(FOREST, [...NATURE, "logSmall", "wBush"], 46, 2.5);
+  litter(FARM, [...NATURE, "planks", "wGrass", "wGrass", "logSmall"], 44, 1.5);
+  litter(SUBURB, ["debrisPlate", "debrisTire", "boxOpen", "wBush", "wGrass", "cone", "planks", "wRock2", "debrisDoor"], 38, 1.2);
+  litter(TOWN, ["debrisPlate", "debrisTire", "debrisBumper", "boxOpen", "roadCone", "planks", "wRock2", "wheel", "debrisDoor"], 34, 1.2);
+
+  // By the way through each zone (x within ~5 m of the middle).
+  const near: [WinterModel, number, number, number, SpawnOptions?][] = [
+    // The forest road: a dropped rucksack's worth - a bedroll, a lantern in the snow, a box, a sled.
+    ["bedroll", -3.2, 18, 40], ["lantern", 3, 13, 0, { tiltZ: 80, y: 0.2 }], ["box", -3.6, 2, 20], ["sled", 3.4, -10, 160], ["wBush", -3.8, -16, 0],
+    // The farm: hay bales by the path, a fallen fence section, a shovel, a barrel.
+    ["boxLarge", -3.6, -58, 20, { scale: [1.4, 1.2, 1.4] }], ["boxLarge", -4.6, -60, 70, { scale: [1.4, 1.2, 1.4] }], ["fenceWood", 3.6, -70, 70, { tiltZ: 80, y: 0.2 }],
+    ["shovel", 2.8, -84, 30, { tiltZ: 85, y: 0.1 }], ["barrel", -3.4, -90, 0], ["wBush", 3.8, -96, 0],
+    // Maple Lane: bins and mail, a bicycle's wheel, a child's sled left on the pavement.
+    ["barrelOpen", 4.4, -128, 0], ["boxOpen", -4.2, -136, 30], ["sled", 4.6, -160, 200], ["wheel", -4.2, -174, 0, { tiltZ: 90, y: 0.3 }], ["roadCone", 3.2, -146, 0],
+    // Ashford: the evacuation's luggage, a stretcher's worth of planks, cones.
+    ["box", -3.4, -212, 15], ["boxOpen", 3.6, -220, 60], ["planks", -3.8, -238, 80], ["roadCone", 3.4, -244, 0], ["chest", -3.6, -250, 200],
+  ];
+  for (const [id, x, z, yaw, options] of near) place(id, x, z, yaw, options ?? {});
 }
 
 /* ------------------------------------------------------------------------------------------------
