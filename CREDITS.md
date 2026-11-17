@@ -15,8 +15,8 @@ Game by Neon Hollow. Third-party assets below; details and build steps in `asset
 
 ## Worlds
 - Kenney (kenney.nl): Pirate Kit, Graveyard Kit, Nature Kit, Space Station Kit, Space Kit, Holiday Kit, City Kit Suburban, City Kit Roads, Car Kit, Survival Kit, CC0.
-- KayKit by Kay Lousberg: Medieval Hexagon Pack, Dungeon Remastered, Halloween Bits, CC0.
-- Quaternius: Zombie Apocalypse Kit, Ultimate Modular Sci-Fi Pack, Ultimate Space Kit, CC0.
+- KayKit by Kay Lousberg: Medieval Hexagon Pack, Dungeon Remastered, Halloween Bits, City Builder Bits, Space Base Bits, CC0.
+- Quaternius: Zombie Apocalypse Kit, Stylized Nature MegaKit, Ultimate Modular Sci-Fi Pack, Ultimate Space Kit, CC0.
 - "Inferno World" (free version) by ithappystudios.
 - "Post-Apocalyptic Starter Pack" by Atomic Realm; "CitySurvivalLite".
 - "Molten Maps SciFi Asset Pack" by Moltenbolt (moltenbolt.com), CC0. "HallwayPACK" spaceship modules, CC0. 3dassets.dev, CC0.

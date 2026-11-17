@@ -16,17 +16,23 @@ import { keepSaves } from "./Install";
 import { checkQuests, chooseDanger, chooseDifficulty, chosenDanger, chosenDifficulty, heroFor, dangerUnlocked, profile, QUESTS } from "../gameplay/profile";
 import { dangerMods, dangerSummary } from "../gameplay/danger";
 import { heroDef } from "../gameplay/heroes";
+import { EXPLORE } from "./ExplorePanel";
 import { clearDaily, dailySetup, markDaily, todayKey } from "../gameplay/daily";
 
-/** What the menu says about each chapter (the rest comes from the campaign data). */
-/** `caption`: the note under the chapter's photo on the map. */
+/**
+ * What the menu says about each chapter (the rest comes from the campaign data); `caption` is the
+ * note under the chapter's photo on the map. In order of size and difficulty, measured from the
+ * campaign data: the Wasteland (3 levels, ~3 min), Whiteout (4, ~5 min), ORION and the Dark
+ * Kingdom (7 each, ~8 min; the Kingdom's crowds hit harder), the Black Tide (10 levels, the largest
+ * map) and Hell last (9 levels, ~12 min, enemies at up to 4x HP and the strongest final boss).
+ */
 const CHAPTERS: { id: BiomeId; numeral: string; name: string; tagline: string; accent: string; caption: string }[] = [
   { id: "outpost", numeral: "I", name: "The Wasteland", tagline: "The dead own the city. Hold the outpost, cross the Dead Streets, and bring down what waits in the Plaza.", accent: "#d6a23c", caption: "the Plaza. don't stop here" },
-  { id: "facility", numeral: "II", name: "Station ORION", tagline: "A research station gone silent. Fight through seven sectors to Project Gate, and whatever came through it.", accent: "#4fd8ff", caption: "deck 7. the lights are still on" },
-  { id: "medieval", numeral: "III", name: "The Dark Kingdom", tagline: "A plague-struck realm where the dead rise. Cross the graveyard and the abbey, storm the castle, and face the Fallen King.", accent: "#c9a25a", caption: "the king's road. he isn't dead enough" },
-  { id: "hell", numeral: "IV", name: "Hell", tagline: "Nine circles of fire and ash. Descend past the Citadel to the Archfiend's throne.", accent: "#ff6a2e", caption: "ninth circle. bring water" },
+  { id: "winter", numeral: "II", name: "Whiteout", tagline: "One night of snow and the dead. Cross the black pines and a farm in the blizzard, walk the dark suburb, and survive the burning town of Ashford.", accent: "#9fc4ff", caption: "Ashford. follow the fires" },
+  { id: "facility", numeral: "III", name: "Station ORION", tagline: "A research station gone silent. Fight through seven sectors to Project Gate, and whatever came through it.", accent: "#4fd8ff", caption: "deck 7. the lights are still on" },
+  { id: "medieval", numeral: "IV", name: "The Dark Kingdom", tagline: "A plague-struck realm where the dead rise. Cross the graveyard and the abbey, storm the castle, and face the Fallen King.", accent: "#c9a25a", caption: "the king's road. he isn't dead enough" },
   { id: "pirate", numeral: "V", name: "The Black Tide", tagline: "Cursed gold woke the drowned. Escape the treasure grotto, cross the wrecks and the reef, and sink the ghost flagship.", accent: "#3fc7b0", caption: "the tide came back with them" },
-  { id: "winter", numeral: "VI", name: "Whiteout", tagline: "One night of snow and the dead. Cross the black pines and a farm in the blizzard, walk the dark suburb, and survive the burning town of Ashford.", accent: "#9fc4ff", caption: "Ashford. follow the fires" },
+  { id: "hell", numeral: "VI", name: "Hell", tagline: "Nine circles of fire and ash. Descend past the Citadel to the Archfiend's throne.", accent: "#ff6a2e", caption: "ninth circle. bring water" },
 ];
 
 const LAST_KEY = "dustline3d.chapter";
@@ -165,7 +171,7 @@ export function showMainMenu(): Promise<BiomeId> {
         <div class="kit"><button type="button" class="meta">upgrades<b></b></button><button type="button" class="hero"></button><button type="button" class="quests"></button><button type="button" class="daily"></button></div>
       </div>
       <div class="rule"></div>
-      <button type="button" class="play">SET OUT</button>
+      <button type="button" class="play">${EXPLORE ? "EXPLORE" : "SET OUT"}</button>
     </div>`;
   document.body.append(root);
 

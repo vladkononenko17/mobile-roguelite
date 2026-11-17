@@ -267,6 +267,14 @@ export class Game {
     if (new URLSearchParams(location.search).get("sandbox") !== "1") {
       this.gameplay = new Gameplay(app, this.camera.entity, this.collision, biome, this.player, this.weapons, new Hud(), () => this.characterScale, () => this.camera.snap());
       this.gameplay.onShake = (amount) => { if (settings.shake) this.camera.shake(amount); };
+      // Explore mode (?explore=1): the panel's camera buttons.
+      this.gameplay.onExploreZoom = (dir) => {
+        this.camera.height = Math.min(70, Math.max(4, this.camera.height * (dir > 0 ? 1.4 : 1 / 1.4)));
+        // Far enough to see the ground from up there (fog still fades the distance).
+        const cam = this.camera.entity.camera!;
+        cam.farClip = Math.max(biome.lighting.farClip ?? CAMERA.farClip, this.camera.settings.distance * 2.5);
+      };
+      this.gameplay.onExploreMap = (on) => this.setMapView(on);
       this.gameplay.init().catch((error: unknown) => console.error("[Gameplay] failed to start.", error));
     }
     app.on("update", this.update, this);

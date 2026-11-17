@@ -48,3 +48,7 @@ assets-src/pirate
 dist-bot/
 assets-src/heroes/
 assets-src/winter-kenney/
+
+# Wasteland city rework sources (re-download, see assets-src/SOURCES.md)
+assets-src/city-overgrowth/
+assets-src/orion-additions/

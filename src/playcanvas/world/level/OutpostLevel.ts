@@ -14,8 +14,9 @@ import type { Biome, LevelBounds, WayPoint, Zone } from "./Biome";
  *   2 THE DEAD STREETS (z -56..-120) a ruined city block round a crossroads (64 x 64 m)
  *   3 THE PLAZA        (z -136..-196) the Abomination's square (60 x 60 m)
  * joined by short streets through barricades that fall when a level is won (the same walk-on flow
- * as Hell and the ORION). Ruined skyscrapers stand either side of the city and a fallen tower beyond
- * the plaza; trees and weeds take the streets back (see buildCity).
+ * as Hell and the ORION). The city is an abandoned one taken back by nature: brick brownstones wall
+ * the streets and the square, trees and grass break through the paving, cars sit where they were
+ * left; ruined towers and a fallen one stand beyond the plaza (see buildCity).
  *
  * The outpost: an abandoned industrial compound fortified by survivors, 48 x 80 m,
  * built from the Atomic Realm kit (see world/props/OutpostKit.ts).
@@ -108,7 +109,7 @@ export const GROUND_SPEC: GroundSpec = {
   ],
   pads: [
     // The plaza's paving.
-    { x0: -22, z0: -188, x1: 22, z1: -144, surface: "concrete" },
+    { x0: -30, z0: -196, x1: 30, z1: -137, surface: "concrete" },
     // Industrial yard: poured concrete up to the east wall.
     { x0: 5.5, z0: -25.5, x1: 24.5, z1: 5.2, surface: "concrete" },
   ],
@@ -135,6 +136,17 @@ export const GROUND_SPEC: GroundSpec = {
     { x: 20, z: -64, w: 18, d: 12, surface: "dirt", seed: 3 },
     { x: -26, z: -150, w: 10, d: 16, surface: "overgrowth", seed: 3 },
     { x: 25, z: -186, w: 12, d: 12, surface: "overgrowth", seed: 0 },
+    // The plaza grown over: moss round the great tree and in the corners, earth along the facades.
+    { x: 2, z: -168, w: 13, d: 13, surface: "overgrowth", seed: 1 },
+    { x: -17, z: -178, w: 18, d: 22, surface: "overgrowth", seed: 2 },
+    { x: 18, z: -156, w: 16, d: 22, surface: "overgrowth", seed: 3 },
+    { x: -8, z: -190, w: 14, d: 8, surface: "overgrowth", seed: 0 },
+    { x: 14, z: -152, w: 9, d: 8, surface: "dirt", seed: 1 },
+    { x: -6, z: -158, w: 8, d: 6, surface: "overgrowth", seed: 2 },
+    { x: -9, z: -143, w: 16, d: 7, surface: "dirt", seed: 0 },
+    // The streets' kerbs gone to weeds under the brownstones.
+    { x: -29, z: -100, w: 6, d: 36, surface: "overgrowth", seed: 2 },
+    { x: 29, z: -98, w: 6, d: 30, surface: "overgrowth", seed: 1 },
     { x: -3, z: -71, w: 8, d: 7, surface: "ash", seed: 2 },
     { x: 15, z: -87, w: 7, d: 6, surface: "ash", seed: 1 },
     { x: 0, z: -48, w: 10, d: 14, surface: "dirt", seed: 2 },
@@ -465,6 +477,10 @@ export const OUTPOST_BIOME: Biome<OutpostModel> = {
       world.exitSeals = exit ? world.seals.filter((s) => s.entity.enabled && Math.abs(s.z - exit.at) < 1.5) : [];
       return world.exitSeals.map((s) => ({ x: s.x, z: s.z, width: GAP * 2, yawDeg: 0 }));
     },
+    openAll() {
+      for (const s of world.seals) s.entity.enabled = false;
+      world.exitSeals = [];
+    },
     openExit(_zoneId, index) {
       const s = world.exitSeals[index];
       if (s && s.open < 0 && s.entity.enabled) s.open = 0;
@@ -504,6 +520,43 @@ function buildCity(kit: ModelKit<OutpostModel>, root: Entity, place: Place, plac
   const STREET: SpawnOptions = { scale: [1, 0.5, 1], y: 0.05 };
   const street = (id: OutpostModel, x: number, z: number, yaw: number) => place(id, x, z, yaw, STREET);
 
+  // ------------------------------------------------------------------ the city's walls
+  // Brick brownstones and storefronts (KayKit, 9 m blocks): their fronts stand on a zone's edge
+  // facing in, a second row behind them, so the zones are streets and squares inside a city rather
+  // than yards walled off in a desert. Only on the sides and the far (north) edge of a zone, never
+  // the near one, where they would stand between the camera and the hero. The zone edges' invisible
+  // walls do the blocking. Rubble and weeds gather at their feet.
+  const FRONT = 2.92, DEPTH = 5.84;
+  const BLOCKS: [OutpostModel, number][] = [["kbA", 5.44], ["kbB", 7.24], ["kbC", 5.44], ["kbD", 7.24], ["kbE", 9.04], ["kbF", 9.04], ["kbG", 9.04], ["kbH", 9.04]];
+  const facades = (side: "w" | "e" | "n", line: number, from: number, to: number, gaps: [number, number][] = []) => {
+    for (const row of [0, 1]) {
+      let t = from;
+      while (to - t >= 5.4) {
+        const gap = gaps.find(([a, b]) => t < b && t + 5.4 > a);
+        if (gap) { t = gap[1]; continue; }
+        const room = Math.min(to, gaps.filter(([a]) => a >= t).reduce((m, [a]) => Math.min(m, a), Infinity)) - t;
+        const fit = BLOCKS.filter(([, w]) => w <= room + 0.05);
+        if (!fit.length) { t += 1; continue; }
+        const [id, w] = fit[Math.floor(random() * fit.length)];
+        const along = t + w / 2, off = FRONT + row * DEPTH;
+        if (side === "w") place(id, line - off, along, 90);
+        else if (side === "e") place(id, line + off, along, -90);
+        else place(id, along, line - off, 0);
+        // At the front: rubble, a weed, now and then a dumpster or boxes.
+        if (row === 0) {
+          const at = (d: number, inward: number): [number, number] => side === "w" ? [line + inward, along + d] : side === "e" ? [line - inward, along + d] : [along + d, line + inward];
+          const roll = random();
+          const [rx, rz] = at((random() - 0.5) * w * 0.6, 0.8);
+          if (roll < 0.35) { place("qRock1", rx, rz, random() * 360, { scale: 0.8 + random() * 0.6 }); place("qRock2", rx + 0.7, rz + 0.5, random() * 360); place("zkCinder", rx - 0.6, rz + 0.3, random() * 360); }
+          else if (roll < 0.5) place("kDumpster", ...at((random() - 0.5) * w * 0.5, 1), side === "w" ? 90 : side === "e" ? -90 : 0);
+          else if (roll < 0.62) { place("kBoxA", rx, rz, random() * 360); place("kBoxB", rx + 0.6, rz - 0.3, random() * 360); }
+          for (let i = 0; i < 3; i++) place(random() < 0.5 ? "nGrass" : random() < 0.5 ? "nGrassLeafs" : "qPlant", ...at((random() - 0.5) * w, 0.4 + random() * 1.4), random() * 360, { scale: 0.8 + random() * 0.6 });
+        }
+        t += w;
+      }
+    }
+  };
+
   // ------------------------------------------------------------------ streets (8 m tiles)
   // North-south from the outpost gate through the crossroads to the plaza; east-west across.
   const crack: OutpostModel[] = ["zkStreet", "zkStreetCrack", "zkStreet", "zkStreetCrack2"];
@@ -538,15 +591,11 @@ function buildCity(kit: ModelKit<OutpostModel>, root: Entity, place: Place, plac
   wallRun(q.x0, q.z0, -GAP, q.z0, { rows: 2, pattern: ["wallConcreteMetal", "wall", "wallWindow2", "wall"], upper: ["wall", "", "wallWindow", ""], columnsEvery: 2, flip: true });
   wallRun(GAP, q.z0, q.x1, q.z0, { rows: 2, pattern: ["wall", "wallWindow2", "wallConcreteMetal", "wall"], upper: ["", "wallWindow", "", "wall"], columnsEvery: 2, flip: true });
   for (const s of [-1, 1]) {
-    // Side edges: ruined shopfronts, rubble mounds; the east-west street barricaded where it leaves.
-    const x = s * q.x1;
-    wallRun(x, q.z1, x, -88.5, { pattern: ["wall", "wallWindow2", "wallBoarded", "wall", "wall", "wallWindow"], flip: s < 0, columnsEvery: 2 });
-    wallRun(x, -79.5, x, q.z0, { pattern: ["wallWindow2", "wall", "wallWindow", "", "wall", "wallBoarded", "wall"], flip: s < 0, columnsEvery: 2 });
+    // Side edges: the brownstones; the east-west street barricaded where it leaves between them.
+    facades(s < 0 ? "w" : "e", s * q.x1, q.z0, q.z1, [[-88.5, -79.5]]);
     place(s < 0 ? "vPickupArmored" : "vTruckArmored", s * (q.x1 + 3), -84, 90 + random() * 20);
     place("zkBarrier", s * (q.x1 - 1.5), -82, 90);
     place("zkBarrier", s * (q.x1 - 1.5), -86, 90);
-    place("wreckage", s * (q.x1 + 6), -64, random() * 360, { noCollider: true });
-    place("wreckage", s * (q.x1 + 6), -108, random() * 360, { noCollider: true });
   }
   edge((q.x0 - GAP) / 2, q.z1 + 0.5, -GAP - q.x0, 1);
   edge((q.x1 + GAP) / 2, q.z1 + 0.5, q.x1 - GAP, 1);
@@ -558,7 +607,7 @@ function buildCity(kit: ModelKit<OutpostModel>, root: Entity, place: Place, plac
   // The crossroads: traffic lights at the corners, wrecked cars left where they stopped.
   placeAll([
     ["zkTrafficLight", -5.2, -79, 0], ["zkTrafficLight", 5.2, -89, 180], ["zkTrafficLight2", 5.2, -79, -90], ["zkTrafficLight2", -5.2, -89, 90],
-    ["vSports", -2.6, -71, 28], ["vTruck", 15, -86.5, 97], ["vPickup", -17, -82.5, 72, { tiltZ: 6 }], ["vSports", 1.8, -103, 200],
+    ["vSports", -2.6, -71, 28], ["vTruck", 15, -86.5, 97], ["vPickup", -17, -82.5, 72, { tiltZ: 6 }], ["kTaxi", 1.8, -103, 200], ["kPolice", -9, -88.6, 160],
     ["zkHydrant", -5.4, -66, 0], ["zkHydrant", 5.4, -101, 0],
     ["zkBlood", 11, -83, 0, { y: 0.12 }], ["zkBlood2", -1, -94, 50, { y: 0.12 }], ["zkBlood", -20, -89, 120, { y: 0.12 }],
   ]);
@@ -575,7 +624,7 @@ function buildCity(kit: ModelKit<OutpostModel>, root: Entity, place: Place, plac
   ]);
   // South-east: a parking lot, cars abandoned at angles.
   placeAll([
-    ["vPickup", 14, -63, 80], ["vSports", 22, -66, 100], ["vTruck", 26, -74, 95, { tiltX: 4 }], ["vSports", 12, -74, 250],
+    ["vPickup", 14, -63, 80], ["kSedan", 22, -66, 100], ["vTruck", 26, -74, 95, { tiltX: 4 }], ["kHatch", 12, -74, 250], ["kWagon", 20.5, -76.5, 265],
     ["zkWheels", 19, -71, 0], ["zkCone", 9, -68, 0], ["zkCone", 17.5, -60, 20], ["zkCinder", 24, -61, 0], ["zkCinder", 24.6, -61.4, 40],
     ["zkPallet", 28.5, -63, 10],
   ]);
@@ -621,67 +670,84 @@ function buildCity(kit: ModelKit<OutpostModel>, root: Entity, place: Place, plac
   }
 
   // ------------------------------------------------------------------ THE PLAZA
+  // An old city square taken back: brownstones and storefronts on three sides, the paving broken
+  // by grass, a great tree grown through the middle, a quarantine checkpoint abandoned in the west,
+  // cars jammed at the south entrance where the evacuation stopped. The middle stays open for the
+  // fight with the Abomination.
   const p = PLAZA;
   wallRun(p.x0, p.z1, -GAP, p.z1, { pattern: ["wall", "wall", "wallWindow2", "wall", "", "wall"], columnsEvery: 2 });
   wallRun(GAP, p.z1, p.x1, p.z1, { pattern: ["wall", "", "wallWindow2", "wallWindow", "wall", "wall"], columnsEvery: 2 });
-  wallRun(p.x0, p.z0, p.x1, p.z0, { rows: 2, pattern: ["wallConcreteMetal", "wall", "wallWindow2", "wall", "wallConcreteMetal"], upper: ["wall", "", "wallWindow", "", "wall", ""], columnsEvery: 3, flip: true });
-  for (const s of [-1, 1]) wallRun(s * p.x1, p.z1, s * p.x1, p.z0, { pattern: ["wall", "wallWindow", "wallWindow2", "", "wall", "wallBoarded"], flip: s < 0, columnsEvery: 2 });
+  facades("w", p.x0, p.z0, p.z1);
+  facades("e", p.x1, p.z0, p.z1);
+  facades("n", p.z0, p.x0 - 2 * DEPTH, p.x1 + 2 * DEPTH);
   edge((p.x0 - GAP) / 2, p.z1 + 0.5, -GAP - p.x0, 1);
   edge((p.x1 + GAP) / 2, p.z1 + 0.5, p.x1 - GAP, 1);
   edge(0, p.z0 - 0.5, p.x1 - p.x0 + 2, 1);
   edge(p.x0 - 0.5, (p.z0 + p.z1) / 2, 1, p.z1 - p.z0);
   edge(p.x1 + 0.5, (p.z0 + p.z1) / 2, 1, p.z1 - p.z0);
+
+  // The great tree, its old planter a ring of broken stone, grass and ferns at its roots.
+  place("qTwisted", 2, -168, 40);
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2, r = 2.6 + random() * 0.4;
+    place(i % 3 ? "qRock1" : "qRock3", 2 + Math.cos(a) * r, -168 + Math.sin(a) * r, random() * 360, { scale: 0.7 + random() * 0.4, noCollider: true });
+  }
+  for (let i = 0; i < 18; i++) {
+    const a = random() * Math.PI * 2, r = 1.2 + random() * 3.5;
+    place(random() < 0.5 ? "nGrassLeafs" : random() < 0.5 ? "nGrass" : "qPlant", 2 + Math.cos(a) * r, -168 + Math.sin(a) * r, random() * 360, { scale: 0.8 + random() * 0.6 });
+  }
   placeAll([
-    // West: the convoy that never left.
-    ["vTruckArmored", -24.5, -158, 8], ["vPickupArmored", -23.5, -172, -14], ["zkContainerGreen", -25, -146.5, 90], ["sandbags", -18.5, -165, 90],
-    ["zkBarrier", -19, -151, 70], ["zkBarrel", -26.5, -183, 0], ["zkBarrel", -25.8, -184.2, 0],
-    // East: the water tower, a bus-stop bench, planters grown wild.
-    ["zkWaterTower", 23, -186, 0], ["bench", 26, -160, -90], ["zkStreetLight", 27, -150, -90], ["zkStreetLight", 27, -175, -90],
-    ["zkContainerRed", 25, -142, 90],
-    // Corners: trees in the old planters.
-    ["nTreeOak", -21, -141, 0], ["nTreeFat", 20, -142, 60], ["nTreeOak", -22, -190, 30], ["nTree", 14, -191, 0],
-    ["nBushDetailed", -19, -143, 0], ["nBush", 18, -189, 0],
-    // The square itself stays open: blood, a cone, weeds.
-    ["zkBlood", -4, -160, 0, { y: 0.03 }], ["zkBlood2", 7, -174, 80, { y: 0.03 }], ["zkCone", 9, -150, 0], ["zkTrash", -9, -182, 0],
+    // West: the quarantine checkpoint - the convoy that never left, sandbag nests, a tent, wire.
+    ["vTruckArmored", -24.5, -158, 8], ["vPickupArmored", -23.5, -172, -14], ["zkContainerGreen", -25, -146.5, 90],
+    ["sandbags", -18.5, -165, 90], ["sandbags", -17.8, -151, 80], ["razorWire", -15.5, -158, 90], ["razorWire", -15, -144.5, 100],
+    ["sandbags", -20.5, -183, 20], ["floodlight", -26.5, -178, 60], ["kPolice", -14, -178, 125], ["zkBarrier", -19, -141.5, 70],
+    ["zkBarrel", -26.5, -186.5, 0], ["zkBarrel", -25.8, -187.7, 0], ["kBoxA", -19.5, -186, 20], ["kBoxB", -18.8, -186.6, 50], ["cot", -23.5, -187, 90],
+    // East: the shopfronts' side - the water tower on its lot, benches, lamps, cars left at the kerb.
+    ["zkWaterTower", 23, -186, 0], ["kBench", 27.5, -160, -90], ["kBench", 27.5, -166, -90], ["kLight", 28.3, -151, -90], ["kLight", 28.3, -177, -90],
+    ["kTaxi", 21, -151, 74], ["kSedan", 19.5, -176, 196], ["vSports", 13, -161, 60, { tiltZ: 90, y: 1.1 }],
+    // South entrance: the jam - cars nose to tail either side of the way in.
+    ["kWagon", -10, -141.5, 82], ["vPickup", -17.5, -140.5, 96], ["kHatch", 9.5, -141, -96], ["vTruck", 17.5, -142, -84],
+    ["zkCone", -5.2, -139, 0], ["zkCone", 5.6, -140.2, 30],
+    // North: under the far shopfronts.
+    ["vPickup", -10, -190, 175], ["kLight", -1, -195.2, 0], ["kLight", 15, -195.2, 0], ["kBench", 7, -194.6, 0],
+    // Trees in the old planters and grown up through the cracks; dead ones too.
+    ["nTreeOak", -21, -140.5, 0], ["nTreeFat", 24, -139.5, 60], ["nTreeOak", -23, -191, 30], ["nTree", 14, -191, 0],
+    ["qDead1", -6, -192, 70], ["qDead2", 26, -170, 10], ["nTreeTall", -27, -164, 0], ["nTree", 24, -145, 120],
+    // Cover in the square: a crate stack, barrier lines, a flipped dumpster.
+    ["zkBarrier", 10, -181, 30], ["zkBarrier2", 13, -183, 50], ["zkBarrier", -12, -149, -20],
+    ["crate", 18.5, -170, 10], ["crate", 19.4, -171, -20], ["crate", 18.9, -170.5, 5, { y: 1.15 }], ["kDumpster", -9, -177, 30, { tiltZ: 85, y: 0.7 }],
+    ["zkBlood", -4, -160, 0, { y: 0.03 }], ["zkBlood2", 7, -174, 80, { y: 0.03 }], ["zkTrash", -9, -182, 0], ["zkTrash2", 16, -150, 40],
   ]);
-  // Cover round the square's edge: a flipped car, barrier lines, a crate stack; bushes on the walls.
-  placeAll([
-    ["vSports", 14, -160, 60, { tiltZ: 90, y: 1.3 }], ["vPickup", -10, -190, 175], ["zkBarrier", 10, -181, 30], ["zkBarrier2", 13, -183, 50],
-    ["zkBarrier", -12, -148, -20], ["crate", 18.5, -170, 10], ["crate", 19.4, -171, -20], ["crate", 18.9, -170.5, 5, { y: 1.15 }],
-  ]);
-  hedge(p.x0 + 1.4, p.z1 - 1.5, p.x0 + 1.4, p.z0 + 1.5);
-  hedge(p.x1 - 1.4, p.z1 - 1.5, p.x1 - 1.4, p.z0 + 1.5);
+  // Bushes along the fronts; the paving broken up by grass, thickest near the edges and the tree.
+  hedge(p.x0 + 1.4, p.z1 - 4, p.x0 + 1.4, p.z0 + 1.5);
+  hedge(p.x1 - 1.4, p.z1 - 4, p.x1 - 1.4, p.z0 + 1.5);
   hedge(p.x0 + 1.5, p.z0 + 1.4, p.x1 - 1.5, p.z0 + 1.4);
-  for (let i = 0; i < 40; i++) {
-    const x = p.x0 + 1.5 + random() * (p.x1 - p.x0 - 3), z = p.z0 + 1.5 + random() * (p.z1 - p.z0 - 3);
-    place(random() < 0.6 ? "nGrass" : "nGrassLeafs", x, z, random() * 360, { scale: 0.6 + random() * 0.6 });
+  for (let i = 0; i < 230; i++) {
+    let x = p.x0 + 1.5 + random() * (p.x1 - p.x0 - 3), z = p.z0 + 1.5 + random() * (p.z1 - p.z0 - 3);
+    // Pull two in three towards the edges (the middle of the arena stays readable).
+    if (random() < 0.5) { if (random() < 0.5) x = Math.sign(x || 1) * (17 + random() * 11.5); else z = random() < 0.7 ? p.z0 + 1.5 + random() * 9 : p.z1 - 1.5 - random() * 7; }
+    const roll = random();
+    place(roll < 0.4 ? "nGrass" : roll < 0.65 ? "qGrass" : roll < 0.85 ? "nGrassLeafs" : "qPlant", x, z, random() * 360, { scale: 0.7 + random() * 0.7 });
+  }
+  // Litter across the square: trash bags, pallets, tyres, stones, blood where someone fell.
+  for (let i = 0; i < 26; i++) {
+    const x = p.x0 + 4 + random() * (p.x1 - p.x0 - 8), z = p.z0 + 4 + random() * (p.z1 - p.z0 - 10);
+    if (Math.hypot(x - 2, z + 168) < 4.5) continue;
+    const roll = random();
+    place(roll < 0.25 ? "zkTrash" : roll < 0.4 ? "zkTrash2" : roll < 0.52 ? "zkPalletBroken" : roll < 0.62 ? "tire" : roll < 0.8 ? "qRock2" : roll < 0.9 ? "zkCinder" : "zkBlood2", x, z, random() * 360, roll >= 0.9 ? { y: 0.03 } : {});
+  }
+  // Rubble where the facades shed brick.
+  for (let i = 0; i < 16; i++) {
+    const side = random() < 0.5 ? -1 : 1, x = side * (25 + random() * 3.5), z = p.z0 + 4 + random() * 50;
+    place(random() < 0.5 ? "qRock3" : "qRock1", x, z, random() * 360, { scale: 0.7 + random() * 0.6 });
+    place("zkCinder", x + 0.8, z - 0.4, random() * 360);
   }
 
   // ------------------------------------------------------------------ the skyline
-  // Ruined towers either side of the city and beyond the plaza (never south of a zone, where they
-  // would stand between the camera and the hero). Billboards on the rubble lots.
-  // Each side tower's face starts right behind the zone wall (the portrait view reaches only ~8 m
-  // past the hero, so towers farther out were never seen from the play).
-  const FOOT: Partial<Record<OutpostModel, [number, number]>> = { bld1: [20, 20], bld2: [20, 30], bld5: [20, 20], bld6: [32, 20], bld7: [20, 25] };
-  const sideTowers: [OutpostModel, -1 | 1, number, number, number][] = [
-    ["bld1", -1, -66, 0, STREETS.x1], ["bld5", -1, -98, 90, STREETS.x1], ["bld2", -1, -128, 0, PLAZA.x1], ["bld6", -1, -162, 90, PLAZA.x1], ["bld1", -1, -190, 180, PLAZA.x1],
-    ["bld6", 1, -70, 90, STREETS.x1], ["bld7", 1, -104, 0, STREETS.x1], ["bld5", 1, -130, 180, PLAZA.x1], ["bld2", 1, -164, 90, PLAZA.x1], ["bld5", 1, -192, 0, PLAZA.x1],
-  ];
-  for (const [id, s, z, yaw, edgeX] of sideTowers) {
-    const [w, d] = FOOT[id]!;
-    const half = (yaw % 180 === 0 ? w : d) / 2;
-    place(id, s * (edgeX + 1.5 + half), z, yaw, { noCollider: true });
-  }
+  // Beyond the plaza's far row: ruined towers and the one that fell. (The sides are the brownstones
+  // now; towers there stood in the empty lots past the walls, cut off by the view.)
   for (const [id, x, z, yaw] of [["bld6", -28, -226, 0], ["bld1", 30, -224, 90]] as [OutpostModel, number, number, number][]) place(id, x, z, yaw, { noCollider: true });
-  // The tower that fell across the far end of the plaza.
   place("bld7", 2, -222, 70, { tiltX: 62, y: -4, noCollider: true });
-  for (const [x, z] of [[-34, -84], [34, -84], [-36, -116], [36, -60], [-34, -175], [34, -150]]) place("wreckage", x, z, random() * 360, { noCollider: true, scale: 0.8 + random() * 0.5 });
-  placeAll([["billboards", 36.5, -98, -90, { scale: 1.4, noCollider: true }], ["billboards", -36.5, -150, 90, { scale: 1.4, noCollider: true }], ["fireStairs", 38, -120, -90, { noCollider: true }]]);
-  // Trees and bushes on the lots round the towers.
-  for (let i = 0; i < 30; i++) {
-    const s = random() < 0.5 ? -1 : 1, x = s * (35 + random() * 8), z = -60 - random() * 140;
-    place(random() < 0.4 ? "nTreeOak" : random() < 0.5 ? "nTreeFat" : "nBush", x, z, random() * 360, { noCollider: true, scale: 0.8 + random() * 0.6 });
-  }
 }
 
 /* ------------------------------------------------------------------------------------------------

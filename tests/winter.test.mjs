@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { buildSync } from "esbuild";
 
-// Whiteout (chapter VI): campaign data, its enemies and the kit.
+// Whiteout (chapter II): campaign data, its enemies and the kit.
 const { outputFiles } = buildSync({
   stdin: {
     contents: `
