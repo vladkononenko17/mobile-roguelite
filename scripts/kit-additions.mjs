@@ -24,15 +24,29 @@ import sharp from "sharp";
  * @param {Record<string, number>} [o.ratio]  topology-preserving simplification ratio per id
  * @param {Record<string, number>} [o.sloppy] sloppy simplification ratio per id
  * @param {(id: string, doc: import("@gltf-transform/core").Document) => void} [o.tweak]  per-model edits before scaling
+ * @param {Record<string, number>} [o.rescale]  existing kit models to resize (factor of their original size; idempotent)
+ * @param {string[]} [o.remove]  existing kit models to drop (no longer placed anywhere)
  */
-export async function addToKit({ kit: KIT, models: MODELS, grades: GRADES, ratio: RATIO = {}, sloppy: SLOPPY = {}, tweak }) {
+export async function addToKit({ kit: KIT, models: MODELS, grades: GRADES, ratio: RATIO = {}, sloppy: SLOPPY = {}, tweak, rescale = {}, remove = [] }) {
 await MeshoptSimplifier.ready;
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 const kit = await io.read(KIT);
 const scene = kit.getRoot().getDefaultScene() ?? kit.getRoot().listScenes()[0];
 // Drop what is replaced (and anything this script added before).
-for (const node of scene.listChildren()) if (MODELS[node.getName()]) { scene.removeChild(node); node.dispose(); }
+for (const node of scene.listChildren()) if (MODELS[node.getName()] || remove.includes(node.getName())) { scene.removeChild(node); node.dispose(); }
+// Resized models: the factor goes on the model's children (ModelKit sets the model node's own scale
+// when it places a copy). Each child keeps its original transform in extras, so running again does
+// not compound.
+for (const node of scene.listChildren()) {
+  const f = rescale[node.getName()];
+  if (!f) continue;
+  for (const child of node.listChildren()) {
+    const extras = child.getExtras();
+    const base = extras.base ?? { s: child.getScale(), t: child.getTranslation() };
+    child.setExtras({ ...extras, base }).setScale(base.s.map((v) => v * f)).setTranslation(base.t.map((v) => v * f));
+  }
+}
 await kit.transform(prune());
 
 const graded = new Map();
@@ -58,6 +72,9 @@ const target = kit;
 for (const [id, [file, size, grades]] of Object.entries(MODELS)) {
   const doc = await io.read(file);
   for (const a of doc.getRoot().listAnimations()) a.dispose();
+  // Static props: no skeletons (a skinned mesh in the kit breaks PlayCanvas's bounds for the batch).
+  for (const node of doc.getRoot().listNodes()) node.setSkin(null);
+  for (const skin of doc.getRoot().listSkins()) skin.dispose();
   // Textures: graded once per (image, recipe); no normal maps; no emission (KayKit windows).
   for (const m of doc.getRoot().listMaterials()) {
     m.setNormalTexture(null).setMetallicFactor(0).setRoughnessFactor(0.92);
