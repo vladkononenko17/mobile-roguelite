@@ -6,14 +6,14 @@ import { MEDIEVAL_BIOME } from "./MedievalLevel";
 import { PIRATE_BIOME } from "./PirateLevel";
 import { WINTER_BIOME } from "./WinterLevel";
 
-/** Every playable map, in chapter order. */
+/** Every playable map, in chapter order (by size and difficulty: the Wasteland first, Hell last). */
 export const BIOMES = {
   outpost: OUTPOST_BIOME as Biome,
+  winter: WINTER_BIOME as Biome,
   facility: SHIP_BIOME as Biome,
   medieval: MEDIEVAL_BIOME as Biome,
-  hell: HELL_BIOME as Biome,
   pirate: PIRATE_BIOME as Biome,
-  winter: WINTER_BIOME as Biome,
+  hell: HELL_BIOME as Biome,
 };
 
 export type BiomeId = keyof typeof BIOMES;

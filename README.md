@@ -171,9 +171,9 @@ Rules are pure TypeScript — `hata/src/content.ts` (tools and levels, pay rates
 
 The game is made for the iPhone only: on a computer (no touch screen) `hata/src/main.ts` loads nothing heavy and shows a page with a QR code to open it on the phone; the game itself (`hata/src/game.ts`) is loaded only on touch devices. Controls (landscape): left part of the screen — walk (floating stick, push to the edge to jog), the rest — look, the big button — work (it changes to «Підняти», «Лізти», «Мити посуд»… when you aim at something to use, and offers the right tool when you aim at a surface it can't clean); washing up is done by rubbing the dish with a finger. Textures are 512 px to stay well within iPhone Safari's memory; if the tab ever dies in the first seconds of play, the next launch lowers the graphics one step by itself. Graphics quality (low/medium/high) is in the settings; medium by default. Adding the page to the Home Screen runs it full screen. Progress is saved on the device. For offline checks: open with `?still=1` (or `?dev=1`) and drive it from the console with `__hata.teleport(x, z, yaw, pitch)`, `__hata.setTool('washer')`, `__hata.simulate(seconds, holdAction, [strafe, forward], [lookX, lookY])`, `__hata.rows()`.
 
-## Dustline 3D — Chapter III: The Dark Kingdom (medieval)
+## Dustline 3D — Chapter IV: The Dark Kingdom (medieval)
 
-The 3D game at `/playcanvas.html` gains a medieval chapter: open it from the menu (chapter III, before Hell, which is now chapter IV) or with
+The 3D game at `/playcanvas.html` gains a medieval chapter: open it from the menu (chapter IV) or with
 `?level=medieval` (also `?level=kingdom`). A plague-struck realm where the dead rise, seven levels
 south to north (`src/playcanvas/world/level/MedievalLevel.ts`): the Burned Village, the Graveyard,
 the Abbey (boss: **the Mad Abbot**), the Bridge, the Outer Bailey, the Great Hall and the Throne Yard
@@ -192,7 +192,7 @@ the Abbey (boss: **the Mad Abbot**), the Bridge, the Outer Bailey, the Great Hal
 
 ## Dustline 3D — Chapter V: The Black Tide (pirates)
 
-The last and largest chapter of the 3D game at `/playcanvas.html`: open it from the menu (chapter V) or with
+The largest map of the 3D game at `/playcanvas.html`: open it from the menu (chapter V) or with
 `?level=pirate` (also `?level=tide`, `?level=sea`). Cursed gold woke the drowned. Ten levels on one
 ~90 × 820 m map, south to north (`src/playcanvas/world/level/PirateLevel.ts`):
 
@@ -230,7 +230,7 @@ The last and largest chapter of the 3D game at `/playcanvas.html`: open it from 
   and `assets-src/medieval/` (git-ignored).
 - Tests: `tests/pirate.test.mjs`. Its own theme (`music_pirate`) and surf ambience are synthesised by `scripts/build-synth-audio.py`.
 
-## Dustline 3D — Chapter VI: Whiteout (snow horror)
+## Dustline 3D — Chapter II: Whiteout (snow horror)
 
 `?level=winter` (also `?level=snow`, `?level=whiteout`). One night of snow, four levels south to north
 (`src/playcanvas/world/level/WinterLevel.ts`): **The Black Pines** (a forest road, a crashed patrol car
