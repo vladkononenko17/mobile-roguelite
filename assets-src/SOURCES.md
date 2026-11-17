@@ -110,3 +110,10 @@ Survivor's skeleton by `scripts/build-heroes.mjs` into `public/models/heroes/`.
 ## Whiteout (chapter II): Kenney Holiday, City Suburban, City Roads, Car and Survival kits (CC0)
 
 By Kenney (www.kenney.nl), Creative Commons Zero (`License.txt` kept per pack). The GLB folders were taken from the CC0 mirror github.com/series-ai/jam-ready-assets (`kenney-holiday-kit`, `kenney-city-kit-suburban`, `kenney-city-kit-roads`, `kenney-car-kit`, `kenney-survival-kit`) into `winter-kenney/<pack>/` (git-ignored). `scripts/build-winter-kit.mjs` bakes the used models into `public/models/winter/winter-kit.glb` at life size, adds snow caps on every up-facing face and soot-dark variants of some cars (the burnt-out wrecks).
+
+## Wasteland city rework (assets-src/city-overgrowth/, git-ignored; CC0)
+
+`scripts/build-city-additions.mjs` adds these to `public/models/outpost/outpost-kit.glb` (replacing ids of the same name; textures graded and stored as WebP, kept as textures rather than baked to vertex colours):
+- Quaternius "Zombie Apocalypse Kit" vehicles, glTF with their atlas (quaternius.com/packs/zombieapocalypsekit.html; mirrored in github.com/series-ai/jam-ready-assets `quaternius-zombie-apocalypse`).
+- Quaternius "Stylized Nature MegaKit" (free/standard version): trees, dead trees, the great twisted tree, bushes, ferns, grass, rocks (quaternius.com/packs/stylizednaturemegakit.html; jam-ready-assets `quaternius-stylized-nature`).
+- KayKit "City Builder Bits" by Kay Lousberg: brownstones and storefronts, cars, dumpsters, benches, street lights (kaylousberg.com/game-assets; jam-ready-assets `kaykit-city-builder`).

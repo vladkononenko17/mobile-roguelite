@@ -22,8 +22,8 @@ export const CREDITS: { group: string; lines: string[] }[] = [
     group: "Worlds",
     lines: [
       "Kenney (kenney.nl): Pirate, Graveyard, Nature, Space Station, Space, Holiday, City Suburban, City Roads, Car and Survival kits, CC0",
-      "KayKit by Kay Lousberg: Medieval Hexagon, Dungeon Remastered, Halloween Bits, CC0",
-      "Quaternius: Zombie Apocalypse Kit, Ultimate Modular Sci-Fi, Ultimate Space Kit, CC0",
+      "KayKit by Kay Lousberg: Medieval Hexagon, Dungeon Remastered, Halloween Bits, City Builder Bits, CC0",
+      "Quaternius: Zombie Apocalypse Kit, Stylized Nature MegaKit, Ultimate Modular Sci-Fi, Ultimate Space Kit, CC0",
       "\"Inferno World\" (free) by ithappystudios",
       "\"Post-Apocalyptic Starter Pack\" by Atomic Realm; \"CitySurvivalLite\"",
       "\"Molten Maps SciFi\" by Moltenbolt, CC0; \"HallwayPACK\", CC0; 3dassets.dev, CC0",
