@@ -117,3 +117,9 @@ By Kenney (www.kenney.nl), Creative Commons Zero (`License.txt` kept per pack). 
 - Quaternius "Zombie Apocalypse Kit" vehicles, glTF with their atlas (quaternius.com/packs/zombieapocalypsekit.html; mirrored in github.com/series-ai/jam-ready-assets `quaternius-zombie-apocalypse`).
 - Quaternius "Stylized Nature MegaKit" (free/standard version): trees, dead trees, the great twisted tree, bushes, ferns, grass, rocks (quaternius.com/packs/stylizednaturemegakit.html; jam-ready-assets `quaternius-stylized-nature`).
 - KayKit "City Builder Bits" by Kay Lousberg: brownstones and storefronts, cars, dumpsters, benches, street lights (kaylousberg.com/game-assets; jam-ready-assets `kaykit-city-builder`).
+
+## ORION rework (assets-src/orion-additions/, git-ignored; CC0)
+
+`scripts/build-orion-additions.mjs` adds these to `public/models/facility/facility-kit.glb` (via `scripts/kit-additions.mjs`, shared with the Wasteland's script):
+- KayKit "Space Base Bits" by Kay Lousberg: dropship, landers, landing pads, cargo, cargo depots, trucks, gantries, base modules, tunnels, drill, solar panels, rocks and cliffs (the orange stone graded violet grey) (kaylousberg.com/game-assets; jam-ready-assets `kaykit-space-base`).
+- Kenney "Space Station Kit" furniture: workstations, holo tables, beds, tables, chairs, containers, frames (kenney.nl/assets/space-station-kit; jam-ready-assets `kenney-space-station-kit`).

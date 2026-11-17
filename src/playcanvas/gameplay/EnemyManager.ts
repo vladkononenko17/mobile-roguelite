@@ -1,3 +1,4 @@
+import { crossFade } from "./crossFade";
 import { BLEND_ADDITIVE, Color, Entity, StandardMaterial, Vec3, type AnimTrack, type Texture, type AppBase, type ContainerResource, type MeshInstance, type RenderComponent } from "playcanvas";
 import { BALANCE, ENEMIES, ENEMY_LIMITS, ENEMY_VISUALS, TARGETING, type EnemyClips, type EnemyDef, type EnemyId, type EnemySkinId, type EnemyVisualId } from "./config";
 import { TYPE_SKINS } from "./campaigns";
@@ -401,7 +402,7 @@ export class EnemyManager {
       enemy.hitReact = ENEMY_LIMITS.hitReact;
       enemy.hitCooldown = ENEMY_LIMITS.hitReactCooldown;
       enemy.model.anim!.speed = 1;
-      enemy.model.anim!.baseLayer!.transition("Hit", 0.05);
+      crossFade(enemy.model.anim!.baseLayer, "Hit", 0.05);
     }
     return false;
   }
@@ -444,7 +445,7 @@ export class EnemyManager {
     this.hazards.clear(enemy.marker);
     enemy.marker = null;
     enemy.model.anim!.speed = 1;
-    enemy.model.anim!.baseLayer!.transition("Death", 0.1);
+    crossFade(enemy.model.anim!.baseLayer, "Death", 0.1);
     // Flyers fall to the ground as they die.
     if (reward) this.onDeath(enemy);
     return true;
@@ -548,7 +549,7 @@ export class EnemyManager {
     if (enemy.slowTime > 0) enemy.slowTime -= dt;
     if (enemy.hitReact > 0) {
       enemy.hitReact -= dt;
-      if (enemy.hitReact <= 0 && enemy.state === "move") enemy.model.anim!.baseLayer!.transition("Move", 0.15);
+      if (enemy.hitReact <= 0 && enemy.state === "move") crossFade(enemy.model.anim!.baseLayer, "Move", 0.15);
     }
     const flyer = !!def.fly;
     // Safety net: never leave a walker stranded where it cannot reach the player (flyers go anywhere).
@@ -590,7 +591,7 @@ export class EnemyManager {
           enemy.dirX = toX;
           enemy.dirZ = toZ;
           enemy.marker = this.hazards.lane(enemy.position.x, enemy.position.z, toX, toZ, def.charge.distance, def.radius * 2.2, def.charge.telegraph);
-          anim.baseLayer!.transition("Special", 0.15);
+          crossFade(anim.baseLayer, "Special", 0.15);
           break;
         }
         if (def.fly?.dive && enemy.specialCooldown <= 0 && distance < def.fly.dive.distance * 0.8 && distance > 3) {
@@ -599,32 +600,32 @@ export class EnemyManager {
           enemy.dirX = toX;
           enemy.dirZ = toZ;
           enemy.marker = this.hazards.lane(enemy.position.x, enemy.position.z, toX, toZ, def.fly.dive.distance, def.radius * 2.4, def.fly.dive.telegraph);
-          anim.baseLayer!.transition("Special", 0.15);
+          crossFade(anim.baseLayer, "Special", 0.15);
           break;
         }
         if (def.slam && enemy.specialCooldown <= 0 && distance < def.slam.triggerRange) {
           this.setState(enemy, "slam");
           enemy.marker = this.hazards.ring(enemy.position.x, enemy.position.z, def.slam.radius, def.slam.telegraph);
           anim.speed = 1;
-          anim.baseLayer!.transition("Special", 0.1);
+          crossFade(anim.baseLayer, "Special", 0.1);
           break;
         }
         if (def.projectile && enemy.specialCooldown <= 0 && distance >= def.projectile.minRange && distance <= def.projectile.maxRange) {
           this.setState(enemy, "throw");
           anim.speed = 1;
-          anim.baseLayer!.transition(def.behavior === "thrower" ? "Special" : "Attack", 0.1);
+          crossFade(anim.baseLayer, def.behavior === "thrower" ? "Special" : "Attack", 0.1);
           break;
         }
         if (def.bolt && enemy.specialCooldown <= 0 && distance >= def.bolt.minRange && distance <= def.bolt.maxRange) {
           this.setState(enemy, "cast");
           anim.speed = 1;
-          anim.baseLayer!.transition(enemy.clips.special ? "Special" : "Attack", 0.1);
+          crossFade(anim.baseLayer, enemy.clips.special ? "Special" : "Attack", 0.1);
           break;
         }
         if (distance <= def.attackRange * 0.92 && enemy.cooldown <= 0) {
           this.setState(enemy, "attack");
           anim.speed = 1;
-          anim.baseLayer!.transition("Attack", 0.1);
+          crossFade(anim.baseLayer, "Attack", 0.1);
           break;
         }
         if (flyer) {
@@ -701,7 +702,7 @@ export class EnemyManager {
             // Overshot: winded and vulnerable for a moment.
             this.setState(enemy, "recover");
             anim.speed = 0.4;
-            anim.baseLayer!.transition("Move", 0.2);
+            crossFade(anim.baseLayer, "Move", 0.2);
           }
         }
         break;
@@ -785,7 +786,7 @@ export class EnemyManager {
     if (specialCooldown !== undefined) enemy.specialCooldown = specialCooldown;
     enemy.hitReact = 0;
     enemy.model.anim!.speed = this.moveRate(enemy);
-    enemy.model.anim!.baseLayer!.transition("Move", 0.2);
+    crossFade(enemy.model.anim!.baseLayer, "Move", 0.2);
   }
 
   private face(enemy: Enemy, x: number, z: number, dt: number, sharpness: number): void {

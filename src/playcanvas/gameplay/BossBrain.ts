@@ -1,3 +1,4 @@
+import { crossFade } from "./crossFade";
 import { Vec3 } from "playcanvas";
 import type { Enemy, EnemyManager } from "./EnemyManager";
 import type { Hazards } from "./Hazards";
@@ -109,7 +110,7 @@ export class BossBrain {
       b.t = 0;
       enemy.state = "boss";
       anim.speed = 1;
-      anim.baseLayer!.transition("Roar", 0.15);
+      crossFade(anim.baseLayer, "Roar", 0.15);
       this.onPhase(enemy, upcoming, b.phase);
       return out;
     }
@@ -234,7 +235,7 @@ export class BossBrain {
     const anim = enemy.model.anim!;
     // Stretch the clip so its strike lines up with the end of the wind-up.
     anim.speed = clip === "Attack" ? Math.max(0.6, Math.min(1.6, 0.4 / seconds)) : 1;
-    anim.baseLayer!.transition(clip, 0.1);
+    crossFade(anim.baseLayer, clip, 0.1);
   }
 
   /** The attack in progress. */
@@ -419,7 +420,7 @@ export class BossBrain {
     enemy.state = "boss";
     const anim = enemy.model.anim!;
     anim.speed = b.attack?.kind === "charge" ? 0.4 : 1;
-    anim.baseLayer!.transition("Move", 0.25);
+    crossFade(anim.baseLayer, "Move", 0.25);
   }
 
   private toIdle(enemy: Enemy, wait: number): void {
@@ -431,7 +432,7 @@ export class BossBrain {
     enemy.state = "move";
     const anim = enemy.model.anim!;
     anim.speed = 1;
-    anim.baseLayer!.transition("Move", 0.2);
+    crossFade(anim.baseLayer, "Move", 0.2);
   }
 
   private cancel(enemy: Enemy): void {

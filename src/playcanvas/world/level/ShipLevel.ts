@@ -15,11 +15,11 @@ import { FloorPaint } from "./FloorPaint";
  * levels: six sectors inside, joined by short corridors (HallwayPACK halls bridging the void, sealed
  * by energy barriers until the level is won), then out through the airlock onto the asteroid.
  *
- *   z   64  1 DOCKING BAY        the hangar the hero lands in: parked craft, cargo, pads     Act I
+ *   z   64  1 DOCKING BAY        a working hangar: craft on pads, gantries, the fuel island     Act I
  *   z  -16     ~~ corridor ~~
- *   z  -16  2 OPERATIONS DECK    ops hall, crew quarters west, mess east, a checkpoint
+ *   z  -16  2 OPERATIONS DECK    the command ring, workstations, crew quarters, the mess, a scanner
  *   z -100     ~~ corridor ~~
- *   z -100  3 RESEARCH LAB       the cleanest white: glass labs, pods (the Warden's lockdown)
+ *   z -100  3 RESEARCH LAB       the cleanest white: glass labs with benches, pods (the Warden)
  *   z -180     ~~ corridor ~~
  *   z -180  4 QUARANTINE         the lab's language broken: red light, the containment cell   Act II
  *   z -264     ~~ corridor ~~
@@ -27,7 +27,7 @@ import { FloorPaint } from "./FloorPaint";
  *   z -356     ~~ corridor ~~
  *   z -356  6 PROJECT GATE       the round chamber and the portal the hive came through
  *   z -408     ~~ airlock tube ~~
- *   z -432  7 THE ASTEROID       outside, on the rock (the Brood Mother)                     Finale
+ *   z -432  7 THE ASTEROID       out through a survey camp onto the rock (the Brood Mother)  Finale
  *   z -536
  *
  * The station's language: white/off-white modular walls (Quaternius sci-fi), graphite, light strips,
@@ -513,43 +513,69 @@ export function buildShipLevel(kit: ModelKit<FacilityModel>): Entity {
   }
 
   // ================================================================== 1 DOCKING BAY
-  // Two landing pads each side with parked craft, cargo stacked along the hull, the lane up the middle.
+  // A working hangar: four landing pads, craft on three (a dropship, a lander, a cargo ship packed
+  // for a run), the fourth empty with its cargo laid out; maintenance gantries and floodlights at the
+  // pads, cargo depots and a truck with its trailer between them, fuel tanks and container stacks
+  // along the hull. The lane up the middle stays clear.
   {
     const q = ROOMS.dock;
-    place("sCraftCargo", -26, 46, 20);
-    place("sCraftCargoB", 26, 44, -160);
-    place("sCraftMiner", -24, 16, -20);
-    place("sCraftSpeeder", 26, 16, 200);
-    for (const [x, z] of [[-24, 44], [24, 44], [-24, 16], [24, 16]]) {
-      for (const [dx, dz] of [[-7, -7], [7, -7], [-7, 7], [7, 7]]) place("qFloorSide", x + dx, z + dz, Math.atan2(dx, dz) * 57.3 + 45);
+    const PADS: [number, number][] = [[-24, 44], [24, 44], [-24, 16], [24, 16]];
+    for (const [x, z] of PADS) place("yPadL", x, z, 0, { scale: [1, 0.18, 1] });
+    place("yDropship", -24, 44, 75);
+    place("yLanderA", 24, 44, 200);
+    place("yDropshipPacked", -24, 16, 105);
+    // The empty pad: the cargo waiting for its ship.
+    for (const [id, dx, dz, yaw] of [["yCargoA", -3, -3, 10], ["yCargoB", 2.5, 2, -15], ["yCargoPacked", 3, -3.2, 30], ["yCargoPacked", -3.4, 2.6, 0], ["yCargoA", 0, 4.5, 40]] as [FacilityModel, number, number, number][]) place(id, 24 + dx, 16 + dz, yaw);
+    for (const [x, z] of PADS) {
+      const s = Math.sign(x);
+      // A gantry on the lane side of each pad, floodlights at its far corners.
+      place("yStructTall", x - s * 9.5, z - 5, 0);
+      place("yLights", x + s * 7.5, z + 7.5, 0);
+      place("yLights", x - s * 7.5, z - 7.5, 0);
     }
-    // Crate islands between the pads (cover, with room round them).
+    // Between the pads: cargo depots and stacks.
     for (const s of [-1, 1]) {
-      place("qCrateLong", s * 12, 32, 90, { scale: 1.6 });
-      place("qCrate", s * 12.6, 28.6, 15, { scale: 1.5 });
-      place("qCrate", s * 11, 35.6, -10, { scale: 1.5 });
+      place(s < 0 ? "yDepotA" : "yDepotC", s * 12, 30, s * 90);
+      place("yCargoA", s * 16.5, 26.5, 20);
+      place("yCargoPacked", s * 8.5, 33.5, -10);
     }
-    // Cargo along the side walls, in stacks with gaps.
+    // Along the lane: cargo set down by the lifters, a parts trolley, a crate pallet.
+    for (const [id, x, z, yaw] of [
+      ["yCargoPacked", -7, 39, 10], ["yCargoPacked", -7.3, 37.4, -5], ["yCargoA", -8.2, 24, 15], ["zContWide", 7.4, 31, 20], ["zContainer", 8.4, 29.6, -10],
+      ["yCargoB", 7.8, 18, -20], ["zContFlat", -7.2, 15, 90], ["yCargoPacked", 7, 59, 0], ["zContTall", -7.4, 59.4, 0], ["zContTall", -6.2, 59.6, 10],
+    ] as [FacilityModel, number, number, number][]) place(id, x, z, yaw);
+    // Mid-bay, splitting the lane: the refuelling island - the tank, its gantry, hose crates.
+    place("yWater", 0, 30, 0);
+    place("yStructLow", 0, 30, 0, { scale: [1.3, 1, 1.3] });
+    for (const [id, x, z, yaw] of [["zContWide", -4.4, 27.5, 15], ["zContainer", 4.2, 33, -20], ["zContFlat", 4.6, 26.8, 90]] as [FacilityModel, number, number, number][]) place(id, x, z, yaw);
+    // A cargo truck and trailer, one each way.
+    place("yTruckL", 9, 46, 180);
+    place("yTrailer", 9, 52.2, 180);
+    place("yTruck", -9.5, 8, 0);
+    // Along the hull: fuel tanks, container stacks.
     for (const s of [-1, 1]) {
-      for (const z of [58, 30, 4]) {
+      for (const z of [58, 4]) {
         place("qContainer", s * (q.x1 - 2.4), z, 90);
         place("qCrateLong", s * (q.x1 - 2.2), z - 2.4, 90);
         place("qCrate", s * (q.x1 - 3.8), z - 1.2, 20);
       }
+      place("yWater", s * (q.x1 - 4.2), 30, 90);
       place("kContainerTall", s * (q.x1 - 3), 44, 90);
       place("kContainerWide", s * (q.x1 - 3), 18, 90);
     }
-    // Along the north wall: the dock's control booths either side of the doorway.
+    // The dock's control booths either side of the doorway north.
     for (const s of [-1, 1]) {
       place("qComputer", s * 8, q.z0 + 1.2, 180);
-      place("qComputerSmall", s * 10.5, q.z0 + 1, 180);
+      place("zCompWide", s * 11.5, q.z0 + 1.6, 180);
+      place("zChair", s * 11.5, q.z0 + 3.4, 180);
+      place("zCompSystem", s * 15, q.z0 + 1.4, 180);
     }
-    place("sRocket", -36, 58, 0, { scale: 0.8 });
   }
 
   // ================================================================== 2 OPERATIONS DECK
-  // Crew quarters west and the mess east behind partial partitions (wide gaps), the ops consoles on the
-  // north wall, a security checkpoint in front of the way on.
+  // The station's working floor: the command ring round a holographic planet in the middle, banks of
+  // workstations either side, crew quarters west and the mess east behind partial partitions (wide
+  // openings), displays on the north wall, a security scanner over the lane before the way on.
   {
     const q = ROOMS.ops;
     // Partitions: full walls north, low towards the camera, with a 20 m opening.
@@ -560,37 +586,66 @@ export function buildShipLevel(kit: ModelKit<FacilityModel>): Entity {
       place("qColumn3", x, -60, 0);
       place("qColumnLow", x, -40, 0);
     }
-    // Crew quarters (west): bunks against the wall, lockers.
-    for (let z = -24; z > -80; z -= 8) {
-      place("bunk", -41, z, 90);
-      if (z % 16 === 0) place("qShelf", -33, z - 3, 90);
+    // Crew quarters (west): bunks against the wall, beds and lockers in rows, a lounge table.
+    for (let z = -24; z > -80; z -= 8) place("bunk", -41, z, 90);
+    for (const z of [-26, -33, -67, -74]) {
+      place("zBed", -33.5, z, 90);
+      place("zContTall", -28, z + 1.6, -90);
+      place("zContainer", -28, z - 1.4, -90);
     }
-    place("kTable", -33, -48, 0);
-    place("kChair", -35, -46, 40);
-    // Mess (east): tables, a food dispenser row.
+    place("zTableLarge", -33, -50, 90);
+    for (const [dx, dz, yaw] of [[-2.4, -1.2, 90], [-2.4, 1.2, 90], [2.4, -1.2, -90], [2.4, 1.2, -90]]) place("zChairArm", -33 + dx, -50 + dz, yaw);
+    // Mess (east): long tables with chairs, the old tables, food dispensers along the wall, supplies.
     for (const [x, z] of [[34, -26], [34, -36], [34, -70], [30, -78]]) place("cafeTable", x, z, 90);
-    place("octoTable", 36, -52, 0);
-    for (let z = -24; z > -80; z -= 10) place("qComputerSmall", 42.6, z, -90);
-    // Ops consoles on the north wall.
+    for (const z of [-46, -58]) {
+      place("zTableLarge", 31, z, 90);
+      for (const [dx, dz] of [[-2.3, -1.2], [-2.3, 1.2], [2.3, -1.2], [2.3, 1.2]]) place("zChair", 31 + dx, z + dz, dx < 0 ? 90 : -90);
+    }
+    for (let z = -24; z > -80; z -= 10) place("zCompSystem", 42.4, z, -90);
+    for (const [x, z, yaw] of [[27, -81, 10], [28.6, -81.4, -15], [27.8, -79.6, 30]] as [number, number, number][]) place("zContWide", x, z, yaw);
+    // The command ring: eight desks round the holo-planet (the lane passes north-south through it).
+    place("zTablePlanet", 0, -44, 0, { scale: 1.7 });
+    for (const deg of [35, 70, 110, 145, 215, 250, 290, 325]) {
+      const a = (deg * Math.PI) / 180;
+      place("zCompWide", Math.sin(a) * 6.6, -44 + Math.cos(a) * 6.6, deg + 180);
+      place("zChair", Math.sin(a) * 8.2, -44 + Math.cos(a) * 8.2, deg + 180);
+    }
+    // The duty desk mid-lane between the south door and the ring.
+    place("zTableLarge", 0, -27, 0);
+    place("zCompWide", -0.8, -27.3, 0, { y: 1.04 });
+    place("zCompScreen", 1.2, -27.3, 0, { y: 1.04 });
+    place("zChairArm", 0, -25.4, 0);
+    // By the lane: holo tables with stools at the doors' ends, a crate of parts left out.
+    for (const [x, z] of [[-6.5, -27], [6.5, -62], [6.5, -26], [-6.5, -63]]) {
+      place("zTableDisplay", x, z, 90);
+      place("zChair", x - Math.sign(x) * 2, z, Math.sign(x) * -90 + 180);
+    }
+    place("zContWide", -7, -35.5, 25);
+    place("zContainer", 7.5, -54, -15);
+    // Workstation banks between the ring and the partitions.
+    for (const s of [-1, 1]) for (const x of [s * 12.5, s * 18]) for (const z of [-24, -30, -58, -64]) {
+      place("zTable", x, z, 0);
+      place("zCompScreen", x, z - 0.2, 180, { y: 1.04 });
+      place("zChair", x, z + 1.5, 180);
+    }
+    // North wall: ops consoles, wall displays.
     for (const x of [-20, -14, 14, 20]) place("commandConsole", x, q.z0 + 2.2, 180);
     place("monitorBlue", -9, q.z0 + 1, 180);
     place("monitorBlue", 9, q.z0 + 1, 180);
-    place("kTableDisplay", 0, -44, 0, { scale: 1.6 });
-    for (let i = 0; i < 4; i++) {
-      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-      place("qComputerSmall", Math.sin(a) * 5, -44 + Math.cos(a) * 5, (a * 180) / Math.PI + 180);
-    }
-    // The checkpoint: two scanner posts either side of the lane.
+    for (const x of [-34, -28, 28, 34]) place("zDisplayWide", x, q.z0 + 0.6, 0, { y: 1.6 });
+    // The checkpoint: a scanner frame over the lane, posts and barriers either side.
+    place("zStructure", 0, -76, 0, { scale: [2.1, 1.1, 0.6] });
     for (const s of [-1, 1]) {
-      place("qColumnSlim", s * 6.5, -76, 0);
       place("qComputer", s * 8.5, -74, s > 0 ? -90 : 90);
+      place("zBarrierHigh", s * 5.6, -76, 0);
       place("kBarrier", s * 12, -74, 0);
     }
   }
 
   // ================================================================== 3 RESEARCH LAB
-  // The cleanest white room: glass-walled labs west and east (wide openings), pods and capsules in
-  // rows, the centre open for the Warden.
+  // The cleanest white room: glass-walled labs west and east (wide openings) with specimen pods along
+  // the hull and benches of analysers; reception and sample storage by the south door; instruments
+  // on the north wall. The centre stays open for the Warden.
   {
     const q = ROOMS.lab;
     for (const s of [-1, 1]) {
@@ -600,24 +655,48 @@ export function buildShipLevel(kit: ModelKit<FacilityModel>): Entity {
       place("qColumn3", x, -140, 0);
       place("qColumnLow", x, -124, 0);
       place("qColumnLow", x, q.z1, 0);
-      // Pods and capsules in the labs.
-      for (let z = -108; z > -160; z -= 8) {
-        place("qPod", s * 36.5, z, s > 0 ? -90 : 90);
-        place("qCapsule", s * 30, z - 4, 0);
+      // Specimen pods along the hull; benches of analysers in the middle of each lab.
+      for (let z = -108; z > -160; z -= 8) place("qPod", s * 36.5, z, s > 0 ? -90 : 90);
+      for (const z of [-110, -118, -146, -154]) {
+        place("zTableInset", s * 29, z, 90);
+        place("zCompScreen", s * 29, z - 0.6, s > 0 ? -90 : 90, { y: 1.04 });
+        place("zContFlat", s * 29, z + 1.1, 0, { y: 1.04, scale: 0.6 });
+        place("zChair", s * 31.2, z, s > 0 ? 90 : -90);
       }
-      place("qComputer", s * 27, -144, s > 0 ? -90 : 90);
-      place("qComputerSmall", s * 27, -150, s > 0 ? -90 : 90);
-      place("qShelfTall", s * 38, -162, 0);
-      place("qTeleporter", s * 30, -132, 0);
+      place("qCapsule", s * 30, -128, 0);
+      place("qTeleporter", s * 30, -136, 0);
+      place("qComputer", s * 26, -144, s > 0 ? -90 : 90);
+      place("zCompSystem", s * 37.5, -162, 0);
+      place("qShelfTall", s * 33, -162, 0);
     }
-    // Specimen pods standing in the hall (islands of cover).
-    for (const [x, z] of [[-12, -122], [12, -122], [-12, -144], [12, -144]]) place("qPod", x, z, 0);
-    // North wall: a statue of the station's founder, the lab's instruments.
+    // Specimen pods standing in the hall (islands of cover), cordoned by frames.
+    for (const [x, z] of [[-12, -122], [12, -122], [-12, -144], [12, -144]]) {
+      place("qPod", x, z, 0);
+      place("zStructure", x, z, 0, { scale: [1.3, 1.2, 1.3] });
+    }
+    // North wall: the founder's statue, the lab's instruments, analysers.
     place("qStatue", 12, q.z0 + 2, 180);
     place("qLaser", -12, q.z0 + 2.4, 180);
     for (const x of [-18, 18]) place("qComputer", x, q.z0 + 1.2, 180);
+    for (const x of [-5, 5]) place("zCompSystem", x * 1.4, q.z0 + 1.4, 180);
+    // The lab's front desk, mid-hall between the door and the open centre.
+    place("zTableLarge", -1.6, -118, 90);
+    place("zTableLarge", 1.6, -118, 90);
+    place("zCompWide", -1.6, -118.4, 0, { y: 1.04 });
+    place("zCompScreen", 1.6, -118.6, 180, { y: 1.04 });
+    place("zChair", -1.6, -116, 0);
+    // Round the centre (kept open): sample carts, a stretcher, a chair rolled away, sample crates.
+    for (const [id, x, z, yaw] of [
+      ["zContFlat", -6.5, -113, 30], ["zContFlat", 7, -112, -20], ["zBed", -7.5, -153, 75], ["zChair", 8.5, -151, 200], ["zContainer", 6.8, -155, 10],
+      ["zContainer", 7.6, -156.2, 40], ["zCompScreen", -16, -133, 90], ["zCompScreen", 16, -133, -90], ["zTableInset", -16.5, -133, 90], ["zTableInset", 16.5, -133, 90],
+    ] as [FacilityModel, number, number, number][]) place(id, x, z, yaw, id === "zCompScreen" ? { y: 1.04 } : {});
+    // Reception by the south door, sample storage opposite.
+    place("zTableLarge", -11, -105.5, 0);
+    place("zCompWide", -11.6, -105, 0, { y: 1.04 });
+    place("zChair", -11, -103.4, 0);
+    for (const [x, z, id] of [[10, -104.5, "zContTall"], [11.8, -104.6, "zContTall"], [13.6, -104.4, "zContainer"], [11, -107, "zContFlat"]] as [number, number, FacilityModel][]) place(id, x, z, 0);
     // A few vessels, tidy.
-    for (const [x, z] of [[-16, -106], [16, -106], [-14, -158], [14, -158]]) {
+    for (const [x, z] of [[-16, -112], [16, -112], [-14, -158], [14, -158]]) {
       place("qVesselTall", x, z, 0);
       place("qVessel", x + 0.6, z + 0.4, 0);
     }
@@ -711,7 +790,11 @@ export function buildShipLevel(kit: ModelKit<FacilityModel>): Entity {
   }
 
   // ================================================================== 7 THE ASTEROID
-  // Low colliders round the rock (open where the airlock tube arrives), boulders over the void.
+  // Out of the airlock tube into the survey camp the station kept on the rock: base modules plugged
+  // into the tube by short tunnels either side, floodlights down the way out, a lander on its pad,
+  // a drill rig with its truck and cargo, a field of solar panels, a dropship that came down hard.
+  // Past the camp the open rock where the Brood Mother waits, the hive's crystal spires beyond; cliffs
+  // and boulders round the rim, rocks drifting in the void, the station's hull below.
   {
     const m = ROCK;
     block(m.x0 - 0.5, (m.z0 + m.z1) / 2, 1, m.z1 - m.z0, true);
@@ -719,31 +802,58 @@ export function buildShipLevel(kit: ModelKit<FacilityModel>): Entity {
     block((m.x0 + m.x1) / 2, m.z0 - 0.5, m.x1 - m.x0, 1, true);
     block((m.x0 - HALL) / 2, m.z1 + 0.5, -HALL - m.x0, 1, true);
     block((m.x1 + HALL) / 2, m.z1 + 0.5, m.x1 - HALL, 1, true);
+    // The rim: cliff blocks sunk at the edge, boulders in front of them.
     const edges: [number, number, number, number][] = [[m.x0, m.z0, m.x1, m.z0], [m.x0, m.z1, m.x1, m.z1], [m.x0, m.z0, m.x0, m.z1], [m.x1, m.z0, m.x1, m.z1]];
     for (const [x0, z0, x1, z1] of edges) {
       const len = Math.hypot(x1 - x0, z1 - z0);
-      for (let d = 0; d <= len; d += 3 + random() * 3) {
+      for (let d = 0; d <= len; d += 6 + random() * 4) {
         const t = d / len;
-        const x = x0 + (x1 - x0) * t + (random() - 0.5) * 2, z = z0 + (z1 - z0) * t + (random() - 0.5) * 2;
-        if (Math.abs(x) < HALL + 3 && Math.abs(z - m.z1) < 4) continue;
-        const roll = random();
-        place(roll < 0.4 ? "sMeteor" : roll < 0.7 ? "sRockLargeB" : "sMeteorHalf", x, z, random() * 360, { scale: 0.9 + random() * 1.1, y: -0.6, noCollider: true });
-        if (random() < 0.3) place("sCliff", x, z, random() * 360, { scale: [2, 2.5, 2], y: -9, noCollider: true });
+        const x = x0 + (x1 - x0) * t + (random() - 0.5) * 3, z = z0 + (z1 - z0) * t + (random() - 0.5) * 3;
+        if (Math.abs(x) < HALL + 12 && Math.abs(z - m.z1) < 6) continue;
+        // South rim (towards the camera): low boulders only.
+        const south = Math.abs(z - m.z1) < 4;
+        if (!south) place(random() < 0.5 ? "yCliff" : "yCliffCurve", x + Math.sign(x) * 2, z - (Math.abs(z - m.z0) < 4 ? 2 : 0), Math.floor(random() * 4) * 90, { y: -4 - random() * 4, scale: [1.2, 1 + random() * 0.6, 1.2], noCollider: true });
+        place(random() < 0.6 ? "yRocksB" : "yRocksA", x, z, random() * 360, { scale: 0.7 + random() * 0.6, y: -0.3, noCollider: true });
+        if (random() < 0.4) place("yCliffCurve", x, z, random() * 360, { scale: [2, 2.6, 2], y: -14, noCollider: true });
       }
     }
     // Rocks drifting in the void round it.
     for (let i = 0; i < 22; i++) {
       const a = random() * Math.PI * 2, d = 62 + random() * 36;
-      place(random() < 0.5 ? "sMeteor" : "sRockLargeA", Math.sin(a) * d, -484 + Math.cos(a) * d, random() * 360, { y: -8 - random() * 20, scale: 1 + random() * 3, noCollider: true });
+      place(random() < 0.6 ? "yRocksB" : "yCliffCurve", Math.sin(a) * d, -484 + Math.cos(a) * d, random() * 360, { y: -8 - random() * 20, scale: 1 + random() * 2.5, noCollider: true, tiltX: random() * 40 });
     }
-    // A crashed shuttle, the hive's crystal spires, a survey team's rover and dish, craters.
-    place("sCraftCargo", -30, -456, 70, { tiltZ: 18, y: -0.8 });
-    place("sDish", 34, -466, 200);
-    place("sRover", 30, -476, 120);
+    // The camp at the airlock: the tube opens under a frame between two base modules, tunnels
+    // running on from them to the next modules.
+    place("zStructure", 0, ROCK.z1 - 1.2, 0, { scale: [2.7, 1.4, 0.5] });
+    // The gangway: tunnel sections either side of the path out of the tube, modules behind them.
+    for (const s of [-1, 1]) for (const z of [-437, -445]) place("yTunnel", s * 5.6, z, 90);
+    place("yGarage", -14, -441, 90);
+    place("yBaseA", 14, -441, -90);
+    for (const s of [-1, 1]) place("yTunnel", s * 24, -440, 0);
+    place("yBaseE", -33, -441, 0);
+    place("yEco", 33.5, -442, 0);
+    // By the way out of the airlock: a parked truck, cargo, the rover tracks' rocks pushed aside.
+    for (const [id, x, z, yaw] of [
+      ["yTruck", -6, -455, 15], ["yCargoPacked", 5.2, -453, 10], ["yCargoA", 6.6, -456, -20], ["zContWide", -5.2, -461, 40], ["yCargoPacked", 4.6, -463, 60], ["yMobile", 14, -464, 200],
+      ["yRocksA", -10, -470, 30], ["yRocksA", 10.5, -474, 160], ["yRock", -5, -466, 0], ["yRock", 6, -480, 90],
+    ] as [FacilityModel, number, number, number][]) place(id, x, z, yaw);
+    // Cover on the open rock (the Brood Mother's ground): boulder clusters, not too many.
+    for (const [x, z] of [[-18, -488], [19, -496], [-6, -500], [22, -515], [-22, -520]]) place("yRocksB", x, z, random() * 360, { scale: 0.7 + random() * 0.3 });
+    // West: a lander on its pad, solar panels in rows, the dropship that came down hard.
+    place("yPadS", -36, -456, 0, { scale: [1, 0.2, 1] });
+    place("yLanderB", -36, -456, 30);
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) place("ySolar", -43 + j * 6, -472 - i * 4.2, 0);
+    place("yDropship", -30, -506, 125, { tiltZ: 14, y: -0.9 });
+    for (const [x, z] of [[-24, -500], [-36, -512], [-27, -514]]) place("yRocksA", x, z, random() * 360, { scale: 0.6 });
+    // East: the drill rig on the rock, its truck and trailer, cargo, a water tank, the dish.
+    place("yDrill", 36, -476, 0);
+    place("yTruckL", 25, -466, 160);
+    place("yTrailer", 26.8, -460.4, 160);
+    for (const [id, x, z, yaw] of [["yCargoA", 42, -486, 10], ["yCargoB", 44.5, -483, -20], ["yCargoPacked", 40, -489.5, 0], ["yWater", 42, -454, 90]] as [FacilityModel, number, number, number][]) place(id, x, z, yaw);
+    place("sDish", 40, -506, 200);
+    // The hive's crystal spires at the far end; scattered stones on the open rock.
     for (const [x, z, k] of [[-8, -512, 1.6], [12, -516, 1.4], [0, -524, 2]]) place("sCrystalsLargeB", x, z, random() * 360, { scale: k });
-    for (let i = 0; i < 10; i++) place(random() < 0.5 ? "sCraterLarge" : "sCrater", -40 + random() * 80, -446 - random() * 84, random() * 360, { scale: 1.5 + random() * 1.5 });
-    const rocks: [FacilityModel, number, number][] = [["sMeteor", -36, -500], ["sRockLargeA", 38, -506], ["sRock", -20, -482], ["sCrystals", 22, -490], ["sRocksSmall", -12, -470], ["sRock", 16, -528]];
-    for (const [id, x, z] of rocks) place(id, x, z, random() * 360, { scale: 0.9 + random() * 0.4 });
+    for (let i = 0; i < 40; i++) place("yRock", -46 + random() * 92, -452 - random() * 80, random() * 360, { scale: 0.3 + random() * 0.6, noCollider: true });
     // ORION herself, seen from the rock: the station's hull runs below the rock's west and east rims
     // (lit windows facing the rock), docking arms hang in the void either side of the airlock tube.
     for (const s of [-1, 1]) {
@@ -756,11 +866,11 @@ export function buildShipLevel(kit: ModelKit<FacilityModel>): Entity {
       for (let i = 0; i < 6; i++) {
         const x = s * (HALL + 6 + i * 8), z = m.z1 + 6 + (i % 2) * 3;
         place("qWindowLong", x, z, 180, { y: -3 - i * 1.5, scale: [2, 1.6, 2], noCollider: true });
-        if (i % 2 === 0) place("sStructure", x, z + 5, 0, { y: -8 - i, scale: 1.6, noCollider: true });
+        if (i % 2 === 0) place("yStructTall", x, z + 5, 0, { y: -10 - i, scale: 1.4, noCollider: true });
       }
-      place("sHangar", s * 64, m.z1 + 8, s > 0 ? -90 : 90, { y: -10, scale: 1.8, noCollider: true });
+      place("yGarage", s * 64, m.z1 + 8, s > 0 ? -90 : 90, { y: -10, scale: 1.5, noCollider: true });
       place("sDish", s * 70, -470, s * 60, { y: -14, scale: 1.5, noCollider: true });
-      place("sSupports", s * 60, -520, 0, { y: -18, scale: 2, noCollider: true });
+      place("yStructLow", s * 60, -520, 0, { y: -18, scale: 2, noCollider: true });
     }
   }
 
@@ -812,6 +922,10 @@ export function buildShipLevel(kit: ModelKit<FacilityModel>): Entity {
   // 6 PROJECT GATE: rings round the portal.
   for (const [rad, a] of [[11, 0.22], [17, 0.15]]) paint.add("ring", PORTAL.x, PORTAL.z, rad * 2, rad * 2, 0, VIOLET, a);
   paint.add("label5", 0, -362, 15, 3.8, 0, VIOLET, 0.25);
+  // 7 THE ASTEROID: the camp's markings on the rock - hazard stripes at the airlock, the pad.
+  paint.add("hazard", 0, ROCK.z1 - 1.2, DOOR * 2 - 0.6, 1.2, 0, YELLOW, 0.7);
+  paint.add("pad", -36, -456, 10, 10, 0, YELLOW, 0.35);
+  paint.add("frame", 38, -484, 9, 9, 0, YELLOW, 0.3);
   paint.build(app, root);
 
   // ------------------------------------------------------------------ floor light strips
@@ -833,6 +947,8 @@ export function buildShipLevel(kit: ModelKit<FacilityModel>): Entity {
     lights.add("dash", GATE.x + Math.sin(a) * (GATE.radius - 1.8), GATE.z + Math.cos(a) * (GATE.radius - 1.8), 1.2, 4.5, (a * 180) / Math.PI + 90, VIOLET, 0.5);
   }
   for (let i = 0; i < 3; i++) lights.add("chevron", 0, GATE.z - GATE.radius + 4 + i * 3, 2.6, 2.6, 0, VIOLET, 0.5 - i * 0.12);
+  // Out on the rock: guide lights from the airlock into the camp.
+  for (const s of [-1, 1]) for (let z = ROCK.z1 - 3; z > ROCK.z1 - 26; z -= 3.5) lights.add("dash", s * 3.4, z, 0.9, 1.8, 0, CYAN, 0.55);
   lights.build(app, root);
   return root;
 }
