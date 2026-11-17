@@ -815,6 +815,10 @@ export const HELL_BIOME: Biome<HellModel> = {
       world.exitSeals = exit ? world.seals.filter((s) => s.entity.enabled && Math.abs((exit.axis === "z" ? s.z : s.x) - exit.at) < 0.7) : [];
       return world.exitSeals.map((s) => ({ x: s.x, z: s.z, width: s.width, yawDeg: s.yawDeg }));
     },
+    openAll() {
+      for (const s of world.seals) s.entity.enabled = false;
+      world.exitSeals = [];
+    },
     openExit(_zone, index) {
       const s = world.exitSeals[index];
       if (s && s.open < 0 && s.entity.enabled) s.open = 0;

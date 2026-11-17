@@ -112,4 +112,6 @@ export interface Campaign {
   exits?(zone: string): WayPoint[];
   /** Opens exit seal `index` of `zone` (it sinks away). */
   openExit?(zone: string, index: number): void;
+  /** Explore mode: every seal on the map gone at once (the whole map walkable). */
+  openAll?(): void;
 }

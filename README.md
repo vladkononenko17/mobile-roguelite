@@ -263,6 +263,16 @@ the Ravager).
 - **Health bars** (`src/playcanvas/ui/HealthBars.ts`): red over every living enemy (wider for elites
   and bosses, dimmed at full health, the lost part flashes white) and green over the hero.
 
+## Dustline 3D — test modes
+
+- `?explore=1` (`src/playcanvas/ui/ExplorePanel.ts`): walk a whole chapter with no enemies, no gates and
+  no timer, to check the map, textures and edges. With no `level` the title screen opens (its button
+  reads EXPLORE); `?explore=1&level=pirate` goes straight in. The panel jumps to any zone, sets the
+  speed (1x / 2x / 4x), zooms the camera or shows the whole map from above, walks through walls and
+  hides the HUD for screenshots. Walking into a zone switches its lighting and mood. Nothing is saved.
+- `?arsenal=1` (`src/playcanvas/ui/ArsenalPanel.ts`): switch to any gun or hero mid-level, god mode,
+  freeze enemies.
+
 ## Dustline 3D — settings, warnings, hints, install
 
 - **Settings** (`src/playcanvas/settings.ts`, `ui/SettingsScreen.ts`; the cog on the title screen and the

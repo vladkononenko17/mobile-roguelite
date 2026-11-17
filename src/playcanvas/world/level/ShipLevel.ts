@@ -907,6 +907,10 @@ export const SHIP_BIOME: Biome<FacilityModel> = {
       if (zoneId === "gate" && world.portal && world.portal.collapse < 0) world.portal.collapse = 0;
       return world.exitSeals.map((s) => ({ x: s.x, z: s.z, width: s.width, yawDeg: s.yawDeg }));
     },
+    openAll() {
+      for (const s of world.seals) s.entity.enabled = false;
+      world.exitSeals = [];
+    },
     openExit(_zoneId, index) {
       const s = world.exitSeals[index];
       if (s && s.open < 0 && s.entity.enabled) s.open = 0;

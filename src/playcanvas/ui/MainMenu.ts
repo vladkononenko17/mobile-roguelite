@@ -16,6 +16,7 @@ import { keepSaves } from "./Install";
 import { checkQuests, chooseDanger, chooseDifficulty, chosenDanger, chosenDifficulty, heroFor, dangerUnlocked, profile, QUESTS } from "../gameplay/profile";
 import { dangerMods, dangerSummary } from "../gameplay/danger";
 import { heroDef } from "../gameplay/heroes";
+import { EXPLORE } from "./ExplorePanel";
 import { clearDaily, dailySetup, markDaily, todayKey } from "../gameplay/daily";
 
 /**
@@ -170,7 +171,7 @@ export function showMainMenu(): Promise<BiomeId> {
         <div class="kit"><button type="button" class="meta">upgrades<b></b></button><button type="button" class="hero"></button><button type="button" class="quests"></button><button type="button" class="daily"></button></div>
       </div>
       <div class="rule"></div>
-      <button type="button" class="play">SET OUT</button>
+      <button type="button" class="play">${EXPLORE ? "EXPLORE" : "SET OUT"}</button>
     </div>`;
   document.body.append(root);
 

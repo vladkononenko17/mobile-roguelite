@@ -516,6 +516,10 @@ export const MEDIEVAL_BIOME: Biome<MedievalModel> = {
       world.exitSeals = exit ? world.seals.filter((s) => s.entity.enabled && Math.abs(s.z - exit.at) < 1.5) : [];
       return world.exitSeals.map((s) => ({ x: s.x, z: s.z, width: GAP * 2, yawDeg: 0 }));
     },
+    openAll() {
+      for (const s of world.seals) s.entity.enabled = false;
+      world.exitSeals = [];
+    },
     openExit(_zoneId, index) {
       const s = world.exitSeals[index];
       if (s && s.open < 0 && s.entity.enabled) s.open = 0;

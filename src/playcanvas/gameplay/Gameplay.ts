@@ -1,6 +1,7 @@
 import { Vec3, type AnimTrack, type AppBase, type Asset, type ContainerResource, type Entity, type Texture } from "playcanvas";
 import { CHARACTERS, WEAPONS, type WeaponId } from "../config";
 import { ArsenalPanel, TEST_ARSENAL } from "../ui/ArsenalPanel";
+import { EXPLORE, ExplorePanel } from "../ui/ExplorePanel";
 import { showSettings } from "../ui/SettingsScreen";
 import { setSetting, settings } from "../settings";
 import { audio } from "../audio/Audio";
@@ -48,7 +49,8 @@ import { shareDaily } from "../ui/shareCard";
 const DASH = { speed: 15, seconds: 0.17, iframes: 0.32, cooldown: 2.2, blastRadius: 2.6 };
 
 /** "travel": a campaign level is won and the hero walks to the way on (see Zone.exit). */
-export type RunPhase = "loading" | "combat" | "cleared" | "shop" | "travel" | "dead" | "complete";
+/** "explore": the explore test mode (?explore=1) - the whole map open, no enemies, no timer. */
+export type RunPhase = "loading" | "combat" | "cleared" | "shop" | "travel" | "explore" | "dead" | "complete";
 
 async function loadBody(app: AppBase, url: string): Promise<BodySource> {
   const asset = await new Promise<Asset>((resolve, reject) => {
@@ -97,6 +99,13 @@ export class Gameplay {
   private arsenal: ArsenalPanel | null = null;
   private testGod = false;
   private testFreeze = false;
+  private explorePanel: ExplorePanel | null = null;
+  /** The zone the hero is walking in (explore mode). */
+  private exploreZone = "";
+  private exploreSpeed = 2;
+  /** Camera hooks for explore mode (set by Game): zoom a step in or out; the whole map from above. */
+  onExploreZoom: (dir: -1 | 1) => void = () => {};
+  onExploreMap: (on: boolean) => void = () => {};
   readonly enemies: EnemyManager;
   readonly gun: PlayerGun;
   readonly director: SpawnDirector;
@@ -240,6 +249,7 @@ export class Gameplay {
     this.daily = daily && daily.chapter === biome.id ? daily : null;
     if (this.daily && this.campaign?.difficulties) this.params.set("difficulty", this.campaign.defaultDifficulty ?? Object.keys(this.campaign.difficulties)[0]);
     if (TEST_ARSENAL) this.setupArsenal(biome.id);
+    if (EXPLORE) this.setupExplore();
     this.enemies.onPlayerHit = (damage, from) => {
       const c = this.rules?.cripple === false ? undefined : from.def.cripple;
       if (c) this.cripple = { time: Math.max(this.cripple.time, c.seconds), slow: Math.min(this.cripple.time > 0 ? this.cripple.slow : 1, c.slow) };
@@ -342,7 +352,7 @@ export class Gameplay {
 
   /** Freezes the run under a pause menu (only while playing, never over another screen). */
   pause(): void {
-    const playing = this.phase === "combat" || this.phase === "cleared" || this.phase === "travel";
+    const playing = this.phase === "combat" || this.phase === "cleared" || this.phase === "travel" || this.phase === "explore";
     if (this.paused || this.choosing || !playing || !this.stats.alive || this.hud.modalOpen) return;
     this.paused = true;
     audio.setPaused(true);
@@ -566,7 +576,7 @@ export class Gameplay {
     }
     this.player.bounds = region;
     this.campaign?.onLevel?.(index, this.levels[index].zone ?? "");
-    reachedLevel(this.biome.id, index + 1);
+    if (!EXPLORE) reachedLevel(this.biome.id, index + 1);
     this.bossMusic = false;
     audio.music(BIOME_AUDIO[this.biome.id]?.music ?? null);
     audio.ambience(BIOME_AUDIO[this.biome.id]?.ambience ?? null);
@@ -626,6 +636,69 @@ export class Gameplay {
     const card = this.unlocked && WEAPON_CARDS[this.unlocked];
     if (card) this.hud.showWeapon(WEAPONS.list[this.unlocked!].label, card.text, card.stats, card.color);
     this.unlocked = null;
+    if (EXPLORE) this.enterExplore(index);
+  }
+
+  /** Explore mode: the panel (zones, speed, camera, walls, HUD). */
+  private setupExplore(): void {
+    const zones = this.campaign ? this.levels.filter((l, i, all) => l.zone && all.findIndex((m) => m.zone === l.zone) === i).map((l) => ({ id: l.zone!, label: l.subtitle ?? l.label })) : [];
+    this.explorePanel = new ExplorePanel({
+      zones,
+      onZone: (id) => {
+        const zone = this.campaign?.zones[id];
+        if (!zone || this.phase !== "explore") return;
+        this.player.entity.setPosition(zone.start.x, 0, zone.start.z);
+        this.player.yawDeg = zone.start.yawDeg;
+        this.player.velocity.set(0, 0, 0);
+        this.onTeleport();
+        this.exploreZone = "";
+      },
+      onSpeed: (mult) => { this.exploreSpeed = mult; },
+      onGhost: (on) => { this.player.noclip = on; },
+      onHud: () => {},
+      onMap: (on) => this.onExploreMap(on),
+      onZoom: (dir) => this.onExploreZoom(dir),
+    });
+  }
+
+  /** Explore mode: no enemies, every seal open, the whole map walkable, no timer or level-ups. */
+  private enterExplore(index: number): void {
+    this.phase = "explore";
+    this.pendingLevelUps = 0;
+    this.enemies.clear();
+    this.pickups.clear();
+    this.tutorial?.dispose();
+    this.tutorial = null;
+    this.testGod = true;
+    this.bounty = null;
+    this.showBounty();
+    this.player.bounds = { ...this.biome.bounds };
+    this.campaign?.openAll?.();
+    this.exploreZone = this.levels[index]?.zone ?? "";
+    this.explorePanel?.setZone(this.exploreZone);
+    this.hud.clearBanners();
+    this.hud.showBanner("No enemies, no gates", 2.6, "Explore mode");
+  }
+
+  /** Explore mode, per frame: the hero's speed, and the zone he walks into takes over (its light, its mood). */
+  private updateExplore(position: Vec3): void {
+    this.player.speedMultiplier = this.exploreSpeed;
+    this.stats.invulnerable = 1;
+    const zones = this.campaign?.zones;
+    if (!zones) return;
+    const inside = (r: LevelBounds) => position.x >= r.minX && position.x <= r.maxX && position.z >= r.minZ && position.z <= r.maxZ;
+    if (zones[this.exploreZone] && inside(zones[this.exploreZone].region)) return;
+    const found = Object.entries(zones).find(([, z]) => inside(z.region));
+    if (!found) return;
+    const [id] = found;
+    this.exploreZone = id;
+    const index = Math.max(0, this.levels.findIndex((l) => l.zone === id));
+    this.campaign?.onLevel?.(index, id);
+    this.campaign?.openAll?.();
+    this.explorePanel?.setZone(id);
+    const level = this.levels[index];
+    this.hud.clearBanners();
+    this.hud.showBanner(level?.subtitle ?? id, 1.6, `Zone ${index + 1}`);
   }
 
   equip(weapon: WeaponId): void {
@@ -1871,7 +1944,7 @@ export class Gameplay {
 
   /** Dash (button, Space / Shift): a burst along the stick (or facing), invulnerable for a moment. */
   private tryDash(): void {
-    const playing = this.phase === "combat" || this.phase === "cleared" || this.phase === "travel";
+    const playing = this.phase === "combat" || this.phase === "cleared" || this.phase === "travel" || this.phase === "explore";
     if (!playing || this.paused || this.choosing || this.hud.modalOpen || !this.player.controlsEnabled || !this.stats.alive || this.dashReady <= 0) return;
     const s = this.stats;
     this.dashReady--;
@@ -1953,6 +2026,8 @@ export class Gameplay {
       if (this.clearTimer <= 0 && !this.choosing) this.afterWave();
     } else if (this.phase === "travel" && !this.choosing) {
       this.updateTravel(position);
+    } else if (this.phase === "explore") {
+      this.updateExplore(position);
     }
     this.gun.update(dt, this.player, this.weapons, this.characterScale(), combat && this.stats.alive);
     this.drones.update(dt, position, this.stats.drones, this.characterScale(), combat && this.stats.alive);
@@ -1979,7 +2054,8 @@ export class Gameplay {
     this.hud.setWeapon(label, this.gun.ammo, ws?.magazine ?? 0, this.gun.reloading > 0);
     const remaining = Math.max(0, d.duration - d.time);
     const right = d.phase === "waves" ? `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(Math.floor(remaining % 60)).padStart(2, "0")}` : d.phase === "boss" ? "BOSS" : "CLEAR";
-    if (this.travel) this.hud.setWave(this.levels[this.travel.next].label, 0, "GO");
+    if (this.phase === "explore") this.hud.setWave("Explore", 0, "FREE");
+    else if (this.travel) this.hud.setWave(this.levels[this.travel.next].label, 0, "GO");
     else this.hud.setWave(d.wave.label, d.progress, right);
     this.hud.setXp(s.level, s.xp, s.xpNeeded);
     const boss = d.boss && isAlive(d.boss) ? d.boss : null;
@@ -2014,7 +2090,7 @@ export class Gameplay {
     }
     this.updateWarnings(dt, hero);
     this.hud.update(dt, this.projector);
-    const barsOn = (this.phase === "combat" || this.phase === "cleared" || this.phase === "travel") && s.alive && !this.hud.modalOpen;
+    const barsOn = (this.phase === "combat" || this.phase === "cleared" || this.phase === "travel" || this.phase === "explore") && s.alive && !this.hud.modalOpen;
     const cd = DASH.cooldown * s.dashCooldownMult;
     this.hud.setDash(barsOn && !this.paused, this.dashReady, s.dashCharges, Math.max(0, Math.min(1, this.dashTimer / cd)));
     this.hud.setGadgets([...s.gadgets].map(([id, level]) => ({ icon: gadgetDef(id).icon, color: gadgetDef(id).color, level })));
