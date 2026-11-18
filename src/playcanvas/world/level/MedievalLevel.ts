@@ -219,6 +219,7 @@ export function buildMedievalLevel(kit: ModelKit<MedievalModel>): Entity {
   buildBailey(place, placeAll, wallRun, random);
   buildHall(place, placeAll, wallRun);
   buildThrone(place, placeAll, wallRun, random);
+  dressZones(place, placeAll, random);
 
   // Zone edges and the lanes between the zones.
   ORDER.forEach((id, i) => zoneEdges(ZONE_BOXES[id], i > 0, i < ORDER.length - 1));
@@ -319,7 +320,7 @@ function buildAbbey(place: Place, placeAll: PlaceAll, wallRun: WallRun, random: 
     ["shrine", 0, b.z0 + 6, 180, { scale: 1.3 }], ["candles", -2.5, b.z0 + 6, 0], ["candles", 2.5, b.z0 + 6, 0],
     ["torchLit", -8, b.z0 + 8, 0], ["torchLit", 8, b.z0 + 8, 0],
     ["benchStone", -21, -126, 90], ["benchStone", -21, -132, 90], ["benchStone", 21, -150, -90], ["benchStone", 21, -144, -90],
-    ["rubble", -9, -128, 30], ["rubbleHalf", 10, -152, 60], ["tableBroken", 9, -127, 15], ["barrelStack", -24, -160, 0],
+    ["rubble", -13.5, -128, 30], ["rubbleHalf", 10, -152, 60], ["tableBroken", 12.4, -127, 15], ["barrelStack", -24, -160, 0],
     ["chest", 24, -122, -90], ["keg", -25, -119, 0], ["shelves", 26.5, -160, -90],
   ]);
 }
@@ -373,7 +374,7 @@ function buildBailey(place: Place, placeAll: PlaceAll, wallRun: WallRun, random:
     ["barracks", -20, -270, 90], ["blacksmith", 21, -284, -90], ["tent", -21, -298, 60], ["tent", 20, -267, -40],
     ["weaponRack", -12, -283, 90], ["weaponRack", -12, -288, 90], ["target", 8, -298, 180], ["target", 13, -300, 200],
     ["hay", 10, -301, 0], ["crate", -9, -302, 10], ["crate", -9.6, -303.3, 40], ["cratesStacked", 24, -306, 0],
-    ["barrelStack", -25, -258, 0], ["cartBarrel", 6, -266, 0], ["wheelbarrow", -5, -296, 200],
+    ["barrelStack", -25, -258, 0], ["cartBarrel", 6, -266, 0], ["wheelbarrow", -3.4, -304, 200],
     ["bannerShield", -GAP - 1.2, b.z0 + 0.6, 0, { noCollider: true }], ["bannerShield", GAP + 1.2, b.z0 + 0.6, 0, { noCollider: true }],
     ["torchLit", -7, -262, 0], ["torchLit", 7, -262, 0], ["well", 0, -284, 0, { scale: 0.8 }],
   ]);
@@ -402,7 +403,7 @@ function buildHall(place: Place, placeAll: PlaceAll, wallRun: WallRun): void {
     ["chair", -14, -338, 90], ["chair", -18, -342, -90], ["stool", 14, -356, 0], ["stool", 18, -360, 0],
     ["chestGold", -20, -381, 0], ["chest", 20, -381, 0], ["keg", -21.5, -331, 0], ["kegDecorated", 21.5, -331, 0],
     ["barrelStack", -21.5, -360, 0], ["shelves", 21.8, -350, -90], ["coins", -19, -380, 0], ["candles", 0, -379, 0],
-    ["rubble", 4, -350, 40], ["swordShield", -3, -364, 0],
+    ["rubble", 13, -350, 40], ["swordShield", -12.5, -364, 0],
   ]);
 }
 
@@ -435,6 +436,90 @@ function buildThrone(place: Place, placeAll: PlaceAll, wallRun: WallRun, random:
     ["rubble", -22, -410, 0], ["rubble", 23, -452, 60], ["barrelStack", -25, -452, 0], ["cratesStacked", 25, -408, 0],
   ]);
   void random;
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Dressing by the lanes. The camera sees ~8 m either side of the hero, so what is placed against
+ * the walls is mostly off screen while he walks the lane: each zone also gets its story told right
+ * beside the way through (kept 5-6 m wide; the boss arenas keep their middle open).
+ * ---------------------------------------------------------------------------------------------- */
+function dressZones(place: Place, placeAll: PlaceAll, random: () => number): void {
+  // 1 Village: lanterns along the road, a cart and the market's leftovers by it.
+  for (const z of [28, 12, -4, -18]) for (const s of [-1, 1]) place("tLantern", s * 4.6, z + (s > 0 ? 4 : 0), 0);
+  placeAll([
+    ["tCart", -6.5, 4, 20], ["fBarrelApples", 5.6, 20, 0], ["fCrate", 6.4, 18.6, 25], ["tStallBench", 6, -10, 90], ["fVaseRubble", -5.4, -14, 0],
+    ["fBarrel", -5.6, 16, 0], ["fCrate", 5.2, -1, -10],
+  ]);
+  // 2 Graveyard: the mourners' cart, candle stands at the graves by the path.
+  placeAll([
+    ["tCart", -6.5, -56, 70, { tiltZ: 8 }], ["fCandleStand", -4.6, -68, 0], ["fCandleStand", 4.6, -68, 0], ["fCandleStand", -4.6, -84, 0], ["fCandleStand", 4.6, -84, 0],
+    ["fBooks", 5.2, -60, 40], ["fVaseRubble", -5, -77, 0],
+  ]);
+  // 3 Abbey: pews either side of the processional way, candle stands down it, lecterns before the
+  // altar, the great chandelier fallen; bookcases of the abbey's library along the cloister walls.
+  for (const s of [-1, 1]) {
+    for (const z of [-118, -122, -126, -130, -134]) for (const x of [2.6, 5.8, 9]) place("fBench", s * x, z, 0);
+    for (const z of [-140, -148, -156]) place("fCandleStand", s * 3.6, z, 0);
+    place("fBookStand", s * 3, -161, 180);
+    for (const z of [-118, -124, -150, -156, -162]) place("fBookcase", s * 27.6, z, s > 0 ? -90 : 90);
+  }
+  placeAll([
+    ["fChandelier", -6, -150, 40, { tiltX: 12 }], ["fBooks", -4.6, -153, 20], ["fBooks", 5, -138, 70], ["fChest", 5.6, -160, 180], ["fVaseRubble", 4.8, -146, 0],
+  ]);
+  // 4 Bridge: the siege broke here - a wrecked ram, a smashed catapult, an abandoned ballista,
+  // an overturned cart, banners on the parapets, crates and barrels by the way.
+  placeAll([
+    ["cRamWreck", -6, -205, 15], ["cCatapultWreck", 5.4, -215, -20], ["cBallistaWreck", -5.8, -233, 200], ["tCart", 6.4, -227, 80, { tiltZ: 80, y: 0.6 }],
+    ["fCrate", 4.6, -200, 15], ["fBarrel", -4.8, -218, 0], ["fVaseRubble", -3.5, -224, 0], ["cRocks", 8, -237, 30],
+  ]);
+  for (const z of [-196, -212, -228]) for (const s of [-1, 1]) place("cBanner", s * 12.4, z + (s > 0 ? 8 : 0), s > 0 ? -90 : 90);
+  // 5 Bailey: the market by the gate (stalls facing the lane), the training yard (dummies, a
+  // weapon stand) and the smithy's work yard (bench, anvil, cauldron, tool rack); lanterns.
+  placeAll([
+    ["tStallRed", -6.8, -266, 90], ["tStallGreen", 6.8, -272, -90], ["tStall", -6.8, -277, 90], ["tStallBench", -4.4, -271.5, 90], ["fBarrelApples", 5, -261, 0],
+    ["fCrate", 5, -278, 15], ["fStallCart", 4.4, -306, 200],
+    ["fDummy", -4.8, -291, 20], ["fDummy", -7.6, -294.5, -10], ["fDummy", -5, -298.5, 40], ["fWeaponStand", -10, -295, 90],
+    ["fWorkbench", 12, -282.5, -90], ["fAnvil", 9.6, -287, 30], ["fCauldron", 12.4, -290.5, 0], ["fPegRack", 14.4, -280.5, 0],
+  ]);
+  for (const z of [-290, -306]) for (const s of [-1, 1]) place("tLantern", s * 4.6, z, 0);
+  // 6 Great Hall: the feast laid down the middle either side of the way, benches outside them, the
+  // chandelier fallen across the floor, candles on the tables, bookcases between the wall torches.
+  for (const s of [-1, 1]) {
+    for (const z of [-337, -345, -363, -371]) {
+      for (const x of [3.4]) {
+        place("fTable", s * x, z, 90);
+        place("fBench", s * (x + 1.9), z, 90);
+        place("candles", s * x, z + (random() - 0.5), 0, { y: 0.85, noCollider: true });
+      }
+    }
+    for (const z of [-335, -366]) place("fBookcase", s * 22.4, z, s > 0 ? -90 : 90);
+    place("fBarrel", s * 5, -381, 0);
+  }
+  placeAll([["fChandelier", 1, -354, 70, { tiltZ: 10 }], ["fChest", -6, -380.5, 0], ["fBooks", 3.4, -358, 30]]);
+  // 7 Throne yard: the siege that failed at the last wall - a wrecked trebuchet and siege tower, a
+  // catapult left loaded, a ram; tall banners either side of the throne; rubble by the way.
+  placeAll([
+    ["cTrebuchetWreck", -14, -413, 30], ["cTowerWreck", 15, -420, -20], ["cCatapult", -13, -446, 60], ["cRamWreck", 12.5, -448, 190],
+    ["cBanner", -8, -457.5, 0], ["cBanner", 8, -457.5, 0], ["cRocks", -6, -409, 20, { scale: 0.7 }], ["cRocks", 6.5, -452, 120, { scale: 0.6 }],
+    ["fVaseRubble", 5, -412, 0], ["fBarrel", -5.5, -452, 0],
+  ]);
+
+  // Walk-over leftovers across every floor, so wherever the fight goes the ground tells the story
+  // (the camera only shows a few metres either side of the hero).
+  const litter = (ids: MedievalModel[], n: number, zone: keyof typeof ZONE_BOXES, inset = 3) => {
+    const b = ZONE_BOXES[zone];
+    for (let i = 0; i < n; i++) {
+      const x = b.x0 + inset + random() * (b.x1 - b.x0 - inset * 2), z = b.z0 + inset + random() * (b.z1 - b.z0 - inset * 2);
+      if (Math.abs(x) < 1) continue;
+      place(ids[Math.floor(random() * ids.length)], x, z, random() * 360, { noCollider: true });
+    }
+  };
+  litter(["bucket", "fVaseRubble", "fBooks", "trunk"], 18, "village");
+  litter(["fBooks", "fVaseRubble", "candles", "bones", "coins", "swordShieldBroken"], 34, "abbey");
+  litter(["swordShieldBroken", "bones", "bonesB", "skull", "fVaseRubble", "ribcage"], 30, "bridge", 2);
+  litter(["bucket", "fVaseRubble", "swordShieldBroken", "trunk", "bones"], 30, "bailey");
+  litter(["fBooks", "candles", "coins", "fVaseRubble", "swordShield", "bones"], 32, "hall");
+  litter(["bones", "bonesB", "skull", "ribcage", "swordShieldBroken", "rubbleHalf", "fVaseRubble"], 40, "throne");
 }
 
 /* ------------------------------------------------------------------------------------------------

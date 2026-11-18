@@ -187,7 +187,9 @@ the Abbey (boss: **the Mad Abbot**), the Bridge, the Outer Bailey, the Great Hal
   Medieval Hexagon, Halloween Bits (environment, `scripts/build-medieval-kit.mjs` →
   `public/models/medieval/medieval-kit.glb`, 139 models, 3 materials) and Adventurers / Skeletons
   (creatures with their clips and colour skins, `scripts/build-medieval-creatures.mjs`). The raw packs
-  stay local in `assets-src/medieval/` (git-ignored).
+  stay local in `assets-src/medieval/` (git-ignored). `scripts/build-medieval-additions.mjs` adds Kenney
+  Castle Kit siege engines, Fantasy Town Kit stalls and lanterns and Quaternius Fantasy Props furniture
+  (CC0, textured, graded to the dusk palette) for the zones' set dressing.
 - Tests: `tests/medieval.test.mjs`. Its own theme (`music_graveyard`) and night ambience are synthesised by `scripts/build-synth-audio.py`.
 
 ## Dustline 3D — Chapter V: The Black Tide (pirates)
@@ -247,7 +249,9 @@ the Ravager).
   burning wreckage and finally calls the whole town).
 - **Assets**: Kenney Holiday Kit, City Kit Suburban, City Kit Roads, Car Kit and Survival Kit (CC0)
   merged by `scripts/build-winter-kit.mjs` → `public/models/winter/winter-kit.glb` with snow caps baked on
-  every up-facing face and soot-dark burnt-out cars. New ground surfaces: snow, snowpack, slush, ice, blood
+  every up-facing face and soot-dark burnt-out cars; `scripts/build-winter-additions.mjs` then swaps the
+  cars, trucks, van, ambulance, fire engine and pines for textured Quaternius / KayKit ones (frosted; the
+  service vehicles are the box truck repainted) and adds undergrowth showing through the snow. New ground surfaces: snow, snowpack, slush, ice, blood
   on snow. Tests: `tests/winter.test.mjs`.
 - **The Drifter** (`heroes.ts`, free): Whiteout's own hero - a man in an olive puffer parka (the CC0 avatar's
   sweater inflated into quilted baffles with a longer hem by `build-heroes.mjs` PUFF; the fur ruff, folded

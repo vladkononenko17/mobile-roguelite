@@ -709,9 +709,17 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
       if (dx !== 0 && rand() < 0.25) continue;
       const tilt = id === "boneRib" ? { tiltZ: (rand() - 0.5) * 30 } : id === "graveCross" || id === "graveRound" ? { tiltZ: (rand() - 0.5) * 14 } : {};
       const yaw = aligned ? -turn * math.RAD_TO_DEG + (rand() - 0.5) * 10 : rand() * 360;
-      place(id, c.x + dx * cos - dz * sin, c.z + dx * sin + dz * cos, yaw, { scale: k0 + rand() * (k1 - k0), ...tilt, ...(id === "crag" ? { y: -0.5 } : {}) });
+      const px = c.x + dx * cos - dz * sin, scale = k0 + rand() * (k1 - k0);
+      // Nothing of a scene ends up on the central road.
+      if (Math.abs(px) < 3.4) continue;
+      place(id, px, c.z + dx * sin + dz * cos, yaw, { scale, ...tilt, ...(id === "crag" ? { y: -0.5 } : {}) });
     }
   }
+
+  // ------------------------------------------------------------------ by the road
+  // The camera shows a few metres either side of the hero, and he walks the road: small scenes stand
+  // just off it every ~14 m, alternating sides, and walk-over leftovers lie on every island.
+  buildRoadside(place, rng(2718));
 
   // ------------------------------------------------------------------ zone signatures
   // Gates: an avenue of fire baskets up to the gate.
@@ -759,6 +767,60 @@ export function buildHellLevel(kit: ModelKit<HellModel>): Entity {
 }
 
 /** A glowing pentagram decal (additive) over a ritual platform; returns its material (arena glow). */
+/** The scenes by the road: a few props each, set facing the road on its side. */
+const ROAD_SCENES: [HellModel, number, number, number, SpawnOptions?][][] = [
+  // An impaled sinner: the cross, the skeleton at its foot, candles.
+  [["cross", 0, 0, 0], ["skeleton", 0.9, 0.4, 70], ["candles", -0.8, 0.6, 0], ["bones2", 0.4, -1.2, 30]],
+  // A cage with its prisoner's skull, a chain dropped by it.
+  [["cage", 0, 0, 0], ["skull", 1.2, 0.8, 40], ["bones1", -1.1, 1, 0], ["hRock2", 1.4, -1, 0]],
+  // An offering: a stone altar, gold and a skull on it, candles round.
+  [["altar", 0, 0, 0], ["goldSmall", 0.8, 0.7, 20], ["skull", -0.6, 0.8, -30], ["candles", 1.1, -0.6, 0], ["vase", -1.2, -0.5, 0]],
+  // A fallen column in the ash, stones and a skull by it.
+  [["columnBroken", 0, 0, 0, { tiltZ: 84, y: 0.4 }], ["rubble", 1.4, 1, 0], ["skull", -1.2, 1.2, 60], ["hRock1", -1.6, -1, 0]],
+  // A stockade with a body still in it, a barrel and bones.
+  [["stockade", 0, 0, 0], ["bones3", 1.2, 0.8, 0], ["barrel", -1.2, 0.4, 0], ["skeleton", 0.3, 1.2, 160]],
+  // A spiked wheel by a heap of basalt.
+  [["spikeWheel", 0, 0, 0], ["hRock3", -1.8, -0.6, 0], ["hRock2", 1.6, 0.9, 0], ["bones1", 0.4, 1.4, 0]],
+  // A torturer's table with its tools.
+  [["table", 0, 0, 0], ["axe", 1.4, 0.4, 0], ["chain", -1.3, 0.2, 0], ["bones2", 0.5, 1.4, 0], ["candles", -0.2, 0, 0, { y: 0.95 }]],
+];
+
+function buildRoadside(place: (id: HellModel, x: number, z: number, yaw?: number, options?: SpawnOptions) => unknown, random: () => number): void {
+  const starts = Object.values(ZONES).map((zone) => zone.start);
+  const fires: XZ[] = [...BRAZIERS, ...GATE_BASKETS];
+  const clear = (x: number, z: number, r: number) =>
+    Math.hypot(x - SIGIL_C.x, z - SIGIL_C.z) > SIGIL_C.radius + 4 && Math.hypot(x - SIGIL_F.x, z - SIGIL_F.z) > SIGIL_F.radius + 5 &&
+    !starts.some((p) => Math.hypot(x - p.x, z - p.z) < 5) && !fires.some(([fx, fz]) => Math.hypot(x - fx, z - fz) < r) &&
+    !GRAVE_PLOTS.some((g) => Math.abs(x - g.x) < g.w / 2 + 2 && Math.abs(z - g.z) < g.d / 2 + 2) &&
+    Math.abs(z + 86 * S) > 6 && !POOLS.some((p) => p.soft && Math.abs(x - p.x) < p.w / 2 + 1.5 && Math.abs(z - p.z) < p.d / 2 + 1.5);
+  // Islands the road runs through (x = 0), with the scenes' distance off the road's centre.
+  const roads: [string, number][] = [["gates", 7], ["wastes", 3.6], ["pentagram", 3.6], ["citadel", 3.8], ["abyss", 3.8], ["throne", 3.8]];
+  let n = 0;
+  for (const [name, off] of roads) {
+    const isl = ISLANDS[name];
+    for (let z = isl.z1 - 10; z > isl.z0 + 8; z -= 11) {
+      const side = n % 2 ? 1 : -1;
+      const x = side * (off + random() * 0.6), zz = z + (random() - 0.5) * 4;
+      n++;
+      if (!clear(x, zz, 3.2)) continue;
+      const scene = ROAD_SCENES[Math.floor(random() * ROAD_SCENES.length)];
+      // Face the road: the scene's local +x points away from it.
+      const turn = side > 0 ? 0 : 180, flip = side > 0 ? 1 : -1;
+      for (const [id, dx, dz, yaw, options] of scene) place(id, x + dx * flip, zz + dz * flip, yaw + turn + (random() - 0.5) * 16, options ?? {});
+    }
+  }
+  // Walk-over leftovers on every island: bones, skulls, stones, rubble.
+  const litter: HellModel[] = ["bones1", "bones2", "bones3", "skull", "stoneSmall1", "stoneSmall2", "rubble", "hRock2", "skull", "bones1"];
+  for (const isl of Object.values(ISLANDS)) {
+    const count = Math.round(((isl.x1 - isl.x0) * (isl.z1 - isl.z0)) / 42);
+    for (let i = 0; i < count; i++) {
+      const x = isl.x0 + 3 + random() * (isl.x1 - isl.x0 - 6), z = isl.z0 + 3 + random() * (isl.z1 - isl.z0 - 6);
+      if (Math.abs(x) < 1.2 || !clear(x, z, 1.2)) continue;
+      place(litter[Math.floor(random() * litter.length)], x, z, random() * 360, { noCollider: true, scale: 1.1 + random() * 0.6 });
+    }
+  }
+}
+
 function sigil(root: Entity, app: AppBase, x: number, z: number, radius: number, intensity: number): StandardMaterial {
   const m = new StandardMaterial();
   m.diffuse.set(0, 0, 0);

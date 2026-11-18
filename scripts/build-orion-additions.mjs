@@ -9,8 +9,9 @@
 //     and rocks and cliffs (the pack's orange Mars stone graded to the asteroid's violet grey).
 //   - Kenney "Space Station Kit": the crew's furniture - workstations, holo tables, beds, mess tables,
 //     chairs, lockers and crates, scaffold frames.
-// These replace the low-poly Kenney Space Kit craft, rocks and craters in the first three sectors
-// and outside.
+//   - For the quarantine, reactor and gate: carts, rails, wall screens, blankets, sealed crates
+//     (Kenney) and KayKit container stacks.
+// These replace the low-poly Kenney Space Kit craft, rocks and craters, which are removed.
 //
 //   node scripts/build-orion-additions.mjs   (needs sharp, meshoptimizer, @gltf-transform/*)
 import path from "node:path";
@@ -92,6 +93,19 @@ const MODELS = {
   zStructure: st("structure", { k: 3 }),
   zBarrierHigh: st("structure-barrier-high"),
   zSkipRocks: st("skip-rocks"),
+  // Quarantine, reactor and gate: carts, rails, wall screens, blankets, sealed crates.
+  zSkip: st("skip"),
+  zRail: st("rail"),
+  zDisplay: st("display-wall"),
+  zBedCover: st("bed-single-cover"),
+  zContFlatShut: st("container-flat"),
+  zTableSmall: st("table-display-small"),
+  yContA: [`${KS}/containers_A.gltf`, { len: 5 }, B],
+  yContB: [`${KS}/containers_B.gltf`, { len: 5 }, B],
+  yContC: [`${KS}/containers_C.gltf`, { len: 5 }, B],
 };
 
-await addToKit({ kit: KIT, models: MODELS, grades: GRADES });
+// The Kenney Space Kit pieces nothing places any more (craft, rocks, craters, the hangar).
+const REMOVE = ["sCliff", "sCraftCargo", "sCraftCargoB", "sCraftMiner", "sCraftSpeeder", "sCrater", "sCraterLarge", "sHangar", "sMeteor", "sMeteorHalf", "sRock", "sRockLargeA", "sRockLargeB", "sRocket", "sRocksSmall", "sRover", "sStructure", "sSupports"];
+
+await addToKit({ kit: KIT, models: MODELS, grades: GRADES, remove: REMOVE });

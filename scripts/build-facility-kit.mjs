@@ -79,31 +79,13 @@ const KENNEY = {
   kChair: [`${KST}/chair-armrest-headrest`, "kprop", 2.4],
   kTable: [`${KST}/table-large`, "kprop", 2.4],
   kTableDisplay: [`${KST}/table-display-planet`, "kprop", 2.4],
-  // Space Kit (hangar, launch bay, the meteor), x4
-  sCraftCargo: [`${KSP}/craft_cargoA`, "kprop", 4],
-  sCraftCargoB: [`${KSP}/craft_cargoB`, "kprop", 4],
-  sCraftMiner: [`${KSP}/craft_miner`, "kprop", 4],
-  sCraftSpeeder: [`${KSP}/craft_speederA`, "kprop", 4],
-  sRocket: [[`${KSP}/rocket_baseA`, `${KSP}/rocket_fuelA`, `${KSP}/rocket_sidesA`, `${KSP}/rocket_topA`], "kprop", 4],
-  sHangar: [`${KSP}/hangar_largeA`, "kprop", 4],
+  // Space Kit (the dish, generator, pipe ring, crystals), x4
   sDish: [`${KSP}/satelliteDish_large`, "kprop", 4],
-  sRover: [`${KSP}/rover`, "kprop", 4],
   sGenerator: [`${KSP}/machine_generatorLarge`, "kprop", 4],
-  sSupports: [`${KSP}/supports_high`, "kprop", 4],
-  sStructure: [`${KSP}/structure_detailed`, "kprop", 4],
   sPipeRing: [`${KSP}/pipe_ringHigh`, "kprop", 4],
-  sMeteor: [`${KSP}/meteor_detailed`, "krock", 4],
-  sMeteorHalf: [`${KSP}/meteor_half`, "krock", 4],
-  sRock: [`${KSP}/rock`, "krock", 4],
-  sRockLargeA: [`${KSP}/rock_largeA`, "krock", 4],
-  sRockLargeB: [`${KSP}/rock_largeB`, "krock", 4],
-  sRocksSmall: [`${KSP}/rocks_smallA`, "krock", 4],
   sCrystals: [`${KSP}/rock_crystals`, "krock", 4],
   sCrystalsLargeA: [`${KSP}/rock_crystalsLargeA`, "krock", 4],
   sCrystalsLargeB: [`${KSP}/rock_crystalsLargeB`, "krock", 4],
-  sCrater: [`${KSP}/crater`, "krock", 4],
-  sCraterLarge: [`${KSP}/craterLarge`, "krock", 4],
-  sCliff: [`${KSP}/terrain_sideCliff`, "krock", 4],
 };
 const QSF = "assets-src/quaternius-scifi/glb";
 /**

@@ -43,6 +43,8 @@ export const WINTER_MODELS = {
   road: clutter, roadCross: clutter, roadT: clutter, roadEnd: clutter, roadBend: clutter, roadCrossing: clutter, roadSide: clutter, tilePavement: clutter,
   streetLight: circle(0.2), streetLightDouble: circle(0.2), streetLightCurved: circle(0.2),
   barrier: box(0.9), barrierLight: circle(0.3), roadCone: clutter, highwaySign: circle(0.3),
+  // Near-field detail (Quaternius nature, snowed on; scripts/build-winter-additions.mjs): walk-over
+  wBush: clutter, wGrass: clutter, wFern: clutter, wRock1: clutter, wRock2: clutter,
 } satisfies Record<string, KitModelDef>;
 
 export type WinterModel = keyof typeof WINTER_MODELS;

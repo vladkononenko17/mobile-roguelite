@@ -420,6 +420,9 @@ export function buildShipLevel(kit: ModelKit<FacilityModel>): Entity {
   world.exitSeals = [];
   world.accent = kit.material("accent") ?? null;
   const place = (id: FacilityModel, x: number, z: number, yaw = 0, options: SpawnOptions = {}) => kit.spawn(id, x, z, yaw, root, options);
+  /** Its own random stream for the late dressing, so the older placements keep their layout. */
+  const dress = rng(4417);
+  const placeStacks = (list: [FacilityModel, number, number, number][]) => { for (const [id, x, z, yaw] of list) place(id, x, z, yaw); };
   const block = (x: number, z: number, width: number, depth: number, low = false) => {
     const e = new Entity("block");
     e.setLocalPosition(x, 0, z);
@@ -722,13 +725,39 @@ export function buildShipLevel(kit: ModelKit<FacilityModel>): Entity {
     for (const [x, z, yaw] of [[-16, -200, 0], [16, -200, 0], [-16, -228, 0], [8, -228, 0], [-17, -214, 90], [17, -210, 90]] as [number, number, number][]) place("kBarrier", x, z, yaw);
     // Around the walls: fallen capsules, broken screens, abandoned crates.
     const wreck: [FacilityModel, number, number, number, SpawnOptions?][] = [
-      ["qPod", -36, -190, 90], ["qPod", -36, -200, 90, { tiltZ: 25 }], ["qCapsule", -30, -196, 0, { tiltX: 80, y: 0.4 }],
+      ["qPod", -36, -190, 90], ["qPod", -36, -200, 90, { tiltZ: 25 }],
       ["qPod", 36, -238, -90], ["qCapsule", 30, -240, 0, { tiltZ: -75, y: 0.4 }], ["qCrate", 32, -186, 30], ["qCrateLong", 35, -190, 80],
       ["qComputer", -38, -226, 90, { tiltX: -20 }], ["displayRed", -38.6, -214, 90], ["monitorRed", 38, -214, -90],
       ["qShelf", -34, -244, 0, { tiltZ: 30 }], ["qCrate", -30, -242, 10], ["bioRed", 36, -226, -90],
-      ["cryoOff", 34, -200, -90, { tiltZ: -35 }], ["qVessel", -24, -188, 0, { tiltX: 90, y: 0.15 }],
+      ["cryoOff", 34, -200, -90, { tiltZ: -35 }],
     ];
     for (const [id, x, z, yaw, o] of wreck) place(id, x, z, yaw, o ?? {});
+    // The triage ward south-west of the cell: beds in rows with a screen at each head, blankets
+    // dropped, a bed shoved askew in the rush.
+    for (const z of [-185, -191, -197]) for (const x of [-31, -24.5, -18]) {
+      if (x === -18 && z === -197) continue;
+      place("zBed", x, z, 90 + (dress() - 0.5) * (x === -18 ? 50 : 12));
+      place("zDisplay", x - 2.1, z, 90);
+      if (dress() < 0.5) place("zBedCover", x + 2.4, z + 1.6, dress() * 360);
+    }
+    // The decontamination line south-east: frames over the floor, sealed crates waiting by them.
+    for (const x of [20, 26, 32]) {
+      place("zStructure", x, -194, 0, { scale: [1, 1.1, 1] });
+      place("zContFlatShut", x, -200, 90);
+    }
+    place("zBarrierHigh", 17, -194, 90);
+    place("zBarrierHigh", 35, -194, 90);
+    // Hazard storage north of the cell: container stacks, carts.
+    placeStacks([["yContA", -26, -236, 0], ["yContC", -20, -242, 90], ["yContB", 26, -234, 0], ["zSkip", 20, -242, 80], ["zSkip", -32, -230, -10]]);
+    // By the way through: the evacuation's leftovers - a stretcher tipped over, chairs, carts and
+    // crates, blankets, a screen face down.
+    const lane: [FacilityModel, number, number, number, SpawnOptions?][] = [
+      ["zBed", -3.6, -186, 20, { tiltZ: 75, y: 0.5 }], ["zChair", 2.6, -189, 130, { tiltX: 85, y: 0.35 }], ["zContFlat", 3.8, -195, 10], ["zBedCover", -2.2, -192, 40],
+      ["zSkip", -4.6, -199, 75], ["zDisplay", 1.8, -199.5, 0, { tiltX: 90, y: 0.15 }], ["zContainer", 5.6, -201, 30], ["zBedCover", 2.4, -183, 200],
+      ["zChair", -15, -207, 60], ["zContFlat", 15, -219, -20], ["zBed", 16, -226, 100, { tiltZ: -70, y: 0.5 }], ["zContainer", -15.5, -224, 15],
+      ["zContFlat", -3.4, -232, 30], ["zChair", 2.6, -236, 250, { tiltZ: 85, y: 0.35 }], ["zContainer", 3.8, -243, 0], ["zBedCover", -2.4, -240, 70],
+    ];
+    for (const [id, x, z, yaw, o] of lane) place(id, x, z, yaw, o ?? {});
   }
 
   // ================================================================== 5 REACTOR
@@ -759,6 +788,24 @@ export function buildShipLevel(kit: ModelKit<FacilityModel>): Entity {
     for (const s of [-1, 1]) for (const dz of [-8, 8]) {
       for (let k = 0; k < 4; k++) place("qPipes", s * (14 + k * 7), CORE.z + dz, 0, { y: -3.95, scale: [2, 1, 1] });
     }
+    // The control desks south of the dais, facing the core; floodlights on the dais's corners.
+    for (const x of [-7.5, -4, 4, 7.5]) {
+      place("zCompWide", x, CORE.z + 15, 180);
+      place("zChairArm", x, CORE.z + 16.6, 180);
+    }
+    for (const [x, z] of [[-11, CORE.z - 11], [11, CORE.z - 11], [-11, CORE.z + 11], [11, CORE.z + 11]]) place("yLights", x, z, 0);
+    // Maintenance: cargo and parts stacked between the bays, carts, a truck left mid-job.
+    placeStacks([
+      ["yCargoA", -22, q.z1 - 7, 0], ["yCargoB", -25, q.z1 - 6, 30], ["yContB", 24, q.z1 - 8, 0], ["yContA", -26, q.z0 + 8, 90],
+      ["yCargoA", 25, q.z0 + 7, 15], ["yCargoPacked", 21, q.z0 + 10, 0], ["yTruck", 30, CORE.z + 14, -100], ["yTrailer", 30, CORE.z + 20.5, -100],
+      ["zSkip", -36, CORE.z - 6, 0], ["zSkip", 36, CORE.z + 4, 180], ["zContFlatShut", -30, CORE.z + 18, 0], ["zContFlatShut", -33, CORE.z + 18, 0],
+    ]);
+    // By the way through: crates of parts, a cart, a tool table.
+    const lane: [FacilityModel, number, number, number, SpawnOptions?][] = [
+      ["zContainer", -3.6, q.z1 - 5, 20], ["zContainer", -5.2, q.z1 - 6, 50], ["zSkip", 4, q.z1 - 9, -15], ["zTableSmall", -4.2, CORE.z + 21, 0],
+      ["zContFlat", 3.8, CORE.z + 22, 0], ["zContainer", 3.4, q.z0 + 6, 10], ["zContFlat", -3.8, q.z0 + 9, -30], ["zSkip", -4.6, CORE.z - 16, 100],
+    ];
+    for (const [id, x, z, yaw, o] of lane) place(id, x, z, yaw, o ?? {});
   }
 
   // ================================================================== 6 PROJECT GATE
@@ -787,6 +834,26 @@ export function buildShipLevel(kit: ModelKit<FacilityModel>): Entity {
     for (const [x, z, k] of [[-5, -392, 1.1], [6, -393, 0.9], [-12, -386, 0.7], [13, -380, 0.8], [-3, -398, 1.3]]) {
       place(random() < 0.5 ? "sCrystalsLargeB" : "sCrystals", GATE.x + x, z, random() * 360, { scale: k });
     }
+    // The project's control: a bank of desks facing the portal, the holo table between them, the
+    // scientists' chairs pushed back; scaffolds still standing by the dais.
+    for (const x of [-8, -4.5, 4.5, 8]) {
+      place("zCompWide", GATE.x + x, PORTAL.z + 13, 180);
+      place("zChairArm", GATE.x + x + (dress() - 0.5), PORTAL.z + 14.8 + dress(), 180 + (dress() - 0.5) * 60);
+    }
+    place("zTableDisplay", GATE.x, PORTAL.z + 19, 0);
+    for (const s of [-1, 1]) {
+      place("zStructure", GATE.x + s * 13, PORTAL.z - 2, 0, { scale: [1.2, 1.4, 1.2] });
+      place("zCompSystem", GATE.x + s * 20, PORTAL.z + 10, s > 0 ? -60 : 60);
+      place("zCompSystem", GATE.x + s * 21.5, PORTAL.z + 6, s > 0 ? -75 : 75);
+      place("zContFlatShut", GATE.x + s * 15, PORTAL.z + 16, s * 30);
+      place("yCargoPacked", GATE.x + s * 17.5, PORTAL.z + 13, s * 15);
+    }
+    // Left where they fell: crates, a cart, a chair, a screen.
+    const lane: [FacilityModel, number, number, number, SpawnOptions?][] = [
+      ["zContainer", -3.4, -361, 20], ["zContFlat", 3.6, -363, -10], ["zSkip", 6, -372, 60], ["zChair", -2.8, -375, 0, { tiltZ: 85, y: 0.35 }],
+      ["zDisplay", 2.6, -376.5, 0, { tiltX: 90, y: 0.15 }], ["zContainer", -11, -366, 0], ["zContFlat", 11.5, -397, 40], ["zContainer", -10.5, -398, 15],
+    ];
+    for (const [id, x, z, yaw, o] of lane) place(id, x, z, yaw, o ?? {});
   }
 
   // ================================================================== 7 THE ASTEROID
@@ -820,7 +887,11 @@ export function buildShipLevel(kit: ModelKit<FacilityModel>): Entity {
     // Rocks drifting in the void round it.
     for (let i = 0; i < 22; i++) {
       const a = random() * Math.PI * 2, d = 62 + random() * 36;
-      place(random() < 0.6 ? "yRocksB" : "yCliffCurve", Math.sin(a) * d, -484 + Math.cos(a) * d, random() * 360, { y: -8 - random() * 20, scale: 1 + random() * 2.5, noCollider: true, tiltX: random() * 40 });
+      const id: FacilityModel = random() < 0.6 ? "yRocksB" : "yCliffCurve", yaw = random() * 360, y = -8 - random() * 20, k = 1 + random() * 2.5, tiltX = random() * 40;
+      const x = Math.sin(a) * d, z = -484 + Math.cos(a) * d;
+      // Never under the station (a big one would come up through its floor).
+      if (z > ROCK.z1 - 8 && Math.abs(x) < 60) continue;
+      place(id, x, z, yaw, { y, scale: k, noCollider: true, tiltX });
     }
     // The camp at the airlock: the tube opens under a frame between two base modules, tunnels
     // running on from them to the next modules.

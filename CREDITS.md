@@ -14,9 +14,9 @@ Game by Neon Hollow. Third-party assets below; details and build steps in `asset
 - "Flat Guns East" and "Flat Gun Attachments" by Pichuliru (pichuliru.itch.io), CC0. The Plasma and Hellfire rifles, the Pulse SMG and the Railgun are recoloured East guns.
 
 ## Worlds
-- Kenney (kenney.nl): Pirate Kit, Graveyard Kit, Nature Kit, Space Station Kit, Space Kit, Holiday Kit, City Kit Suburban, City Kit Roads, Car Kit, Survival Kit, CC0.
+- Kenney (kenney.nl): Pirate Kit, Graveyard Kit, Nature Kit, Castle Kit, Fantasy Town Kit, Space Station Kit, Space Kit, Holiday Kit, City Kit Suburban, City Kit Roads, Car Kit, Survival Kit, CC0.
 - KayKit by Kay Lousberg: Medieval Hexagon Pack, Dungeon Remastered, Halloween Bits, City Builder Bits, Space Base Bits, CC0.
-- Quaternius: Zombie Apocalypse Kit, Stylized Nature MegaKit, Ultimate Modular Sci-Fi Pack, Ultimate Space Kit, CC0.
+- Quaternius: Zombie Apocalypse Kit, Stylized Nature MegaKit, Fantasy Props MegaKit, Ultimate Modular Sci-Fi Pack, Ultimate Space Kit, CC0.
 - "Inferno World" (free version) by ithappystudios.
 - "Post-Apocalyptic Starter Pack" by Atomic Realm; "CitySurvivalLite".
 - "Molten Maps SciFi Asset Pack" by Moltenbolt (moltenbolt.com), CC0. "HallwayPACK" spaceship modules, CC0. 3dassets.dev, CC0.

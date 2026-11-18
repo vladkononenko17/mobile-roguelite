@@ -3,7 +3,7 @@
 // replacing nodes of the same id, so the step is idempotent and can run over the committed kit.
 //
 // Per model: animations dropped; base-colour textures graded (saturation, brightness, a colour laid
-// over, a hue turn) once per (image, recipe); normal maps dropped; vertex attributes cut to position,
+// over, a hue turn, one paint colour repainted) once per (image, recipe); normal maps dropped; vertex attributes cut to position,
 // normal and UV; optional simplification (topology-preserving `ratio`, or the sloppy one for meshes
 // of many small islands); scaled to a target size and set on the ground. Then the kit is deduplicated
 // and the new PNGs stored as 512 px WebP.
@@ -20,19 +20,33 @@ import sharp from "sharp";
  * @param {string} o.kit  path of the kit GLB (read and rewritten)
  * @param {Record<string, [string, {h?: number, len?: number, k?: number}, Record<string, string>]>} o.models
  *   id -> [source glTF, target size ({ h } height, { len } longest ground side, { k } scale), grade per texture file name ("*": default)]
- * @param {Record<string, {saturation: number, brightness: number, hue?: number, dust?: [number, number, number, number]}>} o.grades
+ * @param {Record<string, {saturation: number, brightness: number, hue?: number, dust?: [number, number, number, number], repaint?: {hue: [number, number], minSat?: number, to: [number, number, number], ref?: number}}>} o.grades
  * @param {Record<string, number>} [o.ratio]  topology-preserving simplification ratio per id
  * @param {Record<string, number>} [o.sloppy] sloppy simplification ratio per id
  * @param {(id: string, doc: import("@gltf-transform/core").Document) => void} [o.tweak]  per-model edits before scaling
+ * @param {Record<string, number>} [o.rescale]  existing kit models to resize (factor of their original size; idempotent)
+ * @param {string[]} [o.remove]  existing kit models to drop (no longer placed anywhere)
  */
-export async function addToKit({ kit: KIT, models: MODELS, grades: GRADES, ratio: RATIO = {}, sloppy: SLOPPY = {}, tweak }) {
+export async function addToKit({ kit: KIT, models: MODELS, grades: GRADES, ratio: RATIO = {}, sloppy: SLOPPY = {}, tweak, rescale = {}, remove = [] }) {
 await MeshoptSimplifier.ready;
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 const kit = await io.read(KIT);
 const scene = kit.getRoot().getDefaultScene() ?? kit.getRoot().listScenes()[0];
 // Drop what is replaced (and anything this script added before).
-for (const node of scene.listChildren()) if (MODELS[node.getName()]) { scene.removeChild(node); node.dispose(); }
+for (const node of scene.listChildren()) if (MODELS[node.getName()] || remove.includes(node.getName())) { scene.removeChild(node); node.dispose(); }
+// Resized models: the factor goes on the model's children (ModelKit sets the model node's own scale
+// when it places a copy). Each child keeps its original transform in extras, so running again does
+// not compound.
+for (const node of scene.listChildren()) {
+  const f = rescale[node.getName()];
+  if (!f) continue;
+  for (const child of node.listChildren()) {
+    const extras = child.getExtras();
+    const base = extras.base ?? { s: child.getScale(), t: child.getTranslation() };
+    child.setExtras({ ...extras, base }).setScale(base.s.map((v) => v * f)).setTranslation(base.t.map((v) => v * f));
+  }
+}
 await kit.transform(prune());
 
 const graded = new Map();
@@ -40,6 +54,7 @@ async function grade(image, recipe) {
   const key = `${recipe}:${image.length}:${image.subarray(0, 64).toString("hex")}`;
   if (graded.has(key)) return graded.get(key);
   const g = GRADES[recipe];
+  if (g.repaint) image = await repaint(image, g.repaint);
   let img = sharp(image).modulate({ saturation: g.saturation, brightness: g.brightness, ...(g.hue ? { hue: g.hue } : {}) });
   const meta = await sharp(image).metadata();
   if (g.dust) {
@@ -54,10 +69,33 @@ async function grade(image, recipe) {
   return out;
 }
 
+/**
+ * Repaints one paint colour of an atlas: pixels whose hue is within `hue` [from, to] degrees and
+ * whose saturation is at least `minSat` take the colour `to`, keeping their shading (value relative
+ * to `ref`). E.g. a green truck cab made white for an ambulance or red for a fire engine.
+ */
+async function repaint(image, { hue: [h0, h1], minSat = 0.25, to, ref = 0.7 }) {
+  const { data, info } = await sharp(image).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i] / 255, gg = data[i + 1] / 255, b = data[i + 2] / 255;
+    const max = Math.max(r, gg, b), min = Math.min(r, gg, b), d = max - min;
+    if (max === 0 || d / max < minSat) continue;
+    let h = max === r ? ((gg - b) / d) % 6 : max === gg ? (b - r) / d + 2 : (r - gg) / d + 4;
+    h = (h * 60 + 360) % 360;
+    if (h < h0 || h > h1) continue;
+    const k = Math.min(1.25, Math.max(0.35, max / ref));
+    for (let c = 0; c < 3; c++) data[i + c] = Math.min(255, Math.round(to[c] * k));
+  }
+  return sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer();
+}
+
 const target = kit;
 for (const [id, [file, size, grades]] of Object.entries(MODELS)) {
   const doc = await io.read(file);
   for (const a of doc.getRoot().listAnimations()) a.dispose();
+  // Static props: no skeletons (a skinned mesh in the kit breaks PlayCanvas's bounds for the batch).
+  for (const node of doc.getRoot().listNodes()) node.setSkin(null);
+  for (const skin of doc.getRoot().listSkins()) skin.dispose();
   // Textures: graded once per (image, recipe); no normal maps; no emission (KayKit windows).
   for (const m of doc.getRoot().listMaterials()) {
     m.setNormalTexture(null).setMetallicFactor(0).setRoughnessFactor(0.92);
