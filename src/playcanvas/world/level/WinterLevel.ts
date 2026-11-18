@@ -422,6 +422,21 @@ function dressNear(place: (id: WinterModel, x: number, z: number, yaw?: number, 
       place(id, x, z, random() * 360, { noCollider: true, scale: 0.8 + random() * 0.4, ...flat });
     }
   };
+  /** Undergrowth in clumps (dead grass, ferns, a bush) poking through the snow. */
+  const clumps = (r: Rect, n: number, keepOff: number) => {
+    for (let i = 0; i < n; i++) {
+      const cx = r.x0 + 2 + random() * (r.x1 - r.x0 - 4), cz = r.z0 + 2 + random() * (r.z1 - r.z0 - 4);
+      if (Math.abs(cx) < keepOff) continue;
+      const count = 3 + Math.floor(random() * 4);
+      for (let k = 0; k < count; k++) {
+        const id: WinterModel = k === 0 && random() < 0.35 ? "wBush" : random() < 0.75 ? "wGrass" : "wFern";
+        place(id, cx + (random() - 0.5) * 2.4, cz + (random() - 0.5) * 2.4, random() * 360, { noCollider: true, scale: 0.8 + random() * 0.6 });
+      }
+    }
+  };
+  clumps(FOREST, 34, 2.5);
+  clumps(FARM, 40, 1.5);
+  clumps(SUBURB, 14, 5);
   const NATURE: WinterModel[] = ["wBush", "wGrass", "wGrass", "wFern", "wRock1", "wRock2"];
   litter(FOREST, [...NATURE, "logSmall", "wBush"], 46, 2.5);
   litter(FARM, [...NATURE, "planks", "wGrass", "wGrass", "logSmall"], 44, 1.5);

@@ -250,7 +250,8 @@ the Ravager).
 - **Assets**: Kenney Holiday Kit, City Kit Suburban, City Kit Roads, Car Kit and Survival Kit (CC0)
   merged by `scripts/build-winter-kit.mjs` → `public/models/winter/winter-kit.glb` with snow caps baked on
   every up-facing face and soot-dark burnt-out cars; `scripts/build-winter-additions.mjs` then swaps the
-  cars and pines for textured Quaternius / KayKit ones (frosted) and adds snowed-on undergrowth. New ground surfaces: snow, snowpack, slush, ice, blood
+  cars, trucks, van, ambulance, fire engine and pines for textured Quaternius / KayKit ones (frosted; the
+  service vehicles are the box truck repainted) and adds undergrowth showing through the snow. New ground surfaces: snow, snowpack, slush, ice, blood
   on snow. Tests: `tests/winter.test.mjs`.
 - **The Drifter** (`heroes.ts`, free): Whiteout's own hero - a man in an olive puffer parka (the CC0 avatar's
   sweater inflated into quilted baffles with a longer hem by `build-heroes.mjs` PUFF; the fur ruff, folded
