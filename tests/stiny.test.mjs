@@ -126,10 +126,11 @@ describe('«Чотири стіни» rules', () => {
     const N = 60;
     const res = (style) => Array.from({ length: N }, (_, i) => play(i + 1, style));
     const careful = res('careful');
-    const survived = careful.filter((r) => r.ending === 'survived').length;
+    // «together» is surviving with friends still close: it counts as making it
+    const survived = careful.filter((r) => r.ending === 'survived' || r.ending === 'together').length;
     assert.ok(survived > N * 0.15 && survived < N * 0.8, `careful survived ${survived}/${N}`);
     const worker = res('worker');
-    assert.ok(worker.every((r) => r.ending !== 'survived'), 'grinding should not get you through');
+    assert.ok(worker.every((r) => r.ending !== 'survived' && r.ending !== 'together'), 'grinding should not get you through');
     const doom = res('doom');
     assert.ok(doom.reduce((s, r) => s + r.history.length, 0) / N < 5, 'doomscrolling should break you fast');
     // the line goes down over the years

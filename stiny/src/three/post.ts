@@ -15,7 +15,7 @@ import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
  */
 
 export type Quality = "low" | "medium" | "high";
-export type Mood = "day" | "rain" | "fog" | "snow" | "night" | "indoor" | "home" | "blackout" | "dusk";
+export type Mood = "day" | "rain" | "fog" | "snow" | "night" | "indoor" | "home" | "blackout" | "dusk" | "memory";
 
 interface Grade {
   lift: [number, number, number];
@@ -39,6 +39,8 @@ const GRADES: Record<Mood, Grade> = {
   home: { lift: [0.03, 0.012, 0.0], gamma: [1, 1, 0.98], gain: [1.08, 1.0, 0.88], saturation: 1.08, contrast: 1.05, vignette: 0.42, grain: 0.04, bloom: [0.6, 1.1] },
   dusk: { lift: [0.02, 0.0, 0.04], gamma: [1, 0.98, 1.02], gain: [1.1, 0.95, 0.9], saturation: 0.95, contrast: 1.08, vignette: 0.45, grain: 0.045, bloom: [0.8, 0.95] },
   blackout: { lift: [0.02, 0.0, 0.0], gamma: [1, 0.98, 0.92], gain: [1.12, 0.95, 0.78], saturation: 0.9, contrast: 1.12, vignette: 0.6, grain: 0.06, bloom: [1.0, 0.75] },
+  /** A summer remembered: warm, saturated, glowing, a little grainy like old film. */
+  memory: { lift: [0.05, 0.035, 0.0], gamma: [1, 1, 0.96], gain: [1.12, 1.04, 0.88], saturation: 1.3, contrast: 1.03, vignette: 0.3, grain: 0.055, bloom: [0.95, 0.72] },
 };
 
 const GradeShader = {

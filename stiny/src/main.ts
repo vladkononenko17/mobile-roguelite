@@ -2,19 +2,20 @@ import "./stiny.css";
 import { Scene3D } from "./Scene3D.ts";
 import * as A from "./audio.ts";
 import {
-  ENDINGS, PERKS, PLACE_LABELS, SEASONS, SEASON_DEFS, THOUGHTS, TRAITS, actionById, perkById, seasonName,
-  type ActionId, type PlaceId, type TraitId,
+  ENDINGS, ENDING_HINTS, ENDING_ORDER, MEMORY_DEAD, MEMORY_LINES, PERKS, PLACE_LABELS, SEASONS, SEASON_DEFS, THOUGHTS, TRAITS, actionById, perkById, seasonName,
+  type ActionId, type FriendState, type PlaceId, type TraitId,
 } from "./content.ts";
 import {
   actionsAt, beginAction, busHere, choosePerk, startDay, clockText, despair, endDay, fmt, has, hasWater, interruptAction, isLight, isNight,
-  dailySeed, maxPsyche, newRun, peep, resolveBallistic, resolveDelivery, resolveKnock, resolveMom, resolveNeighbor, resolveSlam, tick, unlockedTraits,
+  bondOf, dailySeed, maxPsyche, newRun, peep, pendingOffer, readSteps, remember, replyFriend, replyOptions, takeOffer, tiszaCost,
+  type OfferId, type ReplyKind, type Visitor, resolveBallistic, resolveDelivery, resolveKnock, resolveMom, resolveNeighbor, resolveSlam, tick, unlockedTraits,
   yearIndex, type ActionResult, type DayEvent, type Msg, type Outcome, type RunState, type SeasonReport,
 } from "./sim.ts";
 import { bankRun, loadMeta, loadRun, saveMeta, saveRun } from "./save.ts";
 import { detectLang, getLang, nameOf, num, saveLang, tr, type Lang } from "./i18n.ts";
 import { applyContentLang } from "./content.en.ts";
 import { H, buzz, setVibe, supported as vibeSupported, vibeOn } from "./haptics.ts";
-import { renderCard, shareResult, type RunResult } from "./share.ts";
+import { FRIEND_MARK, endingColor, renderCard, shareResult, stateWord, type RunResult } from "./share.ts";
 
 applyContentLang(detectLang());
 
@@ -35,7 +36,7 @@ let run: RunState | null = loadRun();
 let selected: TraitId = unlockedTraits(meta.seasons).includes(meta.lastTrait) ? meta.lastTrait : "it";
 /** An async flow (event, minigame, dialog) is running: time stands still. */
 let handling = false;
-let mode: "menu" | "day" | "screen" = "menu";
+let mode: "menu" | "day" | "screen" | "memory" = "menu";
 let paused = false;
 let near: PlaceId | null = null;
 let panelKey = "";
@@ -48,11 +49,11 @@ let audioOn = false;
 /** The last finished run, for the share card (drawn as soon as the run ends). */
 let lastResult: RunResult | null = null;
 let lastCard: Promise<Blob | null> | null = null;
-Object.assign(window as unknown as Record<string, unknown>, { __stiny: { scene, get run() { return run; }, set run(v: RunState | null) { run = v; } } });
+Object.assign(window as unknown as Record<string, unknown>, { __stiny: { scene, get run() { return run; }, set run(v: RunState | null) { run = v; }, act: (id: ActionId) => doAction(id), phone: () => openPhone() } });
 
 // ================================================================ small UI helpers
 
-const SCREENS = ["#start-screen", "#season-screen", "#phone-screen", "#summary-screen", "#perk-screen", "#end-screen", "#pause-screen"];
+const SCREENS = ["#start-screen", "#season-screen", "#phone-screen", "#summary-screen", "#perk-screen", "#end-screen", "#pause-screen", "#codex-screen"];
 function showScreen(id: string | null): void {
   for (const s of SCREENS) $(s).classList.toggle("active", s === id);
 }
@@ -60,7 +61,7 @@ function showScreen(id: string | null): void {
 let toastTimer = 0;
 function toast(text: string, from = "", bad = false, ms = 2600): void {
   const t = $("#toast");
-  t.innerHTML = from ? `<small>${esc(from)}</small>${esc(text)}` : esc(text);
+  t.innerHTML = (from ? `<small>${esc(from)}</small>` : "") + esc(text).replace(/\n/g, "<br>");
   t.classList.toggle("bad", bad);
   t.classList.add("show");
   window.clearTimeout(toastTimer);
@@ -193,6 +194,10 @@ async function doAction(id: ActionId): Promise<void> {
     await finishRun();
     return;
   }
+  if (id === "photos") {
+    await flow(() => flashback());
+    return;
+  }
   let s = 1;
   if (id === "work") {
     s = await flow(() => workGame());
@@ -300,9 +305,11 @@ function workGame(): Promise<number> {
  * breath (hold the button). Air runs out; if you gasp while they listen, they
  * hear you.
  */
-function breathGame(): Promise<boolean> {
+function breathGame(bonus = 0): Promise<boolean> {
   return new Promise((resolve) => {
     const dsp = run ? despair(run) : 0;
+    // you read the steps right: you were ready. Wrong: you are shaking
+    const k = bonus > 0 ? 0.75 : bonus < 0 ? 1.25 : 1;
     const box = $("#mini");
     $("#mini-title").textContent = tr("СТУКАЮТЬ", "KNOCKING");
     $("#mini-prompt").textContent = tr("Коли слухають — затамуй подих", "When they listen — hold your breath");
@@ -347,11 +354,11 @@ function breathGame(): Promise<boolean> {
       }
       gasp -= dt;
       if (holding) {
-        a -= dt * (0.2 + dsp * 0.08);
+        a -= dt * (0.2 + dsp * 0.08) * k;
         if (a <= 0) { a = 0; holding = false; gasp = 0.7; btn.classList.remove("held"); n += 0.35; A.sigh(); }
       } else {
         a = Math.min(1, a + dt * 0.45);
-        if (ph === "listen") n += dt * (0.55 + dsp * 0.3);
+        if (ph === "listen") n += dt * (0.55 + dsp * 0.3) * k;
       }
       heart -= dt;
       if (heart <= 0) { heart = holding ? 0.45 : 0.7; A.play("heart"); scene.heartbeat(); if (holding) buzz(H.heart); }
@@ -444,6 +451,217 @@ function peepScreen(kind: "courier" | "fake" | "unclear" | "empty" | "neighbor",
   });
 }
 
+// ================================================================ steps on the stairs
+
+/**
+ * Before the knock: steps on the stairs, seen as footprints climbing to your
+ * door and heard from the door's side. Guess who it is. The worse your head,
+ * the more the prints lie.
+ */
+function stepsGame(who: Visitor): Promise<Visitor | null> {
+  return new Promise((resolve) => {
+    const dsp = run ? despair(run) : 0;
+    const box = $("#mini");
+    $("#mini-title").textContent = tr("КРОКИ НА СХОДАХ", "STEPS ON THE STAIRS");
+    $("#mini-prompt").textContent = tr("Хтось підіймається. Хто це?", "Someone is coming up. Who is it?");
+    const opts: Array<[Visitor, string]> = [["tck", tr("ТЦК", "TCC")], ["police", tr("ДІЛЬНИЧНИЙ", "LOCAL COP")], ["neighbor", tr("СУСІДКА", "NEIGHBOUR")], ["phantom", tr("НІКОГО НЕМАЄ", "NOBODY")]];
+    $("#mini-body").innerHTML = `<div class="steps-timer"><i></i></div><div class="stairs"><div class="door"></div></div>
+      <div class="steps-choices">${opts.map(([id, l]) => `<button data-who="${id}" disabled>${esc(l)}</button>`).join("")}</div>`;
+    box.classList.remove("hidden");
+    const stairs = box.querySelector<HTMLElement>(".stairs")!;
+    const timer = box.querySelector<HTMLElement>(".steps-timer i")!;
+    const btns = [...box.querySelectorAll<HTMLButtonElement>(".steps-choices button")];
+    const secs = 3.6;
+    A.footsteps(who, secs);
+    // the prints: when, which, how big
+    const plan: Array<{ t: number; icon: string; big?: boolean; ghost?: boolean; dx?: number }> = [];
+    if (who === "phantom") {
+      let t = 0.2;
+      while (t < secs) { plan.push({ t, icon: "👣", ghost: true }); t += 0.35 + Math.random() * 0.9; }
+    } else {
+      const interval = who === "tck" ? 0.42 : who === "police" ? 0.56 : 0.78;
+      let t = 0.15;
+      let i = 0;
+      while (t < secs) {
+        const lie = Math.random() < dsp * 0.45;
+        const icon = lie ? "👣" : who === "neighbor" ? "🩴" : "🥾";
+        plan.push({ t, icon, big: who !== "neighbor" && !lie, ghost: lie });
+        if (who === "tck") plan.push({ t: t + 0.09, icon: lie ? "👣" : "🥾", big: !lie, ghost: lie, dx: 18 });
+        if (who === "neighbor" && i % 4 === 3) { plan.push({ t: t + 0.2, icon: "💬", dx: 22 }); t += 0.7; }
+        t += interval * (who === "neighbor" ? 0.8 + Math.random() * 0.5 : 1);
+        i++;
+      }
+      if (who === "tck") plan.push({ t: secs * 0.55, icon: "📻", dx: 30 });
+      if (who === "police") plan.push({ t: secs * 0.6, icon: "🔑", dx: 26 });
+    }
+    plan.sort((a, b) => a.t - b.t);
+    let t = 0;
+    let k = 0;
+    let done = false;
+    let last = performance.now();
+    const total = 8;
+    const finish = (g: Visitor | null) => {
+      if (done) return;
+      done = true;
+      box.classList.add("hidden");
+      A.play("click");
+      resolve(g);
+    };
+    btns.forEach((b) => { b.onclick = () => finish(b.dataset.who as Visitor); });
+    const loop = (now: number) => {
+      if (done) return;
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      t += dt;
+      while (k < plan.length && plan[k].t <= t) {
+        const p = plan[k++];
+        const prog = Math.min(1, p.t / secs);
+        const el = document.createElement("span");
+        el.className = `print${p.big ? " big" : ""}${p.ghost ? " ghost" : ""}`;
+        el.textContent = p.icon;
+        // up the flight from bottom left to the door at top right
+        el.style.left = `${8 + prog * 72 + (p.dx ?? 0) * 0.3}%`;
+        el.style.top = `${78 - prog * 62 + ((k % 2) ? 6 : -2)}%`;
+        stairs.appendChild(el);
+        if (p.ghost) setTimeout(() => { el.style.opacity = "0"; }, 260);
+        else setTimeout(() => { el.style.opacity = ".35"; }, 1400);
+      }
+      if (t > 1.2) btns.forEach((b) => { b.disabled = false; });
+      timer.style.transform = `scaleX(${Math.max(0, 1 - t / total)})`;
+      if (t >= total) { finish(null); return; }
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  });
+}
+
+// ================================================================ the memory
+
+function fadeTo(alpha: number, ms: number, white = false): Promise<void> {
+  const f = $("#fade");
+  f.classList.toggle("white", white);
+  f.style.transition = `opacity ${ms}ms`;
+  f.style.opacity = String(alpha);
+  return wait(ms).then(() => undefined);
+}
+
+/** The photo from Kozyn, walked into: the five of you, July 2021. */
+async function flashback(): Promise<void> {
+  if (!run?.day) return;
+  const r = run;
+  stopBusy();
+  await fadeTo(1, 700, true);
+  mode = "memory";
+  hud(false);
+  $("#controls").classList.remove("hidden");
+  $("#phone-btn").classList.add("hidden");
+  scene.enterMemory(r.friends.map((f) => ({ color: f.color, dead: f.state === "dead" })));
+  score.bright = true;
+  setText($("#memory-hint"), tr("Підійди до друзів", "Walk up to your friends"));
+  $("#memory").classList.remove("hidden");
+  await fadeTo(0, 1100, true);
+  const talked = new Set<number>();
+  let t = 0;
+  let allAt = -1;
+  let skip = false;
+  $("#memory-skip").onclick = () => { skip = true; };
+  const bubble = $("#bubble");
+  let shown = -1;
+  await new Promise<void>((resolve) => {
+    let last = performance.now();
+    const loop = (now: number) => {
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      t += dt;
+      A.summer(dt);
+      const i = scene.memoryNearest();
+      if (i != null) {
+        talked.add(i);
+        if (i !== shown) {
+          shown = i;
+          const f = r.friends[i];
+          const line = f.state === "dead" ? MEMORY_DEAD[0] : MEMORY_LINES[(i * 3 + r.season) % MEMORY_LINES.length];
+          bubble.innerHTML = `<b>${esc(nameOf(f))}</b>${esc(line)}`;
+          A.play("ping");
+        }
+        const p = scene.memoryHead(i);
+        bubble.style.left = `${Math.max(120, Math.min(window.innerWidth - 120, p.x))}px`;
+        bubble.style.top = `${Math.max(150, p.y)}px`;
+        bubble.classList.remove("hidden");
+      } else { shown = -1; bubble.classList.add("hidden"); }
+      setText($("#memory-hint"), talked.size >= r.friends.length ? tr("Усі тут. Зараз фото.", "Everyone's here. Photo time.") : `${tr("Підійди до друзів", "Walk up to your friends")} · ${talked.size}/${r.friends.length}`);
+      if (talked.size >= r.friends.length && allAt < 0) allAt = t;
+      if (skip || (allAt >= 0 && t - allAt > 3) || t > 55) { resolve(); return; }
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  });
+  bubble.classList.add("hidden");
+  // the shutter: this is the picture on the fridge
+  A.shutter();
+  buzz(H.tap, true);
+  scene.memoryFlash();
+  setText($("#photo-caption"), tr("Козин, липень 2021", "Kozyn, July 2021"));
+  $("#photo-frame").classList.remove("hidden");
+  $("#memory").classList.add("hidden");
+  await wait(2200);
+  await fadeTo(1, 1400);
+  $("#photo-frame").classList.add("hidden");
+  scene.exitMemory();
+  scene.setMove(0, 0);
+  score.bright = false;
+  $("#phone-btn").classList.remove("hidden");
+  dressScene();
+  scene.setPose(null);
+  scene.placeHero(3.7, -2.0, Math.PI);
+  mode = "day";
+  hud(true);
+  await fadeTo(0, 900);
+  await showResult(remember(r));
+}
+
+// ================================================================ decisions that end a run
+
+async function offerFlow(id: OfferId): Promise<void> {
+  if (!run) return;
+  const r = run;
+  const abroad = [...r.friends].filter((f) => f.state === "abroad").sort((a, b) => bondOf(b) - bondOf(a))[0];
+  const c = await note(
+    id === "enlist" ? tr("РІШЕННЯ", "A DECISION") : tr("ПОВІДОМЛЕННЯ З ВАРШАВИ", "A MESSAGE FROM WARSAW"),
+    id === "enlist"
+      ? tr("Після похорону, на який ти не пішов, ти довго сидиш у коридорі в куртці. Може, сьогодні — сам? Без буса. Своїми ногами.", "After the funeral you didn't go to, you sit in the hallway in your jacket for a long time. Maybe today — on your own? No van. On your own feet.")
+      : tr(`${abroad ? nameOf(abroad) : "Друг"} пише: «Є людина. Переводить через Тису. ${fmt(tiszaCost())} — і ти тут. Думай».`, `${abroad ? nameOf(abroad) : "A friend"} writes: “There's a man. Takes people across the Tisza. ${fmt(tiszaCost())} — and you're here. Think about it.”`),
+    id === "enlist"
+      ? [{ id: "yes", label: tr("ПІТИ В ТЦК САМОМУ", "GO TO THE TCC YOURSELF"), cls: "danger" }, { id: "no", label: tr("НІ. НЕ СЬОГОДНІ", "NO. NOT TODAY"), cls: "main" }]
+      : [{ id: "yes", label: tr(`ЗАПЛАТИТИ ${fmt(tiszaCost())}`, `PAY ${fmt(tiszaCost())}`), cls: "danger" }, { id: "no", label: tr("ВИДАЛИТИ НОМЕР", "DELETE THE NUMBER"), cls: "main" }],
+  );
+  const o = takeOffer(r, id, c === "yes");
+  if (o.ending) { await finishRun(); return; }
+  await outcomeNote(id === "enlist" ? tr("КОРИДОР", "THE HALLWAY") : tr("НОМЕР", "THE NUMBER"), o);
+}
+
+// ================================================================ the collection
+
+const FATE_ORDER: FriendState[] = ["hiding", "abroad", "volunteered", "taken", "front", "wounded", "home", "dead"];
+
+function showCodex(): void {
+  const seen = meta.endings ?? {};
+  $("#codex-endings").innerHTML = ENDING_ORDER.map((id) => {
+    const n = seen[id] ?? 0;
+    const e = ENDINGS[id];
+    return n
+      ? `<div class="codex-card"><i style="background:${endingColor(id)}">${n}×</i><b>${esc(e.title)}</b><small>${esc(e.text.slice(0, 70))}…</small></div>`
+      : `<div class="codex-card locked"><i style="background:#3a3640">???</i><b>???</b><small>${esc(ENDING_HINTS[id])}</small></div>`;
+  }).join("");
+  const fates = meta.fates ?? {};
+  $("#codex-fates").innerHTML = FATE_ORDER.map((st) => {
+    const n = fates[st] ?? 0;
+    return `<div class="fate ${n ? "" : "locked"}"><em>${n ? FRIEND_MARK[st] : "?"}</em>${n ? esc(stateWord(st)) : "???"}<small>${n ? `${n}×` : ""}</small></div>`;
+  }).join("");
+  setText($("#codex-title"), `${tr("КІНЦІВКИ", "ENDINGS")} · ${ENDING_ORDER.filter((id) => seen[id]).length}/${ENDING_ORDER.length}`);
+  showScreen("#codex-screen");
+}
+
 // ================================================================ events
 
 async function handle(e: DayEvent): Promise<void> {
@@ -502,17 +720,32 @@ async function handle(e: DayEvent): Promise<void> {
       break;
     case "msg":
       A.play("ping");
-      toast(e.msg.text, e.msg.from, e.msg.kind === "bus");
+      if (e.msg.friend != null && run && replyOptions(run, e.msg).length) toast(`${e.msg.text}\n💬 ${tr("відповісти — у телефоні", "answer in the phone")}`, e.msg.from, false, 3600);
+      else toast(e.msg.text, e.msg.from, e.msg.kind === "bus");
       break;
     case "knock": {
       stopBusy();
       await flow(async () => {
+        // first the steps on the stairs: who is coming?
+        const guess = await stepsGame(e.who);
+        const read = readSteps(e.who, guess);
+        if (e.who === "phantom" && read === "right") {
+          await outcomeNote(tr("ТИША", "SILENCE"), resolveKnock(run!, "phantom", true, "right"));
+          return;
+        }
         A.knock(true);
         buzz(H.knockHard);
         scene.squeeze(1);
+        if (e.who === "neighbor" && read === "right") {
+          const c = await note(tr("ДВЕРІ", "THE DOOR"), tr("Ти впізнав її човгання ще на сходах. Тьотя Валя з восьмої. Від неї пахне пиріжками.", "You knew her shuffle on the stairs. Auntie Valia from number eight. She smells of pies."), [
+            { id: "open", label: tr("ВІДЧИНИТИ ЇЙ", "OPEN FOR HER"), cls: "main" }, { id: "silent", label: tr("МОВЧАТИ", "STAY SILENT") },
+          ]);
+          await outcomeNote(tr("СУСІДКА", "NEIGHBOUR"), resolveKnock(run!, "neighbor", c !== "open", "right"));
+          return;
+        }
         await wait(500);
-        const quiet = await breathGame();
-        const o = resolveKnock(run!, e.who, quiet);
+        const quiet = await breathGame(read === "right" ? 1 : read === "wrong" ? -1 : 0);
+        const o = resolveKnock(run!, e.who, quiet, read);
         await outcomeNote(e.who === "phantom" ? tr("СТУК", "A KNOCK") : quiet ? tr("ПІШЛИ", "THEY LEFT") : tr("ПОЧУЛИ", "THEY HEARD"), o);
       });
       break;
@@ -670,7 +903,7 @@ function hud(on: boolean): void {
     $("#act-panel").classList.add("hidden");
     $("#busy").classList.add("hidden");
     // the room tone (rain, generator, tinnitus) belongs to the day
-    amb.update(0, { despair: 0, blackout: false, birds: false, quiet: false, rain: 0, open: false });
+    amb.update(0, { despair: 0, blackout: false, birds: false, quiet: false, rain: 0, open: false, off: true });
   }
 }
 
@@ -683,6 +916,8 @@ function enterDay(): void {
   persist();
   const first = run.day.msgs.slice(0, 2);
   first.forEach((m, i) => setTimeout(() => toast(m.text, m.from, false, 3200), 300 + i * 3300));
+  const offer = pendingOffer(run);
+  if (offer) void flow(() => offerFlow(offer));
 }
 
 async function nightfall(): Promise<void> {
@@ -752,13 +987,14 @@ async function finishRun(): Promise<void> {
   const after = unlockedTraits(meta.seasons);
   saveRun(null);
   const e = ENDINGS[ending];
-  setText($("#end-sticker"), ending === "survived" ? e.sticker : `${seasonName(Math.min(r.season, SEASONS - 1))}`);
-  $("#end-sticker").style.background = ending === "survived" ? "#3a6a4a" : "var(--red)";
+  const madeIt = ending === "survived" || ending === "together";
+  setText($("#end-sticker"), madeIt ? e.sticker : `${seasonName(Math.min(r.season, SEASONS - 1))}`);
+  $("#end-sticker").style.background = endingColor(ending);
   setText($("#end-title"), e.title);
   setText($("#end-text"), e.text);
   // the line of the mind across the seasons
   const pts = r.history.map((v, i) => `${10 + (i / Math.max(1, SEASONS - 1)) * 300},${100 - v * 0.9}`).join(" ");
-  $("#end-graph").innerHTML = `<line x1="10" y1="100" x2="310" y2="100" stroke="#3a3640"/>${[0, 4, 8, 12].map((s, i) => `<text x="${10 + (s / 15) * 300}" y="108" fill="#6a6470" font-size="8">${2023 + i}</text>`).join("")}<polyline points="${pts}" fill="none" stroke="#e8c45a" stroke-width="2.5"/>${r.history.length ? `<circle cx="${10 + ((r.history.length - 1) / Math.max(1, SEASONS - 1)) * 300}" cy="${100 - r.history[r.history.length - 1] * 0.9}" r="3.5" fill="${ending === "survived" ? "#8ac46a" : "#c83a32"}"/>` : ""}`;
+  $("#end-graph").innerHTML = `<line x1="10" y1="100" x2="310" y2="100" stroke="#3a3640"/>${[0, 4, 8, 12].map((s, i) => `<text x="${10 + (s / 15) * 300}" y="108" fill="#6a6470" font-size="8">${2023 + i}</text>`).join("")}<polyline points="${pts}" fill="none" stroke="#e8c45a" stroke-width="2.5"/>${r.history.length ? `<circle cx="${10 + ((r.history.length - 1) / Math.max(1, SEASONS - 1)) * 300}" cy="${100 - r.history[r.history.length - 1] * 0.9}" r="3.5" fill="${madeIt ? "#8ac46a" : "#c83a32"}"/>` : ""}`;
   const dead = r.friends.filter((f) => f.state === "dead").length;
   $("#end-stats").innerHTML = `
     <div class="delta"><small>${tr("ДНІВ БЕЗ ВУЛИЦІ", "DAYS INSIDE")}</small><b>${num(r.daysInside)}</b></div>
@@ -779,8 +1015,20 @@ async function finishRun(): Promise<void> {
 
 // ================================================================ phone
 
-function msgHtml(m: Msg, time = true): string {
-  return `<div class="msg ${m.kind}"><b>${esc(m.from)}${time ? `<time>${clockText(m.at)}</time>` : ""}</b><p>${esc(m.text)}</p></div>`;
+const REPLY_LABEL: Record<ReplyKind, () => [string, string]> = {
+  warm: () => [tr("НАПИСАТИ ПО-СПРАВЖНЬОМУ", "WRITE FOR REAL"), tr("15 хв", "15 min")],
+  music: () => [tr("НАДІСЛАТИ МУЗИКУ", "SEND MUSIC"), tr("10 хв", "10 min")],
+  emoji: () => [tr("СМАЙЛИК", "A SMILEY"), "👍"],
+};
+
+function msgHtml(m: Msg, time = true, idx = -1): string {
+  const opts = idx >= 0 && run ? replyOptions(run, m) : [];
+  const f = m.friend != null && run ? run.friends[m.friend] : null;
+  const bond = f && idx >= 0 ? `<span class="bond">${bondOf(f) >= 70 ? "❤️" : bondOf(f) < 25 ? "🖤" : "🤍"}</span>` : "";
+  const replies = opts.length
+    ? `<div class="replies">${opts.map((k) => { const [l, sub] = REPLY_LABEL[k](); return `<button data-reply="${idx}:${k}">${esc(l)}<small>${esc(sub)}</small></button>`; }).join("")}</div>`
+    : "";
+  return `<div class="msg ${m.kind} ${m.replied && m.friend != null ? "answered" : ""}"><b>${esc(m.from)}${bond}${time ? `<time>${clockText(m.at)}</time>` : ""}</b><p>${esc(m.text)}</p>${replies}</div>`;
 }
 
 function openPhone(): void {
@@ -796,7 +1044,7 @@ function openPhone(): void {
     if (a.def.id === "order") b.querySelector("small")!.textContent = a.ok ? `${fmt(Math.round(450 * [1, 1.2, 1.45, 1.7][yearIndex(run)] / 10) * 10)} · ${tr("+3 їжі", "+3 food")}` : a.why ?? "";
     acts.appendChild(b);
   }
-  $("#phone-msgs").innerHTML = [...d.msgs].reverse().map((m) => msgHtml(m)).join("");
+  $("#phone-msgs").innerHTML = d.msgs.map((m, i) => msgHtml(m, true, i)).reverse().join("");
   showScreen("#phone-screen");
   paused = true;
 }
@@ -831,7 +1079,8 @@ scene.onFrame = (dt) => {
   scene.setMood(!isLight(d) && (isNight(d) || winter(run)) ? "blackout" : isNight(d) ? "night" : d.clock > 19 * 60 ? "dusk" : d.rain ? "rain" : "home");
   score.despair = dsp;
   const open = d.busy?.id === "air" || d.busy?.id === "balcony" || d.busy?.id === "tomatoes" || d.busy?.id === "look";
-  amb.update(dt, { despair: dsp, blackout: !isLight(d), birds: !d.rain && yearIndex(run) <= 1 && run.season % 4 !== 0 && !isNight(d) && !d.alert, quiet: !d.alert, rain: d.rain ? 1 : 0, open });
+  A.setListener(scene.heroX, scene.heroZ);
+  amb.update(dt, { despair: dsp, blackout: !isLight(d), birds: !d.rain && yearIndex(run) <= 1 && run.season % 4 !== 0 && !isNight(d) && !d.alert, quiet: !d.alert, rain: d.rain ? 1 : 0, open, bus: busHere(d) && d.knowsBus });
   // the sky
   if (d.alert && !d.alert.ballistic) {
     buzzT += dt;
@@ -904,7 +1153,7 @@ const stick = { id: -1, ox: 0, oy: 0 };
     if (len > R) { dx = (dx / len) * R; dy = (dy / len) * R; }
     knob.style.transform = `translate(${dx}px, ${dy}px)`;
     const k = Math.min(1, len / R);
-    if (!handling) scene.setMove(len > 6 ? (dx / Math.max(1, Math.hypot(dx, dy))) * k : 0, len > 6 ? (dy / Math.max(1, Math.hypot(dx, dy))) * k : 0);
+    if (!handling || mode === "memory") scene.setMove(len > 6 ? (dx / Math.max(1, Math.hypot(dx, dy))) * k : 0, len > 6 ? (dy / Math.max(1, Math.hypot(dx, dy))) * k : 0);
   });
   const up = (e: PointerEvent) => {
     if (e.pointerId !== stick.id) return;
@@ -925,7 +1174,7 @@ window.addEventListener("keydown", (e) => {
 });
 window.addEventListener("keyup", (e) => { keys.delete(e.key.toLowerCase()); updateKeys(); });
 function updateKeys(): void {
-  if (stick.id !== -1 || handling) return;
+  if (stick.id !== -1 || (handling && mode !== "memory")) return;
   const x = (keys.has("d") || keys.has("arrowright") ? 1 : 0) - (keys.has("a") || keys.has("arrowleft") ? 1 : 0);
   const y = (keys.has("s") || keys.has("arrowdown") ? 1 : 0) - (keys.has("w") || keys.has("arrowup") ? 1 : 0);
   const l = Math.hypot(x, y) || 1;
@@ -951,6 +1200,19 @@ $("#resume-btn").addEventListener("click", () => { showScreen(null); paused = fa
 $("#phone-btn").addEventListener("click", () => { unlock(); openPhone(); });
 $("#phone-close").addEventListener("click", () => { showScreen(null); paused = false; });
 $("#phone-acts").addEventListener("click", () => { paused = false; }, true);
+$("#phone-msgs").addEventListener("click", (e) => {
+  const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-reply]");
+  if (!b || !run?.day) return;
+  const [i, kind] = b.dataset.reply!.split(":");
+  const m = run.day.msgs[Number(i)];
+  if (!m) return;
+  A.play("click");
+  buzz(H.tap, true);
+  const o = replyFriend(run, m, kind as ReplyKind);
+  persist();
+  openPhone();
+  if (o.text) toast(o.text + (Math.round(o.dPsyche) ? `  +${Math.round(o.dPsyche)} 🧠` : ""), m.from);
+});
 $("#busy-stop").addEventListener("click", () => {
   if (!run?.day?.busy) return;
   const id = run.day.busy.id;
@@ -973,6 +1235,8 @@ $("#new-btn").addEventListener("click", () => {
   saveRun(run);
   startSeason();
 });
+$("#codex-btn").addEventListener("click", () => { A.play("click"); showCodex(); });
+$("#codex-back").addEventListener("click", () => { A.play("click"); showStart(); });
 $("#daily-btn").addEventListener("click", () => {
   unlock();
   A.play("click");
@@ -1055,6 +1319,8 @@ function showStart(): void {
   scene.setWeather(!run);
   scene.setPose("stare");
   updateDailyBtn();
+  const got = ENDING_ORDER.filter((id) => meta.endings?.[id]).length;
+  setText($("#codex-btn"), `${tr("КОЛЕКЦІЯ", "COLLECTION")} · ${got}/${ENDING_ORDER.length}`);
   showScreen("#start-screen");
 }
 
@@ -1094,6 +1360,11 @@ const STATIC_EN: Array<[string, string, boolean?]> = [
   ["#perk-screen h2", "CHOOSE ONE"],
   ["#perk-skip", "NOTHING HELPED"],
   ["#share-btn", "SHARE"],
+  ["#codex-screen .eyebrow", "COLLECTION"],
+  ["#codex-fates-title", "FRIENDS' FATES"],
+  ["#codex-back", "BACK"],
+  ["#memory .eyebrow", "SUMMER 2021 · KOZYN"],
+  ["#memory-skip", "GO BACK"],
   ["#end-btn", "AGAIN"],
   ["#pause-screen .eyebrow", "PAUSED"],
   ["#pause-screen h2", "THE WALLS WILL WAIT"],
@@ -1126,6 +1397,18 @@ function setLang(l: Lang): void {
   renderPanel(true);
 }
 applyStaticLang();
+
+/** Opened from a shared daily result: go straight to today's run (or point at it). */
+function openedDaily(): boolean {
+  if (!new URLSearchParams(location.search).has("daily")) return false;
+  history.replaceState(null, "", location.pathname + location.hash);
+  if (run) { showStart(); $("#daily-btn").classList.add("pulse"); return true; }
+  const day = dailySeed();
+  run = newRun(day, "it", day);
+  saveRun(run);
+  startSeason();
+  return true;
+}
 
 // ================================================================ test menu (#test)
 
@@ -1185,4 +1468,4 @@ $("#test-panel").addEventListener("click", (e) => {
   persist();
 });
 
-showStart();
+if (!openedDaily()) showStart();

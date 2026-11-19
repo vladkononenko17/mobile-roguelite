@@ -20,17 +20,22 @@ export interface RunResult {
 
 const SPARK = "▁▂▃▄▅▆▇█";
 
-const FRIEND_MARK: Record<FriendState, string> = {
+export const FRIEND_MARK: Record<FriendState, string> = {
   free: "🟢", home: "🟢", hiding: "🏠", abroad: "✈️", volunteered: "🪖", front: "🪖", taken: "🚐", wounded: "🩹", dead: "🕯️",
 };
 
-function stateWord(s: FriendState): string {
+export function stateWord(s: FriendState): string {
   const uk: Record<FriendState, string> = { free: "ТУТ", home: "ВДОМА", hiding: "ХОВАЄТЬСЯ", abroad: "ВИЇХАВ", volunteered: "ПІШОВ САМ", front: "ФРОНТ", taken: "ЗАБРАЛИ", wounded: "ПОРАНЕНИЙ", dead: "ЗАГИНУВ" };
   const en: Record<FriendState, string> = { free: "HERE", home: "HOME", hiding: "HIDING", abroad: "LEFT", volunteered: "ENLISTED", front: "FRONT", taken: "TAKEN", wounded: "WOUNDED", dead: "KILLED" };
   return tr(uk, en)[s];
 }
 
 const dateText = (d: number) => `${String(d % 100).padStart(2, "0")}.${String(Math.floor(d / 100) % 100).padStart(2, "0")}.${Math.floor(d / 10000)}`;
+
+/** Green for making it, teal for the river, blue for going yourself, red for the rest. */
+export function endingColor(e: EndingId): string {
+  return e === "survived" || e === "together" ? "#3a6a4a" : e === "tisza" ? "#3a7a8a" : e === "enlist" ? "#3a5a8a" : "#c83a32";
+}
 
 export function gameUrl(daily: boolean): string {
   const base = `${location.origin}${location.pathname}`;
@@ -41,7 +46,7 @@ export function gameUrl(daily: boolean): string {
 export function shareText(r: RunResult): string {
   const e = ENDINGS[r.ending];
   const lived = r.history.length;
-  const spark = r.history.map((v) => SPARK[Math.max(0, Math.min(7, Math.floor((v / 100) * 8)))]).join("") + (r.ending === "survived" ? "" : "✖");
+  const spark = r.history.map((v) => SPARK[Math.max(0, Math.min(7, Math.floor((v / 100) * 8)))]).join("") + (r.ending === "survived" || r.ending === "together" ? "" : "✖");
   const head = r.daily ? `${tr("Чотири стіни · щоденний", "Four Walls · daily")} ${dateText(r.daily)}` : tr("Чотири стіни", "Four Walls");
   return [
     head,
@@ -74,7 +79,7 @@ export async function renderCard(r: RunResult): Promise<Blob> {
   const DISPLAY = '"Oswald", "Arial Narrow", sans-serif';
   const BODY = '"Inter", system-ui, sans-serif';
   const e = ENDINGS[r.ending];
-  const survived = r.ending === "survived";
+  const survived = r.ending === "survived" || r.ending === "together";
 
   // the room: dark, with four walls drawn closing in
   g.fillStyle = "#131217";
@@ -121,7 +126,7 @@ export async function renderCard(r: RunResult): Promise<Blob> {
   const sw = g.measureText(sticker).width + 40;
   g.fillStyle = "#121115";
   g.fillRect(8, 8, sw, 58);
-  g.fillStyle = survived ? "#3a6a4a" : "#c83a32";
+  g.fillStyle = endingColor(r.ending);
   g.fillRect(0, 0, sw, 58);
   g.fillStyle = "#fff";
   g.fillText(sticker, 20, 43);
