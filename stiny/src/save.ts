@@ -1,5 +1,5 @@
 import type { RunState } from "./sim.ts";
-import type { TraitId } from "./content.ts";
+import type { EndingId, FriendState, TraitId } from "./content.ts";
 
 /** Progress on the device: the run in progress and what all runs added up to. */
 export interface Meta {
@@ -11,6 +11,9 @@ export interface Meta {
   lastTrait: TraitId;
   /** Your first result of today's daily run (one shared day for everyone). */
   daily?: { date: number; seasons: number; ending: string };
+  /** The collection: how many times you reached each ending, and saw each fate of a friend. */
+  endings?: Partial<Record<EndingId, number>>;
+  fates?: Partial<Record<FriendState, number>>;
 }
 
 const META_KEY = "stiny-meta-v1";
@@ -48,7 +51,12 @@ export function bankRun(m: Meta, r: RunState): void {
   m.seasons += r.history.length;
   m.runs++;
   m.best = Math.max(m.best, r.history.length);
-  if (r.ending === "survived") m.survived++;
+  if (r.ending === "survived" || r.ending === "together") m.survived++;
+  const end = r.ending ?? "zryv";
+  m.endings = { ...(m.endings ?? {}), [end]: (m.endings?.[end] ?? 0) + 1 };
+  const fates = { ...(m.fates ?? {}) };
+  for (const k of Object.keys(r.flags)) if (k.startsWith("fate_")) { const st = k.slice(5) as FriendState; fates[st] = (fates[st] ?? 0) + 1; }
+  m.fates = fates;
   const day = r.flags.daily;
   if (day && m.daily?.date !== day) m.daily = { date: day, seasons: r.history.length, ending: r.ending ?? "zryv" };
   saveMeta(m);

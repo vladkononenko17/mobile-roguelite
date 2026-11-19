@@ -10,6 +10,36 @@ export { isMusicMuted, isMuted, play, setMusicMuted, setMuted, unlockAudio } fro
 
 function ctx() { return getAudio(); }
 
+// ------------------------------------------------------------------ where sounds come from
+
+/** The hero's position in the flat (metres); sounds are panned and dimmed from here. */
+const listener = { x: 0, z: 0 };
+export function setListener(x: number, z: number): void { listener.x = x; listener.z = z; }
+
+/** Fixed sources in and around the flat. */
+export const SPOT = {
+  door: [4.7, 2.6], stairs: [7, 2.2], lift: [6.8, 0.4], window: [-3.8, -4.6], fridge: [4.55, -3.05], up: [0, 0], yard: [-1, -12],
+} as const satisfies Record<string, readonly [number, number]>;
+
+/**
+ * A short-lived bus placed at (x, z): stereo pan from the hero's side, quieter
+ * with distance. Everything played into it is heard from there.
+ */
+function spatial(x: number, z: number, vol = 1, life = 8): GainNode | undefined {
+  const a = ctx();
+  if (!a) return undefined;
+  const dx = x - listener.x;
+  const dz = z - listener.z;
+  const g = a.ctx.createGain();
+  g.gain.value = vol / (1 + Math.hypot(dx, dz) * 0.09);
+  const p = a.ctx.createStereoPanner();
+  p.pan.value = Math.max(-0.92, Math.min(0.92, dx / 4.5));
+  g.connect(p).connect(a.sfx);
+  setTimeout(() => { try { g.disconnect(); p.disconnect(); } catch { /* gone */ } }, life * 1000);
+  return g;
+}
+const at = (spot: readonly [number, number], vol = 1, life = 8) => spatial(spot[0], spot[1], vol, life);
+
 export function siren(seconds = 7): void {
   const a = ctx();
   if (!a) return;
@@ -29,7 +59,7 @@ export function siren(seconds = 7): void {
   g.gain.linearRampToValueAtTime(0.09, t0 + 0.8);
   g.gain.setValueAtTime(0.09, t0 + seconds - 1);
   g.gain.linearRampToValueAtTime(0, t0 + seconds);
-  o.connect(lp).connect(g).connect(a.sfx);
+  o.connect(lp).connect(g).connect(at(SPOT.window, 1.4, seconds + 1) ?? a.sfx);
   o.start(t0);
   o.stop(t0 + seconds + 0.1);
 }
@@ -81,24 +111,107 @@ export function droneBuzz(level: number): void {
 
 export function boom(near: boolean): void {
   const v = near ? 1 : 0.4;
-  tone(near ? 48 : 60, 0, near ? 1.4 : 1.0, "sine", 0.55 * v, 28);
-  noise(0, near ? 1.6 : 1.1, 0.5 * v, near ? 1800 : 700, 60, "lowpass", 0.7);
-  if (near) { noise(0.05, 0.25, 0.25, 6000, 2500, "highpass", 1); for (let i = 0; i < 6; i++) tone(2400 + Math.random() * 3000, 0.3 + i * 0.06, 0.08, "triangle", 0.03); }
+  // from somewhere out there, on the window side; the glass rattles from the window
+  const bus = spatial(-4 + (Math.random() - 0.5) * 10, -14, 1.6, 4);
+  tone(near ? 48 : 60, 0, near ? 1.4 : 1.0, "sine", 0.55 * v, 28, bus);
+  noise(0, near ? 1.6 : 1.1, 0.5 * v, near ? 1800 : 700, 60, "lowpass", 0.7, bus);
+  if (near) { const glass = at(SPOT.window, 1.4, 3); noise(0.05, 0.25, 0.25, 6000, 2500, "highpass", 1, glass); for (let i = 0; i < 6; i++) tone(2400 + Math.random() * 3000, 0.3 + i * 0.06, 0.08, "triangle", 0.03, undefined, glass); }
 }
 
 export function drill(): void {
-  for (let i = 0; i < 6; i++) { noise(i * 0.55, 0.42, 0.08, 1400, 1100, "bandpass", 6); tone(170, i * 0.55, 0.42, "sawtooth", 0.015); }
+  const bus = at(SPOT.up, 1, 5);
+  for (let i = 0; i < 6; i++) { noise(i * 0.55, 0.42, 0.08, 1400, 1100, "bandpass", 6, bus); tone(170, i * 0.55, 0.42, "sawtooth", 0.015, undefined, bus); }
 }
 
+/** Three knocks on the front door, heard from the door. */
 export function knock(hard = false): void {
-  play("knock");
-  if (hard) setTimeout(() => play("knock"), 750);
+  const bus = at(SPOT.door, 1.3, 4);
+  if (!bus) { play("knock"); return; }
+  const blows = (t0: number, k: number) => { for (let i = 0; i < 3; i++) { tone(140, t0 + i * 0.22, 0.09, "sine", 0.6 * k, 90, bus); noise(t0 + i * 0.22, 0.06, 0.4 * k, 900, 300, "lowpass", 1, bus); } };
+  blows(0, hard ? 1.2 : 1);
+  if (hard) blows(0.75, 1.3);
 }
 
 export function doorbell(): void {
-  tone(660, 0, 0.5, "sine", 0.12);
-  tone(523, 0.45, 0.8, "sine", 0.12);
+  const bus = at(SPOT.door, 1.2, 3);
+  tone(660, 0, 0.5, "sine", 0.12, undefined, bus);
+  tone(523, 0.45, 0.8, "sine", 0.12, undefined, bus);
 }
+
+// ------------------------------------------------------------------ the stairwell
+
+/**
+ * Steps coming up the stairs to your door, over `secs` seconds. Each visitor
+ * walks differently: two men in boots with a radio, one heavy man with keys,
+ * a woman in slippers who stops to mutter — and steps that come from nowhere.
+ */
+export function footsteps(who: "tck" | "police" | "neighbor" | "phantom", secs = 3.6): void {
+  const a = ctx();
+  if (!a) return;
+  const step = (t: number, k: number, heavy: number, x: number) => {
+    // each step from a little closer: up the flight, onto the landing, to the door
+    const bus = spatial(x, 2.4, 0.35 + k * 1.1, 3);
+    if (heavy > 0.5) { tone(62 + Math.random() * 10, t, 0.09, "sine", 0.45 * heavy, 40, bus); noise(t, 0.07, 0.3 * heavy, 600, 180, "lowpass", 1, bus); }
+    else noise(t, 0.16, 0.18, 2600, 1400, "bandpass", 1.2, bus);
+  };
+  if (who === "phantom") {
+    // in your head: centred, muffled, irregular, with a ringing that grows
+    const head = a.ctx.createGain();
+    head.gain.value = 0.9;
+    const lp = a.ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 380;
+    head.connect(lp).connect(a.sfx);
+    setTimeout(() => { try { head.disconnect(); lp.disconnect(); } catch { /* gone */ } }, (secs + 3) * 1000);
+    let t = 0.2;
+    while (t < secs) { tone(55, t, 0.25, "sine", 0.5, 35, head); noise(t, 0.3, 0.25, 300, 80, "lowpass", 0.5, head); t += 0.35 + Math.random() * 0.9; }
+    tone(6800, 0, secs, "sine", 0.012, 7400, head);
+    return;
+  }
+  const interval = who === "tck" ? 0.42 : who === "police" ? 0.56 : 0.78;
+  const heavy = who === "neighbor" ? 0.2 : who === "tck" ? 1 : 0.9;
+  let t = 0.15;
+  let i = 0;
+  while (t < secs) {
+    const k = t / secs;
+    const x = 9.5 - k * 4.5;
+    step(t, k, heavy, x);
+    if (who === "tck") step(t + 0.09, k, heavy * 0.9, x + 0.3);
+    if (who === "neighbor" && i % 4 === 3) { t += 0.7; for (let j = 0; j < 4; j++) tone(190 + Math.random() * 60, t - 0.6 + j * 0.13, 0.11, "triangle", 0.025, 170, spatial(x, 2.4, 0.3 + k, 3)); }
+    t += interval * (who === "neighbor" ? 0.8 + Math.random() * 0.5 : 1);
+    i++;
+  }
+  if (who === "tck") { const r = spatial(6, 2.4, 0.9, 4); noise(secs * 0.55, 0.35, 0.08, 2400, 1800, "bandpass", 4, r); tone(1250, secs * 0.55 + 0.36, 0.12, "square", 0.02, undefined, r); }
+  if (who === "police") { const r = spatial(5.6, 2.4, 0.9, 4); for (let j = 0; j < 7; j++) tone(3800 + Math.random() * 2600, secs * 0.6 + j * 0.05 + Math.random() * 0.03, 0.04, "triangle", 0.03, undefined, r); }
+}
+
+/** The lift going past your floor: motor, a clunk, doors on another landing. */
+function lift(): void {
+  const bus = at(SPOT.lift, 0.9, 10);
+  tone(95, 0, 6, "sawtooth", 0.01, 110, bus);
+  noise(0, 6, 0.03, 300, 260, "lowpass", 1, bus);
+  noise(6, 0.12, 0.25, 500, 150, "lowpass", 1, bus);
+  noise(6.6, 0.9, 0.05, 1200, 900, "bandpass", 2, bus);
+}
+/** Someone walks past on the stairs and keeps going. */
+function passing(): void {
+  for (let i = 0; i < 10; i++) {
+    const k = i / 9;
+    const near = 1 - Math.abs(k - 0.5) * 2;
+    const bus = spatial(8 - near * 2.5, 2.4, 0.25 + near * 0.6, 3);
+    tone(70, i * 0.5, 0.08, "sine", 0.3, 45, bus);
+    noise(i * 0.5, 0.06, 0.2, 600, 200, "lowpass", 1, bus);
+  }
+}
+function doorSlam(): void { const bus = spatial(8, 4, 0.7, 3); noise(0, 0.3, 0.4, 700, 90, "lowpass", 0.8, bus); tone(55, 0, 0.35, "sine", 0.3, 35, bus); }
+function dog(): void { const bus = spatial(8, -1, 0.5, 3); for (const t of [0, 0.32]) { tone(330, t, 0.14, "sawtooth", 0.03, 210, bus); noise(t, 0.14, 0.06, 900, 500, "bandpass", 2, bus); } }
+function voices(): void {
+  const bus = spatial(7, 2.4, 0.5, 5);
+  let t = 0;
+  for (let i = 0; i < 14; i++) { const f = (i % 5 < 3 ? 140 : 230) + Math.random() * 50; tone(f, t, 0.14, "triangle", 0.02, f * 0.9, bus); t += 0.12 + Math.random() * 0.18; }
+}
+/** The entrance door far below bangs: with the van in the yard, every bang is someone. */
+function entrance(): void { const bus = spatial(2, -6, 0.6, 3); noise(0, 0.25, 0.3, 500, 80, "lowpass", 0.8, bus); tone(48, 0, 0.3, "sine", 0.25, 30, bus); }
 
 export function sigh(): void { noise(0, 1.2, 0.05, 600, 300, "bandpass", 0.6); }
 
@@ -116,6 +229,60 @@ export class Ambience {
   private birdT = 2;
   private rain: { src: AudioBufferSourceNode; lp: BiquadFilterNode; g: GainNode; patter: GainNode } | null = null;
   private dripT = 1;
+  private fridge: { g: GainNode; pan: StereoPannerNode } | null = null;
+  private fridgeOn = true;
+  private stairT = 20;
+
+  /** The fridge hums until the power goes — and the silence is how you know. */
+  private updateFridge(power: boolean): void {
+    const a = ctx();
+    if (!a) return;
+    if (!this.fridge) {
+      const g = a.ctx.createGain();
+      g.gain.value = 0;
+      const pan = a.ctx.createStereoPanner();
+      const lp = a.ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 260;
+      for (const [f, v] of [[50, 1], [100, 0.6], [150, 0.25]] as const) {
+        const o = a.ctx.createOscillator();
+        o.type = "sine";
+        o.frequency.value = f + Math.random() * 0.4;
+        const og = a.ctx.createGain();
+        og.gain.value = v;
+        o.connect(og).connect(lp);
+        o.start();
+      }
+      lp.connect(g).connect(pan).connect(a.sfx);
+      this.fridge = { g, pan };
+    }
+    const [fx, fz] = SPOT.fridge;
+    const d = Math.hypot(fx - listener.x, fz - listener.z);
+    this.fridge.pan.pan.setTargetAtTime(Math.max(-0.9, Math.min(0.9, (fx - listener.x) / 4.5)), a.ctx.currentTime, 0.2);
+    if (power !== this.fridgeOn) {
+      this.fridgeOn = power;
+      // the compressor clunks off, or shudders back on
+      const bus = at(SPOT.fridge, 1, 2);
+      noise(0, 0.12, 0.2, 400, 120, "lowpass", 1, bus);
+      tone(power ? 70 : 90, 0, 0.18, "sine", 0.15, power ? 50 : 40, bus);
+    }
+    this.fridge.g.gain.setTargetAtTime(power ? 0.022 / (1 + d * 0.25) : 0, a.ctx.currentTime, power ? 0.8 : 0.05);
+  }
+
+  /** Every so often, the building: the lift, steps, a door, a dog, voices on the landing. */
+  private updateStairs(dt: number, quiet: boolean, bus: boolean): void {
+    this.stairT -= dt;
+    if (this.stairT > 0) return;
+    this.stairT = (bus ? 12 : 25) + Math.random() * (bus ? 20 : 45);
+    if (!quiet) return;
+    const r = Math.random();
+    if (bus && r < 0.5) entrance();
+    else if (r < 0.3) lift();
+    else if (r < 0.55) passing();
+    else if (r < 0.7) doorSlam();
+    else if (r < 0.85) voices();
+    else dog();
+  }
 
   /**
    * Rain: a hiss through the glass, a patter on the sill, and drips. With the
@@ -172,7 +339,7 @@ export class Ambience {
     }
   }
 
-  update(dt: number, s: { despair: number; blackout: boolean; birds: boolean; quiet: boolean; rain?: number; open?: boolean }): void {
+  update(dt: number, s: { despair: number; blackout: boolean; birds: boolean; quiet: boolean; rain?: number; open?: boolean; bus?: boolean; off?: boolean }): void {
     const a = ctx();
     if (!a) return;
     // clock
@@ -210,6 +377,9 @@ export class Ambience {
     }
     this.hum.g.gain.setTargetAtTime(s.blackout ? 0.025 : 0, a.ctx.currentTime, 1);
     this.updateRain(dt, s.rain ?? 0, !!s.open);
+    if (s.off) { if (this.fridge) this.fridge.g.gain.setTargetAtTime(0, a.ctx.currentTime, 0.1); return; }
+    this.updateFridge(!s.blackout);
+    this.updateStairs(dt, s.quiet, !!s.bus);
     // birds, while there are still birds for you
     this.birdT -= dt;
     if (s.birds && this.birdT <= 0) {
@@ -226,6 +396,9 @@ const midiHz = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 // D minor, slow; the melody has gaps that grow
 const CHORDS = [[50, 53, 57], [46, 50, 53], [43, 46, 50], [45, 49, 52]];
 const LINE = [69, 67, 65, 64, 65, 62, 64, 65, 67, 65, 64, 61];
+// the summer of 2021: D major, the same melody's shape but open, nothing missing
+const CHORDS_BRIGHT = [[50, 54, 57], [55, 59, 62], [47, 50, 54], [45, 49, 52]];
+const LINE_BRIGHT = [69, 71, 73, 74, 73, 69, 71, 66, 69, 71, 74, 76];
 
 export class Score {
   private timer = 0;
@@ -235,6 +408,8 @@ export class Score {
   despair = 0;
   /** Silence during alerts. */
   hush = false;
+  /** The memory: major key, every note there, a little faster. */
+  bright = false;
 
   start(): void {
     const a = ctx();
@@ -250,15 +425,19 @@ export class Score {
     while (this.next < a.ctx.currentTime + 0.4) {
       const at = this.next - a.ctx.currentTime;
       const s = this.step;
-      const d = this.despair;
+      const d = this.bright ? 0 : this.despair;
       const bar = Math.floor(s / 8) % 4;
-      const keep = 1 - d * 0.75;
+      const keep = this.bright ? 1.2 : 1 - d * 0.75;
+      const chords = this.bright ? CHORDS_BRIGHT : CHORDS;
+      const line = this.bright ? LINE_BRIGHT : LINE;
       if (!this.hush) {
         const detune = d * 0.35 * (Math.random() - 0.5);
-        if (s % 8 === 0 && Math.random() < keep + 0.2) for (const n of CHORDS[bar]) piano(midiHz(n + detune), at, 3.4, 0.035, a.music);
-        if (s % 2 === 0 && Math.random() < keep * 0.8) piano(midiHz(LINE[(s / 2) % LINE.length] + detune), at, 1.6, 0.05, a.music);
+        if (s % 8 === 0 && Math.random() < keep + 0.2) for (const n of chords[bar]) piano(midiHz(n + detune), at, 3.4, 0.035, a.music);
+        if (s % 2 === 0 && Math.random() < keep * 0.8) piano(midiHz(line[(s / 2) % line.length] + detune), at, 1.6, 0.05, a.music);
+        // a guitar strum under the summer
+        if (this.bright && s % 4 === 2) chords[bar].forEach((n, i) => tone(midiHz(n + 12), at + i * 0.03, 0.9, "triangle", 0.018, undefined, a.music));
       }
-      this.next += 0.62 + d * 0.3;
+      this.next += this.bright ? 0.5 : 0.62 + d * 0.3;
       this.step++;
     }
   }
@@ -267,4 +446,31 @@ export class Score {
 function piano(f: number, at: number, dur: number, vol: number, bus: GainNode): void {
   tone(f, at, dur, "sine", vol, undefined, bus);
   tone(f * 2, at, dur * 0.4, "triangle", vol * 0.25, undefined, bus);
+}
+
+// ------------------------------------------------------------------ the summer of 2021
+
+let summerBird = 0.5;
+let summerFire = 0;
+/** Birds everywhere, the grill crackling, the river somewhere: called every frame in the memory. */
+export function summer(dt: number): void {
+  if (!ctx()) return;
+  summerBird -= dt;
+  if (summerBird <= 0) {
+    summerBird = 0.6 + Math.random() * 1.6;
+    const f = 2200 + Math.random() * 2200;
+    const n = 2 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < n; i++) tone(f + (i % 2) * 300, i * 0.08, 0.06, "sine", 0.025, f + 700);
+  }
+  summerFire -= dt;
+  if (summerFire <= 0) {
+    summerFire = 0.08 + Math.random() * 0.3;
+    noise(0, 0.03, 0.03 + Math.random() * 0.04, 3000, 1500, "bandpass", 2);
+  }
+}
+
+/** The camera shutter. */
+export function shutter(): void {
+  noise(0, 0.04, 0.3, 4000, 2000, "bandpass", 1);
+  noise(0.09, 0.05, 0.25, 3000, 1500, "bandpass", 1);
 }

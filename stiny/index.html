@@ -92,6 +92,7 @@
         <button id="continue-btn" class="primary-btn hidden">ПРОДОВЖИТИ</button>
         <button id="new-btn" class="primary-btn">ПОЧАТИ</button>
         <button id="daily-btn" class="ghost-btn daily-btn">ЩОДЕННИЙ ЗАБІГ<small id="daily-sub"></small></button>
+        <button id="codex-btn" class="ghost-btn codex-btn">КОЛЕКЦІЯ</button>
         <p id="meta-line" class="hint"></p>
         <p class="hint small">Гра про психологічний стан людини, яка ховається від мобілізації. Не про те, правильно це чи ні.</p>
       </section>
@@ -136,6 +137,15 @@
         <p id="end-unlock" class="hint"></p>
         <button id="share-btn" class="primary-btn share-btn">ПОДІЛИТИСЯ</button>
         <button id="end-btn" class="ghost-btn">ЩЕ РАЗ</button>
+      </section>
+
+      <section id="codex-screen" class="screen codex">
+        <p class="eyebrow">КОЛЕКЦІЯ</p>
+        <h2 id="codex-title">КІНЦІВКИ</h2>
+        <div id="codex-endings" class="codex-grid"></div>
+        <h3 id="codex-fates-title">ДОЛІ ДРУЗІВ</h3>
+        <div id="codex-fates" class="codex-fates"></div>
+        <button id="codex-back" class="ghost-btn">НАЗАД</button>
       </section>
 
       <section id="pause-screen" class="screen compact">
@@ -190,6 +200,16 @@
           </div>
         </div>
       </section>
+
+      <!-- ===== the memory ===== -->
+      <section id="memory" class="hidden" aria-live="polite">
+        <p class="eyebrow">ЛІТО 2021 · КОЗИН</p>
+        <p id="memory-hint">Підійди до друзів</p>
+        <button id="memory-skip" class="ghost-btn">ПОВЕРНУТИСЯ</button>
+      </section>
+      <div id="bubble" class="bubble hidden"></div>
+      <div id="photo-frame" class="hidden"><span id="photo-caption">Козин, липень 2021</span></div>
+      <div id="fade" aria-hidden="true"></div>
 
       <div id="toast" role="status" aria-live="polite"></div>
     </main>

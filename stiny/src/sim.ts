@@ -8,7 +8,7 @@
  * the weight of the year.
  */
 import {
-  ACTIONS, DOOR_LINES, ENDINGS, FRIEND_ACC, FRIEND_ARCS, FRIEND_IMPACT, FRIEND_NAMES, FRIEND_NEWS, FRIEND_ROLES, MIRROR_LINES,
+  ACTIONS, DOOR_LINES, ENDINGS, FRIEND_ACC, REPLY_BACK, FRIEND_ARCS, FRIEND_IMPACT, FRIEND_NAMES, FRIEND_NEWS, FRIEND_ROLES, MIRROR_LINES,
   PERKS, SEASONS, SEASON_DEFS, TRAITS, WINDOW_LINES, actionById, seasonName, yearOf,
   type ActionDef, type ActionId, type EndingId, type FriendState, type PerkId, type PlaceId, type TraitId,
 } from "./content.ts";
@@ -53,10 +53,24 @@ export interface Friend {
   color: number;
   /** You already opened the chat of this dead friend. */
   mourned?: boolean;
+  /** 0..100: how close you still are. Replies keep it up, silence wears it down. */
+  bond?: number;
 }
 
+export const bondOf = (f: Friend) => f.bond ?? 60;
+const setBond = (f: Friend, v: number) => { f.bond = clamp(v, 0, 100); };
+/** Friends who can still write and read. */
+const reachable = (f: Friend) => f.state !== "dead" && f.state !== "taken";
+
 export type MsgKind = "chat" | "bus" | "friend" | "mom" | "news" | "sys";
-export interface Msg { kind: MsgKind; from: string; text: string; at: number; /** From the building chat: you now know about the van. */ house?: boolean }
+export interface Msg {
+  kind: MsgKind; from: string; text: string; at: number;
+  /** From the building chat: you now know about the van. */
+  house?: boolean;
+  /** Index of the friend who wrote it: you can answer. */
+  friend?: number;
+  replied?: boolean;
+}
 
 export type PlannedKind = "alert" | "knock" | "mom" | "neighbor" | "delivery" | "volunteer" | "msg" | "drill" | "warn";
 export interface Planned {
@@ -164,7 +178,7 @@ export function newRun(seed: number, traitId: TraitId = "it", daily = 0): RunSta
     const startAt = Math.floor(between(run, 0, 7));
     run.friends.push({
       name: FRIEND_NAMES[ni], acc: FRIEND_ACC[ni], role: pick(run, FRIEND_ROLES), state: "free",
-      arc: arc.map(([off, s]) => [Math.min(SEASONS - 1, startAt + off), s]), color: FRIEND_COLORS[k % FRIEND_COLORS.length],
+      arc: arc.map(([off, s]) => [Math.min(SEASONS - 1, startAt + off), s]), color: FRIEND_COLORS[k % FRIEND_COLORS.length], bond: 60,
     });
   });
   startDay(run);
@@ -293,11 +307,13 @@ export function startDay(run: RunState): void {
   if (bus) {
     plan.push({ at: bus[0] + 5, kind: "msg", msg: { kind: "bus", from: tr("Чат будинку", "Building chat"), text: tr("Біля нашого підʼїзду бус!!! Чоловіки, не виходьте", "The van is by our entrance!!! Men, don't go out"), at: bus[0] + 5, house: true } });
   }
-  for (const f of run.friends) {
+  run.friends.forEach((f, i) => {
+    // a friend you stopped answering stops writing
+    if (bondOf(f) < 25) return;
     const at = Math.round(between(run, 9, 22) * 4) * 15;
     const line = friendChatter(run, f);
-    if (line && rnd(run) < 0.6) plan.push({ at, kind: "msg", msg: { kind: "friend", from: nameOf(f), text: line, at } });
-  }
+    if (line && rnd(run) < 0.6) plan.push({ at, kind: "msg", msg: { kind: "friend", from: nameOf(f), text: line, at, friend: i } });
+  });
   plan.sort((a, b) => a.at - b.at);
 
   // the morning
@@ -767,11 +783,24 @@ export function resolveBallistic(run: RunState, sheltered: boolean): Outcome {
 }
 
 /** Holding your breath behind the door. `quiet` — they did not hear you. */
-export function resolveKnock(run: RunState, who: "tck" | "police" | "neighbor" | "phantom", quiet: boolean): Outcome {
+export function resolveKnock(run: RunState, who: Visitor, quiet: boolean, read: StepRead = "none"): Outcome {
   const d = run.day!;
   const p0 = run.psyche;
   run.stats.knocks++;
   let text = "";
+  // knowing who is out there is less terrible than not knowing; getting it wrong is worse
+  if (read === "wrong") addPsyche(run, -3);
+  if (who === "phantom" && read === "right") {
+    addPsyche(run, -1);
+    return { text: tr("Ти прислухався: кроків не було. Стук — у твоїй голові. Ти навіть не встав.", "You listened: there were no steps. The knock is in your head. You didn't even get up."), dPsyche: run.psyche - p0 };
+  }
+  if (who === "neighbor" && read === "right" && !quiet) {
+    run.food += 1;
+    run.heat = clamp(run.heat + 2, 0, 100);
+    addPsyche(run, 4);
+    return { text: tr("Ти впізнав її човгання ще на сходах і відчинив сам. Тьотя Валя з пиріжками. Вона нічого не спитала. Просто погладила тебе по руці.", "You knew her shuffle on the stairs and opened the door yourself. Auntie Valia with pies. She didn't ask anything. Just patted your hand."), dPsyche: run.psyche - p0 };
+  }
+  if (read === "right" && who !== "neighbor") addPsyche(run, 2);
   if (who === "phantom") {
     addPsyche(run, -4);
     text = tr("Ти довго стояв біля дверей. Подивився в глазок. На сходах нікого не було. Нікого й не було.", "You stood by the door a long time. Looked through the peephole. Nobody on the stairs. There never was anybody.");
@@ -876,6 +905,115 @@ export function resolveNeighbor(run: RunState, answer: "polite" | "silent"): Out
   return { text: tr("Ти не відповів. Вона постукала ще раз і сказала комусь на сходах: «Там хтось живе, я чула».", "You didn't answer. She knocked again and said to someone on the stairs: “Someone lives there, I heard.”"), dPsyche: run.psyche - p0 };
 }
 
+// ------------------------------------------------------------------ answering friends
+
+export type ReplyKind = "warm" | "emoji" | "music";
+
+/** How you can answer a friend's message (nothing, if it was answered or he can't read it). */
+export function replyOptions(run: RunState, m: Msg): ReplyKind[] {
+  if (m.friend == null || m.replied) return [];
+  const f = run.friends[m.friend];
+  if (!f || !reachable(f)) return [];
+  const out: ReplyKind[] = ["warm", "emoji"];
+  if (f.state === "front" || f.state === "volunteered" || f.state === "wounded") out.splice(1, 0, "music");
+  return out;
+}
+
+/** You answer a friend. Warm words take time and bring an answer back later in the day. */
+export function replyFriend(run: RunState, m: Msg, kind: ReplyKind): Outcome {
+  const d = run.day!;
+  const p0 = run.psyche;
+  if (!replyOptions(run, m).includes(kind)) return { text: "", dPsyche: 0 };
+  const f = run.friends[m.friend!];
+  m.replied = true;
+  d.phone = Math.max(0, d.phone - 2);
+  let text: string;
+  if (kind === "emoji") {
+    setBond(f, bondOf(f) + 3);
+    addPsyche(run, 1);
+    d.clock += 1;
+    text = tr(`Ти відписав ${nameOf(f)} смайликом. Краще, ніж нічого.`, `You sent ${nameOf(f)} a smiley. Better than nothing.`);
+  } else {
+    const music = kind === "music";
+    setBond(f, bondOf(f) + (music ? 15 : 12));
+    addPsyche(run, music ? 3 : 4);
+    d.clock += music ? 10 : 15;
+    text = music
+      ? tr(`Ти довго вибирав пісні для ${accOf(f)}. Ті, під які ви колись їхали на дачу.`, `You took ages choosing songs for ${nameOf(f)}. The ones you used to drive to the dacha to.`)
+      : tr(`Ти написав ${nameOf(f)} по-справжньому — не «норм», а як є. Стало легше обом.`, `You wrote to ${nameOf(f)} for real — not “fine”, but how it is. It got easier for both of you.`);
+    const back = REPLY_BACK[f.state];
+    if (back?.length) {
+      const at = d.clock + Math.round(between(run, 25, 80));
+      d.plan.push({ at, kind: "msg", msg: { kind: "friend", from: nameOf(f), text: pick(run, back), at, replied: true } });
+      d.plan.sort((a, b) => a.at - b.at);
+    }
+  }
+  return { text, dPsyche: run.psyche - p0 };
+}
+
+// ------------------------------------------------------------------ steps on the stairs
+
+export type Visitor = "tck" | "police" | "neighbor" | "phantom";
+export type StepRead = "right" | "wrong" | "none";
+
+/** Before a knock: you listen to the steps and guess who it is. */
+export function readSteps(who: Visitor, guess: Visitor | null): StepRead {
+  if (!guess) return "none";
+  return guess === who ? "right" : "wrong";
+}
+
+// ------------------------------------------------------------------ the memory
+
+/** You look at the photo from Kozyn long enough to be there again. */
+export function remember(run: RunState): ActionResult {
+  const d = run.day!;
+  const p0 = run.psyche;
+  d.used.photos = (d.used.photos ?? 0) + 1;
+  d.clock += 30;
+  const dead = run.friends.filter((f) => f.state === "dead").length;
+  const gone = run.friends.filter((f) => f.state !== "free" && f.state !== "hiding").length;
+  addPsyche(run, 7 - dead * 2.5);
+  const text = dead
+    ? tr("Ти був там пів години. Пахло димом і річкою. Потім фото знову стало фото — з чорною стрічкою на одному обличчі. У спогаді він ще сміється.", "You were there for half an hour. It smelled of smoke and the river. Then the photo became a photo again — with a black ribbon on one face. In the memory he's still laughing.")
+    : gone >= 3
+      ? tr("Ти був там пів години. Всі п'ятеро, всі живі, всі разом. Тепер ви в різних країнах, окопах і квартирах.", "You were there for half an hour. All five of you, alive, together. Now you're in different countries, trenches and flats.")
+      : tr("Ти був там пів години. Пахло димом і річкою, і ніхто нікуди не поспішав. Найкращий день.", "You were there for half an hour. It smelled of smoke and the river, and nobody was in a hurry. The best day.");
+  return { id: "photos", text, dPsyche: run.psyche - p0 };
+}
+
+// ------------------------------------------------------------------ decisions that end a run
+
+export type OfferId = "enlist" | "tisza";
+export function tiszaCost(): number { return 90000; }
+
+/** A decision waiting for you this morning, if any. */
+export function pendingOffer(run: RunState): OfferId | null {
+  if (run.flags.offerEnlist === 1) return "enlist";
+  if (run.flags.offerTisza === 1) return "tisza";
+  return null;
+}
+
+/** You decide. Yes ends the run (one way or another); no lets it pass. */
+export function takeOffer(run: RunState, id: OfferId, yes: boolean): Outcome {
+  const p0 = run.psyche;
+  if (id === "enlist") run.flags.offerEnlist = 2;
+  else run.flags.offerTisza = 2;
+  if (!yes) {
+    addPsyche(run, -2);
+    return {
+      text: id === "enlist"
+        ? tr("Ти зняв куртку і повісив назад. Ще ні. Може, ніколи. Ти не знаєш, чи це правильно — і ніхто не знає.", "You took off the jacket and hung it back up. Not yet. Maybe never. You don't know if it's right — nobody does.")
+        : tr("Ти видалив номер. Гроші лежать, де лежали. Вночі тобі сниться ріка.", "You deleted the number. The money stays where it was. At night you dream of a river."),
+      dPsyche: run.psyche - p0,
+    };
+  }
+  if (id === "enlist") { run.ending = "enlist"; return { text: ENDINGS.enlist.text, dPsyche: 0, ending: "enlist" }; }
+  run.money -= tiszaCost();
+  const crossed = rnd(run) < 0.55;
+  run.ending = crossed ? "tisza" : "border";
+  return { text: ENDINGS[run.ending].text, dPsyche: 0, ending: run.ending };
+}
+
 // ------------------------------------------------------------------ night: the day becomes a season
 
 export interface SeasonReport {
@@ -912,6 +1050,28 @@ export function endDay(run: RunState): SeasonReport {
   if (run.body < 30) { shift -= 3; lines.push(tr("Спина болить. Сходи до холодильника — вже кардіо.", "Your back hurts. The walk to the fridge is cardio now.")); }
   if (has(run, "meds")) shift += 4;
   if (has(run, "cat")) shift += 2;
+  // friends: silence wears a friendship down, answers hold it up
+  for (const m of d.msgs) {
+    if (m.friend != null && !m.replied && run.friends[m.friend]) setBond(run.friends[m.friend], bondOf(run.friends[m.friend]) - 6);
+  }
+  const close = run.friends.filter((f) => reachable(f) && bondOf(f) >= 70);
+  if (close.length) {
+    shift += Math.min(3, close.length);
+    lines.push(close.length > 1
+      ? tr(`${close.map(nameOf).join(" і ")} пишуть майже щодня. Це тримає.`, `${close.map(nameOf).join(" and ")} write almost every day. It holds you up.`)
+      : tr(`${nameOf(close[0])} пише майже щодня. Це тримає.`, `${nameOf(close[0])} writes almost every day. It holds you up.`));
+  }
+  run.friends.forEach((f, i) => {
+    if (reachable(f) && bondOf(f) < 25 && !run.flags[`quiet${i}`]) {
+      run.flags[`quiet${i}`] = 1;
+      lines.push(tr(`${nameOf(f)} перестав писати. Ти теж.`, `${nameOf(f)} stopped writing. So did you.`));
+    }
+    if (f.state === "abroad" && bondOf(f) >= 70 && !run.flags[`sent${i}`]) {
+      run.flags[`sent${i}`] = 1;
+      run.money += 5000;
+      lines.push(tr(`${nameOf(f)} переказав 5 000 ₴ з Варшави: «на каву, якої ми не вип'ємо».`, `${nameOf(f)} sent 5,000 ₴ from Warsaw: “for the coffee we won't drink”.`));
+    }
+  });
   addPsyche(run, Math.min(shift, 8));
   if (dayNet >= 0) lines.push(tr("Цей день був стерпним. Таких у сезоні було багато.", "This day was bearable. There were many like it this season."));
   else if (dayNet > -10) lines.push(tr("Ще девʼяносто таких днів. Вони злилися в один.", "Ninety more days like this. They merged into one."));
@@ -946,10 +1106,17 @@ export function endDay(run: RunState): SeasonReport {
       f.state = st;
       const tpl = FRIEND_NEWS[st];
       if (tpl.length) {
-        const text = pick(run, tpl).replace("{n}", nameOf(f)).replace("{a}", accOf(f));
+        let text = pick(run, tpl).replace("{n}", nameOf(f)).replace("{a}", accOf(f));
+        if (st === "dead" && bondOf(f) >= 70) text += tr(" Останнє повідомлення в чаті — від нього: «тримайся там».", " The last message in the chat is from him: “hang in there”.");
         news.push({ kind: "friend", from: `${nameOf(f)}, ${roleOf(f)}`, text, at: 0 });
-        addPsyche(run, FRIEND_IMPACT[st]);
-        if (st === "dead") run.stats.lost++;
+        // the closer you were, the harder it hits
+        const imp = FRIEND_IMPACT[st];
+        addPsyche(run, imp < 0 ? imp * (0.5 + bondOf(f) / 120) : imp);
+        run.flags[`fate_${st}`] = 1;
+        if (st === "dead") {
+          run.stats.lost++;
+          if (bondOf(f) >= 55 && !run.flags.offerEnlist) run.flags.offerEnlist = 1;
+        }
       }
     }
   }
@@ -961,8 +1128,16 @@ export function endDay(run: RunState): SeasonReport {
   const dPsyche = run.psyche - pStart;
   let ending: EndingId | null = run.ending;
   if (!ending && run.psyche <= 0) ending = "zryv";
+  if (!ending && run.apathy >= 95) ending = "faded";
   run.season++;
-  if (!ending && run.season >= SEASONS) ending = "survived";
+  if (!ending && run.season >= SEASONS) {
+    const close = run.friends.filter((f) => reachable(f) && bondOf(f) >= 70).length;
+    ending = close >= 2 ? "together" : "survived";
+  }
+  // someone abroad knows a man who takes people across the river
+  if (!ending && !run.flags.offerTisza && run.season >= 8 && run.money >= tiszaCost() && run.friends.some((f) => f.state === "abroad" && bondOf(f) >= 50)) {
+    run.flags.offerTisza = 1;
+  }
   run.ending = ending;
   const offer = ending ? [] : offerPerks(run);
   run.offer = offer;

@@ -4,7 +4,7 @@
  * current language without knowing about it. Ukrainian stays the original.
  */
 import {
-  ACTIONS, DOOR_LINES, ENDINGS, FRIEND_NEWS, MIRROR_LINES, PERKS, PLACE_LABELS, SEASON_DEFS, THOUGHTS, TRAITS, WINDOW_LINES,
+  ACTIONS, DOOR_LINES, ENDINGS, ENDING_HINTS, FRIEND_NEWS, MEMORY_DEAD, MEMORY_LINES, MIRROR_LINES, PERKS, PLACE_LABELS, REPLY_BACK, SEASON_DEFS, THOUGHTS, TRAITS, WINDOW_LINES,
   type ActionId, type EndingId, type FriendState, type PerkId, type PlaceId, type TraitId,
 } from "./content.ts";
 import { setLangValue, type Lang } from "./i18n.ts";
@@ -143,13 +143,53 @@ const ENDINGS_EN: Record<EndingId, { title: string; sticker: string; text: strin
   bus: { title: "TAKEN", sticker: "YOU OPENED", text: "The door opened, and all those years ended in five seconds. They led you down the stairs, and you were thinking about the ficus that nobody would water now." },
   strike: { title: "DIRECT HIT", sticker: "TOO LATE", text: "You didn't make it to the corridor. For four years you hid from people, and what found you was the thing no flat can hide you from." },
   survived: { title: "YOU MADE IT", sticker: "1,461 DAYS", text: "Autumn 2026. You made it. You're still here. The door is still shut. Nobody will tell you whether it was worth it — and you will never say it yourself." },
+  together: { title: "WE MADE IT", sticker: "NOT ALONE", text: "Autumn 2026. You're still here, and you're not alone. Every morning someone writes “alive?”, and you answer “alive”. The door is still shut. But on the other side there are people waiting for you to open it." },
+  faded: { title: "FADED", sticker: "DIDN'T GET UP", text: "One morning you didn't get up. Not because you couldn't — there was just no reason to. You didn't break. You quietly ran out, like the battery in a remote nobody looks for." },
+  enlist: { title: "WENT ON HIS OWN", sticker: "OPENED IT HIMSELF", text: "You shaved — for the first time in years. You opened the door yourself, walked down the stairs yourself, walked to the TCC yourself. Outside it smelled of rain and petrol. You don't know if it's courage or exhaustion. Probably both." },
+  tisza: { title: "THE TISZA", sticker: "ON THE OTHER SIDE", text: "You gave all your money to a man you'd never seen. Night, forest, water up to your chest — colder than you thought. On the other side you lay in the wet grass for a long time. You're free. You will never be home again." },
+  border: { title: "THE BORDER", sticker: "STOPPED", text: "The forest was full of flashlights. The guide ran first. They led you out to the road in wet clothes, and for some reason you were thinking about the money you'd never get back. Then — a van. A different one. Just the same." },
 };
+
+const HINTS_EN: Record<EndingId, string> = {
+  survived: "Hold on until autumn 2026.",
+  together: "Make it — and not alone.",
+  zryv: "The mind hits zero.",
+  faded: "Apathy takes you quietly.",
+  bus: "Opened to the wrong people.",
+  strike: "Didn't make it to the corridor.",
+  enlist: "When you lose someone close…",
+  tisza: "Someone abroad knows a man.",
+  border: "Not everyone reaches the other bank.",
+};
+
+const REPLY_EN: Record<FriendState, string[]> = {
+  free: ["thanks for writing. seriously. I thought you'd disappeared", "see, a normal conversation. let's do this more often"],
+  hiding: ["thanks. I needed that. let's hang in there", "you're the first this week to ask how I am"],
+  abroad: ["so good to hear Kyiv. even in text", "you hang in there. I'm waiting until I can come back"],
+  volunteered: ["read it to the guys. they laughed. thanks, bro", "thanks. you don't get that often here"],
+  front: ["got it. listening to your music in the trench. you have no idea", "alive. your message is the best thing all week"],
+  wounded: ["laughing at your message and the stitches hurt. thanks", "come over when... well, someday. I'll wait"],
+  dead: [],
+  home: ["thanks. I don't know how to live now either. let's not know together", "you're a real friend, even through a screen"],
+  taken: [],
+};
+
+const MEMORY_EN = [
+  "What are you standing there for? Grab a skewer before it all burns!",
+  "Let's go to the Carpathians next summer. All of us. Promise?",
+  "The Desna is like warm milk. Swim after the shashlik?",
+  "I'm so glad we're all here. Seriously.",
+  "Someday we'll remember this day, you'll see.",
+  "Put on that song. You know the one.",
+  "Who took my cap? Give it back, it's my lucky one!",
+];
 
 // ------------------------------------------------------------------ applying
 
 type Snapshot = {
   seasons: typeof SEASONS_EN; places: Record<PlaceId, string>; actions: typeof ACTIONS_EN; perks: typeof PERKS_EN; traits: typeof TRAITS_EN;
   news: Record<FriendState, string[]>; thoughts: string[][]; mirror: string[]; window: Record<string, string[]>; door: string[]; endings: typeof ENDINGS_EN;
+  hints: Record<EndingId, string>; reply: Record<FriendState, string[]>; memory: string[]; memoryDead: string[];
 };
 
 function snapshot(): Snapshot {
@@ -165,6 +205,10 @@ function snapshot(): Snapshot {
     window: Object.fromEntries(Object.entries(WINDOW_LINES).map(([k, v]) => [k, [...v]])),
     door: [...DOOR_LINES],
     endings: JSON.parse(JSON.stringify(ENDINGS)) as typeof ENDINGS_EN,
+    hints: { ...ENDING_HINTS },
+    reply: Object.fromEntries(Object.entries(REPLY_BACK).map(([k, v]) => [k, [...v]])) as Record<FriendState, string[]>,
+    memory: [...MEMORY_LINES],
+    memoryDead: [...MEMORY_DEAD],
   };
 }
 
@@ -172,6 +216,7 @@ const UK = snapshot();
 const EN: Snapshot = {
   seasons: SEASONS_EN, places: PLACES_EN, actions: ACTIONS_EN, perks: PERKS_EN, traits: TRAITS_EN, news: NEWS_EN,
   thoughts: THOUGHTS_EN, mirror: MIRROR_EN, window: WINDOW_EN, door: DOOR_EN, endings: ENDINGS_EN,
+  hints: HINTS_EN, reply: REPLY_EN, memory: MEMORY_EN, memoryDead: ["He's laughing at something, but you can't hear the sound."],
 };
 
 const refill = (target: string[], src: string[]) => { target.splice(0, target.length, ...src); };
@@ -191,4 +236,8 @@ export function applyContentLang(l: Lang): void {
   for (const k of Object.keys(WINDOW_LINES) as Array<keyof typeof WINDOW_LINES>) refill(WINDOW_LINES[k], s.window[k]);
   refill(DOOR_LINES, s.door);
   for (const k of Object.keys(ENDINGS) as EndingId[]) Object.assign(ENDINGS[k], s.endings[k]);
+  Object.assign(ENDING_HINTS, s.hints);
+  for (const k of Object.keys(REPLY_BACK) as FriendState[]) refill(REPLY_BACK[k], s.reply[k]);
+  refill(MEMORY_LINES, s.memory);
+  refill(MEMORY_DEAD, s.memoryDead);
 }

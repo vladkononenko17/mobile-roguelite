@@ -1,10 +1,14 @@
 import * as THREE from "three";
 import {
   C, CAMO_TCK, LOOKS, animateRig, at, camoTexture, canvasTexture, carpetTexture, facadeTextures, makeBench, makeCar, makeLamp,
-  makePerson, makePine, makePlant, makeTrashBins, makeTree, makeVan, mat, mesh, wallpaperTexture, type Rig,
+  makePerson, makePine, makePlant, makeTrashBins, makeTree, makeVan, mat, mesh, type Rig,
 } from "../../rozshuk/src/three/models.ts";
 import { Post, defaultQuality, glowMat, lightPoolMaterial, type Mood } from "./three/post.ts";
 import { RainField, rainGlassMaterial } from "./three/weather.ts";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { lino, markTexture, parquet, plaster, tiles, wallpaper, type Mark, type Surface } from "./three/textures.ts";
+import { LaptopScreen, type ScreenMode } from "./three/screen.ts";
+import { Memory, type MemoryFriend } from "./three/memory.ts";
 import type { ActionId, PlaceId } from "./content.ts";
 
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
@@ -93,7 +97,15 @@ export class Scene3D {
   private candle = new THREE.PointLight(0xff9a3a, 0, 4.5, 1.6);
   private flashLight = new THREE.PointLight(0xfff0d8, 0, 20, 1.2);
   private flameMesh: THREE.Mesh;
-  private screenMat = new THREE.MeshBasicMaterial({ color: 0x6fb0ff });
+  private laptop = new LaptopScreen();
+  private screenMat = new THREE.MeshBasicMaterial({ map: this.laptop.texture });
+  /** The laptop lights your face at night. */
+  private screenLight = new THREE.PointLight(0x9cc8ff, 0, 3.5, 1.6);
+  /** Stains, mould, peeling paper, tally marks: they come with the years. */
+  private marks: Array<{ m: THREE.Mesh; from: number }> = [];
+  // the memory of Kozyn
+  private memory: Memory | null = null;
+  memoryOn = false;
   private glassMat = rainGlassMaterial();
   private clock = new THREE.Clock();
   readonly post: Post;
@@ -179,6 +191,11 @@ export class Scene3D {
     sc.left = -8; sc.right = 8; sc.top = 8; sc.bottom = -8; sc.near = 1; sc.far = 50;
     this.sun.shadow.bias = -0.0006;
     this.post = new Post(this.renderer, this.scene, this.camera, defaultQuality());
+    // a soft room reflection for the glossy surfaces (varnished floor, fridge enamel)
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.35;
+    pmrem.dispose();
 
     this.buildFlat();
     this.collectFollowers();
@@ -282,43 +299,27 @@ export class Scene3D {
     const g = this.flat;
     const H = 2.7;
     // floors
-    const parquet = canvasTexture(128, 128, (c) => {
-      c.fillStyle = "#9a6a42";
-      c.fillRect(0, 0, 128, 128);
-      for (let i = 0; i < 8; i++) for (let j = 0; j < 4; j++) {
-        const v = 140 + ((i * 7 + j * 13) % 5) * 9;
-        c.fillStyle = `rgb(${v},${Math.round(v * 0.7)},${Math.round(v * 0.45)})`;
-        const x = j * 32 + (i % 2) * 16;
-        c.fillRect(x, i * 16, 32, 16);
-        if (x + 32 > 128) c.fillRect(x - 128, i * 16, 32, 16);
-        c.strokeStyle = "rgba(0,0,0,.25)";
-        c.strokeRect(x, i * 16, 32, 16);
-        if (x + 32 > 128) c.strokeRect(x - 128, i * 16, 32, 16);
-      }
-    });
-    parquet.repeat.set(3, 4);
-    const lino = canvasTexture(64, 64, (c) => {
-      c.fillStyle = "#b9a888"; c.fillRect(0, 0, 64, 64);
-      c.fillStyle = "#a8967a"; c.fillRect(0, 0, 32, 32); c.fillRect(32, 32, 32, 32);
-    });
-    lino.repeat.set(5, 4);
-    const tiles = canvasTexture(64, 64, (c) => {
-      c.fillStyle = "#cfd8d8"; c.fillRect(0, 0, 64, 64);
-      c.strokeStyle = "#8a9a9a"; c.lineWidth = 2;
-      for (let i = 0; i <= 4; i++) { c.beginPath(); c.moveTo(i * 16, 0); c.lineTo(i * 16, 64); c.stroke(); c.beginPath(); c.moveTo(0, i * 16); c.lineTo(64, i * 16); c.stroke(); }
-    });
-    tiles.repeat.set(2, 2);
-    const floor = (x0: number, z0: number, x1: number, z1: number, tex: THREE.Texture) => {
-      const f = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), new THREE.MeshLambertMaterial({ map: tex }));
+    // surfaces drawn at 512 px with normal maps: the window light catches every seam
+    const rep2 = (sf: Surface, x: number, y: number) => { for (const t of [sf.map, sf.normal, sf.rough]) t?.repeat.set(x, y); return sf; };
+    const wood = rep2(parquet(), 3, 4);
+    const linoS = rep2(lino(), 1.25, 1);
+    const tileS = tiles();
+    const floorMat = (sf: Surface, rough: number) => new THREE.MeshStandardMaterial({ map: sf.map, normalMap: sf.normal, roughnessMap: sf.rough ?? null, roughness: rough, metalness: 0 });
+    const woodMat = floorMat(wood, 0.8);
+    const linoMat = floorMat(linoS, 0.5);
+    const tileMat = floorMat(tileS, 0.3);
+    const floor = (x0: number, z0: number, x1: number, z1: number, material: THREE.Material) => {
+      const f = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), material);
       f.rotation.x = -Math.PI / 2;
       f.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2);
       f.receiveShadow = true;
       g.add(f);
+      return f;
     };
-    floor(-5, -3.5, 0.5, 3.5, parquet);
-    floor(0.5, -3.5, 5, 0, lino);
-    floor(0.5, 0, 5, 3.5, lino);
-    floor(0.5, 1.5, 2.4, 3.5, tiles);
+    floor(-5, -3.5, 0.5, 3.5, woodMat);
+    floor(0.5, -3.5, 5, 0, linoMat);
+    floor(0.5, 0, 5, 3.5, linoMat);
+    floor(0.5, 1.5, 2.4, 3.5, tileMat);
     // balcony slab
     const slab = mesh(new THREE.BoxGeometry(2.8, 0.18, 1.6), 0xa8a49a, 0.02);
     at(slab, -1.0, -0.09, -4.3, g);
@@ -330,12 +331,14 @@ export class Scene3D {
     for (const x of [-2.4, 0.4]) at(mesh(new THREE.BoxGeometry(0.08, 0.06, 1.6), 0x3a3a3a, 0.01), x, 1.02, -4.3, g);
 
     // walls
-    const paper = wallpaperTexture("#c9b98a", "#b3a272");
-    paper.repeat.set(5, 1.6);
-    const roomWall = new THREE.MeshLambertMaterial({ map: paper });
-    const kitchenWall = new THREE.MeshLambertMaterial({ color: 0xd8d0a8 });
-    const hallWall = new THREE.MeshLambertMaterial({ color: 0xa8b0a0 });
-    const bathWall = new THREE.MeshLambertMaterial({ map: tiles });
+    const paper = rep2(wallpaper(), 5, 1.6);
+    const wallMat = (sf: Surface) => new THREE.MeshStandardMaterial({ map: sf.map, normalMap: sf.normal, normalScale: new THREE.Vector2(0.7, 0.7), roughness: 0.92, metalness: 0 });
+    const roomWall = wallMat(paper);
+    const kitchenWall = wallMat(rep2(plaster("#d8d0a8", 61), 4, 1.4));
+    const hallWall = wallMat(rep2(plaster("#a8b0a0", 73), 4, 1.4));
+    const bathTiles = tiles();
+    for (const t of [bathTiles.map, bathTiles.normal]) t.repeat.set(1.4, 0.8);
+    const bathWall = new THREE.MeshStandardMaterial({ map: bathTiles.map, normalMap: bathTiles.normal, roughness: 0.25, metalness: 0 });
     const outer = new THREE.MeshLambertMaterial({ color: 0xbfb8a8 });
     // back wall with openings: room window, balcony door, kitchen window
     const back = this.wallsBack;
@@ -425,6 +428,7 @@ export class Scene3D {
     flame.name = "flame";
     at(flame, -0.55, 0.96, -0.15, desk);
     at(this.candle, -0.55, 1.15, -0.15, desk);
+    at(this.screenLight, 0, 1.05, 0.35, desk);
     at(desk, -2.1, 0, -3.05, g);
     this.solid(-2.8, -3.45, -1.4, -2.7);
     const chair = new THREE.Group();
@@ -490,7 +494,7 @@ export class Scene3D {
     at(pot, 2.46, 1.02, -3.27, g);
     this.solid(2.25, -3.45, 2.95, -2.85);
     // fridge with photos
-    const fridge = mesh(new THREE.BoxGeometry(0.7, 1.85, 0.68), 0xeceae2, 0.03);
+    const fridge = mesh(new THREE.BoxGeometry(0.7, 1.85, 0.68), new THREE.MeshStandardMaterial({ color: 0xeceae2, roughness: 0.32, metalness: 0.05 }), 0.03);
     at(fridge, 4.55, 0.92, -3.05, g);
     this.solid(4.15, -3.45, 4.95, -2.7);
     for (let i = 0; i < 5; i++) {
@@ -598,6 +602,23 @@ export class Scene3D {
     at(this.cat, -4.3, 0.62, 2.6, g);
     this.cat.visible = false;
     at(this.flashLight, -1.0, 1.8, -4.5, g);
+    // what the years leave on the walls (shown in setSeason)
+    const mark = (parent: THREE.Object3D, kind: Mark, w: number, h: number, x: number, y: number, z: number, ry: number, from: number, seed = 1) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshLambertMaterial({ map: markTexture(kind, seed), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+      m.rotation.y = ry;
+      m.userData.noAO = true;
+      at(m, x, y, z, parent);
+      m.visible = false;
+      this.marks.push({ m, from });
+    };
+    mark(this.wallsL, "damp", 1.3, 1.1, -4.92, 2.05, -2.4, Math.PI / 2, 4);
+    mark(this.wallsL, "peel", 0.7, 0.7, -4.92, 2.25, 0.25, Math.PI / 2, 6);
+    mark(this.wallsBack, "mould", 0.46, 0.6, -4.75, 2.05, -3.42, 0, 8);
+    mark(this.wallsBack, "mould", 0.5, 0.5, 4.6, 2.2, -3.42, 0, 10, 2);
+    mark(this.wallsBack, "ghost", 0.5, 0.45, -0.05, 1.55, -3.42, 0, 5);
+    mark(this.wallsR, "scuff", 1.1, 1.1, 4.92, 1.0, 1.65, -Math.PI / 2, 3);
+    mark(g, "tally", 0.75, 0.55, 0.43, 1.3, -1.6, -Math.PI / 2, 4);
+    mark(g, "damp", 0.9, 0.8, 0.43, 2.2, 2.6, -Math.PI / 2, 12, 3);
   }
 
   // ================================================================ the courtyard
@@ -736,6 +757,11 @@ export class Scene3D {
       (ph.material as THREE.MeshLambertMaterial).color.set(f.color).lerp(new THREE.Color(0x8a8a8a), gone ? 0.6 : 0.2);
       this.ribbons[i].visible = f.state === "dead";
     });
+    for (const { m, from } of this.marks) {
+      const k = clamp((season - from + 1) / 4, 0, 1);
+      m.visible = k > 0;
+      (m.material as THREE.MeshLambertMaterial).opacity = k;
+    }
     const tapeOn = season >= 8;
     this.wallsBack.children.forEach((c) => { if (c.name === "tape") c.visible = tapeOn; });
     this.brokenGlass.visible = opts.glass;
@@ -757,6 +783,72 @@ export class Scene3D {
 
   /** One heartbeat: the walls throb with it, harder the worse it gets. */
   heartbeat(): void { this.beat = 1; }
+
+  // ================================================================ the memory
+
+  /** Into the photo: summer 2021 in Kozyn. The flat and the yard go away. */
+  enterMemory(friends: MemoryFriend[]): void {
+    if (!this.memory) { this.memory = new Memory(); this.scene.add(this.memory.group); }
+    this.memory.setup(friends);
+    this.memoryOn = true;
+    this.memory.group.visible = true;
+    this.flat.visible = false;
+    this.yard.visible = false;
+    this.rain.lines.visible = false;
+    if (this.snow) this.snow.visible = false;
+    this.post.setMood("memory", true);
+    this.camera.position.set(0, 6, 10);
+  }
+
+  exitMemory(): void {
+    this.memoryOn = false;
+    if (this.memory) this.memory.group.visible = false;
+    this.flat.visible = true;
+    this.yard.visible = true;
+    if (this.snow) this.snow.visible = true;
+    this.post.setMood("home", true);
+    this.sun.shadow.camera.updateProjectionMatrix();
+  }
+
+  memoryNearest(): number | null { return this.memory?.nearest() ?? null; }
+
+  /** Screen position above a friend's head in the memory. */
+  memoryHead(i: number): { x: number; y: number } {
+    const v = this.memory!.head(i).project(this.camera);
+    return { x: (v.x + 1) / 2 * this.vw, y: (1 - v.y) / 2 * this.vh };
+  }
+
+  /** The shutter: a flash, the picture is taken. */
+  memoryFlash(): void { this.post.flash = 0.9; }
+
+  private updateMemory(dt: number, time: number): void {
+    const m = this.memory!;
+    m.update(dt, time, this.move, 2.6);
+    // golden hour, long shadows, a hazy warm sky
+    this.sun.position.set(-7, 6.5, 6);
+    this.sun.target.position.set(0, 0, -1);
+    this.sun.color.set(0xffc98a);
+    this.sun.intensity = 2.5;
+    this.hemi.color.set(0xcfe4ff);
+    this.hemi.groundColor.set(0x6a8a3a);
+    this.hemi.intensity = 1.0;
+    const sky = new THREE.Color(0xf4d6a0);
+    this.scene.background = sky;
+    if (!this.scene.fog) this.scene.fog = new THREE.Fog(sky, 30, 75);
+    const fog = this.scene.fog as THREE.Fog;
+    fog.color.copy(sky);
+    fog.near = 16;
+    fog.far = 46;
+    // the camera follows you, lower and closer than in the flat: this is a warm place
+    const hp = m.heroPos;
+    this.camPos.set(hp.x * 0.8, 5.2, hp.z + 6.4);
+    this.camLook.set(hp.x * 0.85, 0.8, hp.z - 1.2);
+    this.camera.fov = this.vw / this.vh < 0.62 ? 58 : 50;
+    const cam = this.camera;
+    cam.position.lerp(this.camPos, Math.min(1, dt * 3));
+    cam.lookAt(this.camLook);
+    cam.updateProjectionMatrix();
+  }
 
   // ================================================================ input & hero
 
@@ -991,7 +1083,10 @@ export class Scene3D {
     this.flameMesh.visible = candleOn;
     if (candleOn) this.flameMesh.scale.set(1, 1 + Math.sin(time * 17) * 0.15, 1);
     const working = this.pose === "work" || this.pose === "game" || this.pose === "therapy" || this.pose === "journal";
-    this.screenMat.color.set(working ? 0x8fc8ff : light ? 0x3a5a8a : 0x101820).multiplyScalar(working ? 2 : 1);
+    const mode: ScreenMode = this.pose === "work" ? "code" : this.pose === "game" ? "game" : this.pose === "therapy" ? "call" : this.pose === "journal" ? "doc" : light ? "lock" : "off";
+    this.laptop.update(dt, mode, clock);
+    this.screenMat.color.setScalar(working ? 1.7 : 0.9);
+    this.screenLight.intensity = working ? this.laptop.glow * (night || !light ? 2.4 : 0.8) * (0.92 + Math.sin(time * 7) * 0.08) : 0;
     // the block opposite: lit windows at night, dark in a blackout
     const f = this.facades[0];
     const want = night ? f.night : f.day;
@@ -1117,6 +1212,14 @@ export class Scene3D {
   private tick(): void {
     const dt = Math.min(0.05, this.clock.getDelta());
     const time = this.clock.elapsedTime;
+    if (this.memoryOn) {
+      if (!this.paused) this.updateMemory(dt, time);
+      this.post.danger = 0;
+      this.post.despair = 0;
+      this.post.pulse = 0;
+      this.post.render(dt);
+      return;
+    }
     if (!this.paused) {
       this.onFrame?.(dt);
       this.updateHero(dt);
