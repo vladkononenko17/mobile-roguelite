@@ -4,6 +4,7 @@ import {
   makePerson, makePine, makePlant, makeTrashBins, makeTree, makeVan, mat, mesh, wallpaperTexture, type Rig,
 } from "../../rozshuk/src/three/models.ts";
 import { Post, defaultQuality, glowMat, lightPoolMaterial, type Mood } from "./three/post.ts";
+import { RainField, rainGlassMaterial } from "./three/weather.ts";
 import type { ActionId, PlaceId } from "./content.ts";
 
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
@@ -62,7 +63,8 @@ const POSES: Partial<Record<ActionId, { x: number; z: number; ry: number; pose: 
   shelter: { x: 3.3, z: 0.85, ry: 0, pose: "floor" },
 };
 
-interface Box { x0: number; z0: number; x1: number; z1: number }
+interface Box { x0: number; z0: number; x1: number; z1: number; /** Which wall it leans on (moves with it). */ side?: Side }
+type Side = "L" | "R" | "B";
 
 /** A person in the courtyard. */
 interface Walker { rig: Rig; from: THREE.Vector3; to: THREE.Vector3; t: number; speed: number; idle?: boolean; pose?: "call" | "idle" | "grab" }
@@ -92,7 +94,7 @@ export class Scene3D {
   private flashLight = new THREE.PointLight(0xfff0d8, 0, 20, 1.2);
   private flameMesh: THREE.Mesh;
   private screenMat = new THREE.MeshBasicMaterial({ color: 0x6fb0ff });
-  private glassMat = new THREE.MeshLambertMaterial({ color: 0xbfd8ea, transparent: true, opacity: 0.18, depthWrite: false });
+  private glassMat = rainGlassMaterial();
   private clock = new THREE.Clock();
   readonly post: Post;
   private container: HTMLElement;
@@ -103,6 +105,14 @@ export class Scene3D {
   private wallsR = new THREE.Group();
   private wallsBack = new THREE.Group();
   private boxes: Box[] = [];
+  /** Furniture that stands against a wall and moves with it when the walls close in. */
+  private followers: Array<{ o: THREE.Object3D; base: THREE.Vector3; side: Side }> = [];
+  /** How far each wall has come in right now (metres). */
+  private off = { L: 0, R: 0, B: 0 };
+  /** Panic: a sudden inward lurch of the walls + a dolly zoom, decays by itself. */
+  private squeezeV = 0;
+  /** The last heartbeat, decays fast. */
+  private beat = 0;
   private clutter: THREE.Object3D[] = [];
   private plant = new THREE.Group();
   private plantLeaves: THREE.Mesh[] = [];
@@ -138,6 +148,11 @@ export class Scene3D {
   private walkers: Walker[] = [];
   private yardLamps: THREE.Mesh[] = [];
   private snow: THREE.Points | null = null;
+  private rain = new RainField(1600, { x0: -24, x1: 24, y0: FLOOR_Y, y1: 9, z0: -34, z1: -3.9 });
+  private rainOn = false;
+  /** 0..1, eased towards rainOn. */
+  private rainK = 0;
+  private groundBase = new THREE.Color(0x6a8a4a);
   private camo = camoTexture(CAMO_TCK, 5);
 
   // camera
@@ -166,6 +181,8 @@ export class Scene3D {
     this.post = new Post(this.renderer, this.scene, this.camera, defaultQuality());
 
     this.buildFlat();
+    this.collectFollowers();
+    this.scene.add(this.rain.lines);
     this.door = this.flat.getObjectByName("door") as THREE.Mesh;
     this.brokenGlass = this.flat.getObjectByName("broken") as THREE.Mesh;
     this.flameMesh = this.flat.getObjectByName("flame") as THREE.Mesh;
@@ -227,6 +244,38 @@ export class Scene3D {
 
   private solid(x0: number, z0: number, x1: number, z1: number): void {
     this.boxes.push({ x0: Math.min(x0, x1), z0: Math.min(z0, z1), x1: Math.max(x0, x1), z1: Math.max(z0, z1) });
+  }
+
+  /** Which wall a footprint leans on, if any. Left and right win over the back. */
+  private static sideOf(x0: number, x1: number, z0: number, z1: number): Side | undefined {
+    if (x0 < -4.45 && x1 < -2.5) return "L";
+    if (x0 > 4.1) return "R";
+    if (z0 < -3.0 && z0 > -3.7 && z1 < -2.4) return "B";
+    return undefined;
+  }
+
+  /**
+   * After the flat is built: everything standing against a wall (shelf, bed,
+   * fridge, desk, counter) follows that wall in, and so do the collision boxes,
+   * so the walls never slide through furniture and the hero never walks into a wall.
+   */
+  private collectFollowers(): void {
+    const box = new THREE.Box3();
+    this.flat.updateMatrixWorld(true);
+    for (const o of this.flat.children) {
+      if (o === this.wallsL || o === this.wallsR || o === this.wallsBack || (o as THREE.Light).isLight) continue;
+      box.setFromObject(o);
+      if (box.isEmpty()) continue;
+      const side = Scene3D.sideOf(box.min.x, box.max.x, box.min.z, box.max.z);
+      if (side) this.followers.push({ o, base: o.position.clone(), side });
+    }
+    for (const b of this.boxes) b.side = Scene3D.sideOf(b.x0, b.x1, b.z0, b.z1);
+  }
+
+  /** Offset of a spot near a wall, so poses and rings follow the furniture. */
+  private shiftFor(x: number, z: number): { x: number; z: number } {
+    const side = x < -3.5 ? "L" : x > 3.8 ? "R" : z < -2.2 && z > -3.6 ? "B" : null;
+    return { x: side === "L" ? this.off.L : side === "R" ? -this.off.R : 0, z: side === "B" ? this.off.B : 0 };
   }
 
   private buildFlat(): void {
@@ -645,7 +694,8 @@ export class Scene3D {
     const winter = s === 0;
     const autumn = s === 3;
     this.yardDress.clear();
-    this.groundMat.color.set(winter ? 0xe4e8ea : autumn ? 0x8a8a4a : s === 2 ? 0x7a9a4a : 0x6a9a4a);
+    this.groundBase.set(winter ? 0xe4e8ea : autumn ? 0x8a8a4a : s === 2 ? 0x7a9a4a : 0x6a9a4a);
+    this.groundMat.color.copy(this.groundBase);
     const trees: Array<[number, number]> = [[-12, -12], [-8, -15], [12, -14], [16, -10], [-16, -18], [5, -20], [-2, -20], [20, -18], [-20, -11], [9, -9.5]];
     trees.forEach(([x, z], i) => {
       const t = winter ? makePine(i + 1, true) : makeTree(i + 1, autumn);
@@ -699,6 +749,15 @@ export class Scene3D {
 
   setGlass(on: boolean): void { this.brokenGlass.visible = on; }
 
+  /** A rainy day (eases in and out). */
+  setWeather(rain: boolean): void { this.rainOn = rain; }
+
+  /** Panic: the walls lurch in and the room stretches (dolly zoom). 0..1. */
+  squeeze(k: number): void { this.squeezeV = Math.max(this.squeezeV, clamp(k, 0, 1)); }
+
+  /** One heartbeat: the walls throb with it, harder the worse it gets. */
+  heartbeat(): void { this.beat = 1; }
+
   // ================================================================ input & hero
 
   setMove(x: number, y: number): void { this.move.x = x; this.move.y = y; }
@@ -717,7 +776,8 @@ export class Scene3D {
     let bd = Infinity;
     for (const [id, p] of Object.entries(PLACES) as Array<[PlaceId, { x: number; z: number; r: number }]>) {
       if (!enabled(id)) continue;
-      const d = Math.hypot(p.x - this.heroPos.x, p.z - this.heroPos.z);
+      const o = this.shiftFor(p.x, p.z);
+      const d = Math.hypot(p.x + o.x - this.heroPos.x, p.z + o.z - this.heroPos.z);
       if (d < p.r + 0.35 && d < bd) { bd = d; best = id; }
     }
     return best;
@@ -731,14 +791,14 @@ export class Scene3D {
 
   highlight(place: PlaceId | null): void {
     this.ring.visible = !!place && !this.pose;
-    if (place) this.ring.position.set(PLACES[place].x, 0.03, PLACES[place].z);
+    if (place) { const p = PLACES[place]; const o = this.shiftFor(p.x, p.z); this.ring.position.set(p.x + o.x, 0.03, p.z + o.z); }
   }
 
   setPose(id: ActionId | null): void {
     this.pose = id;
     this.poseT = 0;
     const p = id ? POSES[id] : null;
-    if (p && p.pose !== "call") { this.heroPos.set(p.x, 0, p.z); this.heroYaw = p.ry; }
+    if (p && p.pose !== "call") { const o = this.shiftFor(p.x, p.z); this.heroPos.set(p.x + o.x, 0, p.z + o.z); this.heroYaw = p.ry; }
     if (!id) {
       // step off the bed or chair
       if (this.heroPos.x < -3.4 && this.heroPos.z > 0.6) this.heroPos.set(-3.1, 0, 1.7);
@@ -748,7 +808,11 @@ export class Scene3D {
 
   private collide(p: THREE.Vector3): void {
     const r = 0.24;
-    for (const b of this.boxes) {
+    const off = this.off;
+    for (const box of this.boxes) {
+      const dx0 = box.side === "L" ? off.L : box.side === "R" ? -off.R : 0;
+      const dz0 = box.side === "B" ? off.B : 0;
+      const b = dx0 || dz0 ? { x0: box.x0 + dx0, x1: box.x1 + dx0, z0: box.z0 + dz0, z1: box.z1 + dz0 } : box;
       const cx = clamp(p.x, b.x0, b.x1);
       const cz = clamp(p.z, b.z0, b.z1);
       const dx = p.x - cx;
@@ -768,11 +832,12 @@ export class Scene3D {
         }
       }
     }
-    p.x = clamp(p.x, -4.75, 4.75);
+    p.x = clamp(p.x, -4.75 + off.L, 4.75 - off.R);
     p.z = clamp(p.z, -5.0, 3.3);
-    // outside the flat only on the balcony
-    if (p.z < -3.4 && (p.x < -2.2 || p.x > 0.2)) p.z = -3.3;
-    if (p.z < -3.4 && p.z > -3.65 && (p.x < -1.5 || p.x > -0.7)) p.z = -3.3;
+    // outside the flat only on the balcony (through the balcony door, which moves with the back wall)
+    const bz = -3.4 + off.B;
+    if (p.z < bz && (p.x < -2.2 || p.x > 0.2)) p.z = bz + 0.1;
+    if (p.z < bz && p.z > bz - 0.25 && (p.x < -1.5 || p.x > -0.7)) p.z = bz + 0.1;
   }
 
   private updateHero(dt: number): void {
@@ -898,10 +963,25 @@ export class Scene3D {
     this.sun.color.set(dayK < 0.7 ? 0xffb070 : 0xfff2dc);
     this.hemi.intensity = 0.25 + dayK * 0.85;
     this.hemi.color.set(dayK > 0.5 ? 0xdfe8ff : 0x6070a0);
-    const sky = new THREE.Color(s === 0 ? 0xb8c4d0 : 0x9cc4e8).lerp(new THREE.Color(0x0c1020), 1 - dayK);
+    // rain: a low grey sky, a closer horizon, a darker wet yard
+    this.rainK += ((this.rainOn ? 1 : 0) - this.rainK) * Math.min(1, dt * 0.6);
+    const wet = this.rainK;
+    this.sun.intensity *= 1 - wet * 0.65;
+    this.hemi.intensity *= 1 - wet * 0.2;
+    const sky = new THREE.Color(s === 0 ? 0xb8c4d0 : 0x9cc4e8).lerp(new THREE.Color(0x7c848e), wet * 0.75).lerp(new THREE.Color(0x0c1020), 1 - dayK);
     sky.lerp(new THREE.Color(0x6a6e74), despair * 0.4);
     this.scene.background = sky;
-    this.scene.fog = new THREE.Fog(sky, 30, 75);
+    if (!this.scene.fog) this.scene.fog = new THREE.Fog(sky, 30, 75);
+    const fog = this.scene.fog as THREE.Fog;
+    fog.color.copy(sky);
+    fog.near = lerp(30, 14, wet);
+    fog.far = lerp(75, 48, wet);
+    this.groundMat.color.copy(this.groundBase).multiplyScalar(1 - wet * 0.32);
+    this.rain.update(dt, wet, 0.3 + dayK * 0.7);
+    const gu = this.glassMat.uniforms;
+    gu.time.value = time;
+    gu.rain.value = wet;
+    gu.bright.value = 0.3 + dayK * 0.7 * (1 - wet * 0.25);
     // lights inside
     const evening = h >= set - 1 || h < rise + 0.5;
     this.lamp.intensity = light && evening ? 5.5 : 0;
@@ -918,11 +998,24 @@ export class Scene3D {
     if (this.facadeMat.map !== want.map) { this.facadeMat.map = want.map; this.facadeMat.emissiveMap = want.glow; this.facadeMat.needsUpdate = true; }
     this.facadeMat.emissiveIntensity = night && light ? 1.2 : 0;
     for (const l of this.yardLamps) l.visible = night && light;
-    // the walls come closer
+    // the walls come closer: slowly with despair, they breathe, they throb with the heart, they lurch in panic
+    this.squeezeV = Math.max(0, this.squeezeV - dt * 0.9);
+    this.beat = Math.max(0, this.beat - dt * 4.5);
     const breathe = Math.sin(time * 0.9) * 0.02 * despair;
-    this.wallsL.position.x = despair * 0.32 + breathe;
-    this.wallsR.position.x = -despair * 0.22 - breathe;
-    this.wallsBack.position.z = this.view === "window" ? 0 : despair * 0.12 + breathe * 0.5;
+    const throb = this.beat * this.beat * (0.012 + despair * 0.05);
+    const sq = this.squeezeV * this.squeezeV;
+    this.off.L = despair * 0.32 + breathe + throb + sq * 0.16;
+    this.off.R = despair * 0.22 + breathe + throb + sq * 0.14;
+    this.off.B = this.view === "window" ? 0 : despair * 0.12 + breathe * 0.5 + throb * 0.6 + sq * 0.09;
+    this.wallsL.position.x = this.off.L;
+    this.wallsR.position.x = -this.off.R;
+    this.wallsBack.position.z = this.off.B;
+    for (const f of this.followers) {
+      f.o.position.copy(f.base);
+      if (f.side === "L") f.o.position.x += this.off.L;
+      else if (f.side === "R") f.o.position.x -= this.off.R;
+      else f.o.position.z += this.off.B;
+    }
     // the van
     this.van.visible = bus;
     if (bus) {
@@ -998,9 +1091,11 @@ export class Scene3D {
       const k = narrow ? 1.18 : 1;
       const tx = clamp(this.heroPos.x, -3.2, 3.2);
       const tz = this.heroPos.z;
-      this.camPos.set(tx * 0.85, 7.6 * k - d * 0.6, tz + 6.0 * k - d * 0.5);
+      // a squeeze is a dolly zoom: the lens narrows while the camera pulls back, the room stretches
+      const sq = this.squeezeV;
+      this.camPos.set(tx * 0.85, 7.6 * k - d * 0.6 + sq * 2.2, tz + 6.0 * k - d * 0.5 + sq * 1.8);
       this.camLook.set(tx * 0.9, 0.6, tz - 0.4);
-      this.camera.fov = (narrow ? 54 : 46) - d * 6;
+      this.camera.fov = (narrow ? 54 : 46) - d * 6 - sq * 13;
     }
     const cam = this.camera;
     const a = Math.min(1, dt * (this.view === "window" ? 3 : 5));
@@ -1030,6 +1125,7 @@ export class Scene3D {
     this.updateCamera(dt, time);
     this.post.danger = this.info.danger;
     this.post.despair = this.info.despair;
+    this.post.pulse = clamp(this.beat * this.beat * (0.15 + this.info.despair * 0.85) + this.squeezeV * 0.6, 0, 1.2);
     this.post.render(dt);
   }
 

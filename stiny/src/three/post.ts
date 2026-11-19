@@ -54,6 +54,7 @@ const GradeShader = {
     danger: { value: 0 },
     despair: { value: 0 },
     flash: { value: 0 },
+    pulse: { value: -1 },
     time: { value: 0 },
     resolution: { value: new THREE.Vector2(1, 1) },
   },
@@ -65,14 +66,16 @@ const GradeShader = {
     uniform sampler2D tDiffuse;
     uniform vec3 lift; uniform vec3 gammaV; uniform vec3 gain;
     uniform float saturation; uniform float contrast; uniform float vignette; uniform float grain;
-    uniform float danger; uniform float despair; uniform float flash; uniform float time; uniform vec2 resolution;
+    uniform float danger; uniform float despair; uniform float flash; uniform float pulse; uniform float time; uniform vec2 resolution;
     varying vec2 vUv;
     void main() {
       vec2 d = vUv - 0.5;
-      // the walls pinch in with every heartbeat
+      // the walls pinch in with every heartbeat: a steady beat, or the game's own (pulse >= 0)
       float beat = pow(abs(sin(time * 0.05)), 12.0);
       float r2 = dot(d, d);
-      vec2 uv = vUv - d * despair * (0.035 + beat * 0.025) * (1.0 - r2 * 2.0);
+      vec2 uv = pulse < 0.0
+        ? vUv - d * despair * (0.035 + beat * 0.025) * (1.0 - r2 * 2.0)
+        : vUv - d * (despair * 0.035 + pulse * 0.045) * (1.0 - r2 * 2.0);
       d = uv - 0.5;
       float ca = danger * 0.005 + despair * 0.004;
       vec3 c;
@@ -149,6 +152,11 @@ export class Post {
   private despairNow = 0;
   /** Explosion flash, decays by itself. */
   flash = 0;
+  /**
+   * The heartbeat squeeze, 0..1, set by the game every frame. Left at −1, the
+   * picture pulses on its own steady beat (the other games use that).
+   */
+  pulse = -1;
   /** Multiplies the mood's bloom strength (1 = as graded); a game can tame a bright scene. */
   bloomScale = 1;
 
@@ -240,6 +248,7 @@ export class Post {
     this.grade.uniforms.despair.value = this.despairNow;
     this.flash = Math.max(0, this.flash - dt * 2.5);
     this.grade.uniforms.flash.value = this.flash;
+    this.grade.uniforms.pulse.value = this.pulse;
     this.grade.uniforms.time.value = (this.grade.uniforms.time.value + dt * 60) % 1005.3096;
     this.composer.render(dt);
   }

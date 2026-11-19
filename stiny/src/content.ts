@@ -5,9 +5,12 @@
  * bad. Pure data, no rendering imports, so the tests can load it directly.
  */
 
+import { tr } from "./i18n.ts";
+
 // ------------------------------------------------------------------ seasons
 
 export const SEASON_NAMES = ["ЗИМА", "ВЕСНА", "ЛІТО", "ОСІНЬ"] as const;
+const SEASON_NAMES_EN = ["WINTER", "SPRING", "SUMMER", "AUTUMN"] as const;
 export const SEASONS = 16;
 
 export interface YearDef {
@@ -132,7 +135,7 @@ export const SEASON_DEFS: SeasonDef[] = [
 ];
 
 export function seasonName(i: number): string {
-  return `${SEASON_NAMES[i % 4]} ${2023 + Math.floor(i / 4)}`;
+  return `${tr<readonly string[]>(SEASON_NAMES, SEASON_NAMES_EN)[i % 4]} ${2023 + Math.floor(i / 4)}`;
 }
 export function yearOf(i: number): YearDef {
   return YEARS[Math.min(3, Math.floor(i / 4))];
@@ -380,6 +383,7 @@ export const WINDOW_LINES = {
   empty: ["Двір порожній. Чоловіків не видно взагалі. Тільки жінки з пакетами.", "Ворони на смітниках. Більше нікого."],
   bus: ["Бус стоїть біля підʼїзду. Двоє в пікселі курять. Ти не дихаєш, хоча до них пʼять поверхів.", "Бус у дворі. Когось ведуть під руки. Ти відходиш від вікна і знову підходиш."],
   night: ["Темний двір, вікна без світла. Десь гуде генератор.", "Ніч. Над Дніпром — спалахи ППО."],
+  rain: ["Дощ. Двір сірий і порожній, асфальт блищить. Під ліхтарем кипить калюжа.", "Дощ по склу. Бус міг би стояти внизу, і ти б не побачив. Вперше це полегшення."],
 };
 
 export const DOOR_LINES = [

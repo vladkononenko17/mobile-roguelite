@@ -84,12 +84,14 @@
 
       <!-- ===== screens ===== -->
       <section id="start-screen" class="screen active">
+        <button id="lang-btn" class="lang-btn" aria-label="Мова / Language">EN</button>
         <p class="eyebrow">РОГЛАЙТ · 2023–2026 · 18+</p>
         <h1>ЧОТИРИ<br /><span>СТІНИ</span></h1>
         <p class="lead">Ти не виходив з дому чотири роки. Тут не треба перемагати. Тут треба протриматись — і не зламатись.</p>
         <div id="trait-list" class="trait-list" role="group" aria-label="Хто ти був"></div>
         <button id="continue-btn" class="primary-btn hidden">ПРОДОВЖИТИ</button>
         <button id="new-btn" class="primary-btn">ПОЧАТИ</button>
+        <button id="daily-btn" class="ghost-btn daily-btn">ЩОДЕННИЙ ЗАБІГ<small id="daily-sub"></small></button>
         <p id="meta-line" class="hint"></p>
         <p class="hint small">Гра про психологічний стан людини, яка ховається від мобілізації. Не про те, правильно це чи ні.</p>
       </section>
@@ -132,7 +134,8 @@
         <svg id="end-graph" viewBox="0 0 320 110" aria-label="Психіка по сезонах"></svg>
         <div id="end-stats" class="deltas"></div>
         <p id="end-unlock" class="hint"></p>
-        <button id="end-btn" class="primary-btn">ЩЕ РАЗ</button>
+        <button id="share-btn" class="primary-btn share-btn">ПОДІЛИТИСЯ</button>
+        <button id="end-btn" class="ghost-btn">ЩЕ РАЗ</button>
       </section>
 
       <section id="pause-screen" class="screen compact">
@@ -143,6 +146,8 @@
           <button id="sound-btn" class="toggle">ЗВУКИ: ВКЛ</button>
           <button id="music-btn" class="toggle">МУЗИКА: ВКЛ</button>
           <button id="gfx-btn" class="toggle">ГРАФІКА: СЕРЕДНЯ</button>
+          <button id="vibe-btn" class="toggle">ВІБРАЦІЯ: ВКЛ</button>
+          <button id="lang2-btn" class="toggle">МОВА: УКРАЇНСЬКА</button>
         </div>
         <button id="quit-btn" class="ghost-btn">В МЕНЮ</button>
         <p class="hint">Прогрес зберігається на пристрої. Якщо тобі в реальному житті так само важко — поговори з кимось. Лінія психологічної підтримки: 7333 (Lifeline Ukraine).</p>

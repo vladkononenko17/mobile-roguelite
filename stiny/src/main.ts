@@ -7,10 +7,16 @@ import {
 } from "./content.ts";
 import {
   actionsAt, beginAction, busHere, choosePerk, startDay, clockText, despair, endDay, fmt, has, hasWater, interruptAction, isLight, isNight,
-  maxPsyche, newRun, peep, resolveBallistic, resolveDelivery, resolveKnock, resolveMom, resolveNeighbor, resolveSlam, tick, unlockedTraits,
+  dailySeed, maxPsyche, newRun, peep, resolveBallistic, resolveDelivery, resolveKnock, resolveMom, resolveNeighbor, resolveSlam, tick, unlockedTraits,
   yearIndex, type ActionResult, type DayEvent, type Msg, type Outcome, type RunState, type SeasonReport,
 } from "./sim.ts";
 import { bankRun, loadMeta, loadRun, saveMeta, saveRun } from "./save.ts";
+import { detectLang, getLang, nameOf, num, saveLang, tr, type Lang } from "./i18n.ts";
+import { applyContentLang } from "./content.en.ts";
+import { H, buzz, setVibe, supported as vibeSupported, vibeOn } from "./haptics.ts";
+import { renderCard, shareResult, type RunResult } from "./share.ts";
+
+applyContentLang(detectLang());
 
 function $<T extends HTMLElement = HTMLElement>(sel: string): T {
   const el = document.querySelector<T>(sel);
@@ -39,6 +45,9 @@ let heartT = 0;
 let buzzT = 0;
 let ballisticOn = false;
 let audioOn = false;
+/** The last finished run, for the share card (drawn as soon as the run ends). */
+let lastResult: RunResult | null = null;
+let lastCard: Promise<Blob | null> | null = null;
 Object.assign(window as unknown as Record<string, unknown>, { __stiny: { scene, get run() { return run; }, set run(v: RunState | null) { run = v; } } });
 
 // ================================================================ small UI helpers
@@ -60,7 +69,7 @@ function toast(text: string, from = "", bad = false, ms = 2600): void {
 
 interface Choice { id: string; label: string; sub?: string; cls?: string }
 /** A card in the middle of the screen; resolves with the chosen id. */
-function note(title: string, text: string, choices: Choice[] = [{ id: "ok", label: "ДАЛІ", cls: "main" }]): Promise<string> {
+function note(title: string, text: string, choices: Choice[] = [{ id: "ok", label: tr("ДАЛІ", "NEXT"), cls: "main" }]): Promise<string> {
   return new Promise((resolve) => {
     $("#note-title").textContent = title;
     $("#note-text").textContent = text;
@@ -93,7 +102,7 @@ function updateHud(): void {
   const d = run.day;
   setText($("#h-season"), seasonName(run.season));
   setText($("#h-clock"), clockText(d.clock));
-  setText($("#h-days"), run.daysInside.toLocaleString("uk-UA"));
+  setText($("#h-days"), num(run.daysInside));
   const ps = Math.round(run.psyche);
   $("#h-psyche").style.transform = `scaleX(${run.psyche / 100})`;
   $("#h-ceiling").style.width = `${100 - maxPsyche(run)}%`;
@@ -107,13 +116,14 @@ function updateHud(): void {
   setText($("#phone-batt"), `${Math.round(d.phone)}%`);
   $("#phone-badge").classList.toggle("hidden", d.unread === 0);
   const chips: string[] = [];
-  if (d.alert) chips.push(`<span class="chip alert">${d.alert.ballistic ? "БАЛІСТИКА" : "ТРИВОГА"}${d.sheltered ? " · В КОРИДОРІ" : ""}</span>`);
-  if (!isLight(d)) chips.push('<span class="chip dark">БЕЗ СВІТЛА</span>');
-  if (!hasWater(d)) chips.push('<span class="chip dark">БЕЗ ВОДИ</span>');
-  if (busHere(d) && d.knowsBus) chips.push('<span class="chip bad">БУС У ДВОРІ</span>');
+  if (d.alert) chips.push(`<span class="chip alert">${d.alert.ballistic ? tr("БАЛІСТИКА", "BALLISTIC") : tr("ТРИВОГА", "ALERT")}${d.sheltered ? tr(" · В КОРИДОРІ", " · IN THE CORRIDOR") : ""}</span>`);
+  if (!isLight(d)) chips.push(`<span class="chip dark">${tr("БЕЗ СВІТЛА", "NO POWER")}</span>`);
+  if (!hasWater(d)) chips.push(`<span class="chip dark">${tr("БЕЗ ВОДИ", "NO WATER")}</span>`);
+  if (d.rain) chips.push(`<span class="chip">🌧️ ${tr("ДОЩ", "RAIN")}</span>`);
+  if (busHere(d) && d.knowsBus) chips.push(`<span class="chip bad">${tr("БУС У ДВОРІ", "VAN IN THE YARD")}</span>`);
   if (has(run, "station") && !isLight(d)) chips.push(`<span class="chip">🔋 ${Math.round(run.station)}%</span>`);
-  if (run.satiety < 20) chips.push('<span class="chip bad">ГОЛОД</span>');
-  if (run.energy < 10) chips.push('<span class="chip bad">НЕМАЄ СИЛ</span>');
+  if (run.satiety < 20) chips.push(`<span class="chip bad">${tr("ГОЛОД", "HUNGRY")}</span>`);
+  if (run.energy < 10) chips.push(`<span class="chip bad">${tr("НЕМАЄ СИЛ", "EXHAUSTED")}</span>`);
   const html = chips.join("");
   if ($("#chips").innerHTML !== html) $("#chips").innerHTML = html;
 }
@@ -143,14 +153,14 @@ function renderPanel(force = false): void {
   for (const a of list) {
     box.appendChild(actButton(a.def.id, a.ok, a.why));
   }
-  if (!list.length) box.innerHTML = '<p class="hint">Тут нічого не зробиш.</p>';
+  if (!list.length) box.innerHTML = `<p class="hint">${tr("Тут нічого не зробиш.", "Nothing to do here.")}</p>`;
 }
 
 function actButton(id: ActionId, ok: boolean, why?: string): HTMLButtonElement {
   const def = actionById(id);
   const b = document.createElement("button");
   b.className = `act ${ok ? "" : "no"} ${id === "break_out" ? "dark" : ""}`;
-  const mins = def.minutes ? (def.minutes >= 60 ? `${Math.floor(def.minutes / 60)} год${def.minutes % 60 ? ` ${def.minutes % 60}` : ""}` : `${def.minutes} хв`) : "";
+  const mins = def.minutes ? (def.minutes >= 60 ? `${Math.floor(def.minutes / 60)} ${tr("год", "h")}${def.minutes % 60 ? ` ${def.minutes % 60}` : ""}` : `${def.minutes} ${tr("хв", "min")}`) : "";
   b.innerHTML = `<em>${def.icon}</em><div><b>${esc(def.label)}</b><small>${esc(ok ? def.hint : why ?? "")}</small></div><span>${mins}</span>`;
   b.disabled = !ok;
   b.addEventListener("click", () => { if (ok) void doAction(id); });
@@ -166,8 +176,8 @@ async function doAction(id: ActionId): Promise<void> {
   if (id === "sleep") {
     const early = run.day.clock < 20 * 60;
     if (early) {
-      const c = await flow(() => note("ЛІЖКО", `Зараз ${clockText(run!.day!.clock)}. Лягти зараз? День просто закінчиться раніше.`, [
-        { id: "yes", label: "ЛЯГТИ", cls: "main" }, { id: "no", label: "ЩЕ НІ" },
+      const c = await flow(() => note(tr("ЛІЖКО", "BED"), tr(`Зараз ${clockText(run!.day!.clock)}. Лягти зараз? День просто закінчиться раніше.`, `It's ${clockText(run!.day!.clock)}. Go to bed now? The day will just end earlier.`), [
+        { id: "yes", label: tr("ЛЯГТИ", "GO TO BED"), cls: "main" }, { id: "no", label: tr("ЩЕ НІ", "NOT YET") },
       ]));
       if (c !== "yes") return;
     }
@@ -175,8 +185,8 @@ async function doAction(id: ActionId): Promise<void> {
     return;
   }
   if (id === "break_out") {
-    const c = await flow(() => note("ДВЕРІ", "Ти взувся. Руки не трусяться — вперше за довгий час. Просто вийти.", [
-      { id: "go", label: "ВИЙТИ", cls: "danger" }, { id: "no", label: "НІ. ЩЕ НІ.", sub: "Повернутися в кімнату", cls: "main" },
+    const c = await flow(() => note(tr("ДВЕРІ", "THE DOOR"), tr("Ти взувся. Руки не трусяться — вперше за довгий час. Просто вийти.", "You put your shoes on. Your hands aren't shaking — for the first time in a long while. Just go out."), [
+      { id: "go", label: tr("ВИЙТИ", "GO OUT"), cls: "danger" }, { id: "no", label: tr("НІ. ЩЕ НІ.", "NO. NOT YET."), sub: tr("Повернутися в кімнату", "Go back to the room"), cls: "main" },
     ]));
     if (c !== "go") return;
     run.ending = "zryv";
@@ -215,7 +225,7 @@ async function showResult(r: ActionResult): Promise<void> {
   if (r.id === "work" && r.money) A.play("coin");
   const delta = Math.round(r.dPsyche);
   const tail = delta ? `  ${delta > 0 ? "+" : ""}${delta} 🧠` : "";
-  if (r.text && r.text.length > 70) await flow(() => note(actionById(r.id).label.toUpperCase(), r.text! + (delta ? `\n\nПсихіка ${delta > 0 ? "+" : ""}${delta}` : "")));
+  if (r.text && r.text.length > 70) await flow(() => note(actionById(r.id).label.toUpperCase(), r.text! + (delta ? `\n\n${tr("Психіка", "Mind")} ${delta > 0 ? "+" : ""}${delta}` : "")));
   else if (r.text) toast(r.text + tail, actionById(r.id).label);
   else if (delta) toast(`${actionById(r.id).label}${tail}`);
   if (r.ending) await finishRun();
@@ -228,9 +238,9 @@ function workGame(): Promise<number> {
   return new Promise((resolve) => {
     const dsp = run ? despair(run) : 0;
     const box = $("#mini");
-    $("#mini-title").textContent = "РОБОТА";
-    $("#mini-prompt").textContent = "Закрий таски: тисни, коли маркер у зеленому";
-    $("#mini-body").innerHTML = `<div class="dots">${"<i></i>".repeat(5)}</div><div class="track"><div class="zone"></div><div class="marker"></div></div><button class="big-tap">ЗАКРИТИ ТАСК</button>`;
+    $("#mini-title").textContent = tr("РОБОТА", "WORK");
+    $("#mini-prompt").textContent = tr("Закрий таски: тисни, коли маркер у зеленому", "Close the tickets: tap when the marker is in the green");
+    $("#mini-body").innerHTML = `<div class="dots">${"<i></i>".repeat(5)}</div><div class="track"><div class="zone"></div><div class="marker"></div></div><button class="big-tap">${tr("ЗАКРИТИ ТАСК", "CLOSE TICKET")}</button>`;
     box.classList.remove("hidden");
     const zone = box.querySelector<HTMLElement>(".zone")!;
     const marker = box.querySelector<HTMLElement>(".marker")!;
@@ -260,7 +270,7 @@ function workGame(): Promise<number> {
     };
     const judge = (hit: boolean) => {
       dots[round].classList.add(hit ? "hit" : "miss");
-      if (hit) { hits++; A.play("type"); } else A.play("miss");
+      if (hit) { hits++; A.play("type"); buzz(H.tap, true); } else { A.play("miss"); buzz(H.miss, true); }
       round++;
       if (round >= 5) { setTimeout(end, 250); return; }
       newRound();
@@ -294,13 +304,13 @@ function breathGame(): Promise<boolean> {
   return new Promise((resolve) => {
     const dsp = run ? despair(run) : 0;
     const box = $("#mini");
-    $("#mini-title").textContent = "СТУКАЮТЬ";
-    $("#mini-prompt").textContent = "Коли слухають — затамуй подих";
+    $("#mini-title").textContent = tr("СТУКАЮТЬ", "KNOCKING");
+    $("#mini-prompt").textContent = tr("Коли слухають — затамуй подих", "When they listen — hold your breath");
     $("#mini-body").innerHTML = `
-      <div class="meter-row"><span>ПОВІТРЯ</span><div class="bar"><i id="m-air"></i></div></div>
-      <div class="meter-row"><span>ЧУТНО</span><div class="bar"><i id="m-noise"></i></div></div>
+      <div class="meter-row"><span>${tr("ПОВІТРЯ", "AIR")}</span><div class="bar"><i id="m-air"></i></div></div>
+      <div class="meter-row"><span>${tr("ЧУТНО", "HEARD")}</span><div class="bar"><i id="m-noise"></i></div></div>
       <p id="m-state" class="eyebrow" style="text-align:center;font-size:18px;margin:10px 0"></p>
-      <button class="big-tap">ТРИМАЙ — НЕ ДИХАЙ</button>`;
+      <button class="big-tap">${tr("ТРИМАЙ — НЕ ДИХАЙ", "HOLD — DON'T BREATHE")}</button>`;
     box.classList.remove("hidden");
     const card = box.querySelector<HTMLElement>(".mini-card")!;
     const btn = box.querySelector<HTMLButtonElement>(".big-tap")!;
@@ -332,8 +342,8 @@ function breathGame(): Promise<boolean> {
       const ph = phase(t);
       if (ph !== lastPhase) {
         lastPhase = ph;
-        if (ph === "knock") { A.knock(); scene.knockDoor(); card.classList.remove("knock-flash"); void card.offsetWidth; card.classList.add("knock-flash"); }
-        state.textContent = ph === "knock" ? "СТУКАЮТЬ" : "СЛУХАЮТЬ…";
+        if (ph === "knock") { A.knock(); buzz(H.knockHard, true); scene.knockDoor(); scene.squeeze(0.6); card.classList.remove("knock-flash"); void card.offsetWidth; card.classList.add("knock-flash"); }
+        state.textContent = ph === "knock" ? tr("СТУКАЮТЬ", "KNOCKING") : tr("СЛУХАЮТЬ…", "LISTENING…");
       }
       gasp -= dt;
       if (holding) {
@@ -344,7 +354,7 @@ function breathGame(): Promise<boolean> {
         if (ph === "listen") n += dt * (0.55 + dsp * 0.3);
       }
       heart -= dt;
-      if (heart <= 0) { heart = holding ? 0.45 : 0.7; A.play("heart"); }
+      if (heart <= 0) { heart = holding ? 0.45 : 0.7; A.play("heart"); scene.heartbeat(); if (holding) buzz(H.heart); }
       air.style.transform = `scaleX(${a})`;
       noiseEl.style.transform = `scaleX(${Math.min(1, n)})`;
       if (n >= 1 || t >= total) {
@@ -362,23 +372,23 @@ function breathGame(): Promise<boolean> {
 function slamGame(): Promise<boolean> {
   return new Promise((resolve) => {
     const box = $("#mini");
-    $("#mini-title").textContent = "ЦЕ НЕ КУР'ЄР";
-    $("#mini-prompt").textContent = "ЗАЧИНЯЙ! Тисни швидко!";
-    $("#mini-body").innerHTML = `<div class="meter-row"><span>ДВЕРІ</span><div class="bar"><i id="m-air" style="background:var(--mind)"></i></div></div><button class="big-tap">ТИСНИ!</button>`;
+    $("#mini-title").textContent = tr("ЦЕ НЕ КУР'ЄР", "THAT'S NOT A COURIER");
+    $("#mini-prompt").textContent = tr("ЗАЧИНЯЙ! Тисни швидко!", "SHUT IT! Tap fast!");
+    $("#mini-body").innerHTML = `<div class="meter-row"><span>${tr("ДВЕРІ", "DOOR")}</span><div class="bar"><i id="m-air" style="background:var(--mind)"></i></div></div><button class="big-tap">${tr("ТИСНИ!", "TAP!")}</button>`;
     box.classList.remove("hidden");
     const bar = $("#m-air");
     let k = 0.35;
     let t = 0;
     let last = performance.now();
     const goal = 1;
-    box.querySelector<HTMLButtonElement>(".big-tap")!.onpointerdown = (e) => { e.preventDefault(); k += 0.075; A.play("hit"); };
+    box.querySelector<HTMLButtonElement>(".big-tap")!.onpointerdown = (e) => { e.preventDefault(); k += 0.075; A.play("hit"); buzz(H.tap, true); };
     const loop = (now: number) => {
       const dt = Math.min(0.25, (now - last) / 1000);
       last = now;
       t += dt;
       k -= dt * (0.32 + (run ? despair(run) : 0) * 0.15);
       bar.style.transform = `scaleX(${Math.max(0, Math.min(1, k))})`;
-      if (k >= goal || k <= 0 || t > 4) { box.classList.add("hidden"); resolve(k >= goal); return; }
+      if (k >= goal || k <= 0 || t > 4) { box.classList.add("hidden"); buzz(H.slam, true); resolve(k >= goal); return; }
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
@@ -445,47 +455,50 @@ async function handle(e: DayEvent): Promise<void> {
       break;
     case "night":
       scene.setPose(null);
-      await flow(() => note("ПІВНІЧ", "Ти так і не ліг. Заснув там, де сидів, з телефоном у руці."));
+      await flow(() => note(tr("ПІВНІЧ", "MIDNIGHT"), tr("Ти так і не ліг. Заснув там, де сидів, з телефоном у руці.", "You never went to bed. You fell asleep where you sat, phone in hand.")));
       await nightfall();
       break;
     case "alert": {
       A.siren(e.ballistic ? 4 : 7);
+      buzz(H.siren);
       score.hush = true;
       if (e.ballistic) {
         stopBusy();
         await ballistic();
-      } else toast("Повітряна тривога. Шахеди на Київ. Іди в коридор — між двох стін.", "ТРИВОГА", true, 4200);
+      } else toast(tr("Повітряна тривога. Шахеди на Київ. Іди в коридор — між двох стін.", "Air-raid alert. Shaheds heading for Kyiv. Go to the corridor — between two walls."), tr("ТРИВОГА", "ALERT"), true, 4200);
       break;
     }
     case "alert_end":
       A.droneBuzz(0);
       score.hush = false;
-      toast("Відбій тривоги.", "Київ");
+      toast(tr("Відбій тривоги.", "All clear."), tr("Київ", "Kyiv"));
       break;
     case "boom":
       scene.boom(e.near);
       A.boom(e.near);
-      toast(e.near ? "Вибух. Дуже близько. Задзвеніли шибки." : "Десь вибух. Далеко. Мабуть.", "", e.near);
+      buzz(e.near ? H.boomNear : H.boomFar);
+      toast(e.near ? tr("Вибух. Дуже близько. Задзвеніли шибки.", "An explosion. Very close. The windowpanes rang.") : tr("Десь вибух. Далеко. Мабуть.", "An explosion somewhere. Far away. Probably."), "", e.near);
       if (d.glass) scene.setGlass(true);
       break;
     case "power":
-      toast(e.on ? "Світло дали. Заряджай усе, що можна." : "Світло вимкнули. За графіком — чотири години.", "ДТЕК");
+      toast(e.on ? tr("Світло дали. Заряджай усе, що можна.", "The power is back. Charge everything you can.") : tr("Світло вимкнули. За графіком — чотири години.", "The power is off. Four hours, by the schedule."), tr("ДТЕК", "DTEK"));
       if (e.on) A.play("ping");
       break;
     case "water":
-      toast(e.on ? "Воду дали." : "Воду вимкнули.", "Чат будинку");
+      toast(e.on ? tr("Воду дали.", "The water is back.") : tr("Воду вимкнули.", "The water is off."), tr("Чат будинку", "Building chat"));
       break;
     case "bus":
-      if (e.on) { A.play("van"); if (d.knowsBus) toast("Бус заїхав у двір.", "Де бус · канал", true); }
-      else if (d.knowsBus) toast("Бус поїхав. Можна видихнути.", "Чат будинку");
+      if (e.on) { A.play("van"); if (d.knowsBus) { buzz(H.van); scene.squeeze(0.45); } if (d.knowsBus) toast(tr("Бус заїхав у двір.", "The van pulled into the yard."), tr("Де бус · канал", "Where's the van · channel"), true); }
+      else if (d.knowsBus) toast(tr("Бус поїхав. Можна видихнути.", "The van left. You can breathe out."), tr("Чат будинку", "Building chat"));
       break;
     case "warn":
       A.play("phone");
-      toast("«Тихо сиди. ТЦК в підʼїзді, на третьому».", "Петрович, сусід", true, 4000);
+      buzz(H.phoneRing);
+      toast(tr("«Тихо сиди. ТЦК в підʼїзді, на третьому».", "“Sit quiet. The TCC is in the building, third floor.”"), tr("Петрович, сусід", "Petrovych, neighbour"), true, 4000);
       break;
     case "drill":
       A.drill();
-      toast("Сусід зверху свердлить. Вже третю годину.");
+      toast(tr("Сусід зверху свердлить. Вже третю годину.", "The neighbour upstairs is drilling. Third hour now."));
       break;
     case "msg":
       A.play("ping");
@@ -495,10 +508,12 @@ async function handle(e: DayEvent): Promise<void> {
       stopBusy();
       await flow(async () => {
         A.knock(true);
+        buzz(H.knockHard);
+        scene.squeeze(1);
         await wait(500);
         const quiet = await breathGame();
         const o = resolveKnock(run!, e.who, quiet);
-        await outcomeNote(e.who === "phantom" ? "СТУК" : quiet ? "ПІШЛИ" : "ПОЧУЛИ", o);
+        await outcomeNote(e.who === "phantom" ? tr("СТУК", "A KNOCK") : quiet ? tr("ПІШЛИ", "THEY LEFT") : tr("ПОЧУЛИ", "THEY HEARD"), o);
       });
       break;
     }
@@ -508,22 +523,24 @@ async function handle(e: DayEvent): Promise<void> {
       break;
     case "mom": {
       A.play("phone");
+      buzz(H.phoneRing);
       await flow(async () => {
-        const c = await note("ДЗВОНИТЬ МАМА", "На екрані «Мама ❤️». Третій дзвінок за день.", [
-          { id: "yes", label: "ВЗЯТИ", cls: "main" }, { id: "no", label: "НЕ БРАТИ", sub: "Не зараз. Не можу." },
+        const c = await note(tr("ДЗВОНИТЬ МАМА", "MOM IS CALLING"), tr("На екрані «Мама ❤️». Третій дзвінок за день.", "“Mom ❤️” on the screen. The third call today."), [
+          { id: "yes", label: tr("ВЗЯТИ", "ANSWER"), cls: "main" }, { id: "no", label: tr("НЕ БРАТИ", "DON'T ANSWER"), sub: tr("Не зараз. Не можу.", "Not now. I can't.") },
         ]);
-        await outcomeNote("МАМА", resolveMom(run!, c === "yes"));
+        await outcomeNote(tr("МАМА", "MOM"), resolveMom(run!, c === "yes"));
       });
       break;
     }
     case "neighbor": {
       A.knock();
+      buzz(H.knock);
       scene.knockDoor();
       await flow(async () => {
-        const c = await note("ДВЕРІ", "Тихий стук. «Синку, ти вдома? Це тьотя Валя з восьмої».", [
-          { id: "polite", label: "ВІДПОВІСТИ ЧЕРЕЗ ДВЕРІ" }, { id: "silent", label: "МОВЧАТИ" },
+        const c = await note(tr("ДВЕРІ", "THE DOOR"), tr("Тихий стук. «Синку, ти вдома? Це тьотя Валя з восьмої».", "A soft knock. “Sonny, are you home? It's Auntie Valia from number eight.”"), [
+          { id: "polite", label: tr("ВІДПОВІСТИ ЧЕРЕЗ ДВЕРІ", "ANSWER THROUGH THE DOOR") }, { id: "silent", label: tr("МОВЧАТИ", "STAY SILENT") },
         ]);
-        await outcomeNote("СУСІДКА", resolveNeighbor(run!, c as "polite" | "silent"));
+        await outcomeNote(tr("СУСІДКА", "NEIGHBOUR"), resolveNeighbor(run!, c as "polite" | "silent"));
       });
       break;
     }
@@ -538,39 +555,40 @@ function stopBusy(): void {
   scene.setPose(null);
   scene.windowView(false);
   $("#window-caption").classList.add("hidden");
-  if (r && id !== "look") toast(`${actionById(id).label} — перервано`);
+  if (r && id !== "look") toast(`${actionById(id).label} — ${tr("перервано", "interrupted")}`);
 }
 
 async function outcomeNote(title: string, o: Outcome): Promise<void> {
   const d = Math.round(o.dPsyche);
-  await note(title, o.text + (d ? `\n\nПсихіка ${d > 0 ? "+" : ""}${d}` : ""));
+  await note(title, o.text + (d ? `\n\n${tr("Психіка", "Mind")} ${d > 0 ? "+" : ""}${d}` : ""));
 }
 
 async function delivery(fake: boolean, volunteer: boolean): Promise<void> {
   if (!run) return;
   A.doorbell();
-  if (volunteer) { await outcomeNote("ПЕРЕДАЧКА", resolveDelivery(run, false, true, "leave")); return; }
-  let c = await note("ДЗВІНОК У ДВЕРІ", "«Доставка!» Голос за дверима.", [
-    { id: "peep", label: "ГЛЯНУТИ В ГЛАЗОК", cls: "main" },
-    { id: "leave", label: "«ЗАЛИШТЕ ПІД ДВЕРИМА!»" },
-    { id: "ignore", label: "НЕ ВІДПОВІДАТИ" },
+  buzz(H.doorbell);
+  if (volunteer) { await outcomeNote(tr("ПЕРЕДАЧКА", "A PARCEL"), resolveDelivery(run, false, true, "leave")); return; }
+  let c = await note(tr("ДЗВІНОК У ДВЕРІ", "THE DOORBELL"), tr("«Доставка!» Голос за дверима.", "“Delivery!” A voice behind the door."), [
+    { id: "peep", label: tr("ГЛЯНУТИ В ГЛАЗОК", "LOOK THROUGH THE PEEPHOLE"), cls: "main" },
+    { id: "leave", label: tr("«ЗАЛИШТЕ ПІД ДВЕРИМА!»", "“LEAVE IT AT THE DOOR!”") },
+    { id: "ignore", label: tr("НЕ ВІДПОВІДАТИ", "DON'T ANSWER") },
   ]);
   if (c === "peep") {
     const { text: seen, kind } = peep(run, fake);
     c = await peepScreen(kind, seen, [
-      { id: "open", label: "ВІДЧИНИТИ", sub: "Побачити живу людину", cls: kind !== "courier" ? "danger" : "" },
-      { id: "leave", label: "«ЗАЛИШТЕ ПІД ДВЕРИМА!»", cls: "main" },
-      { id: "ignore", label: "НЕ ВІДЧИНЯТИ" },
+      { id: "open", label: tr("ВІДЧИНИТИ", "OPEN"), sub: tr("Побачити живу людину", "See a living person"), cls: kind !== "courier" ? "danger" : "" },
+      { id: "leave", label: tr("«ЗАЛИШТЕ ПІД ДВЕРИМА!»", "“LEAVE IT AT THE DOOR!”"), cls: "main" },
+      { id: "ignore", label: tr("НЕ ВІДЧИНЯТИ", "DON'T OPEN") },
     ]);
   }
   if (fake && c === "open") {
-    await note("ДВЕРІ", resolveDelivery(run, true, false, "open").text, [{ id: "go", label: "ЗАЧИНЯТИ!", cls: "danger" }]);
+    await note(tr("ДВЕРІ", "THE DOOR"), resolveDelivery(run, true, false, "open").text, [{ id: "go", label: tr("ЗАЧИНЯТИ!", "SHUT IT!"), cls: "danger" }]);
     const ok = await slamGame();
     const o = resolveSlam(run, ok);
-    if (!o.ending) await outcomeNote("ЗАЧИНИВ", o);
+    if (!o.ending) await outcomeNote(tr("ЗАЧИНИВ", "SHUT"), o);
     return;
   }
-  await outcomeNote(fake ? "ДВЕРІ" : "ДОСТАВКА", resolveDelivery(run, fake, false, c as "open" | "leave" | "ignore"));
+  await outcomeNote(fake ? tr("ДВЕРІ", "THE DOOR") : tr("ДОСТАВКА", "DELIVERY"), resolveDelivery(run, fake, false, c as "open" | "leave" | "ignore"));
 }
 
 async function ballistic(): Promise<void> {
@@ -582,10 +600,14 @@ async function ballistic(): Promise<void> {
   $("#red-edge").classList.add("on");
   const total = 8;
   const t0 = performance.now();
+  let lastSec = total + 1;
+  scene.squeeze(1);
   await new Promise<void>((resolve) => {
     const loop = () => {
       const left = total - (performance.now() - t0) / 1000;
       const safe = scene.inShelter();
+      const sec = Math.ceil(left);
+      if (sec !== lastSec) { lastSec = sec; if (!safe) { buzz(H.ballisticTick, true); scene.heartbeat(); } }
       $("#ballistic").classList.toggle("safe", safe);
       setText($("#ballistic-n"), safe ? "✓" : String(Math.max(0, Math.ceil(left))));
       const a = scene.project(scene.heroX, 1, scene.heroZ);
@@ -602,12 +624,13 @@ async function ballistic(): Promise<void> {
   const safe = scene.inShelter();
   scene.boom(true);
   A.boom(true);
+  buzz(safe ? H.boomNear : H.ballisticHit, true);
   await flow(async () => {
     const o = resolveBallistic(run!, safe);
     $("#red-edge").classList.remove("on");
     if (!o.ending) {
       scene.setGlass(run!.day!.glass);
-      await outcomeNote(safe ? "ВСТИГ" : "НЕ ВСТИГ", o);
+      await outcomeNote(safe ? tr("ВСТИГ", "MADE IT") : tr("НЕ ВСТИГ", "TOO LATE"), o);
     }
     score.hush = false;
   });
@@ -619,7 +642,7 @@ function startSeason(): void {
   if (!run) return;
   mode = "screen";
   const def = SEASON_DEFS[run.season];
-  setText($("#season-eyebrow"), `СЕЗОН ${run.season + 1} / ${SEASONS}`);
+  setText($("#season-eyebrow"), `${tr("СЕЗОН", "SEASON")} ${run.season + 1} / ${SEASONS}${run.flags.daily ? ` · ${tr("ЩОДЕННИЙ", "DAILY")}` : ""}`);
   setText($("#season-title"), seasonName(run.season));
   setText($("#season-sub"), def.title);
   setText($("#season-text"), def.intro);
@@ -636,13 +659,19 @@ function dressScene(): void {
     clutter: run.clutter, plant: run.plant, plantDead: !!run.flags.plantDead, perks: run.perks,
     friends: run.friends.map((f) => ({ color: f.color, state: f.state })), glass: !!run.day?.glass,
   });
+  scene.setWeather(!!run.day?.rain);
 }
 
 function hud(on: boolean): void {
   $("#hud").classList.toggle("hidden", !on);
   $("#test-btn").classList.toggle("hidden", !on || !testMode());
   $("#controls").classList.toggle("hidden", !on);
-  if (!on) { $("#act-panel").classList.add("hidden"); $("#busy").classList.add("hidden"); }
+  if (!on) {
+    $("#act-panel").classList.add("hidden");
+    $("#busy").classList.add("hidden");
+    // the room tone (rain, generator, tinnitus) belongs to the day
+    amb.update(0, { despair: 0, blackout: false, birds: false, quiet: false, rain: 0, open: false });
+  }
 }
 
 function enterDay(): void {
@@ -676,10 +705,10 @@ function showSummary(rep: SeasonReport): void {
   setText($("#sum-title"), rep.title);
   const sign = (v: number) => (v > 0 ? `+${Math.round(v)}` : `${Math.round(v)}`);
   $("#sum-deltas").innerHTML = `
-    <div class="delta"><small>ПСИХІКА</small><b class="${rep.dPsyche >= 0 ? "up" : "down"}">${Math.round(run.psyche)} <span style="font-size:14px">(${sign(rep.dPsyche)})</span></b></div>
-    <div class="delta"><small>ГРОШІ</small><b class="${run.money >= 0 ? "up" : "down"}">${fmt(run.money)}</b></div>
-    <div class="delta"><small>ДНІВ БЕЗ ВУЛИЦІ</small><b>${run.daysInside.toLocaleString("uk-UA")}</b></div>
-    <div class="delta"><small>СТЕЛЯ ПСИХІКИ</small><b class="down">${Math.round(maxPsyche(run))}</b></div>`;
+    <div class="delta"><small>${tr("ПСИХІКА", "MIND")}</small><b class="${rep.dPsyche >= 0 ? "up" : "down"}">${Math.round(run.psyche)} <span style="font-size:14px">(${sign(rep.dPsyche)})</span></b></div>
+    <div class="delta"><small>${tr("ГРОШІ", "MONEY")}</small><b class="${run.money >= 0 ? "up" : "down"}">${fmt(run.money)}</b></div>
+    <div class="delta"><small>${tr("ДНІВ БЕЗ ВУЛИЦІ", "DAYS INSIDE")}</small><b>${num(run.daysInside)}</b></div>
+    <div class="delta"><small>${tr("СТЕЛЯ ПСИХІКИ", "MIND CEILING")}</small><b class="down">${Math.round(maxPsyche(run))}</b></div>`;
   $("#sum-lines").innerHTML = rep.lines.map((l) => `<li>${esc(l)}</li>`).join("");
   $("#sum-news").innerHTML = rep.news.map((m) => msgHtml(m, false)).join("");
   showScreen("#summary-screen");
@@ -729,15 +758,20 @@ async function finishRun(): Promise<void> {
   setText($("#end-text"), e.text);
   // the line of the mind across the seasons
   const pts = r.history.map((v, i) => `${10 + (i / Math.max(1, SEASONS - 1)) * 300},${100 - v * 0.9}`).join(" ");
-  $("#end-graph").innerHTML = `<line x1="10" y1="100" x2="310" y2="100" stroke="#3a3640"/>${[0, 4, 8, 12].map((s, i) => `<text x="${10 + (s / 15) * 300}" y="108" fill="#6a6470" font-size="8">${2023 + i}</text>`).join("")}<polyline points="${pts}" fill="none" stroke="#e8c45a" stroke-width="2.5"/>`;
+  $("#end-graph").innerHTML = `<line x1="10" y1="100" x2="310" y2="100" stroke="#3a3640"/>${[0, 4, 8, 12].map((s, i) => `<text x="${10 + (s / 15) * 300}" y="108" fill="#6a6470" font-size="8">${2023 + i}</text>`).join("")}<polyline points="${pts}" fill="none" stroke="#e8c45a" stroke-width="2.5"/>${r.history.length ? `<circle cx="${10 + ((r.history.length - 1) / Math.max(1, SEASONS - 1)) * 300}" cy="${100 - r.history[r.history.length - 1] * 0.9}" r="3.5" fill="${ending === "survived" ? "#8ac46a" : "#c83a32"}"/>` : ""}`;
   const dead = r.friends.filter((f) => f.state === "dead").length;
   $("#end-stats").innerHTML = `
-    <div class="delta"><small>ДНІВ БЕЗ ВУЛИЦІ</small><b>${r.daysInside.toLocaleString("uk-UA")}</b></div>
-    <div class="delta"><small>ТРИВОГ</small><b>${r.stats.alerts}</b></div>
-    <div class="delta"><small>СТУКІВ У ДВЕРІ</small><b>${r.stats.knocks}</b></div>
-    <div class="delta"><small>ДРУЗІВ ЗАГИНУЛО</small><b class="${dead ? "down" : ""}">${dead}</b></div>`;
+    <div class="delta"><small>${tr("ДНІВ БЕЗ ВУЛИЦІ", "DAYS INSIDE")}</small><b>${num(r.daysInside)}</b></div>
+    <div class="delta"><small>${tr("ТРИВОГ", "ALERTS")}</small><b>${r.stats.alerts}</b></div>
+    <div class="delta"><small>${tr("СТУКІВ У ДВЕРІ", "KNOCKS AT THE DOOR")}</small><b>${r.stats.knocks}</b></div>
+    <div class="delta"><small>${tr("ДРУЗІВ ЗАГИНУЛО", "FRIENDS KILLED")}</small><b class="${dead ? "down" : ""}">${dead}</b></div>`;
+  lastResult = {
+    ending, trait: r.trait, history: [...r.history], daysInside: r.daysInside, alerts: r.stats.alerts, knocks: r.stats.knocks,
+    friends: r.friends.map((f) => ({ name: nameOf(f), state: f.state, color: f.color })), daily: r.flags.daily ?? 0,
+  };
+  lastCard = renderCard(lastResult).catch(() => null);
   const fresh = after.filter((t) => !before.includes(t));
-  setText($("#end-unlock"), fresh.length ? `Відкрито: ${fresh.map((t) => TRAITS.find((x) => x.id === t)!.name).join(", ")}` : `Прожито сезонів за всі забіги: ${meta.seasons}`);
+  setText($("#end-unlock"), fresh.length ? `${tr("Відкрито", "Unlocked")}: ${fresh.map((t) => TRAITS.find((x) => x.id === t)!.name).join(", ")}` : `${tr("Прожито сезонів за всі забіги", "Seasons lived across all runs")}: ${meta.seasons}`);
   run = null;
   await wait(600);
   showScreen("#end-screen");
@@ -759,7 +793,7 @@ function openPhone(): void {
   acts.innerHTML = "";
   for (const a of actionsAt(run, "phone")) {
     const b = actButton(a.def.id, a.ok, a.why);
-    if (a.def.id === "order") b.querySelector("small")!.textContent = a.ok ? `${fmt(Math.round(450 * [1, 1.2, 1.45, 1.7][yearIndex(run)] / 10) * 10)} · +3 їжі` : a.why ?? "";
+    if (a.def.id === "order") b.querySelector("small")!.textContent = a.ok ? `${fmt(Math.round(450 * [1, 1.2, 1.45, 1.7][yearIndex(run)] / 10) * 10)} · ${tr("+3 їжі", "+3 food")}` : a.why ?? "";
     acts.appendChild(b);
   }
   $("#phone-msgs").innerHTML = [...d.msgs].reverse().map((m) => msgHtml(m)).join("");
@@ -794,9 +828,10 @@ scene.onFrame = (dt) => {
   scene.heroSpeed = 2.5 * (0.55 + 0.45 * (1 - dsp)) * (run.energy < 10 ? 0.7 : 1);
   if (d.alert) d.sheltered = scene.inShelter() || d.busy?.id === "shelter";
   scene.setInfo({ clock: d.clock, light: isLight(d), alert: !!d.alert, bus: busHere(d), despair: dsp, season: run.season, danger: ballisticOn ? 1 : d.alert ? 0.25 : 0 });
-  scene.setMood(!isLight(d) && (isNight(d) || winter(run)) ? "blackout" : isNight(d) ? "night" : d.clock > 19 * 60 ? "dusk" : "home");
+  scene.setMood(!isLight(d) && (isNight(d) || winter(run)) ? "blackout" : isNight(d) ? "night" : d.clock > 19 * 60 ? "dusk" : d.rain ? "rain" : "home");
   score.despair = dsp;
-  amb.update(dt, { despair: dsp, blackout: !isLight(d), birds: yearIndex(run) <= 1 && run.season % 4 !== 0 && !isNight(d) && !d.alert, quiet: !d.alert });
+  const open = d.busy?.id === "air" || d.busy?.id === "balcony" || d.busy?.id === "tomatoes" || d.busy?.id === "look";
+  amb.update(dt, { despair: dsp, blackout: !isLight(d), birds: !d.rain && yearIndex(run) <= 1 && run.season % 4 !== 0 && !isNight(d) && !d.alert, quiet: !d.alert, rain: d.rain ? 1 : 0, open });
   // the sky
   if (d.alert && !d.alert.ballistic) {
     buzzT += dt;
@@ -804,7 +839,7 @@ scene.onFrame = (dt) => {
   }
   // the heart
   heartT -= dt;
-  if (run.psyche < 25 && heartT <= 0) { heartT = 0.55 + run.psyche / 40; A.play("heart"); }
+  if (run.psyche < 25 && heartT <= 0) { heartT = 0.55 + run.psyche / 40; A.play("heart"); scene.heartbeat(); if (run.psyche < 15) buzz(H.heart); }
   $("#red-edge").classList.toggle("on", ballisticOn || run.psyche < 12);
   // thoughts
   thoughtT -= dt;
@@ -938,6 +973,25 @@ $("#new-btn").addEventListener("click", () => {
   saveRun(run);
   startSeason();
 });
+$("#daily-btn").addEventListener("click", () => {
+  unlock();
+  A.play("click");
+  const day = dailySeed();
+  run = newRun(day, "it", day);
+  saveRun(run);
+  startSeason();
+});
+$("#share-btn").addEventListener("click", async () => {
+  if (!lastResult) return;
+  A.play("click");
+  const btn = $<HTMLButtonElement>("#share-btn");
+  btn.disabled = true;
+  try {
+    const o = await shareResult(lastResult, (await lastCard) ?? null);
+    if (o === "copied") toast(tr("Результат скопійовано, картинку збережено.", "Result copied, picture saved."));
+    else if (o === "downloaded") toast(tr("Картинку збережено.", "Picture saved."));
+  } finally { btn.disabled = false; }
+});
 $("#continue-btn").addEventListener("click", () => {
   unlock();
   A.play("click");
@@ -949,13 +1003,22 @@ $("#continue-btn").addEventListener("click", () => {
 const soundBtn = $("#sound-btn");
 const musicBtn = $("#music-btn");
 const gfxBtn = $("#gfx-btn");
-const QN = { low: "НИЗЬКА", medium: "СЕРЕДНЯ", high: "ВИСОКА" } as const;
+const QN = { low: ["НИЗЬКА", "LOW"], medium: ["СЕРЕДНЯ", "MEDIUM"], high: ["ВИСОКА", "HIGH"] } as const;
+const onOff = (on: boolean) => (on ? tr("ВКЛ", "ON") : tr("ВИКЛ", "OFF"));
 function syncToggles(): void {
-  setText(soundBtn, `ЗВУКИ: ${A.isMuted() ? "ВИКЛ" : "ВКЛ"}`);
-  setText(musicBtn, `МУЗИКА: ${A.isMusicMuted() ? "ВИКЛ" : "ВКЛ"}`);
-  setText(gfxBtn, `ГРАФІКА: ${QN[scene.post.quality]}`);
+  setText(soundBtn, `${tr("ЗВУКИ", "SOUND")}: ${onOff(!A.isMuted())}`);
+  setText(musicBtn, `${tr("МУЗИКА", "MUSIC")}: ${onOff(!A.isMusicMuted())}`);
+  setText(gfxBtn, `${tr("ГРАФІКА", "GRAPHICS")}: ${tr(QN[scene.post.quality][0], QN[scene.post.quality][1])}`);
+  setText(vibeBtn, `${tr("ВІБРАЦІЯ", "VIBRATION")}: ${onOff(vibeOn())}`);
+  setText(lang2Btn, tr("МОВА: УКРАЇНСЬКА", "LANGUAGE: ENGLISH"));
 }
+const vibeBtn = $("#vibe-btn");
+const lang2Btn = $("#lang2-btn");
+vibeBtn.classList.toggle("hidden", !vibeSupported);
 soundBtn.addEventListener("click", () => { A.setMuted(!A.isMuted()); syncToggles(); });
+vibeBtn.addEventListener("click", () => { setVibe(!vibeOn()); buzz(H.knock, true); syncToggles(); });
+lang2Btn.addEventListener("click", () => { setLang(getLang() === "en" ? "uk" : "en"); });
+$("#lang-btn").addEventListener("click", () => { A.play("click"); setLang(getLang() === "en" ? "uk" : "en"); });
 musicBtn.addEventListener("click", () => { A.setMusicMuted(!A.isMusicMuted()); syncToggles(); });
 gfxBtn.addEventListener("click", () => {
   const order = ["low", "medium", "high"] as const;
@@ -978,20 +1041,91 @@ function showStart(): void {
     const b = document.createElement("button");
     const locked = !open.includes(t.id);
     b.className = `trait ${t.id === selected ? "on" : ""} ${locked ? "locked" : ""}`;
-    b.innerHTML = `<b>${locked ? "🔒 " : ""}${esc(t.name)}</b><small>${esc(locked ? `Проживи ${t.unlock} сезонів за всі забіги` : `${t.text} · ${fmt(t.money)}`)}</small>`;
+    b.innerHTML = `<b>${locked ? "🔒 " : ""}${esc(t.name)}</b><small>${esc(locked ? tr(`Проживи ${t.unlock} сезонів за всі забіги`, `Live ${t.unlock} seasons across all runs`) : `${t.text} · ${fmt(t.money)}`)}</small>`;
     b.disabled = locked;
     b.addEventListener("click", () => { selected = t.id; A.play("click"); showStart(); });
     box.appendChild(b);
   }
   $("#continue-btn").classList.toggle("hidden", !run);
-  setText($("#new-btn"), run ? "НОВИЙ ЗАБІГ" : "ПОЧАТИ");
-  setText($("#meta-line"), meta.runs ? `Забігів: ${meta.runs} · найдовше: ${meta.best} сезонів · дожили: ${meta.survived}` : "");
+  setText($("#new-btn"), run ? tr("НОВИЙ ЗАБІГ", "NEW RUN") : tr("ПОЧАТИ", "START"));
+  setText($("#meta-line"), meta.runs ? tr(`Забігів: ${meta.runs} · найдовше: ${meta.best} сезонів · дожили: ${meta.survived}`, `Runs: ${meta.runs} · longest: ${meta.best} seasons · made it: ${meta.survived}`) : "");
   // a quiet room behind the menu
   scene.setInfo({ clock: 17 * 60, light: true, alert: false, bus: false, despair: 0.2, season: 3, danger: 0 });
   scene.setSeason(run?.season ?? 3, { clutter: run?.clutter ?? 2, plant: 70, plantDead: false, perks: run?.perks ?? [], friends: [], glass: false });
+  scene.setWeather(!run);
   scene.setPose("stare");
+  updateDailyBtn();
   showScreen("#start-screen");
 }
+
+function updateDailyBtn(): void {
+  const day = dailySeed();
+  const done = meta.daily?.date === day ? meta.daily : null;
+  const dd = `${String(day % 100).padStart(2, "0")}.${String(Math.floor(day / 100) % 100).padStart(2, "0")}`;
+  const it = TRAITS.find((t) => t.id === "it")!.name;
+  $("#daily-btn").classList.toggle("done", !!done);
+  setText($("#daily-sub"), done
+    ? tr(`Сьогодні: ${done.seasons}/${SEASONS} сезонів · спробуй ще`, `Today: ${done.seasons}/${SEASONS} seasons · try again`)
+    : tr(`${dd} · один і той самий забіг для всіх · ${it}`, `${dd} · the same run for everyone · ${it}`));
+}
+
+// ================================================================ language
+
+/** Static text in index.html: [selector, English, is HTML]. Ukrainian is read from the page. */
+const STATIC_EN: Array<[string, string, boolean?]> = [
+  [".days-chip small", "days without the street"],
+  [".psyche-label", "MIND"],
+  ["#busy-stop", "Stop"],
+  ["#stick-hint", "DRAG TO WALK"],
+  ["#window-back", "STEP AWAY FROM THE WINDOW"],
+  ["#ballistic b", "BALLISTIC"],
+  ["#ballistic span", "TO THE CORRIDOR! BETWEEN TWO WALLS"],
+  ["#start-screen .eyebrow", "ROGUELITE · 2023–2026 · 18+"],
+  ["#start-screen h1", "FOUR<br /><span>WALLS</span>", true],
+  ["#start-screen .lead", "You haven't left home in four years. You don't have to win here. You have to hold on — and not break."],
+  ["#continue-btn", "CONTINUE"],
+  ["#daily-btn", "DAILY RUN<small id=\"daily-sub\"></small>", true],
+  ["#start-screen .hint.small", "A game about the state of mind of a man in Kyiv hiding from mobilisation. Not about whether that is right or wrong."],
+  ["#season-go", "WAKE UP"],
+  [".phone-head b", "📱 PHONE"],
+  ["#sum-eyebrow", "THE SEASON IS OVER"],
+  ["#sum-next", "NEXT"],
+  ["#perk-screen .eyebrow", "WHAT HELPED YOU GET THROUGH THE SEASON"],
+  ["#perk-screen h2", "CHOOSE ONE"],
+  ["#perk-skip", "NOTHING HELPED"],
+  ["#share-btn", "SHARE"],
+  ["#end-btn", "AGAIN"],
+  ["#pause-screen .eyebrow", "PAUSED"],
+  ["#pause-screen h2", "THE WALLS WILL WAIT"],
+  ["#resume-btn", "RESUME"],
+  ["#quit-btn", "TO MENU"],
+  ["#pause-screen .hint", "Progress is saved on this device. If real life feels this heavy for you, talk to someone. In Ukraine: Lifeline Ukraine, 7333. Elsewhere: findahelpline.com."],
+];
+const STATIC_UK = new Map<string, string>();
+
+function applyStaticLang(): void {
+  const en = getLang() === "en";
+  document.documentElement.lang = en ? "en" : "uk";
+  document.title = tr("Чотири стіни", "Four Walls");
+  for (const [sel, text, html] of STATIC_EN) {
+    const el = document.querySelector<HTMLElement>(sel);
+    if (!el) continue;
+    if (!STATIC_UK.has(sel)) STATIC_UK.set(sel, html ? el.innerHTML : el.textContent ?? "");
+    const v = en ? text : STATIC_UK.get(sel)!;
+    if (html) el.innerHTML = v; else el.textContent = v;
+  }
+  setText($("#lang-btn"), en ? "УКР" : "EN");
+}
+
+function setLang(l: Lang): void {
+  applyContentLang(l);
+  saveLang(l);
+  applyStaticLang();
+  syncToggles();
+  if (mode === "menu") showStart();
+  renderPanel(true);
+}
+applyStaticLang();
 
 // ================================================================ test menu (#test)
 

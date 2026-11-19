@@ -9,6 +9,8 @@ export interface Meta {
   best: number;
   survived: number;
   lastTrait: TraitId;
+  /** Your first result of today's daily run (one shared day for everyone). */
+  daily?: { date: number; seasons: number; ending: string };
 }
 
 const META_KEY = "stiny-meta-v1";
@@ -47,5 +49,7 @@ export function bankRun(m: Meta, r: RunState): void {
   m.runs++;
   m.best = Math.max(m.best, r.history.length);
   if (r.ending === "survived") m.survived++;
+  const day = r.flags.daily;
+  if (day && m.daily?.date !== day) m.daily = { date: day, seasons: r.history.length, ending: r.ending ?? "zryv" };
   saveMeta(m);
 }
