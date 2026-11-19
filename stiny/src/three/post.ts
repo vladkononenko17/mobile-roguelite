@@ -57,6 +57,7 @@ const GradeShader = {
     despair: { value: 0 },
     flash: { value: 0 },
     pulse: { value: -1 },
+    tilt: { value: 0 },
     time: { value: 0 },
     resolution: { value: new THREE.Vector2(1, 1) },
   },
@@ -68,7 +69,7 @@ const GradeShader = {
     uniform sampler2D tDiffuse;
     uniform vec3 lift; uniform vec3 gammaV; uniform vec3 gain;
     uniform float saturation; uniform float contrast; uniform float vignette; uniform float grain;
-    uniform float danger; uniform float despair; uniform float flash; uniform float pulse; uniform float time; uniform vec2 resolution;
+    uniform float danger; uniform float despair; uniform float flash; uniform float pulse; uniform float tilt; uniform float time; uniform vec2 resolution;
     varying vec2 vUv;
     void main() {
       vec2 d = vUv - 0.5;
@@ -84,6 +85,23 @@ const GradeShader = {
       c.r = texture2D(tDiffuse, uv + d * ca).r;
       c.g = texture2D(tDiffuse, uv).g;
       c.b = texture2D(tDiffuse, uv - d * ca).b;
+      // tilt-shift: a sharp band in the middle, soft above and below — the flat as a diorama (opt-in)
+      if (tilt > 0.0) {
+        float band = smoothstep(0.16, 0.48, abs(uv.y - 0.5)) * tilt;
+        if (band > 0.002) {
+          vec2 px = band * 6.0 / resolution * resolution.y / 900.0 * vec2(1.0, 1.0);
+          vec3 acc = c;
+          float w = 1.0;
+          for (int i = 0; i < 12; i++) {
+            float a = float(i) * 2.39996;
+            float r = sqrt(float(i) + 0.5) / 3.5;
+            vec2 o = vec2(cos(a), sin(a)) * r * px * 3.0;
+            acc += texture2D(tDiffuse, uv + o).rgb;
+            w += 1.0;
+          }
+          c = acc / w;
+        }
+      }
       c = gain * (c + lift * (1.0 - c));
       c = pow(max(c, 0.0), 1.0 / gammaV);
       c = (c - 0.5) * contrast + 0.5;
@@ -159,6 +177,8 @@ export class Post {
    * picture pulses on its own steady beat (the other games use that).
    */
   pulse = -1;
+  /** Tilt-shift blur at the top and bottom of the picture, 0..1 (0: off; the other games leave it). */
+  tilt = 0;
   /** Multiplies the mood's bloom strength (1 = as graded); a game can tame a bright scene. */
   bloomScale = 1;
 
@@ -251,6 +271,7 @@ export class Post {
     this.flash = Math.max(0, this.flash - dt * 2.5);
     this.grade.uniforms.flash.value = this.flash;
     this.grade.uniforms.pulse.value = this.pulse;
+    this.grade.uniforms.tilt.value = this.tilt;
     this.grade.uniforms.time.value = (this.grade.uniforms.time.value + dt * 60) % 1005.3096;
     this.composer.render(dt);
   }

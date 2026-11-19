@@ -4,8 +4,8 @@
  * current language without knowing about it. Ukrainian stays the original.
  */
 import {
-  ACTIONS, DOOR_LINES, ENDINGS, ENDING_HINTS, FRIEND_NEWS, MEMORY_DEAD, MEMORY_LINES, MIRROR_LINES, PERKS, PLACE_LABELS, REPLY_BACK, SEASON_DEFS, THOUGHTS, TRAITS, WINDOW_LINES,
-  type ActionId, type EndingId, type FriendState, type PerkId, type PlaceId, type TraitId,
+  ACTIONS, DOOR_LINES, ENDINGS, ENDING_HINTS, FAMILY, FRIEND_NEWS, MEMORY_CAPTIONS, MEMORY_DEAD, MEMORY_HINTS, MEMORY_LINES, MEMORY_TITLES, NEWYEAR_LINES, MIRROR_LINES, PERKS, PLACE_LABELS, REPLY_BACK, SEASON_DEFS, THOUGHTS, TRAITS, WINDOW_LINES,
+  type ActionId, type EndingId, type FriendState, type MemoryKind, type PerkId, type PlaceId, type TraitId,
 } from "./content.ts";
 import { setLangValue, type Lang } from "./i18n.ts";
 
@@ -68,6 +68,10 @@ const ACTIONS_EN: Record<ActionId, { label: string; hint: string }> = {
   friends: { label: "Text your friends", hint: "Who will answer?" },
   mom: { label: "Call mom", hint: "She's worried" },
   order: { label: "Order delivery", hint: "Groceries · at the door" },
+  smoke: { label: "Smoke on the balcony", hint: "Smoke and the yard below" },
+  smoke_window: { label: "Smoke out of the vent window", hint: "Nobody sees. But the ficus breathes it too." },
+  quit_smoking: { label: "Throw the cigarettes away", hint: "Two seasons without one — and that's it" },
+  pour_out: { label: "Pour it all down the sink", hint: "While you still can" },
 };
 
 const PERKS_EN: Record<PerkId, { name: string; text: string }> = {
@@ -89,6 +93,7 @@ const PERKS_EN: Record<PerkId, { name: string; text: string }> = {
   meds: { name: "Antidepressants", text: "The mind falls more slowly. Joy is muted too." },
   neighbor: { name: "Petrovych, the neighbour", text: "Calls to warn you when the TCC is in the building." },
   console: { name: "Game console", text: "Two hours of oblivion. Apathy creeps in." },
+  cigs: { name: "A pack of cigarettes", text: "Your hands know what to do. Easier right away — and it pulls at you every hour. Cigarettes run out." },
 };
 
 const TRAITS_EN: Record<TraitId, { name: string; text: string }> = {
@@ -174,6 +179,23 @@ const REPLY_EN: Record<FriendState, string[]> = {
   taken: [],
 };
 
+const CAPTIONS_EN: Record<MemoryKind, string> = { dacha: "Kozyn, July 2021", newyear: "New Year, 2022", kitchen: "Mom's kitchen, 2008" };
+const TITLES_EN: Record<MemoryKind, string> = { dacha: "SUMMER 2021 · KOZYN", newyear: "DECEMBER 31, 2021", kitchen: "SUMMER 2008 · MOM'S KITCHEN" };
+const MEM_HINTS_EN: Record<MemoryKind, string> = { dacha: "Your friends' photo on the fridge.", newyear: "Cross off a day in winter.", kitchen: "Cook a proper meal." };
+const NEWYEAR_EN = [
+  "This year is going to be ours, I can feel it!",
+  "Make a wish. Just don't say it out loud.",
+  "Next New Year — in the Carpathians. All of us!",
+  "To us! May it always be like this.",
+  "Look, fireworks! Look!",
+  "Mom keeps asking when you'll bring someone home. Ha.",
+];
+const FAMILY_EN = [
+  { name: "Mom", lines: ["Taste it — enough salt? Careful, it's hot.", "Run and get some bread? Keep the change."] },
+  { name: "Dad", lines: ["So, son, how's school? Honestly.", "In summer we'll go to the sea. The real one, with seagulls."] },
+  { name: "Grandma", lines: ["Eat, you're thin as a rake.", "You're my cleverest, I tell everyone."] },
+];
+
 const MEMORY_EN = [
   "What are you standing there for? Grab a skewer before it all burns!",
   "Let's go to the Carpathians next summer. All of us. Promise?",
@@ -190,6 +212,7 @@ type Snapshot = {
   seasons: typeof SEASONS_EN; places: Record<PlaceId, string>; actions: typeof ACTIONS_EN; perks: typeof PERKS_EN; traits: typeof TRAITS_EN;
   news: Record<FriendState, string[]>; thoughts: string[][]; mirror: string[]; window: Record<string, string[]>; door: string[]; endings: typeof ENDINGS_EN;
   hints: Record<EndingId, string>; reply: Record<FriendState, string[]>; memory: string[]; memoryDead: string[];
+  captions: Record<MemoryKind, string>; titles: Record<MemoryKind, string>; memHints: Record<MemoryKind, string>; newyear: string[]; family: Array<{ name: string; lines: string[] }>;
 };
 
 function snapshot(): Snapshot {
@@ -209,6 +232,8 @@ function snapshot(): Snapshot {
     reply: Object.fromEntries(Object.entries(REPLY_BACK).map(([k, v]) => [k, [...v]])) as Record<FriendState, string[]>,
     memory: [...MEMORY_LINES],
     memoryDead: [...MEMORY_DEAD],
+    captions: { ...MEMORY_CAPTIONS }, titles: { ...MEMORY_TITLES }, memHints: { ...MEMORY_HINTS }, newyear: [...NEWYEAR_LINES],
+    family: FAMILY.map((f) => ({ name: f.name, lines: [...f.lines] })),
   };
 }
 
@@ -217,6 +242,7 @@ const EN: Snapshot = {
   seasons: SEASONS_EN, places: PLACES_EN, actions: ACTIONS_EN, perks: PERKS_EN, traits: TRAITS_EN, news: NEWS_EN,
   thoughts: THOUGHTS_EN, mirror: MIRROR_EN, window: WINDOW_EN, door: DOOR_EN, endings: ENDINGS_EN,
   hints: HINTS_EN, reply: REPLY_EN, memory: MEMORY_EN, memoryDead: ["He's laughing at something, but you can't hear the sound."],
+  captions: CAPTIONS_EN, titles: TITLES_EN, memHints: MEM_HINTS_EN, newyear: NEWYEAR_EN, family: FAMILY_EN,
 };
 
 const refill = (target: string[], src: string[]) => { target.splice(0, target.length, ...src); };
@@ -240,4 +266,9 @@ export function applyContentLang(l: Lang): void {
   for (const k of Object.keys(REPLY_BACK) as FriendState[]) refill(REPLY_BACK[k], s.reply[k]);
   refill(MEMORY_LINES, s.memory);
   refill(MEMORY_DEAD, s.memoryDead);
+  Object.assign(MEMORY_CAPTIONS, s.captions);
+  Object.assign(MEMORY_TITLES, s.titles);
+  Object.assign(MEMORY_HINTS, s.memHints);
+  refill(NEWYEAR_LINES, s.newyear);
+  FAMILY.forEach((f, i) => { f.name = s.family[i].name; refill(f.lines, s.family[i].lines); });
 }

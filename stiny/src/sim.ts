@@ -10,7 +10,7 @@
 import {
   ACTIONS, DOOR_LINES, ENDINGS, FRIEND_ACC, REPLY_BACK, FRIEND_ARCS, FRIEND_IMPACT, FRIEND_NAMES, FRIEND_NEWS, FRIEND_ROLES, MIRROR_LINES,
   PERKS, SEASONS, SEASON_DEFS, TRAITS, WINDOW_LINES, actionById, seasonName, yearOf,
-  type ActionDef, type ActionId, type EndingId, type FriendState, type PerkId, type PlaceId, type TraitId,
+  type ActionDef, type ActionId, type EndingId, type FriendState, type MemoryKind, type PerkId, type PlaceId, type TraitId,
 } from "./content.ts";
 import { accOf, nameOf, num, roleOf, tr } from "./i18n.ts";
 
@@ -72,7 +72,9 @@ export interface Msg {
   replied?: boolean;
 }
 
-export type PlannedKind = "alert" | "knock" | "mom" | "neighbor" | "delivery" | "volunteer" | "msg" | "drill" | "warn";
+export type PlannedKind = "alert" | "knock" | "mom" | "neighbor" | "delivery" | "volunteer" | "msg" | "drill" | "warn" | "story";
+/** Moments that are not about danger: a funeral in the yard, your birthday, her wedding. */
+export type StoryId = "procession" | "birthday" | "ex";
 export interface Planned {
   at: number;
   kind: PlannedKind;
@@ -82,6 +84,7 @@ export interface Planned {
   /** For deliveries: a fake courier. */
   fake?: boolean;
   msg?: Msg;
+  story?: StoryId;
   done?: boolean;
 }
 
@@ -123,6 +126,10 @@ export interface DayState {
   phantomHour: number;
   /** It rains all day (spring, summer, autumn). Rain is cover: nobody looks up. */
   rain?: boolean;
+  /** The yard already cheered for the power tonight. */
+  cheered?: boolean;
+  /** Cigarettes are in today's delivery. */
+  cigsComing?: boolean;
 }
 
 export interface RunState {
@@ -152,10 +159,30 @@ export interface RunState {
   stats: { alerts: number; knocks: number; deliveries: number; worked: number; lost: number };
   offer: PerkId[];
   flags: Record<string, number>;
+  /** A smoker: how much it pulls (0..100), cigarettes left, smoked today, days in a row without. */
+  smoke?: { crave: number; cigs: number; today: number; quitDays: number };
+  /** Drinking: dependency (0..100) and bottles today. */
+  booze?: { dep: number; today: number };
 }
 
 export function has(run: RunState, p: PerkId): boolean { return run.perks.includes(p); }
 export function trait(run: RunState) { return TRAITS.find((t) => t.id === run.trait) ?? TRAITS[0]; }
+
+/** It pulls hard: past this the mind drains and the hands shake. */
+export function craving(run: RunState): number { return run.smoke?.crave ?? 0; }
+/** Withdrawal from drink: 0 none, 1 anxious, 2 the shakes. */
+export function withdrawal(run: RunState): number {
+  const b = run.booze;
+  if (!b || b.today > 0) return 0;
+  return b.dep >= 70 ? 2 : b.dep >= 45 ? 1 : 0;
+}
+/** Hands shaking (craving or withdrawal): the work game wobbles. */
+export function tremor(run: RunState): number { return Math.max(craving(run) > 85 ? 1 : 0, withdrawal(run) / 2); }
+export function drunk(run: RunState): boolean { return (run.booze?.today ?? 0) >= 3; }
+
+/** The season of your birthday and of her message, from the seed alone. */
+const birthdaySeason = (seed: number) => 2 + (Math.abs(seed) % 9);
+const exSeason = (seed: number) => 5 + (Math.abs(seed >> 3) % 6);
 
 const FRIEND_COLORS = [0xd96a4a, 0x4a8ad9, 0x6ac46a, 0xd9b84a, 0x9a6ad9, 0x4ac4c4, 0xd94a8a];
 
@@ -268,6 +295,7 @@ export function startDay(run: RunState): void {
     bus = [a, Math.min(DAY_END, a + Math.round(between(run, 2, y >= 3 ? 10 : 5)) * 60)];
   }
   const nightAlert = run.day?.nightAlert ?? false;
+  const wasDrunk = (run.booze?.today ?? 0) >= 3;
   const d: DayState = {
     clock: DAY_START, start: 0, blackouts, waterOff, bus, plan: [], used: {}, earned: 0, deliveries: 0, doom: 0,
     alert: null, sheltered: false, phone: 85, knowsBus: has(run, "buschat"), exposed: false, busy: null, msgs: [], unread: 0,
@@ -276,6 +304,13 @@ export function startDay(run: RunState): void {
   run.day = d;
   run.energy = clamp(50 + run.body * 0.35 - (nightAlert ? 15 : 0) - run.apathy * 0.1, 15, 100);
   run.satiety = 55;
+  // the habits come into the morning with you
+  if (run.smoke) { run.smoke.today = 0; run.smoke.crave = Math.max(run.smoke.crave, 55); }
+  if (run.booze) {
+    run.booze.today = 0;
+    if (wasDrunk) { run.energy = clamp(run.energy - 20, 10, 100); addPsyche(run, -5); }
+  }
+  if (run.flags.nightmare) addPsyche(run, -3);
   d.start = run.psyche;
   d.powerWasOn = isLight(d);
   d.waterWasOn = hasWater(d);
@@ -297,6 +332,19 @@ export function startDay(run: RunState): void {
   if (rnd(run) < 0.22 + y * 0.05) plan.push({ at: Math.round(between(run, 10, 19) * 4) * 15, kind: "neighbor" });
   if (rnd(run) < 0.3) plan.push({ at: Math.round(between(run, 10, 17) * 4) * 15, kind: "drill" });
   if (has(run, "volunteer")) plan.push({ at: Math.round(between(run, 12, 16) * 4) * 15, kind: "delivery" });
+  // moments: a funeral in the yard, your birthday, her message
+  if (run.season >= 4 && rnd(run) < (run.flags.lostLast ? 0.5 : 0.15)) plan.push({ at: Math.round(between(run, 12, 17) * 4) * 15, kind: "story", story: "procession" });
+  const bday = run.season === birthdaySeason(run.seed) && !run.flags.bday;
+  if (bday) {
+    run.flags.bday = 1;
+    plan.push({ at: 20 * 60, kind: "story", story: "birthday" });
+    run.friends.forEach((f, i) => {
+      if (!reachable(f) || bondOf(f) < 45) return;
+      const at = (9 + i) * 60 + 15;
+      plan.push({ at, kind: "msg", msg: { kind: "friend", from: nameOf(f), text: tr("з днем народження!!! тримайся там. обіймаю", "happy birthday!!! hang in there. hugs"), at, friend: i } });
+    });
+  }
+  if (run.season === exSeason(run.seed) && !run.flags.exDone) { run.flags.exDone = 1; plan.push({ at: 21 * 60 + 30, kind: "story", story: "ex" }); }
   // the chats
   const chatter = 2 + y;
   for (let i = 0; i < chatter; i++) {
@@ -319,6 +367,15 @@ export function startDay(run: RunState): void {
   // the morning
   msg(run, "sys", tr("Ранок", "Morning"), tr(`${seasonName(run.season)}. День ${num(run.daysInside)} без вулиці.`, `${seasonName(run.season)}. Day ${num(run.daysInside)} without the street.`));
   if (nightAlert) msg(run, "sys", tr("Ніч", "Night"), tr("Вночі була тривога. Ти заснув о пʼятій.", "There was an alert in the night. You fell asleep at five."));
+  if (run.flags.nightmare) {
+    run.flags.nightmare = 0;
+    msg(run, "sys", tr("Сон", "A dream"), pick(run, tr(
+      ["Тобі снилося, що бус стоїть у кімнаті, між ліжком і столом. Водій питає, котра година.", "Тобі снилося, що ти вийшов по хліб, і вулиця не закінчувалась. Ти прокинувся, тримаючись за ковдру.", "Тобі снився Сашко на дачі. Він щось казав, а ти не чув. Ти досі не знаєш що."],
+      ["You dreamed the van was parked in your room, between the bed and the desk. The driver asked what time it was.", "You dreamed you went out for bread and the street never ended. You woke up gripping the blanket.", "You dreamed of a friend at the dacha. He was saying something and you couldn't hear. You still don't know what."],
+    )));
+  }
+  if (wasDrunk) msg(run, "sys", tr("Похмілля", "Hangover"), tr("Голова тріщить. Ти не памʼятаєш, як ліг. У телефоні — повідомлення, яких ти не памʼятаєш.", "Your head is splitting. You don't remember going to bed. There are messages in your phone you don't remember sending."));
+  if (bday) msg(run, "sys", tr("Ранок", "Morning"), tr("Сьогодні твій день народження. Тобі 28. Третій — у цій квартирі.", "Today is your birthday. You're 28. The third one in this flat."));
   if (d.rain) msg(run, "sys", tr("Погода", "Weather"), tr("Дощ на весь день. У дощ ніхто не дивиться вгору.", "Rain all day. Nobody looks up in the rain."));
   if (blackouts.length) msg(run, "chat", tr("ДТЕК", "DTEK"), tr(`Графік на сьогодні: ${blackouts.map(([a, b]) => `${clockText(a)}–${clockText(b)}`).join(", ")} без світла.`, `Today's schedule: no power ${blackouts.map(([a, b]) => `${clockText(a)}–${clockText(b)}`).join(", ")}.`));
   if (waterOff.length) msg(run, "chat", tr("Чат будинку", "Building chat"), tr(`Води не буде ${clockText(waterOff[0][0])}–${clockText(waterOff[0][1])}. Набирайте.`, `No water ${clockText(waterOff[0][0])}–${clockText(waterOff[0][1])}. Fill up.`));
@@ -377,11 +434,16 @@ function check(run: RunState, def: ActionDef): { ok: boolean; why?: string } {
     if (d.plan.some((p) => p.kind === "delivery" && !p.done && !p.fake && p.at > d.clock)) return { ok: false, why: tr("Вже їде", "On its way") };
   }
   if (def.id === "shelter" && !d.alert) return { ok: false, why: tr("Тривоги немає", "No alert") };
-  if ((def.id === "balcony" || def.id === "air") && d.alert) return { ok: false, why: tr("Тривога", "Alert") };
+  if ((def.id === "balcony" || def.id === "air" || def.id === "smoke" || def.id === "smoke_window") && d.alert) return { ok: false, why: tr("Тривога", "Alert") };
+  if ((def.id === "smoke" || def.id === "smoke_window") && (run.smoke?.cigs ?? 0) < 1) return { ok: false, why: tr("Сигарети скінчились", "Out of cigarettes") };
+  if (def.id === "quit_smoking" && (run.smoke?.cigs ?? 0) < 1) return { ok: false, why: tr("Нічого викидати", "Nothing to throw away") };
   return { ok: true };
 }
 
-export function orderCost(run: RunState): number { return Math.round(450 * yearOf(run.season).prices / 10) * 10; }
+export function orderCost(run: RunState): number {
+  const p = yearOf(run.season).prices;
+  return Math.round(450 * p / 10) * 10 + (run.smoke ? Math.round(120 * p / 10) * 10 : 0);
+}
 
 export interface ActionResult {
   id: ActionId;
@@ -557,6 +619,7 @@ export function finishAction(run: RunState, id: ActionId, score = 1, part = 1): 
       const at = d.clock + Math.round(between(run, 40, 90));
       d.plan.push({ at, kind: "delivery", fake });
       if (fake) d.plan.push({ at: at + 35, kind: "delivery", fake: false });
+      if (run.smoke) d.cigsComing = true;
       d.plan.sort((a, b) => a.at - b.at);
       d.deliveries++;
       r.text = tr(`Замовлено на ${fmt(cost)}. «Залиште під дверима, будь ласка».`, `Ordered for ${fmt(cost)}. “Please leave it at the door.”`);
@@ -571,7 +634,21 @@ export function finishAction(run: RunState, id: ActionId, score = 1, part = 1): 
       break;
     }
     case "drink": {
-      r.text = tr("Тепло в грудях. Стіни відступають. На годину.", "Warmth in your chest. The walls step back. For an hour.");
+      const b = (run.booze ??= { dep: 0, today: 0 });
+      // the more you drink, the less it gives
+      ps *= Math.max(0.25, 1 - b.dep / 160);
+      b.today++;
+      b.dep = clamp(b.dep + 7, 0, 100);
+      if (b.today === 3) {
+        r.text = tr("Третя пляшка. Стіни не відступають — вони пливуть.", "The third bottle. The walls don't step back — they swim.");
+        const pals = run.friends.filter((f) => reachable(f));
+        if (pals.length) {
+          const f = pick(run, pals);
+          if (rnd(run) < 0.5) { setBond(f, bondOf(f) - 8); r.text += tr(` О другій ночі ти написав ${nameOf(f)} довге повідомлення. Він не відповів.`, ` At two in the morning you wrote ${nameOf(f)} a long message. He didn't answer.`); }
+          else { setBond(f, bondOf(f) + 4); r.text += tr(` О другій ночі ти написав ${nameOf(f)}: «я не можу». Він відповів: «я теж, брат. я теж».`, ` At two in the morning you wrote ${nameOf(f)}: “I can't.” He answered: “me neither, bro. me neither.”`); }
+        }
+      } else if (b.dep >= 60) r.text = tr("Вже не тепло. Просто тихіше.", "Not warm any more. Just quieter.");
+      else r.text = tr("Тепло в грудях. Стіни відступають. На годину.", "Warmth in your chest. The walls step back. For an hour.");
       break;
     }
     case "pet": {
@@ -580,6 +657,40 @@ export function finishAction(run: RunState, id: ActionId, score = 1, part = 1): 
     }
     case "tidy": {
       r.text = run.clutter >= 5 ? tr(`Склав сміття в пакети. Пакетів у коридорі: ${run.clutter + 4}. Винести не можна.`, `Bagged the rubbish. Bags in the hallway: ${run.clutter + 4}. You can't take them out.`) : tr("Чисто. Майже як у людей.", "Clean. Almost like normal people.");
+      break;
+    }
+    case "smoke":
+    case "smoke_window": {
+      const sm = run.smoke;
+      if (!sm) break;
+      sm.cigs = Math.max(0, sm.cigs - 1);
+      sm.today++;
+      sm.crave = 0;
+      run.body = clamp(run.body - 1.5, 0, 100);
+      if (id === "smoke" && busHere(d) && !d.rain) {
+        ps -= 4;
+        run.heat = clamp(run.heat + 10, 0, 100);
+        d.exposed = true;
+        d.knowsBus = true;
+        r.text = tr("Ти запалив і тільки тоді побачив бус унизу. Вогник видно з двору. Ти затиснув сигарету в кулаці.", "You lit up and only then saw the van below. The ember is visible from the yard. You crushed the cigarette in your fist.");
+      } else if (id === "smoke_window") {
+        run.plant = clamp(run.plant - 6, 0, 100);
+        r.text = pick(run, tr(["Дим у кватирку. Він повертається назад, у кімнату, до фікуса.", "Ти куриш і дивишся на дим, бо більше нема на що."], ["Smoke out the vent. It drifts back in, into the room, to the ficus.", "You smoke and watch the smoke, because there's nothing else to watch."]));
+      } else {
+        r.text = pick(run, tr(["Сигарета, двір, небо. Пʼять хвилин, коли руки зайняті.", "Ти куриш на балконі й рахуєш вікна навпроти, де ще світиться.", "Остання затяжка — найгірша. І найкраща."], ["A cigarette, the yard, the sky. Five minutes with your hands busy.", "You smoke on the balcony and count the windows opposite that are still lit.", "The last drag is the worst. And the best."]));
+      }
+      if (sm.cigs === 0) r.text += tr(" Пачка порожня.", " The pack is empty.");
+      break;
+    }
+    case "quit_smoking": {
+      if (run.smoke) run.smoke.cigs = 0;
+      r.text = tr("Ти зімʼяв пачку і викинув у пакет. Через годину дістав і розгладив. Порожня. Добре.", "You crushed the pack and threw it in the bag. An hour later you took it out and smoothed it flat. Empty. Good.");
+      break;
+    }
+    case "pour_out": {
+      run.perks = run.perks.filter((p) => p !== "alcohol");
+      run.flags.poured = 1;
+      r.text = tr("Ти виливав пляшку за пляшкою. Раковина пахла, як бар о пʼятій ранку. Руки трусилися. Ти не знаєш, чи надовго це.", "You poured out bottle after bottle. The sink smelled like a bar at five in the morning. Your hands were shaking. You don't know how long this will last.");
       break;
     }
     case "sleep": {
@@ -612,6 +723,7 @@ export type DayEvent =
   | { kind: "drill" }
   | { kind: "warn" }
   | { kind: "msg"; msg: Msg }
+  | { kind: "story"; id: StoryId }
   | { kind: "night" };
 
 /**
@@ -694,6 +806,12 @@ function hourly(run: RunState, h: number): void {
   if (busHere(d) && d.knowsBus) drain += 0.7;
   if (!isLight(d) && winter(run)) drain += 0.5;
   if (d.glass) drain += 0.6;
+  if (run.smoke) {
+    run.smoke.crave = clamp(run.smoke.crave + 7 * h, 0, 100);
+    if (run.smoke.crave > 60) drain += 0.7;
+    if (run.smoke.crave > 85) drain += 0.7;
+  }
+  drain += withdrawal(run) * 0.6;
   addPsyche(run, -drain * h);
   // phone and power station
   if (isLight(d)) {
@@ -736,6 +854,7 @@ function fire(run: RunState, p: Planned): DayEvent[] {
     case "mom": return [{ kind: "mom" }];
     case "neighbor": return [{ kind: "neighbor" }];
     case "drill": addPsyche(run, -2); return [{ kind: "drill" }];
+    case "story": return p.story ? [{ kind: "story", id: p.story }] : [];
     case "delivery": return [{ kind: "delivery", fake: !!p.fake, volunteer: !p.fake && has(run, "volunteer") && !d.used.order && !(d.used as Record<string, number>).__vol }];
     case "msg": {
       if (!p.msg) return [];
@@ -836,6 +955,13 @@ export function peep(run: RunState, fake: boolean): { text: string; kind: "couri
 }
 
 export function resolveDelivery(run: RunState, fake: boolean, volunteer: boolean, choice: DoorChoice): Outcome {
+  const out = deliver(run, fake, volunteer, choice);
+  const d = run.day!;
+  if (out.food && run.smoke && d.cigsComing) { run.smoke.cigs += 20; d.cigsComing = false; }
+  return out;
+}
+
+function deliver(run: RunState, fake: boolean, volunteer: boolean, choice: DoorChoice): Outcome {
   const d = run.day!;
   const p0 = run.psyche;
   if (volunteer) {
@@ -886,6 +1012,10 @@ export function resolveMom(run: RunState, answer: boolean): Outcome {
   const p0 = run.psyche;
   if (!answer) { addPsyche(run, -3); return { text: tr("Ти не взяв. Вона написала: «Ти живий? Відпиши хоч смайлик». Ти відписав смайлик.", "You didn't pick up. She wrote: “Are you alive? Send at least a smiley.” You sent a smiley."), dPsyche: run.psyche - p0 }; }
   run.day!.clock += 25;
+  if ((run.booze?.today ?? 0) >= 2) {
+    addPsyche(run, -3);
+    return { text: tr("«Ти що, випив?» — «Ні, мам». Вона мовчить так, що краще б кричала.", "“Have you been drinking?” — “No, Mom.” She goes quiet in a way that's worse than shouting."), dPsyche: run.psyche - p0 };
+  }
   addPsyche(run, 5);
   return { text: pick(run, tr(["Мама каже, що молиться за тебе щоранку. Ти кажеш, що все добре.", "Мама надиктувала рецепт борщу. Ти записав, хоча буряка немає."], ["Mom says she prays for you every morning. You say everything's fine.", "Mom dictated her borscht recipe. You wrote it down, though there are no beets."])), dPsyche: run.psyche - p0 };
 }
@@ -962,12 +1092,72 @@ export function readSteps(who: Visitor, guess: Visitor | null): StepRead {
   return guess === who ? "right" : "wrong";
 }
 
+// ------------------------------------------------------------------ moments
+
+export type StoryChoice = "kneel" | "watch" | "away" | "wish" | "blow" | "warm" | "silent" | "still";
+
+/** What you can do in a moment. */
+export function storyChoices(id: StoryId): StoryChoice[] {
+  return id === "procession" ? ["kneel", "watch", "away"] : id === "birthday" ? ["wish", "blow"] : ["warm", "silent", "still"];
+}
+
+export function resolveStory(run: RunState, id: StoryId, choice: StoryChoice): Outcome {
+  const p0 = run.psyche;
+  let text = "";
+  if (id === "procession") {
+    if (choice === "kneel") { addPsyche(run, -2); run.apathy = clamp(run.apathy - 6, 0, 100); text = tr("Ти стоїш на колінах на підлозі своєї кімнати, біля вікна. Тебе ніхто не бачить. Ти все одно стоїш, доки машина не зникне за рогом.", "You kneel on the floor of your room, by the window. Nobody can see you. You stay there anyway, until the car is gone round the corner."); }
+    else if (choice === "watch") { addPsyche(run, -4); text = tr("Двір на колінах. Бабусі, діти, курʼєр зі своєю сумкою. Ти дивишся згори і не можеш відвести очей.", "The whole yard on its knees. Old women, kids, a courier with his bag. You watch from above and can't look away."); }
+    else { addPsyche(run, -5); text = tr("Ти відходиш від вікна. Але чуєш, як двір замовкає, і ця тиша довго не минає.", "You step away from the window. But you hear the yard go silent, and that silence lasts a long time."); }
+  } else if (id === "birthday") {
+    const wished = run.friends.filter((f) => reachable(f) && bondOf(f) >= 45).length;
+    addPsyche(run, wished >= 2 ? 5 : -5);
+    text = wished >= 2
+      ? tr(`Тебе привітали ${wished} друзів і мама. Свічка в пачці печива.`, `${wished} friends and Mom wished you happy birthday. A candle in a pack of biscuits.`)
+      : tr("Привітала тільки мама. Свічка в пачці печива.", "Only Mom remembered. A candle in a pack of biscuits.");
+    if (choice === "wish") { addPsyche(run, 3); text += tr(" Ти загадав бажання. Те саме, що й торік.", " You made a wish. The same as last year."); }
+    else { addPsyche(run, -1); text += tr(" Ти задув її, нічого не загадавши. Нема що загадувати.", " You blew it out without a wish. Nothing to wish for."); }
+  } else {
+    if (choice === "warm") { addPsyche(run, -2); run.apathy = clamp(run.apathy - 4, 0, 100); text = tr("«Я щиро радий за тебе. Будь щаслива». Ти написав це з третьої спроби. Це навіть правда.", "“I'm truly happy for you. Be happy.” You wrote it on the third try. It's even true."); }
+    else if (choice === "silent") { addPsyche(run, -5); text = tr("Ти не відповів. Повідомлення висить у чаті, як фото, яке не можна викинути.", "You didn't answer. The message hangs in the chat like a photo you can't throw away."); }
+    else { addPsyche(run, -6); text = tr("Ти написав, що досі думаєш про неї. Вона прочитала. Не відповіла. І правильно зробила.", "You wrote that you still think about her. She read it. Didn't answer. And she was right not to."); }
+  }
+  return { text, dPsyche: run.psyche - p0 };
+}
+
+/** The power comes back in the evening and the whole yard shouts. */
+export function cheer(run: RunState): string | null {
+  const d = run.day!;
+  if (d.cheered || d.clock < 17 * 60) return null;
+  d.cheered = true;
+  addPsyche(run, 2);
+  return tr("Весь двір кричить «Ура-а-а!» — дали світло. Ти теж кричиш, у подушку.", "The whole yard shouts “Hurra-a-ay!” — the power's back. You shout too, into a pillow.");
+}
+
 // ------------------------------------------------------------------ the memory
 
-/** You look at the photo from Kozyn long enough to be there again. */
-export function remember(run: RunState): ActionResult {
+/** Which memory an action opens, if any: the photo, a winter day crossed off, a proper meal. */
+export function memoryFor(run: RunState, id: ActionId): MemoryKind | null {
+  if (id === "photos") return "dacha";
+  if (id === "calendar" && winter(run) && !run.flags.mem_newyear) return "newyear";
+  if (id === "cook" && !run.flags.mem_kitchen) return "kitchen";
+  return null;
+}
+
+/** You remember long enough to be there again. */
+export function remember(run: RunState, kind: MemoryKind = "dacha"): ActionResult {
   const d = run.day!;
   const p0 = run.psyche;
+  run.flags[`mem_${kind}`] = 1;
+  if (kind !== "dacha") {
+    d.clock += 20;
+    const dead = run.friends.filter((f) => f.state === "dead").length;
+    if (kind === "newyear") {
+      addPsyche(run, 6 - dead * 2.5);
+      return { id: "calendar", text: tr("Тридцять перше грудня, 2021-й. Ви кричали «два-нуль-два-два!» і обіймалися в снігу. Через пʼятдесят пʼять днів почалося.", "December thirty-first, 2021. You shouted “twenty-twenty-two!” and hugged in the snow. Fifty-five days later it began."), dPsyche: run.psyche - p0 };
+    }
+    addPsyche(run, 8);
+    return { id: "cook", text: tr("Мамина кухня пахла кропом і борщем. Тато читав газету вголос. Бабуся підкладала добавку. Тобі було десять, і нічого поганого ще не могло статися.", "Mom's kitchen smelled of dill and borscht. Dad read the paper out loud. Grandma kept giving you more. You were ten, and nothing bad could happen yet."), dPsyche: run.psyche - p0 };
+  }
   d.used.photos = (d.used.photos ?? 0) + 1;
   d.clock += 30;
   const dead = run.friends.filter((f) => f.state === "dead").length;
@@ -1050,6 +1240,33 @@ export function endDay(run: RunState): SeasonReport {
   if (run.body < 30) { shift -= 3; lines.push(tr("Спина болить. Сходи до холодильника — вже кардіо.", "Your back hurts. The walk to the fridge is cardio now.")); }
   if (has(run, "meds")) shift += 4;
   if (has(run, "cat")) shift += 2;
+  // the habits, over ninety days
+  const sm = run.smoke;
+  if (sm) {
+    run.body = clamp(run.body - sm.today * 0.8, 0, 100);
+    if (sm.today > 0) {
+      sm.quitDays = 0;
+      lines.push(tr(`За сезон — близько ${Math.max(1, Math.round(sm.today * 90 / 20))} пачок.`, `This season — about ${Math.max(1, Math.round(sm.today * 90 / 20))} packs.`));
+      if (sm.cigs === 0) lines.push(tr("Сигарети скінчились. Замовиш із доставкою — або терпітимеш.", "Out of cigarettes. Order them with a delivery — or endure."));
+      if (run.body < 30) lines.push(tr("Кашель уночі. Ти рахуєш, скільки разів.", "Coughing at night. You count how many times."));
+    } else {
+      sm.quitDays++;
+      if (sm.quitDays >= 2) {
+        run.perks = run.perks.filter((p) => p !== "cigs");
+        run.smoke = undefined;
+        shift += 6;
+        run.body = clamp(run.body + 8, 0, 100);
+        lines.push(tr("Ти кинув. Два сезони без жодної. Іноді рука досі тягнеться до кишені.", "You quit. Two seasons without a single one. Sometimes your hand still reaches for the pocket."));
+      } else lines.push(tr("Цілий сезон без жодної сигарети. Руки шукають пачку.", "A whole season without a cigarette. Your hands keep looking for the pack."));
+    }
+  }
+  const bz = run.booze;
+  if (bz) {
+    bz.dep = clamp(bz.dep + bz.today * 3 - (bz.today ? 0 : run.flags.poured ? 16 : 10), 0, 100);
+    if (bz.today >= 3) { shift -= 3; lines.push(tr("Ти пив до ранку. Знову. Ранки стали однаковими.", "You drank till morning. Again. The mornings are all the same now.")); }
+    if (bz.dep >= 70) { run.apathy = clamp(run.apathy + 3, 0, 100); lines.push(tr("Пляшок під раковиною більше, ніж тарілок.", "There are more bottles under the sink than plates.")); }
+    if (run.flags.poured && bz.dep < 15 && !run.flags.sober) { run.flags.sober = 1; shift += 4; lines.push(tr("Ти не пʼєш уже кілька сезонів. Тремор пройшов. Ранки знову твої.", "You haven't had a drink in several seasons. The shakes are gone. The mornings are yours again.")); }
+  }
   // friends: silence wears a friendship down, answers hold it up
   for (const m of d.msgs) {
     if (m.friend != null && !m.replied && run.friends[m.friend]) setBond(run.friends[m.friend], bondOf(run.friends[m.friend]) - 6);
@@ -1100,6 +1317,7 @@ export function endDay(run: RunState): SeasonReport {
   run.heat = clamp(run.heat + yd.heat - (d.exposed ? 0 : 6), 0, 100);
   if (run.heat >= 60 && !run.flags.heatWarned) { run.flags.heatWarned = 1; lines.push(tr("Тебе внесли в базу «розшук». Сусідка розповідає це всім у підʼїзді.", "You've been put on the “wanted” list. The neighbour is telling everyone in the building.")); }
   // friends
+  let diedNow = false;
   for (const f of run.friends) {
     while (f.arc.length && f.arc[0][0] <= run.season) {
       const [, st] = f.arc.shift()!;
@@ -1114,6 +1332,7 @@ export function endDay(run: RunState): SeasonReport {
         addPsyche(run, imp < 0 ? imp * (0.5 + bondOf(f) / 120) : imp);
         run.flags[`fate_${st}`] = 1;
         if (st === "dead") {
+          diedNow = true;
           run.stats.lost++;
           if (bondOf(f) >= 55 && !run.flags.offerEnlist) run.flags.offerEnlist = 1;
         }
@@ -1122,6 +1341,8 @@ export function endDay(run: RunState): SeasonReport {
   }
   // the night that ends the season
   d.nightAlert = rnd(run) < yd.alert * 0.5;
+  run.flags.lostLast = diedNow ? 1 : 0;
+  if (run.psyche < 30 && rnd(run) < 0.35) run.flags.nightmare = 1;
   run.daysInside += run.season % 4 === 0 ? 90 : 92;
   run.history.push(Math.round(run.psyche));
 
@@ -1153,7 +1374,11 @@ function offerPerks(run: RunState): PerkId[] {
 
 /** Picks what helped (or nothing) and starts the next season's day. */
 export function choosePerk(run: RunState, id: PerkId | null): void {
-  if (id && run.offer.includes(id) && !run.perks.includes(id)) run.perks.push(id);
+  if (id && run.offer.includes(id) && !run.perks.includes(id)) {
+    run.perks.push(id);
+    if (id === "cigs") run.smoke = { crave: 30, cigs: 20, today: 0, quitDays: 0 };
+    if (id === "alcohol") run.booze ??= { dep: 0, today: 0 };
+  }
   run.offer = [];
   startDay(run);
 }
