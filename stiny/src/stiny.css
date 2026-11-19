@@ -245,3 +245,10 @@ h3 { margin: 0 0 10px; font: 700 20px var(--display); color: var(--mind); }
 .test-grid button { padding: 9px 8px; border: 2px solid var(--ink); background: #fff8e8; font: 700 14px var(--display); text-align: left; }
 .test-grid button:active { background: var(--mind); }
 .test-grid button:disabled { opacity: .4; }
+
+/* ---------- language, daily run, sharing ---------- */
+.lang-btn { position: absolute; top: calc(14px + var(--safe-t)); right: 14px; width: auto !important; margin: 0 !important; padding: 6px 10px; border: 2px solid var(--dim); background: #22202a; color: var(--paper); font: 700 13px var(--display); letter-spacing: .1em; }
+.daily-btn { width: 100%; max-width: 360px; border-color: var(--teal); color: var(--teal); }
+.daily-btn small { display: block; margin-top: 2px; font: 500 11px Inter, sans-serif; letter-spacing: 0; color: var(--dim); }
+.daily-btn.done { border-color: #4a4650; color: var(--dim); }
+.share-btn { background: var(--teal); }

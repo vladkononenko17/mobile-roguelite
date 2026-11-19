@@ -114,8 +114,65 @@ export class Ambience {
   private tickT = 0;
   private tock = false;
   private birdT = 2;
+  private rain: { src: AudioBufferSourceNode; lp: BiquadFilterNode; g: GainNode; patter: GainNode } | null = null;
+  private dripT = 1;
 
-  update(dt: number, s: { despair: number; blackout: boolean; birds: boolean; quiet: boolean }): void {
+  /**
+   * Rain: a hiss through the glass, a patter on the sill, and drips. With the
+   * window or balcony open it gets louder and brighter — the street comes in.
+   */
+  private updateRain(dt: number, k: number, open: boolean): void {
+    const a = ctx();
+    if (!a) return;
+    if (!this.rain && k > 0) {
+      const len = a.ctx.sampleRate * 2;
+      const buf = a.ctx.createBuffer(1, len, a.ctx.sampleRate);
+      const ch = buf.getChannelData(0);
+      // pink-ish noise: rain is not white
+      let b0 = 0, b1 = 0, b2 = 0;
+      for (let i = 0; i < len; i++) {
+        const w = Math.random() * 2 - 1;
+        b0 = 0.997 * b0 + w * 0.029591; b1 = 0.985 * b1 + w * 0.032534; b2 = 0.95 * b2 + w * 0.048056;
+        ch[i] = (b0 + b1 + b2 + w * 0.05) * 0.9;
+      }
+      const src = a.ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      const lp = a.ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 900;
+      const hp = a.ctx.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.value = 160;
+      const g = a.ctx.createGain();
+      g.gain.value = 0;
+      // the patter: the same noise, band-passed high and gated by a fast random LFO-ish modulation
+      const bp = a.ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = 3200;
+      bp.Q.value = 0.7;
+      const patter = a.ctx.createGain();
+      patter.gain.value = 0;
+      src.connect(hp).connect(lp).connect(g).connect(a.sfx);
+      src.connect(bp).connect(patter).connect(a.sfx);
+      src.start();
+      this.rain = { src, lp, g, patter };
+    }
+    if (!this.rain) return;
+    const t = a.ctx.currentTime;
+    this.rain.g.gain.setTargetAtTime(k * (open ? 0.16 : 0.07), t, 0.8);
+    this.rain.lp.frequency.setTargetAtTime(open ? 4200 : 900, t, 0.5);
+    this.rain.patter.gain.setTargetAtTime(k * (open ? 0.05 : 0.012), t, 0.5);
+    // drips on the tin sill
+    this.dripT -= dt;
+    if (k > 0.3 && this.dripT <= 0) {
+      this.dripT = 0.25 + Math.random() * (open ? 0.6 : 1.4);
+      const f = 1400 + Math.random() * 1800;
+      tone(f, 0, 0.05, "sine", (open ? 0.03 : 0.012) * k, f * 0.55);
+    }
+  }
+
+  update(dt: number, s: { despair: number; blackout: boolean; birds: boolean; quiet: boolean; rain?: number; open?: boolean }): void {
     const a = ctx();
     if (!a) return;
     // clock
@@ -152,6 +209,7 @@ export class Ambience {
       this.hum = { o, g };
     }
     this.hum.g.gain.setTargetAtTime(s.blackout ? 0.025 : 0, a.ctx.currentTime, 1);
+    this.updateRain(dt, s.rain ?? 0, !!s.open);
     // birds, while there are still birds for you
     this.birdT -= dt;
     if (s.birds && this.birdT <= 0) {
