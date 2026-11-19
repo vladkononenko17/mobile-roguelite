@@ -163,7 +163,8 @@ export type ActionId =
   | "shower" | "wash_bottle" | "mirror"
   | "water_plant" | "exercise" | "read" | "journal" | "guitar"
   | "tidy" | "go_out" | "break_out" | "peephole" | "calendar" | "pet" | "photos" | "shelter"
-  | "chat" | "news" | "friends" | "mom" | "order";
+  | "chat" | "news" | "friends" | "mom" | "order"
+  | "smoke" | "smoke_window" | "quit_smoking" | "pour_out";
 
 export interface Effects {
   psyche?: number;
@@ -201,6 +202,7 @@ export const ACTIONS: ActionDef[] = [
 
   { id: "eat", place: "fridge", label: "Поїсти", icon: "🥪", minutes: 20, fx: { food: -1, satiety: 45, psyche: 1 }, hint: "−1 запас" },
   { id: "drink", place: "fridge", label: "Випити", icon: "🍺", minutes: 30, fx: { psyche: 10, apathy: 6, energy: -8 }, hint: "Стає легше. Ненадовго.", perk: "alcohol" },
+  { id: "pour_out", place: "fridge", label: "Вилити все в раковину", icon: "🚰", minutes: 10, fx: { psyche: -3, apathy: -6 }, hint: "Поки ще можеш", perk: "alcohol", once: true },
   { id: "cook", place: "stove", label: "Приготувати нормально", icon: "🍳", minutes: 75, fx: { food: -1, satiety: 65, psyche: 5, energy: -4 }, hint: "Потрібні світло і вода", power: true, water: true },
 
   { id: "sleep", place: "bed", label: "Спати", icon: "🛏️", minutes: 0, fx: {}, hint: "Кінець дня" },
@@ -208,7 +210,9 @@ export const ACTIONS: ActionDef[] = [
 
   { id: "look", place: "window", label: "Подивитися у двір", icon: "🪟", minutes: 15, fx: {}, hint: "Що там сьогодні?" },
   { id: "air", place: "window", label: "Відчинити кватирку", icon: "🌬️", minutes: 10, fx: { psyche: 2 }, hint: "Подих вулиці", once: true },
+  { id: "smoke_window", place: "window", label: "Покурити у кватирку", icon: "🚬", minutes: 8, fx: { psyche: 4, energy: 1 }, hint: "Не видно. Але фікус дихає цим теж.", perk: "cigs" },
   { id: "balcony", place: "balcony", label: "Постояти на балконі", icon: "☀️", minutes: 30, fx: { psyche: 7 }, hint: "Сонце. Але тебе видно." , once: true },
+  { id: "smoke", place: "balcony", label: "Покурити на балконі", icon: "🚬", minutes: 10, fx: { psyche: 6, energy: 2 }, hint: "Дим і двір унизу", perk: "cigs" },
   { id: "tomatoes", place: "balcony", label: "Полити помідори", icon: "🍅", minutes: 20, fx: { psyche: 3 }, hint: "Щось росте", perk: "tomatoes", water: true, once: true },
 
   { id: "shower", place: "bath", label: "Душ", icon: "🚿", minutes: 30, fx: { psyche: 5, energy: 6 }, hint: "Потрібна вода", water: true, once: true },
@@ -221,6 +225,7 @@ export const ACTIONS: ActionDef[] = [
   { id: "journal", place: "shelf", label: "Писати щоденник", icon: "✍️", minutes: 30, fx: { psyche: 5, apathy: -2 }, hint: "Вийняти думки з голови", perk: "journal", once: true },
   { id: "guitar", place: "shelf", label: "Грати на гітарі", icon: "🎸", minutes: 60, fx: { psyche: 8, energy: -4 }, hint: "Тихо, щоб сусіди не чули", perk: "guitar" },
 
+  { id: "quit_smoking", place: "trash", label: "Викинути сигарети", icon: "🗑️", minutes: 2, fx: {}, hint: "Два сезони без жодної — і все", perk: "cigs", once: true },
   { id: "tidy", place: "trash", label: "Прибрати", icon: "🧹", minutes: 45, fx: { clutter: -3, psyche: 3, energy: -8 }, hint: "Сміття не винесеш. Тільки в пакети." },
   { id: "go_out", place: "door", label: "Вийти на вулицю", icon: "🚪", minutes: 40, fx: { psyche: -5 }, hint: "Просто вийти" },
   { id: "break_out", place: "door", label: "Вийти. Просто вийти.", icon: "🚪", minutes: 0, fx: {}, hint: "Більше не можу" },
@@ -247,7 +252,7 @@ export function actionById(id: ActionId): ActionDef {
 
 export type PerkId =
   | "station" | "powerbank" | "bottles" | "dumbbells" | "cat" | "therapist" | "books" | "guitar" | "headphones"
-  | "alcohol" | "client" | "volunteer" | "buschat" | "tomatoes" | "journal" | "meds" | "neighbor" | "console";
+  | "alcohol" | "client" | "volunteer" | "buschat" | "tomatoes" | "journal" | "meds" | "neighbor" | "console" | "cigs";
 
 export interface PerkDef {
   id: PerkId;
@@ -277,6 +282,7 @@ export const PERKS: PerkDef[] = [
   { id: "meds", icon: "💊", name: "Антидепресанти", text: "Психіка падає повільніше. Радість теж приглушена." },
   { id: "neighbor", icon: "👴", name: "Сусід Петрович", text: "Попереджає дзвінком, коли ТЦК в підʼїзді." , from: 4 },
   { id: "console", icon: "🎮", name: "Приставка", text: "Дві години забуття. Апатія підкрадається." },
+  { id: "cigs", icon: "🚬", name: "Пачка сигарет", text: "Руки знають, що робити. Легше відразу — і щогодини тягне знову. Сигарети закінчуються." },
 ];
 
 export function perkById(id: PerkId): PerkDef {
@@ -481,3 +487,40 @@ export const MEMORY_LINES = [
 ];
 /** One line, in an array so the language switch can swap it in place. */
 export const MEMORY_DEAD: string[] = ["Він сміється з чогось, але ти не чуєш звуку."];
+
+// ------------------------------------------------------------------ more memories from before
+
+export type MemoryKind = "dacha" | "newyear" | "kitchen";
+export const MEMORY_ORDER: MemoryKind[] = ["dacha", "newyear", "kitchen"];
+
+/** Where and when each memory is: the caption under the photo. */
+export const MEMORY_CAPTIONS: Record<MemoryKind, string> = {
+  dacha: "Козин, липень 2021",
+  newyear: "Новий рік, 2022",
+  kitchen: "Мамина кухня, 2008",
+};
+export const MEMORY_TITLES: Record<MemoryKind, string> = {
+  dacha: "ЛІТО 2021 · КОЗИН",
+  newyear: "31 ГРУДНЯ 2021",
+  kitchen: "ЛІТО 2008 · МАМИНА КУХНЯ",
+};
+/** What the collection says about a memory you have not lived yet. */
+export const MEMORY_HINTS: Record<MemoryKind, string> = {
+  dacha: "Фото друзів на холодильнику.",
+  newyear: "Закресли день узимку.",
+  kitchen: "Приготуй нормальну їжу.",
+};
+export const NEWYEAR_LINES = [
+  "Цей рік буде нашим, я відчуваю!",
+  "Загадай бажання. Тільки вголос не кажи.",
+  "Наступний Новий рік — у Карпатах. Всі разом!",
+  "За нас! Щоб завжди так.",
+  "Дивись, феєрверк! Ну дивись же!",
+  "Мама питає, коли ти вже когось приведеш знайомитись. Ха.",
+];
+/** Mom, dad, grandma: their names in the bubble and what they say. */
+export const FAMILY: Array<{ name: string; lines: string[] }> = [
+  { name: "Мама", lines: ["Скуштуй, чи досить солі? Обережно, гаряче.", "Збігаєш по хліб? Здачу собі залиш."] },
+  { name: "Тато", lines: ["Ну що, синку, як школа? Тільки чесно.", "Влітку поїдемо на море. Справжнє, з чайками."] },
+  { name: "Бабуся", lines: ["Їж, бо худий як тріска.", "Ти в мене найрозумніший, я всім кажу."] },
+];

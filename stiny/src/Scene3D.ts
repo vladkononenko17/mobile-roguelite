@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import {
   C, CAMO_TCK, LOOKS, animateRig, at, camoTexture, canvasTexture, carpetTexture, facadeTextures, makeBench, makeCar, makeLamp,
-  makePerson, makePine, makePlant, makeTrashBins, makeTree, makeVan, mat, mesh, type Rig,
+  makePerson, makePine, makeTrashBins, makeTree, makeVan, mat, mesh, type Rig,
 } from "../../rozshuk/src/three/models.ts";
 import { Post, defaultQuality, glowMat, lightPoolMaterial, type Mood } from "./three/post.ts";
 import { RainField, rainGlassMaterial } from "./three/weather.ts";
@@ -9,7 +9,8 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { lino, markTexture, parquet, plaster, tiles, wallpaper, type Mark, type Surface } from "./three/textures.ts";
 import { LaptopScreen, type ScreenMode } from "./three/screen.ts";
 import { Memory, type MemoryFriend } from "./three/memory.ts";
-import type { ActionId, PlaceId } from "./content.ts";
+import { Sunbeam, curtains, faceUp, ficus, smoothen, surface, type Surface as Finish } from "./three/smooth.ts";
+import type { ActionId, MemoryKind, PlaceId } from "./content.ts";
 
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -103,6 +104,13 @@ export class Scene3D {
   private screenLight = new THREE.PointLight(0x9cc8ff, 0, 3.5, 1.6);
   /** Stains, mould, peeling paper, tally marks: they come with the years. */
   private marks: Array<{ m: THREE.Mesh; from: number }> = [];
+  private beams: Sunbeam[] = [];
+  /** A funeral going through the yard: a car with a flag, people on their knees. */
+  private procession = new THREE.Group();
+  private processionT = -1;
+  private mourners: Rig[] = [];
+  /** Empty bottles gathering by the bin. */
+  private bottles: THREE.Mesh[] = [];
   // the memory of Kozyn
   private memory: Memory | null = null;
   memoryOn = false;
@@ -180,13 +188,17 @@ export class Scene3D {
     this.container = container;
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // neutral tone mapping keeps the palette's hues and rolls highlights off softly
+    this.renderer.toneMapping = THREE.NeutralToneMapping;
+    this.renderer.toneMappingExposure = 1.08;
     container.prepend(this.renderer.domElement);
     this.renderer.domElement.id = "gl";
     this.scene.add(this.hemi, this.sun, this.sun.target, this.flat, this.yard);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(1024, 1024);
+    this.sun.shadow.mapSize.set(defaultQuality() === "low" ? 1024 : 2048, defaultQuality() === "low" ? 1024 : 2048);
+    this.sun.shadow.normalBias = 0.02;
     const sc = this.sun.shadow.camera;
     sc.left = -8; sc.right = 8; sc.top = 8; sc.bottom = -8; sc.near = 1; sc.far = 50;
     this.sun.shadow.bias = -0.0006;
@@ -198,6 +210,7 @@ export class Scene3D {
     pmrem.dispose();
 
     this.buildFlat();
+    this.dressFlat();
     this.collectFollowers();
     this.scene.add(this.rain.lines);
     this.door = this.flat.getObjectByName("door") as THREE.Mesh;
@@ -217,7 +230,10 @@ export class Scene3D {
     this.beard = mesh(new THREE.IcosahedronGeometry(0.17, 0), hairMat, 0.012);
     this.beard.scale.set(1.25, 0.9, 0.65);
     at(this.beard, 0, -0.16, 0.15, this.hero.head);
+    faceUp(this.hero, { tired: true });
+    smoothen(this.hero.root, true);
     this.flat.add(this.hero.root);
+    smoothen(this.flat);
 
     this.buildYard();
     this.van = makeVan();
@@ -225,10 +241,14 @@ export class Scene3D {
     at(this.van, -0.2, FLOOR_Y, -16.5, this.yard);
     for (let i = 0; i < 3; i++) {
       const rig = makePerson(LOOKS.officer(this.camo));
+      faceUp(rig, { cheeks: false, brow: 0x2a2018 });
+      smoothen(rig.root, "far");
       this.yard.add(rig.root);
       this.officers.push({ rig, from: new THREE.Vector3(), to: new THREE.Vector3(), t: 0, speed: 1.2 });
     }
 
+    this.buildProcession();
+    smoothen(this.yard, "far");
     this.resize();
     window.addEventListener("resize", () => this.resize());
     this.renderer.setAnimationLoop(() => this.tick());
@@ -261,6 +281,101 @@ export class Scene3D {
 
   private solid(x0: number, z0: number, x1: number, z1: number): void {
     this.boxes.push({ x0: Math.min(x0, x1), z0: Math.min(z0, z1), x1: Math.max(x0, x1), z1: Math.max(z0, z1) });
+  }
+
+  /**
+   * Real surfaces for the furniture: the shared models only know colours, so
+   * each colour of the flat is given its finish — wood for the desk and the bed,
+   * knit for the blanket, enamel for the stove and the bath, metal, glossy bags.
+   */
+  private dressFlat(): void {
+    const finish: Record<number, Finish> = {
+      0x8a6a4a: "wood", 0x5a4030: "wood", 0x6a4a2a: "wood", 0x6a4a3a: "wood", 0x5a3a2a: "wood", 0x5a3a24: "wood", 0xc8b89a: "wood", 0x8a5a3a: "wood", 0xc8823a: "wood",
+      0x3a5a7a: "knit", 0xf0ece0: "linen", 0xe8d8a0: "linen", 0xe8e4d8: "linen",
+      0xd8d8d0: "enamel", 0xf4f4f0: "enamel", 0xeeeeee: "enamel", 0xe8e0d0: "enamel", 0xf4ecd8: "enamel", 0xf0f0f0: "plastic", 0xe8e8e8: "plastic",
+      0x8a8a90: "metal", 0x222222: "metal", 0x333333: "metal", 0x4a4a4a: "metal", 0x3a3a3a: "metal", 0x555555: "metal", 0x666666: "metal",
+      0x2a2d33: "plastic", 0x3a3d44: "plastic", 0x3a3a44: "rubber", 0x3a5a3a: "plastic", 0x2a6a6a: "rubber",
+      0x2a2a2a: "gloss", 0x3a4a6a: "gloss", 0x3a7a5a: "gloss", 0x5a3a1a: "gloss", 0x8ab8d8: "gloss", 0x8a7a6a: "enamel", 0xa8a49a: "paint", 0xc8a06a: "paint",
+    };
+    // the cat first: soft dark fur, not a bin bag
+    this.cat.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && (m.material as THREE.MeshLambertMaterial).isMeshLambertMaterial) m.material = surface("rubber", 0x26242a); });
+    smoothen(this.cat, true);
+    this.flat.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || m.name === "hull") return;
+      const l = m.material as THREE.MeshLambertMaterial;
+      if (!l.isMeshLambertMaterial || l.map) return;
+      const hex = l.color.getHex();
+      let kind = finish[hex];
+      if (!kind) return;
+      // the kitchen counter shares the bed sheet's colour: laminate, not linen
+      const p = (m.geometry as THREE.BoxGeometry).parameters as { width?: number; height?: number } | undefined;
+      if (kind === "linen" && hex === 0xe8e4d8 && p?.height && p.height > 0.5) kind = "enamel";
+      const tint = new THREE.Color(hex);
+      if (kind === "wood") tint.multiplyScalar(1.25);
+      m.material = surface(kind, tint.getHex(), kind === "wood" ? 1 : 1);
+    });
+    // curtains at the windows, in soft folds
+    const room = curtains(-4.5, -3.1, 2.48, 0x7d8a68);
+    at(room, 0, 0, -3.37, this.wallsBack);
+    const kitchen = curtains(3.0, 4.2, 2.48, 0xc8a070);
+    at(kitchen, 0, 0, -3.37, this.wallsBack);
+    // sunbeams through the windows, slanting in towards the room
+    this.beams = [new Sunbeam(1.3, 1.4, 3.4), new Sunbeam(1.1, 1.4, 3.0)];
+    at(this.beams[0].group, -3.8, 2.25, -3.42, this.flat).rotation.x = -0.95;
+    at(this.beams[1].group, 3.6, 2.25, -3.42, this.flat).rotation.x = -0.95;
+  }
+
+  /** The funeral car with a flag and the people who kneel along the path. */
+  private buildProcession(): void {
+    const car = makeCar(77);
+    car.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && (m.material as THREE.MeshLambertMaterial).isMeshLambertMaterial && m.name !== "hull") m.material = surface("gloss", 0x1a1a1e); });
+    car.rotation.y = Math.PI / 2;
+    car.name = "hearse";
+    this.procession.add(car);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.6, 8), surface("metal", 0x888888));
+    pole.position.set(0.6, 2.2, 0);
+    car.add(pole);
+    const flagTex = (() => { const cv = document.createElement("canvas"); cv.width = 64; cv.height = 40; const c = cv.getContext("2d")!; c.fillStyle = "#2a6ad8"; c.fillRect(0, 0, 64, 20); c.fillStyle = "#f2d22a"; c.fillRect(0, 20, 64, 20); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.56, 8, 1), new THREE.MeshStandardMaterial({ map: flagTex, side: THREE.DoubleSide, roughness: 0.8 }));
+    flag.position.set(0.6, 2.7, 0.46);
+    flag.rotation.y = Math.PI / 2;
+    flag.name = "flag";
+    car.add(flag);
+    // people along the path who will kneel
+    const spots: Array<[number, number]> = [[-6, -8.6], [-4.5, -8.7], [-1.2, -8.6], [1.5, -8.8], [3.6, -8.6], [6.2, -8.7], [-3.6, -6.0], [4.4, -6.1]];
+    spots.forEach(([x, z], i) => {
+      const rig = makePerson(i % 3 === 0 ? LOOKS.babka() : LOOKS.shopper([0x5a5a6a, 0x3a3a44, 0x6a4a3a, 0x2a3a4a][i % 4]));
+      smoothen(rig.root, "far");
+      rig.root.position.set(x, FLOOR_Y, z);
+      rig.root.rotation.y = z < -7 ? Math.PI : 0;
+      this.procession.add(rig.root);
+      this.mourners.push(rig);
+    });
+    this.procession.visible = false;
+    this.yard.add(this.procession);
+    // bottles by the bin, as many as the drinking leaves
+    for (let i = 0; i < 14; i++) {
+      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.24, 14), surface("gloss", i % 3 ? 0x4a3a1a : 0x2a5a3a));
+      b.position.set(4.25 - (i % 5) * 0.11, 0.12, -0.2 + Math.floor(i / 5) * 0.12);
+      if (i > 9) { b.rotation.z = Math.PI / 2; b.position.y = 0.04; b.position.x -= 0.2; }
+      b.castShadow = true;
+      b.visible = false;
+      this.flat.add(b);
+      this.bottles.push(b);
+    }
+  }
+
+  /** Starts (or ends) the funeral procession in the yard. */
+  setProcession(on: boolean): void {
+    this.processionT = on ? 0 : -1;
+    this.procession.visible = on;
+  }
+
+  /** How much you drink, as bottles by the bin (0..100). */
+  setBottles(dep: number): void {
+    const n = Math.min(this.bottles.length, Math.round(dep / 7));
+    this.bottles.forEach((b, i) => { b.visible = i < n; });
   }
 
   /** Which wall a footprint leans on, if any. Left and right win over the back. */
@@ -446,9 +561,9 @@ export class Scene3D {
     }, false) }));
     at(cal, -1.2, 1.65, -3.43, g);
     // the plant by the window
-    const plant = makePlant();
-    plant.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && (m.geometry as THREE.BufferGeometry).type === "ConeGeometry") { m.material = (m.material as THREE.Material).clone(); this.plantLeaves.push(m); } });
-    plant.scale.setScalar(0.85);
+    const { group: plant, leaves } = ficus();
+    for (const l of leaves) { l.userData.rx = l.rotation.x; this.plantLeaves.push(l); }
+    plant.scale.setScalar(0.95);
     at(plant, 0, 0, 0, this.plant);
     at(this.plant, -4.6, 0, -2.9, g);
     this.solid(-4.9, -3.2, -4.3, -2.6);
@@ -703,6 +818,7 @@ export class Scene3D {
     const looks = [0x8a3a5a, 0x3a6a8a, 0xd8a03a, 0x5a8a4a, 0x7a5a9a, 0xc85a3a];
     for (let i = 0; i < 6; i++) {
       const rig = makePerson(i < 2 ? LOOKS.babka() : LOOKS.shopper(looks[i]));
+      smoothen(rig.root, "far");
       if (i >= 4) rig.root.scale.setScalar(0.75);
       y.add(rig.root);
       this.walkers.push({ rig, from: new THREE.Vector3(), to: new THREE.Vector3(), t: Math.random(), speed: 0.05 + Math.random() * 0.04 });
@@ -728,6 +844,7 @@ export class Scene3D {
         at(bare, x, FLOOR_Y, z, this.yardDress);
       } else at(t, x, FLOOR_Y, z, this.yardDress);
     });
+    smoothen(this.yardDress, "far");
     if (this.snow) { this.scene.remove(this.snow); this.snow.geometry.dispose(); this.snow = null; }
     if (winter) {
       const n = 900;
@@ -745,8 +862,9 @@ export class Scene3D {
     const leafColor = new THREE.Color(0x3f7a3a).lerp(new THREE.Color(0x8a6a3a), 1 - health);
     this.plantLeaves.forEach((m, i) => {
       (m.material as THREE.MeshLambertMaterial).color.copy(leafColor);
-      m.visible = opts.plantDead ? i < 1 : i < 2 + Math.round(health * 3);
-      m.rotation.x = Math.cos(i * 1.3) * (0.5 + (1 - health) * 0.9);
+      m.visible = opts.plantDead ? i < 2 : i < 4 + Math.round(health * (this.plantLeaves.length - 4));
+      // a thirsty ficus lets its leaves hang
+      m.rotation.x = (m.userData.rx ?? 0) + (1 - health) * 1.3;
     });
     for (const [k, o] of Object.entries(this.perkProps)) o.visible = opts.perks.includes(k);
     this.cat.visible = opts.perks.includes("cat");
@@ -787,9 +905,9 @@ export class Scene3D {
   // ================================================================ the memory
 
   /** Into the photo: summer 2021 in Kozyn. The flat and the yard go away. */
-  enterMemory(friends: MemoryFriend[]): void {
+  enterMemory(kind: MemoryKind, friends: MemoryFriend[]): void {
     if (!this.memory) { this.memory = new Memory(); this.scene.add(this.memory.group); }
-    this.memory.setup(friends);
+    this.memory.setup(kind, friends);
     this.memoryOn = true;
     this.memory.group.visible = true;
     this.flat.visible = false;
@@ -824,24 +942,26 @@ export class Scene3D {
   private updateMemory(dt: number, time: number): void {
     const m = this.memory!;
     m.update(dt, time, this.move, 2.6);
-    // golden hour, long shadows, a hazy warm sky
-    this.sun.position.set(-7, 6.5, 6);
+    // each memory has its light: golden hour at the dacha, moonlight and garlands, a sunny kitchen
+    const L = m.light;
+    this.sun.position.set(...L.sunPos);
     this.sun.target.position.set(0, 0, -1);
-    this.sun.color.set(0xffc98a);
-    this.sun.intensity = 2.5;
-    this.hemi.color.set(0xcfe4ff);
-    this.hemi.groundColor.set(0x6a8a3a);
-    this.hemi.intensity = 1.0;
-    const sky = new THREE.Color(0xf4d6a0);
+    this.sun.color.set(L.sun);
+    this.sun.intensity = L.sunI;
+    this.hemi.color.set(L.hemi);
+    this.hemi.groundColor.set(L.ground);
+    this.hemi.intensity = L.hemiI;
+    this.scene.environmentIntensity = L.env;
+    const sky = new THREE.Color(L.sky);
     this.scene.background = sky;
     if (!this.scene.fog) this.scene.fog = new THREE.Fog(sky, 30, 75);
     const fog = this.scene.fog as THREE.Fog;
     fog.color.copy(sky);
-    fog.near = 16;
-    fog.far = 46;
+    fog.near = L.fog[0];
+    fog.far = L.fog[1];
     // the camera follows you, lower and closer than in the flat: this is a warm place
     const hp = m.heroPos;
-    this.camPos.set(hp.x * 0.8, 5.2, hp.z + 6.4);
+    this.camPos.set(hp.x * 0.8, L.cam[0], hp.z + L.cam[1]);
     this.camLook.set(hp.x * 0.85, 0.8, hp.z - 1.2);
     this.camera.fov = this.vw / this.vh < 0.62 ? 58 : 50;
     const cam = this.camera;
@@ -1074,6 +1194,10 @@ export class Scene3D {
     gu.time.value = time;
     gu.rain.value = wet;
     gu.bright.value = 0.3 + dayK * 0.7 * (1 - wet * 0.25);
+    const beamK = dayK * (1 - wet) * (s === 0 ? 0.6 : 1) * (this.view === "window" ? 0 : 1);
+    for (const b of this.beams) b.update(time, beamK);
+    // the room reflection follows the daylight: glossy things do not glow at night
+    this.scene.environmentIntensity = 0.08 + dayK * 0.27 * (1 - wet * 0.3);
     // lights inside
     const evening = h >= set - 1 || h < rise + 0.5;
     this.lamp.intensity = light && evening ? 5.5 : 0;
@@ -1110,6 +1234,21 @@ export class Scene3D {
       if (f.side === "L") f.o.position.x += this.off.L;
       else if (f.side === "R") f.o.position.x -= this.off.R;
       else f.o.position.z += this.off.B;
+    }
+    // the funeral: the car crawls along the road, the yard kneels as it passes
+    if (this.processionT >= 0) {
+      this.processionT += dt;
+      const car = this.procession.getObjectByName("hearse")!;
+      const x = -10 + this.processionT * 1.3;
+      car.position.set(x, FLOOR_Y, -7.2);
+      const flag = car.getObjectByName("flag") as THREE.Mesh;
+      flag.rotation.x = Math.sin(time * 4) * 0.1;
+      this.mourners.forEach((r) => {
+        const passed = x > r.root.position.x - 3;
+        animateRig(r, 0, dt, "idle");
+        if (passed) { r.body.position.y = -0.38; r.legL.rotation.x = r.legR.rotation.x = -1.4; r.head.rotation.x = 0.35; }
+      });
+      if (x > 20) this.setProcession(false);
     }
     // the van
     this.van.visible = bus;
@@ -1217,6 +1356,7 @@ export class Scene3D {
       this.post.danger = 0;
       this.post.despair = 0;
       this.post.pulse = 0;
+      this.post.tilt = this.post.quality === "low" ? 0 : 0.4;
       this.post.render(dt);
       return;
     }
@@ -1229,6 +1369,8 @@ export class Scene3D {
     this.post.danger = this.info.danger;
     this.post.despair = this.info.despair;
     this.post.pulse = clamp(this.beat * this.beat * (0.15 + this.info.despair * 0.85) + this.squeezeV * 0.6, 0, 1.2);
+    // the diorama look: soft top and bottom, sharp where you are (not up close at the window)
+    this.post.tilt = this.post.quality === "low" || this.view === "window" ? 0 : 0.55;
     this.post.render(dt);
   }
 

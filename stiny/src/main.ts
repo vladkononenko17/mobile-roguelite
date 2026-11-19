@@ -2,12 +2,13 @@ import "./stiny.css";
 import { Scene3D } from "./Scene3D.ts";
 import * as A from "./audio.ts";
 import {
-  ENDINGS, ENDING_HINTS, ENDING_ORDER, MEMORY_DEAD, MEMORY_LINES, PERKS, PLACE_LABELS, SEASONS, SEASON_DEFS, THOUGHTS, TRAITS, actionById, perkById, seasonName,
-  type ActionId, type FriendState, type PlaceId, type TraitId,
+  ENDINGS, ENDING_HINTS, ENDING_ORDER, FAMILY, MEMORY_CAPTIONS, MEMORY_DEAD, MEMORY_HINTS, MEMORY_LINES, MEMORY_ORDER, MEMORY_TITLES, NEWYEAR_LINES, PERKS, PLACE_LABELS, SEASONS, SEASON_DEFS, THOUGHTS, TRAITS, actionById, perkById, seasonName,
+  type ActionId, type FriendState, type MemoryKind, type PlaceId, type TraitId,
 } from "./content.ts";
 import {
   actionsAt, beginAction, busHere, choosePerk, startDay, clockText, despair, endDay, fmt, has, hasWater, interruptAction, isLight, isNight,
-  bondOf, dailySeed, maxPsyche, newRun, peep, pendingOffer, readSteps, remember, replyFriend, replyOptions, takeOffer, tiszaCost,
+  bondOf, cheer, craving, dailySeed, drunk, maxPsyche, memoryFor, orderCost, resolveStory, storyChoices, tremor, withdrawal,
+  type StoryChoice, type StoryId, newRun, peep, pendingOffer, readSteps, remember, replyFriend, replyOptions, takeOffer, tiszaCost,
   type OfferId, type ReplyKind, type Visitor, resolveBallistic, resolveDelivery, resolveKnock, resolveMom, resolveNeighbor, resolveSlam, tick, unlockedTraits,
   yearIndex, type ActionResult, type DayEvent, type Msg, type Outcome, type RunState, type SeasonReport,
 } from "./sim.ts";
@@ -123,6 +124,10 @@ function updateHud(): void {
   if (d.rain) chips.push(`<span class="chip">🌧️ ${tr("ДОЩ", "RAIN")}</span>`);
   if (busHere(d) && d.knowsBus) chips.push(`<span class="chip bad">${tr("БУС У ДВОРІ", "VAN IN THE YARD")}</span>`);
   if (has(run, "station") && !isLight(d)) chips.push(`<span class="chip">🔋 ${Math.round(run.station)}%</span>`);
+  if (run.smoke) chips.push(`<span class="chip ${run.smoke.cigs === 0 ? "bad" : ""}">🚬 ${run.smoke.cigs}</span>`);
+  if (craving(run) > 60) chips.push(`<span class="chip bad">${tr("ТЯГНЕ ПАЛИТИ", "CRAVING")}</span>`);
+  if (withdrawal(run)) chips.push(`<span class="chip bad">${tr("ТРЕМОР", "THE SHAKES")}</span>`);
+  if (drunk(run)) chips.push(`<span class="chip bad">🍺 ${tr("ПʼЯНИЙ", "DRUNK")}</span>`);
   if (run.satiety < 20) chips.push(`<span class="chip bad">${tr("ГОЛОД", "HUNGRY")}</span>`);
   if (run.energy < 10) chips.push(`<span class="chip bad">${tr("НЕМАЄ СИЛ", "EXHAUSTED")}</span>`);
   const html = chips.join("");
@@ -194,9 +199,11 @@ async function doAction(id: ActionId): Promise<void> {
     await finishRun();
     return;
   }
-  if (id === "photos") {
-    await flow(() => flashback());
-    return;
+  // some actions open a memory first: the photo, a winter day crossed off, a proper meal
+  const mk = memoryFor(run, id);
+  if (mk) {
+    await flow(() => flashback(mk));
+    if (mk === "dacha" || !run?.day) return;
   }
   let s = 1;
   if (id === "work") {
@@ -258,7 +265,9 @@ function workGame(): Promise<number> {
     let pos = 0;
     let last = performance.now();
     let roundT = 0;
-    const speed = 1.1 + dsp * 0.9;
+    // shaking hands (craving, withdrawal) and drink make the marker hard to catch
+    const shake = run ? tremor(run) + (drunk(run) ? 0.7 : 0) : 0;
+    const speed = 1.1 + dsp * 0.9 + (run && drunk(run) ? 0.5 : 0);
     const newRound = () => {
       zw = 0.24 - dsp * 0.1 - round * 0.012;
       z0 = 0.1 + Math.random() * (0.8 - zw);
@@ -286,7 +295,7 @@ function workGame(): Promise<number> {
       t += dt * speed;
       roundT += dt;
       // the marker wobbles more when your head is not here
-      pos = (Math.sin(t * 2.4) + 1) / 2 + Math.sin(t * 7.3) * 0.03 * dsp;
+      pos = (Math.sin(t * 2.4) + 1) / 2 + Math.sin(t * 7.3) * 0.03 * dsp + Math.sin(t * 13.7) * 0.05 * shake + Math.sin(t * 29) * 0.02 * shake;
       marker.style.left = `${Math.max(0, Math.min(1, pos)) * 100}%`;
       if (roundT > 3.2 && round < 5) judge(false);
       if (round < 5) raf = requestAnimationFrame(loop);
@@ -545,19 +554,36 @@ function fadeTo(alpha: number, ms: number, white = false): Promise<void> {
   return wait(ms).then(() => undefined);
 }
 
-/** The photo from Kozyn, walked into: the five of you, July 2021. */
-async function flashback(): Promise<void> {
+/** Who is in a memory: the five friends, or mom, dad and grandma in the kitchen. */
+function memoryPeople(kind: MemoryKind, r: RunState): Array<{ name: string; line: (k: number) => string; color: number; dead: boolean; look?: Record<string, unknown>; hair?: number }> {
+  if (kind === "kitchen") {
+    const looks = [
+      { color: 0xc8506a, look: { pants: 0x5a4a6a }, hair: 0x6a3a22 },
+      { color: 0x4a6a8a, look: { pants: 0x3a3a44, glasses: true } },
+      { color: 0x6a4a6a, look: { pants: 0x3a2f3a, hat: "scarf", hatColor: 0xc8463a, build: 1.1 } },
+    ];
+    return FAMILY.map((f, i) => ({ name: f.name, line: (k: number) => f.lines[k % f.lines.length], dead: false, ...looks[i] }));
+  }
+  const lines = kind === "newyear" ? NEWYEAR_LINES : MEMORY_LINES;
+  return r.friends.map((f, i) => ({ name: nameOf(f), color: f.color, dead: f.state === "dead", line: (k: number) => (f.state === "dead" ? MEMORY_DEAD[0] : lines[(i * 3 + r.season + k) % lines.length]) }));
+}
+
+/** A memory from before, walked into: the dacha in July 2021, New Year's Eve, mom's kitchen. */
+async function flashback(kind: MemoryKind = "dacha"): Promise<void> {
   if (!run?.day) return;
   const r = run;
+  const people = memoryPeople(kind, r);
   stopBusy();
   await fadeTo(1, 700, true);
   mode = "memory";
   hud(false);
   $("#controls").classList.remove("hidden");
   $("#phone-btn").classList.add("hidden");
-  scene.enterMemory(r.friends.map((f) => ({ color: f.color, dead: f.state === "dead" })));
+  scene.enterMemory(kind, people.map((p) => ({ color: p.color, dead: p.dead, look: p.look, hair: p.hair })));
   score.bright = true;
-  setText($("#memory-hint"), tr("Підійди до друзів", "Walk up to your friends"));
+  setText($("#memory .eyebrow"), MEMORY_TITLES[kind]);
+  const goTo = kind === "kitchen" ? tr("Підійди до своїх", "Walk up to your family") : tr("Підійди до друзів", "Walk up to your friends");
+  setText($("#memory-hint"), goTo);
   $("#memory").classList.remove("hidden");
   await fadeTo(0, 1100, true);
   const talked = new Set<number>();
@@ -573,15 +599,16 @@ async function flashback(): Promise<void> {
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       t += dt;
-      A.summer(dt);
+      if (kind === "dacha") A.summer(dt);
+      else if (kind === "newyear") A.newYearNight(dt);
+      else A.kitchenSummer(dt);
       const i = scene.memoryNearest();
       if (i != null) {
-        talked.add(i);
         if (i !== shown) {
           shown = i;
-          const f = r.friends[i];
-          const line = f.state === "dead" ? MEMORY_DEAD[0] : MEMORY_LINES[(i * 3 + r.season) % MEMORY_LINES.length];
-          bubble.innerHTML = `<b>${esc(nameOf(f))}</b>${esc(line)}`;
+          const p = people[i];
+          bubble.innerHTML = `<b>${esc(p.name)}</b>${esc(p.line(talked.has(i) ? 1 : 0))}`;
+          talked.add(i);
           A.play("ping");
         }
         const p = scene.memoryHead(i);
@@ -589,8 +616,8 @@ async function flashback(): Promise<void> {
         bubble.style.top = `${Math.max(150, p.y)}px`;
         bubble.classList.remove("hidden");
       } else { shown = -1; bubble.classList.add("hidden"); }
-      setText($("#memory-hint"), talked.size >= r.friends.length ? tr("Усі тут. Зараз фото.", "Everyone's here. Photo time.") : `${tr("Підійди до друзів", "Walk up to your friends")} · ${talked.size}/${r.friends.length}`);
-      if (talked.size >= r.friends.length && allAt < 0) allAt = t;
+      setText($("#memory-hint"), talked.size >= people.length ? tr("Усі тут. Зараз фото.", "Everyone's here. Photo time.") : `${goTo} · ${talked.size}/${people.length}`);
+      if (talked.size >= people.length && allAt < 0) allAt = t;
       if (skip || (allAt >= 0 && t - allAt > 3) || t > 55) { resolve(); return; }
       requestAnimationFrame(loop);
     };
@@ -601,7 +628,7 @@ async function flashback(): Promise<void> {
   A.shutter();
   buzz(H.tap, true);
   scene.memoryFlash();
-  setText($("#photo-caption"), tr("Козин, липень 2021", "Kozyn, July 2021"));
+  setText($("#photo-caption"), MEMORY_CAPTIONS[kind]);
   $("#photo-frame").classList.remove("hidden");
   $("#memory").classList.add("hidden");
   await wait(2200);
@@ -617,7 +644,42 @@ async function flashback(): Promise<void> {
   mode = "day";
   hud(true);
   await fadeTo(0, 900);
-  await showResult(remember(r));
+  await showResult(remember(r, kind));
+}
+
+// ================================================================ moments
+
+const STORY_TEXT: Record<StoryId, () => [string, string]> = {
+  procession: () => [tr("ПРОЦЕСІЯ", "A PROCESSION"), tr("У дворі стає тихо. Повільно їде машина з прапором — везуть хлопця з третього підʼїзду. Люди стають на коліна просто на асфальті.", "The yard goes quiet. A car with a flag drives slowly through — they're bringing home the boy from the third entrance. People kneel right on the asphalt.")],
+  birthday: () => [tr("ДЕНЬ НАРОДЖЕННЯ", "BIRTHDAY"), tr("Вечір. Ти встромив свічку в пачку печива і запалив. Сам.", "Evening. You stuck a candle in a pack of biscuits and lit it. Alone.")],
+  ex: () => [tr("ПОВІДОМЛЕННЯ", "A MESSAGE"), tr("Аня: «я виходжу заміж. хотіла, щоб ти знав від мене».", "Anya: “I'm getting married. I wanted you to hear it from me.”")],
+};
+const CHOICE_LABEL: Record<StoryChoice, () => string> = {
+  kneel: () => tr("СТАТИ НА КОЛІНА БІЛЯ ВІКНА", "KNEEL BY THE WINDOW"),
+  watch: () => tr("ДИВИТИСЯ", "WATCH"),
+  away: () => tr("ВІДІЙТИ ВІД ВІКНА", "STEP AWAY FROM THE WINDOW"),
+  wish: () => tr("ЗАГАДАТИ БАЖАННЯ", "MAKE A WISH"),
+  blow: () => tr("ПРОСТО ЗАДУТИ", "JUST BLOW IT OUT"),
+  warm: () => tr("ПРИВІТАТИ ЩИРО", "CONGRATULATE HER"),
+  silent: () => tr("НЕ ВІДПОВІДАТИ", "DON'T ANSWER"),
+  still: () => tr("НАПИСАТИ, ЩО ДОСІ…", "SAY YOU STILL…"),
+};
+
+async function story(id: StoryId): Promise<void> {
+  if (!run) return;
+  const [title, text] = STORY_TEXT[id]();
+  if (id === "procession") {
+    // the yard goes silent; you see it from the window
+    score.hush = true;
+    scene.setPose("look");
+    scene.windowView(true);
+    scene.setProcession(true);
+    await wait(5000);
+  } else A.play("phone");
+  const c = await note(title, text, storyChoices(id).map((k, i) => ({ id: k, label: CHOICE_LABEL[k](), cls: i === 0 ? "main" : "" })));
+  const o = resolveStory(run, id, c as StoryChoice);
+  if (id === "procession") { scene.windowView(false); scene.setPose(null); score.hush = false; }
+  await outcomeNote(title, o);
 }
 
 // ================================================================ decisions that end a run
@@ -657,6 +719,11 @@ function showCodex(): void {
   $("#codex-fates").innerHTML = FATE_ORDER.map((st) => {
     const n = fates[st] ?? 0;
     return `<div class="fate ${n ? "" : "locked"}"><em>${n ? FRIEND_MARK[st] : "?"}</em>${n ? esc(stateWord(st)) : "???"}<small>${n ? `${n}×` : ""}</small></div>`;
+  }).join("");
+  const mems = meta.memories ?? {};
+  $("#codex-memories").innerHTML = MEMORY_ORDER.map((k) => {
+    const n = mems[k] ?? 0;
+    return `<div class="fate ${n ? "" : "locked"}"><em>${n ? "📷" : "?"}</em>${esc(n ? MEMORY_CAPTIONS[k] : MEMORY_HINTS[k])}<small>${n ? `${n}×` : ""}</small></div>`;
   }).join("");
   setText($("#codex-title"), `${tr("КІНЦІВКИ", "ENDINGS")} · ${ENDING_ORDER.filter((id) => seen[id]).length}/${ENDING_ORDER.length}`);
   showScreen("#codex-screen");
@@ -698,10 +765,13 @@ async function handle(e: DayEvent): Promise<void> {
       toast(e.near ? tr("Вибух. Дуже близько. Задзвеніли шибки.", "An explosion. Very close. The windowpanes rang.") : tr("Десь вибух. Далеко. Мабуть.", "An explosion somewhere. Far away. Probably."), "", e.near);
       if (d.glass) scene.setGlass(true);
       break;
-    case "power":
+    case "power": {
+      const yay = e.on ? cheer(run) : null;
+      if (yay) { A.cheer(); toast(yay, tr("Двір", "The yard"), false, 3800); break; }
       toast(e.on ? tr("Світло дали. Заряджай усе, що можна.", "The power is back. Charge everything you can.") : tr("Світло вимкнули. За графіком — чотири години.", "The power is off. Four hours, by the schedule."), tr("ДТЕК", "DTEK"));
       if (e.on) A.play("ping");
       break;
+    }
     case "water":
       toast(e.on ? tr("Воду дали.", "The water is back.") : tr("Воду вимкнули.", "The water is off."), tr("Чат будинку", "Building chat"));
       break;
@@ -765,6 +835,10 @@ async function handle(e: DayEvent): Promise<void> {
       });
       break;
     }
+    case "story":
+      stopBusy();
+      await flow(() => story(e.id));
+      break;
     case "neighbor": {
       A.knock();
       buzz(H.knock);
@@ -893,6 +967,7 @@ function dressScene(): void {
     friends: run.friends.map((f) => ({ color: f.color, state: f.state })), glass: !!run.day?.glass,
   });
   scene.setWeather(!!run.day?.rain);
+  scene.setBottles(run.booze?.dep ?? 0);
 }
 
 function hud(on: boolean): void {
@@ -1041,7 +1116,7 @@ function openPhone(): void {
   acts.innerHTML = "";
   for (const a of actionsAt(run, "phone")) {
     const b = actButton(a.def.id, a.ok, a.why);
-    if (a.def.id === "order") b.querySelector("small")!.textContent = a.ok ? `${fmt(Math.round(450 * [1, 1.2, 1.45, 1.7][yearIndex(run)] / 10) * 10)} · ${tr("+3 їжі", "+3 food")}` : a.why ?? "";
+    if (a.def.id === "order") b.querySelector("small")!.textContent = a.ok ? `${fmt(orderCost(run))} · ${tr("+3 їжі", "+3 food")}${run.smoke ? tr(" · +пачка", " · +a pack") : ""}` : a.why ?? "";
     acts.appendChild(b);
   }
   $("#phone-msgs").innerHTML = d.msgs.map((m, i) => msgHtml(m, true, i)).reverse().join("");
@@ -1362,6 +1437,7 @@ const STATIC_EN: Array<[string, string, boolean?]> = [
   ["#share-btn", "SHARE"],
   ["#codex-screen .eyebrow", "COLLECTION"],
   ["#codex-fates-title", "FRIENDS' FATES"],
+  ["#codex-mem-title", "MEMORIES"],
   ["#codex-back", "BACK"],
   ["#memory .eyebrow", "SUMMER 2021 · KOZYN"],
   ["#memory-skip", "GO BACK"],

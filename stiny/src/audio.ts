@@ -474,3 +474,47 @@ export function shutter(): void {
   noise(0, 0.04, 0.3, 4000, 2000, "bandpass", 1);
   noise(0.09, 0.05, 0.25, 3000, 1500, "bandpass", 1);
 }
+
+// ------------------------------------------------------------------ the other memories, and the yard
+
+let nyPop = 1.2;
+let radioT = 0;
+let radioStep = 0;
+/** New Year's Eve: distant fireworks popping and crackling, laughter. */
+export function newYearNight(dt: number): void {
+  if (!ctx()) return;
+  nyPop -= dt;
+  if (nyPop <= 0) {
+    nyPop = 0.7 + Math.random() * 1.8;
+    const bus = spatial(-6 + Math.random() * 12, -14, 0.9, 3);
+    tone(70 + Math.random() * 30, 0, 0.5, "sine", 0.22, 40, bus);
+    noise(0, 0.5, 0.18, 1200, 200, "lowpass", 0.8, bus);
+    for (let i = 0; i < 8; i++) noise(0.35 + i * 0.07 + Math.random() * 0.05, 0.03, 0.05, 4000, 2500, "highpass", 1, bus);
+  }
+}
+/** Mom's kitchen: a radio playing an old tune, a spoon on the pot, a fly at the window. */
+export function kitchenSummer(dt: number): void {
+  const a = ctx();
+  if (!a) return;
+  radioT -= dt;
+  if (radioT <= 0) {
+    radioT = 0.36;
+    // a little waltz through a small speaker
+    const tune = [72, 76, 79, 76, 74, 77, 81, 77, 72, 76, 79, 84, 83, 79, 76, 74];
+    const f = 440 * Math.pow(2, (tune[radioStep % tune.length] - 69) / 12);
+    tone(f, 0, 0.3, "square", 0.008, undefined, a.music);
+    if (radioStep % 3 === 0) tone(f / 4, 0, 0.32, "triangle", 0.012, undefined, a.music);
+    radioStep++;
+  }
+  if (Math.random() < dt * 0.4) noise(0, 0.04, 0.05, 3200, 2400, "bandpass", 3);
+}
+/** The whole yard shouting "Hurray!" when the power comes back. */
+export function cheer(): void {
+  const bus = at(SPOT.yard, 1.2, 4);
+  for (let i = 0; i < 9; i++) {
+    const t = Math.random() * 0.5;
+    const f = 220 + Math.random() * 260;
+    tone(f, t, 0.9 + Math.random() * 0.5, "sawtooth", 0.012, f * 1.15, bus);
+    noise(t, 1.0, 0.03, 1400, 700, "bandpass", 1.5, bus);
+  }
+}

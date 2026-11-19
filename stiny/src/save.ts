@@ -1,5 +1,5 @@
 import type { RunState } from "./sim.ts";
-import type { EndingId, FriendState, TraitId } from "./content.ts";
+import type { EndingId, FriendState, MemoryKind, TraitId } from "./content.ts";
 
 /** Progress on the device: the run in progress and what all runs added up to. */
 export interface Meta {
@@ -14,6 +14,7 @@ export interface Meta {
   /** The collection: how many times you reached each ending, and saw each fate of a friend. */
   endings?: Partial<Record<EndingId, number>>;
   fates?: Partial<Record<FriendState, number>>;
+  memories?: Partial<Record<MemoryKind, number>>;
 }
 
 const META_KEY = "stiny-meta-v1";
@@ -57,6 +58,9 @@ export function bankRun(m: Meta, r: RunState): void {
   const fates = { ...(m.fates ?? {}) };
   for (const k of Object.keys(r.flags)) if (k.startsWith("fate_")) { const st = k.slice(5) as FriendState; fates[st] = (fates[st] ?? 0) + 1; }
   m.fates = fates;
+  const mems = { ...(m.memories ?? {}) };
+  for (const k of Object.keys(r.flags)) if (k.startsWith("mem_")) { const id = k.slice(4) as MemoryKind; mems[id] = (mems[id] ?? 0) + 1; }
+  m.memories = mems;
   const day = r.flags.daily;
   if (day && m.daily?.date !== day) m.daily = { date: day, seasons: r.history.length, ending: r.ending ?? "zryv" };
   saveMeta(m);
