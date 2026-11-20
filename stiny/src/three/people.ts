@@ -55,7 +55,7 @@ const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z).normal
  * Where each limb points, in the character's space (+Z forward, +Y up, +X is the
  * character's left). Bones not listed keep the clip.
  */
-type Aim = Partial<Record<"spine" | "neck" | "lArm" | "lFore" | "rArm" | "rFore" | "lThigh" | "lShin" | "rThigh" | "rShin", THREE.Vector3>>;
+type Aim = Partial<Record<"spine" | "neck" | "head" | "lArm" | "lFore" | "rArm" | "rFore" | "lThigh" | "lShin" | "rThigh" | "rShin", THREE.Vector3>>;
 
 interface PoseDef {
   aim: (t: number) => Aim;
@@ -94,6 +94,117 @@ const POSES: Record<Pose, PoseDef> = {
   kneel: { hips: 0.42, aim: () => ({ spine: V(0, 1, 0.1), neck: V(0, 0.75, 0.65), lThigh: V(0.1, -1, 0.05), rThigh: V(-0.1, -1, 0.05), lShin: V(0, -0.15, -1), rShin: V(0, -0.15, -1), lArm: V(0.1, -1, 0.1), rArm: V(-0.1, -1, 0.1) }) },
 };
 
+// ------------------------------------------------------------------ the look up close
+
+/** Strength of the soft rim of light round every person (the scene follows the daylight). */
+export const RIM = { value: 0.3 };
+
+const detailCache = new Map<string, THREE.Texture>();
+/**
+ * A normal map drawn from a texture's own shading: the folds of a sweater, the
+ * weave of jeans, the creases of a face catch the light instead of being paint.
+ */
+function detailNormal(map: THREE.Texture, strength: number): THREE.Texture | null {
+  const key = `${map.uuid}|${strength}`;
+  const hit = detailCache.get(key);
+  if (hit) return hit;
+  const img = map.image as (CanvasImageSource & { width: number; height: number }) | undefined;
+  if (!img || !img.width || typeof document === "undefined") return null;
+  const N = Math.min(1024, img.width);
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = N;
+  const g = cv.getContext("2d", { willReadFrequently: true });
+  if (!g) return null;
+  g.drawImage(img, 0, 0, N, N);
+  const src = g.getImageData(0, 0, N, N).data;
+  const lum = new Float32Array(N * N);
+  for (let i = 0; i < N * N; i++) lum[i] = (src[i * 4] * 0.3 + src[i * 4 + 1] * 0.59 + src[i * 4 + 2] * 0.11) / 255;
+  const out = g.createImageData(N, N);
+  const L = (x: number, y: number) => lum[Math.min(N - 1, Math.max(0, y)) * N + Math.min(N - 1, Math.max(0, x))];
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const dx = (L(x + 1, y) - L(x - 1, y) + 0.5 * (L(x + 1, y - 1) - L(x - 1, y - 1) + L(x + 1, y + 1) - L(x - 1, y + 1))) * strength;
+    const dy = (L(x, y + 1) - L(x, y - 1) + 0.5 * (L(x - 1, y + 1) - L(x - 1, y - 1) + L(x + 1, y + 1) - L(x + 1, y - 1))) * strength;
+    const l = Math.hypot(dx, dy, 1);
+    const i = (y * N + x) * 4;
+    out.data[i] = (-dx / l * 0.5 + 0.5) * 255;
+    out.data[i + 1] = (-dy / l * 0.5 + 0.5) * 255;
+    out.data[i + 2] = (1 / l * 0.5 + 0.5) * 255;
+    out.data[i + 3] = 255;
+  }
+  g.putImageData(out, 0, 0);
+  const t = new THREE.CanvasTexture(cv);
+  t.flipY = map.flipY;
+  t.wrapS = map.wrapS; t.wrapT = map.wrapT;
+  t.anisotropy = 4;
+  detailCache.set(key, t);
+  return t;
+}
+
+const upgraded = new WeakMap<THREE.Material, THREE.MeshPhysicalMaterial>();
+/**
+ * The avatar's flat materials made real: cloth with a sheen and its folds in
+ * relief, skin with a soft peach-fuzz sheen and pores, wet eyes, hair cut out
+ * with smooth edges, and a faint rim of light that lifts the figure off the floor.
+ */
+function upgrade(src: THREE.MeshStandardMaterial): THREE.MeshPhysicalMaterial {
+  const hit = upgraded.get(src);
+  if (hit) return hit;
+  const name = src.name ?? "";
+  const cut = src.alphaTest > 0 || src.transparent || /hair|brow|lash|beard|moustache|ponytail|braid|afro|bob/i.test(name);
+  const eye = /^eyes?$|eye_|eyeball/i.test(name) && !/brow|lash/i.test(name);
+  const skin = /body|skin/i.test(name);
+  const m = new THREE.MeshPhysicalMaterial({
+    name, map: src.map, color: src.color, side: cut ? THREE.DoubleSide : src.side,
+    alphaTest: cut ? 0.4 : 0, transparent: false, depthWrite: true, metalness: 0,
+  });
+  m.envMapIntensity = 0.6;
+  if (eye) { m.roughness = 0.12; m.clearcoat = 1; m.clearcoatRoughness = 0.05; }
+  else if (cut) { m.roughness = 0.5; m.sheen = 0.5; m.sheenRoughness = 0.45; m.sheenColor = new THREE.Color(0xffffff).lerp(src.color, 0.4); m.alphaToCoverage = true; }
+  else if (skin) {
+    m.roughness = 0.52; m.sheen = 0.3; m.sheenRoughness = 0.5; m.sheenColor = new THREE.Color(0xffc8a8);
+    const n = src.map ? detailNormal(src.map, 2.2) : null;
+    if (n) { m.normalMap = n; m.normalScale.setScalar(0.35); }
+  } else {
+    // fabric
+    m.roughness = 0.88; m.sheen = 0.7; m.sheenRoughness = 0.7; m.sheenColor = new THREE.Color(0xffffff).lerp(src.color, 0.6).multiplyScalar(0.8);
+    const n = src.map ? detailNormal(src.map, 4.5) : null;
+    if (n) { m.normalMap = n; m.normalScale.setScalar(0.85); }
+  }
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.rimK = RIM;
+    sh.fragmentShader = "uniform float rimK;\n" + sh.fragmentShader.replace(
+      "#include <emissivemap_fragment>",
+      "#include <emissivemap_fragment>\n\tfloat rimF = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 3.0);\n\ttotalEmissiveRadiance += vec3(1.0, 0.94, 0.86) * diffuseColor.rgb * rimF * rimK;",
+    );
+  };
+  m.customProgramCacheKey = () => "stiny-rim";
+  upgraded.set(src, m);
+  return m;
+}
+
+let blobMat: THREE.MeshBasicMaterial | null = null;
+/** A soft dark patch under the feet: people stand on the floor instead of floating over it. */
+function contactShadow(): THREE.Mesh {
+  if (!blobMat) {
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = 64;
+    const g = cv.getContext("2d")!;
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, "rgba(0,0,0,1)"); gr.addColorStop(0.45, "rgba(0,0,0,.55)"); gr.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+    blobMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+  }
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 0.7), blobMat);
+  m.rotation.x = -Math.PI / 2;
+  m.position.y = 0.012;
+  m.renderOrder = 1;
+  m.userData.keepShape = true;
+  return m;
+}
+
+/** Where a limb points now, in the character's space. */
+const _inv = new THREE.Quaternion();
+
 const _q = new THREE.Quaternion();
 const _q2 = new THREE.Quaternion();
 const _a = new THREE.Vector3();
@@ -123,6 +234,7 @@ export class Human {
   /** Seat height for the sitting poses here (a chair, a bed's edge, a stool), metres of hips. */
   seat: number | null = null;
   readonly materials: THREE.Material[] = [];
+  private shadow: THREE.Mesh;
 
   constructor(gltf: GLTF) {
     this.model = SkeletonUtils.clone(gltf.scene);
@@ -132,14 +244,9 @@ export class Human {
         m.castShadow = true;
         m.receiveShadow = true;
         m.frustumCulled = false;
-        const mats = Array.isArray(m.material) ? m.material : [m.material];
-        for (const mt of mats) {
-          const s = mt as THREE.MeshStandardMaterial;
-          // hair, brows and lashes are cut-outs: no sorting troubles
-          if (s.transparent && s.map) { s.alphaTest = 0.45; s.transparent = false; s.depthWrite = true; }
-          s.envMapIntensity = 0.6;
-          this.materials.push(s);
-        }
+        if (Array.isArray(m.material)) m.material = m.material.map((mt) => upgrade(mt as THREE.MeshStandardMaterial));
+        else m.material = upgrade(m.material as THREE.MeshStandardMaterial);
+        for (const mt of Array.isArray(m.material) ? m.material : [m.material]) if (!this.materials.includes(mt)) this.materials.push(mt);
       }
       if ((o as THREE.Bone).isBone) {
         const name = o.name.replace(/^mixamorig:?/, "");
@@ -148,6 +255,8 @@ export class Human {
     });
     this.pivot.add(this.model);
     this.root.add(this.pivot);
+    this.shadow = contactShadow();
+    this.root.add(this.shadow);
     this.mixer = new THREE.AnimationMixer(this.model);
     const clip = (n: string) => gltf.animations.find((a) => a.name === n);
     const idleClip = clip("Survivor_Idle") ?? clip("Idle_10") ?? null;
@@ -172,7 +281,8 @@ export class Human {
 
   /** See-through, for someone who is gone now. */
   fade(opacity: number): void {
-    for (const m of this.materials) { m.transparent = true; m.opacity = opacity; m.depthWrite = false; m.alphaTest = 0; }
+    for (const m of this.materials) { m.transparent = true; m.opacity = opacity; m.depthWrite = false; m.alphaTest = 0; (m as THREE.MeshPhysicalMaterial).alphaToCoverage = false; }
+    this.shadow.visible = false;
     this.model.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = false; });
   }
 
@@ -207,16 +317,18 @@ export class Human {
     const pitch = THREE.MathUtils.lerp(from.pitch ?? 0, def.pitch ?? 0, k);
     this.pivot.rotation.x = pitch;
     this.root.updateMatrixWorld(true);
-    // aim the limbs
-    const aims = def.aim(this.t);
-    const prevAims = k < 1 ? from.aim(this.t) : {};
+    // aim the limbs: standing and walking get a natural body over the borrowed clips
+    const nat = this.pose === "stand" || this.pose === "walk" || this.prev === "stand" || this.prev === "walk" ? this.natural(walking ? w : 0) : null;
+    const aims = this.pose === "stand" || this.pose === "walk" ? { ...nat } : def.aim(this.t);
+    const prevAims = k < 1 ? (this.prev === "stand" || this.prev === "walk" ? { ...nat } : from.aim(this.t)) : {};
     const slump = this.slump;
-    if (slump > 0.01 && !aims.spine && !aims.neck && def.pitch === undefined) {
+    if (slump > 0.01 && (this.pose === "stand" || this.pose === "walk" || (!aims.spine && !aims.neck)) && def.pitch === undefined) {
       aims.spine = V(0, 1, 0.18 * slump);
       aims.neck = V(0, 1, 0.55 * slump);
     }
     this.aimLimb("Spine1", "Neck", aims.spine, prevAims.spine, k);
     this.aimLimb("Neck", "Head", aims.neck, prevAims.neck, k);
+    this.aimLimb("Head", "HeadTop_End", aims.head, prevAims.head, k);
     for (const [side, s] of [["Left", "l"], ["Right", "r"]] as const) {
       this.aimLimb(`${side}Arm`, `${side}ForeArm`, aims[`${s}Arm`], prevAims[`${s}Arm`], k);
       this.aimLimb(`${side}ForeArm`, `${side}Hand`, aims[`${s}Fore`], prevAims[`${s}Fore`], k);
@@ -237,6 +349,45 @@ export class Human {
       const hy = (hips.getWorldPosition(_a).y - this.root.getWorldPosition(_b).y) / (this.size || 1);
       this.model.position.y = Math.min(0, target - hy);
     }
+  }
+
+  /** Where a bone points now (after the clip), in the character's space. */
+  private dirOf(bone: string, child: string): THREE.Vector3 | null {
+    const b = this.bones[bone], c = this.bones[child];
+    if (!b || !c) return null;
+    this.pivot.getWorldQuaternion(_inv).invert();
+    return c.getWorldPosition(new THREE.Vector3()).sub(b.getWorldPosition(new THREE.Vector3())).normalize().applyQuaternion(_inv);
+  }
+
+  /**
+   * A person standing at ease: arms hanging close to the body, elbows soft,
+   * legs under the hips, a slow breath. Walking (w → 1) keeps the clip's legs
+   * and swings each arm against the opposite leg.
+   */
+  private natural(w: number): Aim {
+    const t = this.t;
+    const breath = Math.sin(t * 1.4) * 0.012;
+    const sway = Math.sin(t * 0.37) * 0.015;
+    const aim: Aim = {};
+    const rT = this.dirOf("RightUpLeg", "RightLeg"), lT = this.dirOf("LeftUpLeg", "LeftLeg");
+    const swingL = rT ? THREE.MathUtils.clamp(rT.z * 1.1, -0.45, 0.45) * w : 0;
+    const swingR = lT ? THREE.MathUtils.clamp(lT.z * 1.1, -0.45, 0.45) * w : 0;
+    aim.lArm = V(0.11 + breath, -1, 0.04 + sway + swingL);
+    aim.rArm = V(-0.11 - breath, -1, 0.04 - sway + swingR);
+    aim.lFore = V(0.03, -1, 0.16 + Math.max(0, swingL) * 0.9);
+    aim.rFore = V(-0.03, -1, 0.16 + Math.max(0, swingR) * 0.9);
+    if (w < 0.999) {
+      // legs: from the clip's wide crouch to standing straight, by how much we walk
+      const mix = (clip: THREE.Vector3 | null, stand: THREE.Vector3) => (clip ? stand.clone().lerp(clip, w).normalize() : stand);
+      aim.lThigh = mix(lT, V(0.05 + sway, -1, 0.0));
+      aim.rThigh = mix(rT, V(-0.05 + sway, -1, 0.0));
+      aim.lShin = mix(this.dirOf("LeftLeg", "LeftFoot"), V(0.0, -1, -0.02));
+      aim.rShin = mix(this.dirOf("RightLeg", "RightFoot"), V(0.0, -1, -0.02));
+      aim.spine = V(0, 1, 0.03 + breath);
+      aim.neck = V(0, 1, 0.2);
+      aim.head = V(0, 1, 0.1 + Math.sin(t * 0.23) * 0.04);
+    }
+    return aim;
   }
 
   /**
