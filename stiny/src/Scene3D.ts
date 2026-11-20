@@ -10,6 +10,7 @@ import { lino, markTexture, parquet, plaster, tiles, wallpaper, type Mark, type 
 import { LaptopScreen, type ScreenMode } from "./three/screen.ts";
 import { Memory, type MemoryFriend } from "./three/memory.ts";
 import { Sunbeam, curtains, faceUp, ficus, smoothen, surface, type Surface as Finish } from "./three/smooth.ts";
+import { Human, loadPerson, replaceRig, type PersonId, type Pose as BodyPose } from "./three/people.ts";
 import type { ActionId, MemoryKind, PlaceId } from "./content.ts";
 
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
@@ -72,7 +73,18 @@ interface Box { x0: number; z0: number; x1: number; z1: number; /** Which wall i
 type Side = "L" | "R" | "B";
 
 /** A person in the courtyard. */
-interface Walker { rig: Rig; from: THREE.Vector3; to: THREE.Vector3; t: number; speed: number; idle?: boolean; pose?: "call" | "idle" | "grab" }
+interface Walker { rig: Rig; from: THREE.Vector3; to: THREE.Vector3; t: number; speed: number; idle?: boolean; pose?: "call" | "idle" | "grab"; human?: Human }
+
+/** What the real body does for each action (the chibi rig had its own poses). */
+const BODY: Partial<Record<ActionId, BodyPose>> = {
+  work: "type", game: "type", therapy: "type", journal: "type", eat: "eat", drink: "eat", read: "read", guitar: "guitar",
+  stare: "lie", sleep: "lie", exercise: "push", pet: "floor", shelter: "curl", look: "sill", air: "sill", balcony: "sill",
+  tomatoes: "water", water_plant: "water", cook: "stir", tidy: "stir", shower: "arms_up", wash_bottle: "arms_up",
+  go_out: "reach", break_out: "reach", calendar: "reach", peephole: "lean", smoke: "smoke", smoke_window: "smoke",
+  chat: "call", news: "call", friends: "call", mom: "call", order: "call", photos: "stand", mirror: "stand",
+};
+/** Seat heights (hips) where the sitting actions happen. */
+const SEAT: Partial<Record<ActionId, number>> = { work: 0.6, game: 0.6, therapy: 0.6, journal: 0.6, eat: 0.58, drink: 0.58, read: 0.74, guitar: 0.74 };
 
 export interface FrameInfo {
   clock: number;
@@ -147,6 +159,10 @@ export class Scene3D {
   // hero
   hero: Rig;
   private beard: THREE.Mesh;
+  /** The hero as a real person (CC0 MakeHuman avatar), when loaded; the chibi rig is the fallback. */
+  private heroHuman: Human | null = null;
+  private heroModel: PersonId | null = null;
+  private mournerHumans: Array<Human | null> = [];
   private hair: THREE.Mesh;
   private heroPos = new THREE.Vector3(-2.2, 0, 0);
   private heroYaw = Math.PI;
@@ -249,6 +265,7 @@ export class Scene3D {
 
     this.buildProcession();
     smoothen(this.yard, "far");
+    this.loadPeople();
     this.resize();
     window.addEventListener("resize", () => this.resize());
     this.renderer.setAnimationLoop(() => this.tick());
@@ -324,6 +341,39 @@ export class Scene3D {
     this.beams = [new Sunbeam(1.3, 1.4, 3.4), new Sunbeam(1.1, 1.4, 3.0)];
     at(this.beams[0].group, -3.8, 2.25, -3.42, this.flat).rotation.x = -0.95;
     at(this.beams[1].group, 3.6, 2.25, -3.42, this.flat).rotation.x = -0.95;
+  }
+
+  /**
+   * Real people for the yard (light copies: they are five floors down), the
+   * officers and the mourners; the hero is loaded by season in setSeason.
+   */
+  private loadPeople(): void {
+    const put = (rig: Rig, id: PersonId, size: number, done?: (h: Human) => void) => {
+      loadPerson(id, true).then((g) => { const h = new Human(g); h.size = size; replaceRig(rig, h); done?.(h); }).catch(() => { /* the chibi stays */ });
+    };
+    const walkerIds: PersonId[] = ["grandma", "grandma", "mom", "friend2", "friend5", "friend1"];
+    this.walkers.forEach((w, i) => put(w.rig, walkerIds[i], i >= 4 ? 0.82 : 1, (h) => { w.human = h; }));
+    this.officers.forEach((o) => put(o.rig, "officer", 1.02, (h) => { o.human = h; }));
+    const mournerIds: PersonId[] = ["grandma", "mom", "friend3", "grandma", "friend4", "mom", "friend2", "grandma"];
+    this.mourners.forEach((r, i) => { this.mournerHumans[i] = null; put(r, mournerIds[i], 1, (h) => { this.mournerHumans[i] = h; }); });
+  }
+
+  /** The hero's body for a season: stubble in 2023, a beard by 2024, long hair and a long beard by 2026. */
+  private heroFor(season: number): void {
+    const id: PersonId = season < 4 ? "hero1" : season < 10 ? "hero2" : "hero3";
+    if (id === this.heroModel) return;
+    this.heroModel = id;
+    loadPerson(id).then((g) => {
+      if (this.heroModel !== id) return;
+      const h = new Human(g);
+      replaceRig(this.hero, h);
+      this.heroHuman = h;
+    }).catch(() => { /* the chibi stays */ });
+  }
+
+  /** Starts loading the people of a memory, so they are there when it opens. */
+  preloadMemory(ids: PersonId[]): Promise<unknown> {
+    return Promise.all(ids.map((id) => loadPerson(id).catch(() => null)));
   }
 
   /** The funeral car with a flag and the people who kneel along the path. */
@@ -883,6 +933,7 @@ export class Scene3D {
     const tapeOn = season >= 8;
     this.wallsBack.children.forEach((c) => { if (c.name === "tape") c.visible = tapeOn; });
     this.brokenGlass.visible = opts.glass;
+    this.heroFor(season);
     // years in the flat: hair and beard grow
     const k = season / 15;
     this.beard.visible = season >= 2;
@@ -1130,6 +1181,15 @@ export class Scene3D {
     rig.root.position.copy(this.heroPos);
     rig.root.rotation.y = this.heroYaw;
     rig.root.visible = this.view !== "window";
+    const hh = this.heroHuman;
+    if (hh) {
+      const act = this.pose;
+      hh.setPose(act ? BODY[act] ?? "stand" : "stand");
+      hh.seat = act ? SEAT[act] ?? null : null;
+      hh.slump = this.info.despair;
+      const moving = !act ? Math.min(1, Math.hypot(this.move.x, this.move.y)) * this.heroSpeed : 0;
+      hh.update(dt, moving);
+    }
   }
 
   // ================================================================ window view
@@ -1243,10 +1303,12 @@ export class Scene3D {
       car.position.set(x, FLOOR_Y, -7.2);
       const flag = car.getObjectByName("flag") as THREE.Mesh;
       flag.rotation.x = Math.sin(time * 4) * 0.1;
-      this.mourners.forEach((r) => {
+      this.mourners.forEach((r, i) => {
         const passed = x > r.root.position.x - 3;
         animateRig(r, 0, dt, "idle");
         if (passed) { r.body.position.y = -0.38; r.legL.rotation.x = r.legR.rotation.x = -1.4; r.head.rotation.x = 0.35; }
+        const mh = this.mournerHumans[i];
+        if (mh) { mh.setPose(passed ? "kneel" : "stand"); mh.update(dt, 0); }
       });
       if (x > 20) this.setProcession(false);
     }
@@ -1264,12 +1326,14 @@ export class Scene3D {
         o.rig.root.rotation.y = i ? -2.4 : 2.6;
         animateRig(o.rig, 0, dt, "call");
         o.rig.armR.rotation.x = i ? -2.0 : -1.4;
+        if (o.human) { o.human.setPose(i ? "smoke" : "call"); o.human.update(dt, 0); }
       } else {
         o.t += dt * 0.12;
         const k = (Math.sin(o.t) + 1) / 2;
         o.rig.root.position.set(lerp(-2.4, -3, k), FLOOR_Y, lerp(-15.5, -5.2, k));
         o.rig.root.rotation.y = Math.cos(o.t) > 0 ? 0.5 : -2.6;
         animateRig(o.rig, 1.2, dt, "walk");
+        o.human?.update(dt, 1.2);
       }
     });
     // people: many in 2023, few later, none when the van is here or at night
@@ -1292,6 +1356,7 @@ export class Scene3D {
       w.rig.root.position.lerpVectors(w.from, w.to, w.t);
       w.rig.root.rotation.y = Math.atan2(w.to.x - w.from.x, w.to.z - w.from.z);
       animateRig(w.rig, i < 2 ? 0.7 : 1.3, dt, "walk");
+      w.human?.update(dt, i < 2 ? 0.7 : 1.3);
     });
     // snow falls
     if (this.snow) {

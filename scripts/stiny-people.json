@@ -1,0 +1,652 @@
+{
+ "hero1": {
+  "version": 1,
+  "editor": "AvatarEditor",
+  "name": "Hero 2023",
+  "body": {
+   "gender": 1,
+   "age": 0.53,
+   "muscle": 0.42,
+   "weight": 0.52,
+   "race": {
+    "african": 0.02,
+    "asian": 0.08,
+    "caucasian": 0.9
+   }
+  },
+  "skin": {
+   "tone": 0.1,
+   "color": null
+  },
+  "eyes": "brown",
+  "face": {},
+  "hair": {
+   "style": "cortu_short_messy_hair",
+   "color": "#2b1d14"
+  },
+  "eyebrows": "eyebrow003",
+  "eyebrowHeight": 0.8,
+  "moustache": null,
+  "beard": "paint_stubble",
+  "glasses": null,
+  "hat": null,
+  "outfit": null,
+  "top": "elvs_crude_t-shirt_male",
+  "bottom": "toigo_wool_pants",
+  "shoes": "toigo_mj_cloth_shoes",
+  "makeup": {
+   "eyeshadow": {
+    "amount": 0,
+    "color": "#7a5a8c"
+   },
+   "lips": {
+    "amount": 0,
+    "color": "#a8323e"
+   },
+   "nails": {
+    "amount": 0,
+    "color": "#b0283a"
+   }
+  }
+ },
+ "hero2": {
+  "version": 1,
+  "editor": "AvatarEditor",
+  "name": "Hero 2024",
+  "body": {
+   "gender": 1,
+   "age": 0.55,
+   "muscle": 0.36,
+   "weight": 0.47,
+   "race": {
+    "african": 0.02,
+    "asian": 0.08,
+    "caucasian": 0.9
+   }
+  },
+  "skin": {
+   "tone": 0.07,
+   "color": null
+  },
+  "eyes": "brown",
+  "face": {},
+  "hair": {
+   "style": "cortu_short_messy_hair",
+   "color": "#2b1d14"
+  },
+  "eyebrows": "eyebrow003",
+  "eyebrowHeight": 0.8,
+  "moustache": null,
+  "beard": "paint_beard_short",
+  "glasses": null,
+  "hat": null,
+  "outfit": null,
+  "top": "toigo_fisherman_sweater",
+  "bottom": "toigo_wool_pants",
+  "shoes": "toigo_mj_cloth_shoes",
+  "makeup": {
+   "eyeshadow": {
+    "amount": 0,
+    "color": "#7a5a8c"
+   },
+   "lips": {
+    "amount": 0,
+    "color": "#a8323e"
+   },
+   "nails": {
+    "amount": 0,
+    "color": "#b0283a"
+   }
+  }
+ },
+ "hero3": {
+  "version": 1,
+  "editor": "AvatarEditor",
+  "name": "Hero 2026",
+  "body": {
+   "gender": 1,
+   "age": 0.58,
+   "muscle": 0.28,
+   "weight": 0.4,
+   "race": {
+    "african": 0.02,
+    "asian": 0.08,
+    "caucasian": 0.9
+   }
+  },
+  "skin": {
+   "tone": 0.04,
+   "color": null
+  },
+  "eyes": "brown",
+  "face": {},
+  "hair": {
+   "style": "cortu_shaggy_green_hair",
+   "color": "#2b1d14"
+  },
+  "eyebrows": "eyebrow003",
+  "eyebrowHeight": 0.8,
+  "moustache": null,
+  "beard": "rehmanpolanski_beard_viking",
+  "glasses": null,
+  "hat": null,
+  "outfit": null,
+  "top": "toigo_fisherman_sweater",
+  "bottom": "toigo_wool_pants",
+  "shoes": "toigo_mj_cloth_shoes",
+  "makeup": {
+   "eyeshadow": {
+    "amount": 0,
+    "color": "#7a5a8c"
+   },
+   "lips": {
+    "amount": 0,
+    "color": "#a8323e"
+   },
+   "nails": {
+    "amount": 0,
+    "color": "#b0283a"
+   }
+  }
+ },
+ "friend1": {
+  "version": 1,
+  "editor": "AvatarEditor",
+  "name": "Friend 1",
+  "body": {
+   "gender": 1,
+   "age": 0.5,
+   "muscle": 0.55,
+   "weight": 0.5,
+   "race": {
+    "african": 0.02,
+    "asian": 0.08,
+    "caucasian": 0.9
+   }
+  },
+  "skin": {
+   "tone": 0.12,
+   "color": null
+  },
+  "eyes": "brown",
+  "face": {},
+  "hair": {
+   "style": "short02",
+   "color": "#3a2a1a"
+  },
+  "eyebrows": "eyebrow002",
+  "eyebrowHeight": 0.8,
+  "moustache": null,
+  "beard": "paint_stubble",
+  "glasses": null,
+  "hat": null,
+  "outfit": null,
+  "top": "namuhekam_male_polo_shirt",
+  "bottom": "toigo_wool_pants",
+  "shoes": "shoes02",
+  "makeup": {
+   "eyeshadow": {
+    "amount": 0,
+    "color": "#7a5a8c"
+   },
+   "lips": {
+    "amount": 0,
+    "color": "#a8323e"
+   },
+   "nails": {
+    "amount": 0,
+    "color": "#b0283a"
+   }
+  }
+ },
+ "friend2": {
+  "version": 1,
+  "editor": "AvatarEditor",
+  "name": "Friend 2",
+  "body": {
+   "gender": 1,
+   "age": 0.52,
+   "muscle": 0.6,
+   "weight": 0.6,
+   "race": {
+    "african": 0.02,
+    "asian": 0.08,
+    "caucasian": 0.9
+   }
+  },
+  "skin": {
+   "tone": 0.2,
+   "color": null
+  },
+  "eyes": "brown",
+  "face": {},
+  "hair": {
+   "style": "short04",
+   "color": "#1e1610"
+  },
+  "eyebrows": "eyebrow006",
+  "eyebrowHeight": 0.8,
+  "moustache": null,
+  "beard": null,
+  "glasses": null,
+  "hat": null,
+  "outfit": "male_casualsuit05",
+  "top": null,
+  "bottom": null,
+  "shoes": "shoes02",
+  "makeup": {
+   "eyeshadow": {
+    "amount": 0,
+    "color": "#7a5a8c"
+   },
+   "lips": {
+    "amount": 0,
+    "color": "#a8323e"
+   },
+   "nails": {
+    "amount": 0,
+    "color": "#b0283a"
+   }
+  }
+ },
+ "friend3": {
+  "version": 1,
+  "editor": "AvatarEditor",
+  "name": "Friend 3",
+  "body": {
+   "gender": 1,
+   "age": 0.48,
+   "muscle": 0.45,
+   "weight": 0.45,
+   "race": {
+    "african": 0.02,
+    "asian": 0.08,
+    "caucasian": 0.9
+   }
+  },
+  "skin": {
+   "tone": 0.12,
+   "color": null
+  },
+  "eyes": "brown",
+  "face": {},
+  "hair": {
+   "style": "culturalibre_hair_05",
+   "color": "#6a4a2a"
+  },
+  "eyebrows": "eyebrow004",
+  "eyebrowHeight": 0.8,
+  "moustache": null,
+  "beard": null,
+  "glasses": "spamrakuen_tbm_glasses_frames_01",
+  "hat": null,
+  "outfit": "male_casualsuit03",
+  "top": null,
+  "bottom": null,
+  "shoes": "shoes05",
+  "makeup": {
+   "eyeshadow": {
+    "amount": 0,
+    "color": "#7a5a8c"
+   },
+   "lips": {
+    "amount": 0,
+    "color": "#a8323e"
+   },
+   "nails": {
+    "amount": 0,
+    "color": "#b0283a"
+   }
+  }
+ },
+ "friend4": {
+  "version": 1,
+  "editor": "AvatarEditor",
+  "name": "Friend 4",
+  "body": {
+   "gender": 1,
+   "age": 0.5,
+   "muscle": 0.65,
+   "weight": 0.55,
+   "race": {
+    "african": 0.02,
+    "asian": 0.08,
+    "caucasian": 0.9
+   }
+  },
+  "skin": {
+   "tone": 0.12,
+   "color": null
+  },
+  "eyes": "blue",
+  "face": {},
+  "hair": {
+   "style": "short01",
+   "color": "#a07848"
+  },
+  "eyebrows": "eyebrow001",
+  "eyebrowHeight": 0.8,
+  "moustache": null,
+  "beard": "beard_short",
+  "glasses": null,
+  "hat": null,
+  "outfit": "male_casualsuit04",
+  "top": null,
+  "bottom": null,
+  "shoes": "shoes02",
+  "makeup": {
+   "eyeshadow": {
+    "amount": 0,
+    "color": "#7a5a8c"
+   },
+   "lips": {
+    "amount": 0,
+    "color": "#a8323e"
+   },
+   "nails": {
+    "amount": 0,
+    "color": "#b0283a"
+   }
+  }
+ },
+ "friend5": {
+  "version": 1,
+  "editor": "AvatarEditor",
+  "name": "Friend 5",
+  "body": {
+   "gender": 1,
+   "age": 0.47,
+   "muscle": 0.5,
+   "weight": 0.48,
+   "race": {
+    "african": 0.02,
+    "asian": 0.08,
+    "caucasian": 0.9
+   }
+  },
+  "skin": {
+   "tone": 0.12,
+   "color": null
+  },
+  "eyes": "brown",
+  "face": {},
+  "hair": {
+   "style": "short03",
+   "color": "#2a1f17"
+  },
+  "eyebrows": "eyebrow008",
+  "eyebrowHeight": 0.8,
+  "moustache": null,
+  "beard": null,
+  "glasses": null,
+  "hat": null,
+  "outfit": "male_casualsuit06",
+  "top": null,
+  "bottom": null,
+  "shoes": "shoes03",
+  "makeup": {
+   "eyeshadow": {
+    "amount": 0,
+    "color": "#7a5a8c"
+   },
+   "lips": {
+    "amount": 0,
+    "color": "#a8323e"
+   },
+   "nails": {
+    "amount": 0,
+    "color": "#b0283a"
+   }
+  }
+ },
+ "mom": {
+  "version": 1,
+  "editor": "AvatarEditor",
+  "name": "Mom",
+  "body": {
+   "gender": 0,
+   "age": 0.62,
+   "muscle": 0.35,
+   "weight": 0.58,
+   "race": {
+    "african": 0.02,
+    "asian": 0.08,
+    "caucasian": 0.9
+   }
+  },
+  "skin": {
+   "tone": 0.12,
+   "color": null
+  },
+  "eyes": "brown",
+  "face": {},
+  "hair": {
+   "style": "bob01",
+   "color": "#5a3420"
+  },
+  "eyebrows": "eyebrow005",
+  "eyebrowHeight": 0.8,
+  "moustache": null,
+  "beard": null,
+  "glasses": null,
+  "hat": null,
+  "outfit": "female_casualsuit01",
+  "top": null,
+  "bottom": null,
+  "shoes": "toigo_mj_cloth_shoes",
+  "makeup": {
+   "eyeshadow": {
+    "amount": 0,
+    "color": "#7a5a8c"
+   },
+   "lips": {
+    "amount": 0,
+    "color": "#a8323e"
+   },
+   "nails": {
+    "amount": 0,
+    "color": "#b0283a"
+   }
+  }
+ },
+ "dad": {
+  "version": 1,
+  "editor": "AvatarEditor",
+  "name": "Dad",
+  "body": {
+   "gender": 1,
+   "age": 0.65,
+   "muscle": 0.5,
+   "weight": 0.62,
+   "race": {
+    "african": 0.02,
+    "asian": 0.08,
+    "caucasian": 0.9
+   }
+  },
+  "skin": {
+   "tone": 0.12,
+   "color": null
+  },
+  "eyes": "brown",
+  "face": {},
+  "hair": {
+   "style": "short04",
+   "color": "#3a2c22"
+  },
+  "eyebrows": "eyebrow007",
+  "eyebrowHeight": 0.8,
+  "moustache": "rehmanpolanski_moustache_viking",
+  "beard": null,
+  "glasses": "spamrakuen_sagerfrogs_glasses_04",
+  "hat": null,
+  "outfit": "male_casualsuit01",
+  "top": null,
+  "bottom": null,
+  "shoes": "shoes01",
+  "makeup": {
+   "eyeshadow": {
+    "amount": 0,
+    "color": "#7a5a8c"
+   },
+   "lips": {
+    "amount": 0,
+    "color": "#a8323e"
+   },
+   "nails": {
+    "amount": 0,
+    "color": "#b0283a"
+   }
+  }
+ },
+ "grandma": {
+  "version": 1,
+  "editor": "AvatarEditor",
+  "name": "Grandma",
+  "body": {
+   "gender": 0,
+   "age": 0.88,
+   "muscle": 0.25,
+   "weight": 0.72,
+   "race": {
+    "african": 0.02,
+    "asian": 0.08,
+    "caucasian": 0.9
+   }
+  },
+  "skin": {
+   "tone": 0.12,
+   "color": null
+  },
+  "eyes": "brown",
+  "face": {},
+  "hair": {
+   "style": "bob02",
+   "color": "#bdb8b0"
+  },
+  "eyebrows": "eyebrow010",
+  "eyebrowHeight": 0.8,
+  "moustache": null,
+  "beard": null,
+  "glasses": null,
+  "hat": null,
+  "outfit": null,
+  "top": "toigo_fisherman_sweater",
+  "bottom": "toigo_long_full_skirt",
+  "shoes": "shoes01",
+  "makeup": {
+   "eyeshadow": {
+    "amount": 0,
+    "color": "#7a5a8c"
+   },
+   "lips": {
+    "amount": 0,
+    "color": "#a8323e"
+   },
+   "nails": {
+    "amount": 0,
+    "color": "#b0283a"
+   }
+  }
+ },
+ "officer": {
+  "version": 1,
+  "editor": "AvatarEditor",
+  "name": "Officer",
+  "body": {
+   "gender": 1,
+   "age": 0.56,
+   "muscle": 0.78,
+   "weight": 0.62,
+   "race": {
+    "african": 0.02,
+    "asian": 0.08,
+    "caucasian": 0.9
+   }
+  },
+  "skin": {
+   "tone": 0.18,
+   "color": null
+  },
+  "eyes": "brown",
+  "face": {},
+  "hair": {
+   "style": "short04",
+   "color": "#1e1610"
+  },
+  "eyebrows": "eyebrow002",
+  "eyebrowHeight": 0.8,
+  "moustache": null,
+  "beard": "paint_stubble",
+  "glasses": null,
+  "hat": null,
+  "outfit": null,
+  "top": "namuhekam_male_polo_shirt",
+  "bottom": "cortu_cargo_pants",
+  "shoes": "toigo_ankle_boots_male",
+  "makeup": {
+   "eyeshadow": {
+    "amount": 0,
+    "color": "#7a5a8c"
+   },
+   "lips": {
+    "amount": 0,
+    "color": "#a8323e"
+   },
+   "nails": {
+    "amount": 0,
+    "color": "#b0283a"
+   }
+  }
+ },
+ "kid": {
+  "version": 1,
+  "editor": "AvatarEditor",
+  "name": "Kid 2008",
+  "body": {
+   "gender": 1,
+   "age": 0.18,
+   "muscle": 0.3,
+   "weight": 0.45,
+   "race": {
+    "african": 0.02,
+    "asian": 0.08,
+    "caucasian": 0.9
+   }
+  },
+  "skin": {
+   "tone": 0.1,
+   "color": null
+  },
+  "eyes": "brown",
+  "face": {},
+  "hair": {
+   "style": "short01",
+   "color": "#4a3020"
+  },
+  "eyebrows": "eyebrow003",
+  "eyebrowHeight": 0.8,
+  "moustache": null,
+  "beard": null,
+  "glasses": null,
+  "hat": null,
+  "outfit": null,
+  "top": "elvs_crude_t-shirt_male",
+  "bottom": "cortu_jeans_shorts",
+  "shoes": "shoes02",
+  "makeup": {
+   "eyeshadow": {
+    "amount": 0,
+    "color": "#7a5a8c"
+   },
+   "lips": {
+    "amount": 0,
+    "color": "#a8323e"
+   },
+   "nails": {
+    "amount": 0,
+    "color": "#b0283a"
+   }
+  }
+ }
+}

@@ -17,6 +17,7 @@ import { detectLang, getLang, nameOf, num, saveLang, tr, type Lang } from "./i18
 import { applyContentLang } from "./content.en.ts";
 import { H, buzz, setVibe, supported as vibeSupported, vibeOn } from "./haptics.ts";
 import { FRIEND_MARK, endingColor, renderCard, shareResult, stateWord, type RunResult } from "./share.ts";
+import type { PersonId } from "./three/people.ts";
 
 applyContentLang(detectLang());
 
@@ -555,17 +556,18 @@ function fadeTo(alpha: number, ms: number, white = false): Promise<void> {
 }
 
 /** Who is in a memory: the five friends, or mom, dad and grandma in the kitchen. */
-function memoryPeople(kind: MemoryKind, r: RunState): Array<{ name: string; line: (k: number) => string; color: number; dead: boolean; look?: Record<string, unknown>; hair?: number }> {
+function memoryPeople(kind: MemoryKind, r: RunState): Array<{ name: string; line: (k: number) => string; color: number; dead: boolean; look?: Record<string, unknown>; hair?: number; person: PersonId }> {
   if (kind === "kitchen") {
     const looks = [
       { color: 0xc8506a, look: { pants: 0x5a4a6a }, hair: 0x6a3a22 },
       { color: 0x4a6a8a, look: { pants: 0x3a3a44, glasses: true } },
       { color: 0x6a4a6a, look: { pants: 0x3a2f3a, hat: "scarf", hatColor: 0xc8463a, build: 1.1 } },
     ];
-    return FAMILY.map((f, i) => ({ name: f.name, line: (k: number) => f.lines[k % f.lines.length], dead: false, ...looks[i] }));
+    const ids: PersonId[] = ["mom", "dad", "grandma"];
+    return FAMILY.map((f, i) => ({ name: f.name, line: (k: number) => f.lines[k % f.lines.length], dead: false, person: ids[i], ...looks[i] }));
   }
   const lines = kind === "newyear" ? NEWYEAR_LINES : MEMORY_LINES;
-  return r.friends.map((f, i) => ({ name: nameOf(f), color: f.color, dead: f.state === "dead", line: (k: number) => (f.state === "dead" ? MEMORY_DEAD[0] : lines[(i * 3 + r.season + k) % lines.length]) }));
+  return r.friends.map((f, i) => ({ name: nameOf(f), color: f.color, dead: f.state === "dead", person: `friend${(i % 5) + 1}` as PersonId, line: (k: number) => (f.state === "dead" ? MEMORY_DEAD[0] : lines[(i * 3 + r.season + k) % lines.length]) }));
 }
 
 /** A memory from before, walked into: the dacha in July 2021, New Year's Eve, mom's kitchen. */
@@ -574,12 +576,13 @@ async function flashback(kind: MemoryKind = "dacha"): Promise<void> {
   const r = run;
   const people = memoryPeople(kind, r);
   stopBusy();
-  await fadeTo(1, 700, true);
+  // the people of the memory load while the picture goes white
+  await Promise.all([fadeTo(1, 700, true), Promise.race([scene.preloadMemory([...people.map((p) => p.person), kind === "kitchen" ? "kid" : "hero1"]), wait(5000)])]);
   mode = "memory";
   hud(false);
   $("#controls").classList.remove("hidden");
   $("#phone-btn").classList.add("hidden");
-  scene.enterMemory(kind, people.map((p) => ({ color: p.color, dead: p.dead, look: p.look, hair: p.hair })));
+  scene.enterMemory(kind, people.map((p) => ({ color: p.color, dead: p.dead, look: p.look, hair: p.hair, person: p.person })));
   score.bright = true;
   setText($("#memory .eyebrow"), MEMORY_TITLES[kind]);
   const goTo = kind === "kitchen" ? tr("Підійди до своїх", "Walk up to your family") : tr("Підійди до друзів", "Walk up to your friends");

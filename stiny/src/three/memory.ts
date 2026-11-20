@@ -4,13 +4,14 @@ import type { MemoryKind } from "../content.ts";
 import { glowMat } from "./post.ts";
 import { Sunbeam, curtains, faceUp, smoothen, surface } from "./smooth.ts";
 import { lino, plaster, tiles } from "./textures.ts";
+import { Human, loadPerson, replaceRig, type PersonId, type Pose as BodyPose } from "./people.ts";
 
 /**
  * The photo on the fridge, lived again: July 2021, a dacha in Kozyn. Long
  * golden light, a table under the apple tree, the grill smoking, five friends
  * — and you, before: no beard, a yellow T-shirt, somewhere to go.
  */
-export interface MemoryFriend { color: number; dead: boolean; look?: Partial<Look>; hair?: number }
+export interface MemoryFriend { color: number; dead: boolean; look?: Partial<Look>; hair?: number; person?: PersonId }
 
 type Spot = { x: number; z: number; yaw: number; pose: "idle" | "sit" | "call" | "grill" | "stir" | "read" | "sparkler" };
 
@@ -25,7 +26,10 @@ interface Place {
   light: { sun: number; sunPos: [number, number, number]; sunI: number; hemi: number; ground: number; hemiI: number; sky: number; fog: [number, number]; cam: [number, number]; env: number };
 }
 
-interface Pal { rig: Rig; x: number; z: number; yaw: number; pose: Spot["pose"]; dead: boolean; spark?: THREE.Points }
+interface Pal { rig: Rig; x: number; z: number; yaw: number; pose: Spot["pose"]; dead: boolean; spark?: THREE.Points; human?: Human }
+
+/** The real body's pose for a spot's pose. */
+const BODY: Record<Spot["pose"], BodyPose> = { idle: "stand", sit: "sit", call: "call", grill: "stir", stir: "stir", read: "read", sparkler: "sparkler" };
 
 const SPOTS: Spot[] = [
   { x: 3.3, z: -1.8, yaw: Math.PI * 0.85, pose: "grill" },
@@ -55,6 +59,9 @@ export class Memory {
   // the kitchen
   private steam: THREE.Points | null = null;
   private beam: Sunbeam | null = null;
+  /** You, before, as a real person once loaded. */
+  private heroHuman: Human | null = null;
+  private heroId: string | null = null;
 
   constructor() {
     // you, before
@@ -65,6 +72,19 @@ export class Memory {
     smoothen(this.hero.root, true);
     this.group.add(this.hero.root);
     this.group.visible = false;
+  }
+
+  /** You in this memory: the ten-year-old in the kitchen, yourself before the war elsewhere. */
+  private dressHero(child: boolean): void {
+    const id = child ? "kid" : "hero1";
+    if (this.heroId === id) return;
+    this.heroId = id;
+    loadPerson(id).then((g) => {
+      if (this.heroId !== id) return;
+      const h = new Human(g);
+      replaceRig(this.hero, h);
+      this.heroHuman = h;
+    }).catch(() => { /* the chibi stays */ });
   }
 
   private place(kind: MemoryKind): Place {
@@ -458,10 +478,32 @@ export class Memory {
       rig.root.rotation.y = s.yaw;
       if (place.child) rig.root.scale.setScalar(1.3);
       this.group.add(rig.root);
-      return { rig, x: s.x, z: s.z, yaw: s.yaw, pose: s.pose, dead: f.dead, spark };
+      const pal: Pal = { rig, x: s.x, z: s.z, yaw: s.yaw, pose: s.pose, dead: f.dead, spark };
+      if (f.person) {
+        loadPerson(f.person).then((g) => {
+          if (!this.pals.includes(pal)) return;
+          const h = new Human(g);
+          if (f.dead) h.fade(0.3);
+          replaceRig(rig, h);
+          // the sparkler goes into the real hand
+          if (spark) {
+            const hand = h.bone("RightHand");
+            if (hand) {
+              h.root.updateMatrixWorld(true);
+              const ws = hand.getWorldScale(new THREE.Vector3()).x || 1;
+              spark.scale.setScalar(1 / ws);
+              spark.position.set(0, 0.25 / ws, 0);
+              hand.add(spark);
+            }
+          }
+          pal.human = h;
+        }).catch(() => { /* the chibi stays */ });
+      }
+      return pal;
     });
     this.heroPos.set(place.start[0], 0, place.start[1]);
     this.heroYaw = Math.PI;
+    this.dressHero(!!place.child);
   }
 
   /** The friend you are standing next to, if any. */
@@ -501,6 +543,7 @@ export class Memory {
     animateRig(this.hero, speed * len, dt, "walk");
     this.hero.root.position.copy(this.heroPos);
     this.hero.root.rotation.y = this.heroYaw;
+    this.heroHuman?.update(dt, speed * len);
     // the friends: they turn to you when you come close (the faded one does not)
     for (const p of this.pals) {
       const r = p.rig;
@@ -518,6 +561,12 @@ export class Memory {
       if (p.pose === "grill") { r.armR.rotation.x = -1.2 + Math.sin(time * 5) * 0.25; r.armL.rotation.x = -0.9; }
       // laughing: a little bob of the head
       r.head.position.y += Math.sin(time * 6 + p.x * 3) * 0.004;
+      if (p.human) {
+        // the real one turns to you too (the root carries the turn); the sitting keep their seat
+        p.human.setPose(near && p.pose === "idle" ? "stand" : BODY[p.pose]);
+        p.human.seat = p.pose === "sit" || p.pose === "read" ? 0.58 : null;
+        p.human.update(dt, 0);
+      }
     }
     // sparklers spit
     for (const p of this.pals) {
