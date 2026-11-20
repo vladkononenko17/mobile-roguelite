@@ -136,3 +136,12 @@ By Kenney (www.kenney.nl), Creative Commons Zero (`License.txt` kept per pack). 
 
 - `scripts/build-hell-additions.mjs`: Quaternius "Stylized Nature MegaKit" dead trees (charred) in place of the Hell kit's flat ones, and its rocks graded to basalt (`hRock1..3`).
 - `scripts/build-winter-additions.mjs`: Quaternius "Zombie Apocalypse Kit" vehicles and KayKit "City Builder Bits" cars, frosted (and the wrecks graded to soot), in place of the Kenney Car Kit's sedans, sports car, hatchback, SUVs, truck, taxi and police car; the Quaternius box truck with its cab repainted (`repaint` grade) for the van, ambulance, fire engine and dustcart, and burnt for the van and bus wrecks; the pickup for the flatbed; Quaternius pines with their needles dusted white in place of the Kenney pines; dark bushes, dead grass and ferns and frosted stones (`w*`) for near-field detail.
+
+## Four Walls people: VRM Avatar Maker (CC0 MakeHuman assets)
+
+Fourteen avatars (`hero1`–`hero3`, `kid`, `mom`, `dad`, `grandma`, `friend1`–`friend5`, `officer`) from
+`scripts/stiny-people.json`, exported headless with `scripts/export-avatars.mjs` (same maker and licences as
+the Heroes above), then `node scripts/build-stiny-people.mjs name=path/to/name.vrm ...` rebinds each onto the
+Survivor skeleton with only its Walking/idle clips, tints the clothes and writes `public/stiny/people/<name>.glb`
+(plus a decimated `<name>-lite.glb` for the people seen from far), and `node scripts/stiny-compress-people.mjs
+public/stiny/people/*.glb` meshopt-compresses them. Loaded lazily (not precached), about 15 MB in all.

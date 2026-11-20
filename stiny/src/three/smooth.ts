@@ -393,7 +393,7 @@ export class Sunbeam {
           float along = 1.0 - vUv.y;
           float edge = smoothstep(0.0, 0.18, vUv.x) * smoothstep(1.0, 0.82, vUv.x);
           float shimmer = 0.85 + 0.15 * sin(vUv.x * 40.0 + time * 0.6);
-          gl_FragColor = vec4(color * k * 0.16 * along * edge * shimmer, 1.0);
+          gl_FragColor = vec4(color * k * 0.075 * along * edge * shimmer, 1.0);
         }`,
     });
     // a slanted quad from the window to the floor

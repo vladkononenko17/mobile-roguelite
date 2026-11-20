@@ -36,3 +36,6 @@ Game by Neon Hollow. Third-party assets below; details and build steps in `asset
 - PlayCanvas engine, MIT licence.
 - Barlow Condensed and Inter, SIL Open Font Licence 1.1 (`licenses/`).
 - Special Elite (Astigmatic) and Permanent Marker (Font Diner), the start screen's typewriter and marker: Apache Licence 2.0 (`licenses/`).
+
+## Four Walls (stiny)
+- People (the hero in three ages, the boy, mom, dad, grandma, five friends, the officers): made with the VRM Avatar Maker by Flemming Funch (github.com/ffunch/vrm-avatar-maker) from the MakeHuman community's CC0 assets (bodies, skins, hair, clothes), rebound onto the Survivor skeleton above and animated with its idle and walk clips.
