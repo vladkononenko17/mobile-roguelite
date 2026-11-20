@@ -158,7 +158,7 @@ export const PLACE_LABELS: Record<PlaceId, string> = {
 export type ActionId =
   | "work" | "game" | "therapy"
   | "eat" | "cook" | "drink"
-  | "sleep" | "stare"
+  | "sleep" | "stare" | "music"
   | "look" | "air" | "balcony" | "tomatoes"
   | "shower" | "wash_bottle" | "mirror"
   | "water_plant" | "exercise" | "read" | "journal" | "guitar"
@@ -207,6 +207,7 @@ export const ACTIONS: ActionDef[] = [
 
   { id: "sleep", place: "bed", label: "Спати", icon: "🛏️", minutes: 0, fx: {}, hint: "Кінець дня" },
   { id: "stare", place: "bed", label: "Лежати й дивитися в стелю", icon: "🫥", minutes: 120, fx: { energy: 14, psyche: -2, apathy: 5 }, hint: "Нічого не робити" },
+  { id: "music", place: "bed", label: "Послухати музику", icon: "🎧", minutes: 45, fx: { psyche: 4, apathy: -2 }, hint: "Навушники. Світ на паузі." },
 
   { id: "look", place: "window", label: "Подивитися у двір", icon: "🪟", minutes: 15, fx: {}, hint: "Що там сьогодні?" },
   { id: "air", place: "window", label: "Відчинити кватирку", icon: "🌬️", minutes: 10, fx: { psyche: 2 }, hint: "Подих вулиці", once: true },

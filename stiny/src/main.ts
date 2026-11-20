@@ -6,7 +6,7 @@ import {
   type ActionId, type FriendState, type MemoryKind, type PlaceId, type TraitId,
 } from "./content.ts";
 import {
-  actionsAt, beginAction, busHere, choosePerk, startDay, clockText, despair, endDay, fmt, has, hasWater, interruptAction, isLight, isNight,
+  actionsAt, beginAction, busHere, canDo, choosePerk, startDay, clockText, despair, endDay, fmt, has, hasWater, interruptAction, isLight, isNight,
   bondOf, cheer, craving, dailySeed, drunk, maxPsyche, memoryFor, orderCost, resolveStory, storyChoices, tremor, withdrawal,
   type StoryChoice, type StoryId, newRun, peep, pendingOffer, readSteps, remember, replyFriend, replyOptions, takeOffer, tiszaCost,
   type OfferId, type ReplyKind, type Visitor, resolveBallistic, resolveDelivery, resolveKnock, resolveMom, resolveNeighbor, resolveSlam, tick, unlockedTraits,
@@ -15,6 +15,7 @@ import {
 import { bankRun, loadMeta, loadRun, saveMeta, saveRun } from "./save.ts";
 import { detectLang, getLang, nameOf, num, saveLang, tr, type Lang } from "./i18n.ts";
 import { applyContentLang } from "./content.en.ts";
+import { consoleGame, cookGame, rhythmGame, showerGame, workGame, type MiniCtx } from "./minigames.ts";
 import { H, buzz, setVibe, supported as vibeSupported, vibeOn } from "./haptics.ts";
 import { FRIEND_MARK, endingColor, renderCard, shareResult, stateWord, type RunResult } from "./share.ts";
 import type { PersonId } from "./three/people.ts";
@@ -207,8 +208,15 @@ async function doAction(id: ActionId): Promise<void> {
     if (mk === "dacha" || !run?.day) return;
   }
   let s = 1;
-  if (id === "work") {
-    s = await flow(() => workGame());
+  const game = MINIGAMES[id];
+  if (game) {
+    // check first: no shower minigame without water
+    const why = canDo(run, id);
+    if (why) { toast(why, "", true); return; }
+    const ctx: MiniCtx = { despair: despair(run), shake: Math.min(1, tremor(run) + (drunk(run) ? 0.7 : 0)) };
+    $("#act-panel").classList.add("hidden");
+    s = await flow(() => game(ctx));
+    if (!run?.day) return;
   }
   const err = beginAction(run, id, s);
   if (err) { toast(err, "", true); return; }
@@ -246,69 +254,15 @@ async function showResult(r: ActionResult): Promise<void> {
 
 // ================================================================ minigames
 
-/** Close tickets: stop the marker in the green, five times. */
-function workGame(): Promise<number> {
-  return new Promise((resolve) => {
-    const dsp = run ? despair(run) : 0;
-    const box = $("#mini");
-    $("#mini-title").textContent = tr("РОБОТА", "WORK");
-    $("#mini-prompt").textContent = tr("Закрий таски: тисни, коли маркер у зеленому", "Close the tickets: tap when the marker is in the green");
-    $("#mini-body").innerHTML = `<div class="dots">${"<i></i>".repeat(5)}</div><div class="track"><div class="zone"></div><div class="marker"></div></div><button class="big-tap">${tr("ЗАКРИТИ ТАСК", "CLOSE TICKET")}</button>`;
-    box.classList.remove("hidden");
-    const zone = box.querySelector<HTMLElement>(".zone")!;
-    const marker = box.querySelector<HTMLElement>(".marker")!;
-    const dots = [...box.querySelectorAll<HTMLElement>(".dots i")];
-    let round = 0;
-    let hits = 0;
-    let t = 0;
-    let z0 = 0;
-    let zw = 0;
-    let pos = 0;
-    let last = performance.now();
-    let roundT = 0;
-    // shaking hands (craving, withdrawal) and drink make the marker hard to catch
-    const shake = run ? tremor(run) + (drunk(run) ? 0.7 : 0) : 0;
-    const speed = 1.1 + dsp * 0.9 + (run && drunk(run) ? 0.5 : 0);
-    const newRound = () => {
-      zw = 0.24 - dsp * 0.1 - round * 0.012;
-      z0 = 0.1 + Math.random() * (0.8 - zw);
-      zone.style.left = `${z0 * 100}%`;
-      zone.style.width = `${zw * 100}%`;
-      roundT = 0;
-    };
-    newRound();
-    let raf = 0;
-    const end = () => {
-      cancelAnimationFrame(raf);
-      box.classList.add("hidden");
-      resolve(hits / 5);
-    };
-    const judge = (hit: boolean) => {
-      dots[round].classList.add(hit ? "hit" : "miss");
-      if (hit) { hits++; A.play("type"); buzz(H.tap, true); } else { A.play("miss"); buzz(H.miss, true); }
-      round++;
-      if (round >= 5) { setTimeout(end, 250); return; }
-      newRound();
-    };
-    const loop = (now: number) => {
-      const dt = Math.min(0.25, (now - last) / 1000);
-      last = now;
-      t += dt * speed;
-      roundT += dt;
-      // the marker wobbles more when your head is not here
-      pos = (Math.sin(t * 2.4) + 1) / 2 + Math.sin(t * 7.3) * 0.03 * dsp + Math.sin(t * 13.7) * 0.05 * shake + Math.sin(t * 29) * 0.02 * shake;
-      marker.style.left = `${Math.max(0, Math.min(1, pos)) * 100}%`;
-      if (roundT > 3.2 && round < 5) judge(false);
-      if (round < 5) raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
-    box.querySelector<HTMLButtonElement>(".big-tap")!.onpointerdown = (e) => {
-      e.preventDefault();
-      if (round >= 5) return;
-      judge(pos >= z0 && pos <= z0 + zw);
-    };
-  });
-}
+/** The small games that open some actions (see minigames.ts). */
+const MINIGAMES: Partial<Record<ActionId, (ctx: MiniCtx) => Promise<number>>> = {
+  work: workGame,
+  cook: cookGame,
+  game: consoleGame,
+  shower: showerGame,
+  music: (c) => rhythmGame(c, "music"),
+  guitar: (c) => rhythmGame(c, "guitar"),
+};
 
 /**
  * Behind the door: they knock, then they listen. While they listen, hold your

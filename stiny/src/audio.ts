@@ -6,7 +6,7 @@
  */
 import { getAudio, noise, play, tone } from "../../rozshuk/src/sfx.ts";
 
-export { isMusicMuted, isMuted, play, setMusicMuted, setMuted, unlockAudio } from "../../rozshuk/src/sfx.ts";
+export { isMusicMuted, isMuted, play, setMusicMuted, setMuted, tone, unlockAudio } from "../../rozshuk/src/sfx.ts";
 
 function ctx() { return getAudio(); }
 

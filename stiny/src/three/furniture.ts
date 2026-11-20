@@ -482,7 +482,7 @@ export function fridge(): THREE.Group {
 export function kitchenTable(): THREE.Group {
   const g = new THREE.Group();
   put(g, rbox(1.0, 0.03, 0.7, 0.006, 1), wood(0x8a6a4a), 0, 0.73, 0);
-  put(g, profile([[-0.36, 0.745], [0.36, 0.745], [0.37, 0.74], [0.37, 0.68], [0.365, 0.68], [0.36, 0.735], [-0.36, 0.735], [-0.365, 0.68], [-0.37, 0.68], [-0.37, 0.74]], 1.02, 0.003, 2), std(0xffffff, { map: oilcloth(), rough: 0.25 }), 0, 0, 0);
+  put(g, profile([[-0.36, 0.745], [0.36, 0.745], [0.37, 0.74], [0.37, 0.68], [0.365, 0.68], [0.36, 0.735], [-0.36, 0.735], [-0.365, 0.68], [-0.37, 0.68], [-0.37, 0.74]], 1.02, 0.003, 2), std(0xffffff, { map: oilcloth(), rough: 0.25 }), 0, 0.005, 0);
   for (const [x, z] of [[-0.44, -0.29], [0.44, -0.29], [-0.44, 0.29], [0.44, 0.29]]) put(g, rbox(0.04, 0.72, 0.04, 0.008, 1), wood(0x6a4a34), x, 0.36, z);
   put(g, rbox(0.12, 0.08, 0.05, 0.01, 1), plastic(0xe8e4dc), 0.15, 0.79, -0.1);
   put(g, lathe([[0, 0], [0.04, 0], [0.05, 0.05], [0.045, 0.07], [0, 0.07]], 16), enamel(0xf0ece4), -0.2, 0.75, 0.05);
@@ -634,7 +634,7 @@ export function balconyStuff(): THREE.Group {
   put(g, rbox(0.5, 0.35, 0.4, 0.01, 1), std(0xb08a5a, { rough: 0.9 }), 0.2, 0.175, -0.5, { ry: 0.1 });
   put(g, rbox(0.4, 0.3, 0.35, 0.01, 1), std(0xa07a4a, { rough: 0.9 }), 0.25, 0.5, -0.5, { ry: -0.15 });
   // the drying rack: a folding frame, laundry over the rails
-  const rack = group(g, -0.7, 0, 0.05);
+  const rack = group(g, 1.05, 0, 0.15, Math.PI / 2);
   const wire = steel(0xe8e8e4);
   for (const s of [-0.5, 0.5]) for (const d of [-1, 1]) put(rack, rod(new THREE.Vector3(s, 0, d * 0.35), new THREE.Vector3(s, 0.9, 0), 0.01), wire, 0, 0, 0);
   for (let k = 0; k < 6; k++) put(rack, cyl(0.005, 0.005, 1.0, 5), wire, 0, 0.9, -0.25 + k * 0.1, { rz: Math.PI / 2, shadow: false });

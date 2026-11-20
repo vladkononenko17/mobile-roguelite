@@ -9,6 +9,7 @@ import { lino, markTexture, parquet, plaster, tiles, wallpaper, type Mark, type 
 import { LaptopScreen, type ScreenMode } from "./three/screen.ts";
 import { Memory, type MemoryFriend } from "./three/memory.ts";
 import { Sunbeam, curtains, faceUp, ficus, smoothen, surface, type Surface as Finish } from "./three/smooth.ts";
+import { play as playSfx } from "./audio.ts";
 import { buildCourtyard, type Courtyard } from "./three/yard.ts";
 import * as F from "./three/furniture.ts";
 import { makeHearse, makeMinibus } from "./three/cars.ts";
@@ -23,7 +24,7 @@ export const PLACES: Record<PlaceId, { x: number; z: number; r: number }> = {
   desk: { x: -2.1, z: -2.55, r: 0.85 },
   window: { x: -3.8, z: -2.8, r: 0.8 },
   plant: { x: -4.55, z: -2.3, r: 0.6 },
-  calendar: { x: -1.2, z: -2.95, r: 0.5 },
+  calendar: { x: -0.2, z: -2.95, r: 0.5 },
   balcony: { x: -1.0, z: -4.3, r: 0.9 },
   shelf: { x: -4.3, z: -0.5, r: 0.8 },
   bed: { x: -3.3, z: 1.8, r: 1.0 },
@@ -48,6 +49,7 @@ const POSES: Partial<Record<ActionId, { x: number; z: number; ry: number; pose: 
   drink: { x: 1.6, z: -1.1, ry: Math.PI, pose: "sit" },
   cook: { x: 2.6, z: -2.35, ry: Math.PI, pose: "idle" },
   stare: { x: -4.1, z: 1.7, ry: 0, pose: "lie" },
+  music: { x: -4.1, z: 1.7, ry: 0, pose: "lie" },
   sleep: { x: -4.1, z: 1.7, ry: 0, pose: "lie" },
   look: { x: -3.8, z: -2.85, ry: Math.PI, pose: "idle" },
   air: { x: -3.8, z: -2.85, ry: Math.PI, pose: "idle" },
@@ -65,7 +67,7 @@ const POSES: Partial<Record<ActionId, { x: number; z: number; ry: number; pose: 
   go_out: { x: 4.5, z: 2.6, ry: Math.PI / 2, pose: "idle" },
   break_out: { x: 4.5, z: 2.6, ry: Math.PI / 2, pose: "idle" },
   peephole: { x: 4.55, z: 2.6, ry: Math.PI / 2, pose: "idle" },
-  calendar: { x: -1.2, z: -2.95, ry: Math.PI, pose: "idle" },
+  calendar: { x: -0.2, z: -2.95, ry: Math.PI, pose: "idle" },
   pet: { x: -3.7, z: 2.6, ry: -Math.PI / 2, pose: "floor" },
   photos: { x: 3.7, z: -2.4, ry: Math.PI, pose: "idle" },
   shelter: { x: 3.3, z: 0.85, ry: 0, pose: "floor" },
@@ -80,7 +82,7 @@ interface Walker { rig: Rig; from: THREE.Vector3; to: THREE.Vector3; t: number; 
 /** What the real body does for each action (the chibi rig had its own poses). */
 const BODY: Partial<Record<ActionId, BodyPose>> = {
   work: "type", game: "type", therapy: "type", journal: "type", eat: "eat", drink: "eat", read: "read", guitar: "guitar",
-  stare: "lie", sleep: "lie", exercise: "push", pet: "floor", shelter: "curl", look: "sill", air: "sill", balcony: "sill",
+  stare: "lie", sleep: "lie", music: "lie", exercise: "push", pet: "floor", shelter: "curl", look: "sill", air: "sill", balcony: "sill",
   tomatoes: "water", water_plant: "water", cook: "stir", tidy: "stir", shower: "arms_up", wash_bottle: "arms_up",
   go_out: "reach", break_out: "reach", calendar: "reach", peephole: "lean", smoke: "smoke", smoke_window: "smoke",
   chat: "call", news: "call", friends: "call", mom: "call", order: "call", photos: "stand", mirror: "stand",
@@ -178,6 +180,8 @@ export class Scene3D {
   private yardDress = new THREE.Group();
   private groundMat!: THREE.MeshStandardMaterial;
   private court!: Courtyard;
+  private balconyDoor: THREE.Group | null = null;
+  private doorOpen = 0;
   private mood: Mood = "home";
   private van: THREE.Group;
   private officers: Walker[] = [];
@@ -486,7 +490,8 @@ export class Scene3D {
     };
     floor(-5, -3.5, 0.5, 3.5, woodMat);
     floor(0.5, -3.5, 5, 0, linoMat);
-    floor(0.5, 0, 5, 3.5, linoMat);
+    floor(0.5, 0, 5, 1.5, linoMat);
+    floor(2.4, 1.5, 5, 3.5, linoMat);
     floor(0.5, 1.5, 2.4, 3.5, tileMat);
     // balcony slab
     const slab = mesh(new THREE.BoxGeometry(2.8, 0.18, 1.6), 0xa8a49a, 0.02);
@@ -541,9 +546,29 @@ export class Scene3D {
         tape.visible = false;
       } else {
         this.wall(back, a, -3.5, b, -3.5, H - 2.2, m, 2.2, false);
-        const frame = new THREE.Mesh(new THREE.PlaneGeometry(b - a, 2.2), this.glassMat);
-        frame.renderOrder = 2;
-        at(frame, (a + b) / 2, 1.1, -3.52, back);
+        // the balcony door: white plastic, a solid lower panel, glass above, hinged on the right;
+        // it swings into the room when you go out and closes behind you
+        const hinge = new THREE.Group();
+        hinge.position.set(b - 0.02, 0, -3.5);
+        back.add(hinge);
+        const W = b - a - 0.04;
+        const pvc = new THREE.MeshStandardMaterial({ color: 0xf0f0ec, roughness: 0.35 });
+        const bar = (w: number, h: number, x: number, y: number) => { const m2 = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.07), pvc); m2.position.set(x, y, 0); m2.castShadow = true; m2.userData.keepShape = true; hinge.add(m2); };
+        bar(0.07, 2.16, -0.035, 1.08);
+        bar(0.07, 2.16, -W + 0.035, 1.08);
+        bar(W, 0.08, -W / 2, 2.12);
+        bar(W, 0.08, -W / 2, 0.04);
+        bar(W, 0.07, -W / 2, 0.92);
+        bar(W - 0.12, 0.84, -W / 2, 0.48);
+        const pane = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.12, 1.14), this.glassMat);
+        pane.renderOrder = 2;
+        pane.position.set(-W / 2, 1.52, 0);
+        hinge.add(pane);
+        const handle = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.14, 0.05), new THREE.MeshStandardMaterial({ color: 0xe8e8e4, roughness: 0.3 }));
+        handle.position.set(-W + 0.1, 1.05, 0.06);
+        handle.userData.keepShape = true;
+        hinge.add(handle);
+        this.balconyDoor = hinge;
       }
     }
     // broken kitchen glass replaced with plastic film
@@ -616,7 +641,7 @@ export class Scene3D {
       c.strokeStyle = "#c83a32"; c.lineWidth = 2;
       for (let i = 0; i < 30; i++) { const x = 4 + (i % 7) * 8.5, y = 20 + Math.floor(i / 7) * 12; c.beginPath(); c.moveTo(x, y); c.lineTo(x + 6, y + 8); c.moveTo(x + 6, y); c.lineTo(x, y + 8); c.stroke(); }
     }, false) }));
-    at(cal, -1.2, 1.65, -3.43, g);
+    at(cal, -0.2, 1.65, -3.43, this.wallsBack);
     // the plant by the window
     const { group: plant, leaves } = ficus();
     for (const l of leaves) { l.userData.rx = l.rotation.x; this.plantLeaves.push(l); }
@@ -645,6 +670,7 @@ export class Scene3D {
     place(F.dresser(), 0.2, 0, -2.45, -Math.PI / 2);
     this.solid(-0.03, -2.95, 0.45, -1.95);
     place(F.floorLamp(), -0.45, 0, 1.2);
+    this.solid(-0.65, 1.0, -0.25, 1.4);
     at(this.lamp, -1.5, 2.3, 0.2, g);
     // a clock between the window and the balcony door; trims round the doorways; skirting
     place(F.clock(), -2.35, 2.12, -3.42, 0, this.wallsBack);
@@ -701,6 +727,8 @@ export class Scene3D {
     place(F.kitchenTable(), 1.6, 0, -1.6);
     place(F.stool(), 1.6, 0, -0.98, 0.2);
     place(F.stool(), 0.92, 0, -1.7, -0.3);
+    this.solid(1.38, -1.2, 1.82, -0.76);
+    this.solid(0.7, -1.92, 1.14, -1.48);
     this.solid(1.05, -1.95, 2.15, -1.25);
     // trash: a bin and the bags that can never be taken out
     place(F.pedalBin(), 4.65, 0, -0.6);
@@ -731,9 +759,12 @@ export class Scene3D {
     // ---------------- hall: jackets on hooks, shoes, the go-bag by the door, a mat
     place(F.coatRack(), 4.93, 0, 0.9, -Math.PI / 2, this.wallsR);
     place(F.goBag(), 4.62, 0, 1.75, -0.4);
+    this.solid(4.42, 1.58, 4.82, 1.92);
     place(F.doorMat(), 4.5, 0, 2.55, Math.PI / 2);
     // ---------------- the balcony: preserves, boxes, the drying rack
     place(F.balconyStuff(), -1.0, 0, -4.35);
+    this.solid(-0.35, -5.05, 0.4, -3.68);
+    this.solid(-1.1, -5.05, -0.5, -4.62);
     // ---------------- perks you picked up
     const station = F.powerStation();
     at(station, -1.2, 0, -3.2, g);
@@ -1162,6 +1193,16 @@ export class Scene3D {
   setInfo(i: FrameInfo): void { this.info = i; }
 
   private updateWorld(dt: number, time: number): void {
+    if (this.balconyDoor) {
+      const hx = this.heroPos.x, hz = this.heroPos.z - this.off.B;
+      const out = this.pose === "balcony" || this.pose === "smoke" || this.pose === "tomatoes";
+      const near = out || hz < -3.45 || (hx > -1.85 && hx < -0.35 && hz < -2.55);
+      const was = this.doorOpen;
+      this.doorOpen = clamp(this.doorOpen + (near ? 1 : -1) * dt * 1.6, 0, 1);
+      if ((was === 0 && this.doorOpen > 0) || (was > 0.02 && this.doorOpen === 0)) playSfx("door");
+      const e = this.doorOpen * this.doorOpen * (3 - 2 * this.doorOpen);
+      this.balconyDoor.rotation.y = e * 1.45;
+    }
     const { clock, light, despair, bus, season } = this.info;
     const h = clock / 60;
     const s = season % 4;
@@ -1343,7 +1384,7 @@ export class Scene3D {
       const tz = this.heroPos.z;
       // a squeeze is a dolly zoom: the lens narrows while the camera pulls back, the room stretches
       const sq = this.squeezeV;
-      this.camPos.set(tx * 0.85, 7.6 * k - d * 0.6 + sq * 2.2, tz + 6.0 * k - d * 0.5 + sq * 1.8);
+      this.camPos.set(tx * 0.85, 6.5 * k - d * 0.5 + sq * 2.2, tz + 5.15 * k - d * 0.45 + sq * 1.8);
       this.camLook.set(tx * 0.9, 0.6, tz - 0.4);
       this.camera.fov = (narrow ? 54 : 46) - d * 6 - sq * 13;
     }
