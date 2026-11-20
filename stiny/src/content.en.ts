@@ -48,6 +48,7 @@ const ACTIONS_EN: Record<ActionId, { label: string; hint: string }> = {
   balcony: { label: "Stand on the balcony", hint: "Sunlight. But they can see you." },
   tomatoes: { label: "Water the tomatoes", hint: "Something is growing" },
   shower: { label: "Shower", hint: "Needs water" },
+  music: { label: "Listen to music", hint: "Headphones. The world on pause." },
   wash_bottle: { label: "Wash from a jerrycan", hint: "No water" },
   mirror: { label: "Look in the mirror", hint: "Who is that?" },
   water_plant: { label: "Water the ficus", hint: "It's stuck here too" },

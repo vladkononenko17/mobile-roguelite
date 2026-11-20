@@ -413,13 +413,22 @@ export function actionsAt(run: RunState, place: PlaceId | "phone"): Avail[] {
   return out;
 }
 
+/** Whether an action can start now, and why not (asked before its minigame). */
+export function canDo(run: RunState, id: ActionId): string | null {
+  const c = check(run, actionById(id));
+  return c.ok ? null : c.why ?? tr("Не можна", "Can't");
+}
+
+/** Actions with a minigame: its score (0..1.25) scales what they give. */
+export const MINIGAME_ACTIONS: ActionId[] = ["work", "cook", "game", "shower", "music", "guitar"];
+
 function check(run: RunState, def: ActionDef): { ok: boolean; why?: string } {
   const d = run.day!;
   if (d.busy) return { ok: false, why: tr("Зайнятий", "Busy") };
   if (def.once && (d.used[def.id] ?? 0) >= 1) return { ok: false, why: tr("Сьогодні вже", "Done today") };
   if (def.minutes > 0 && d.clock + def.minutes > DAY_END + 30) return { ok: false, why: tr("Вже ніч", "It's night") };
   if ((def.fx.energy ?? 0) < 0 && run.energy < 8) return { ok: false, why: tr("Немає сил", "No strength") };
-  if (def.place === "phone" && d.phone < 5) return { ok: false, why: tr("Телефон сів", "Phone is dead") };
+  if ((def.place === "phone" || def.id === "music") && d.phone < 5) return { ok: false, why: tr("Телефон сів", "Phone is dead") };
   if (def.fx.food && run.food < -def.fx.food) return { ok: false, why: tr("Нема їжі", "No food") };
   if (def.water && !hasWater(d)) {
     if (!(def.id === "water_plant" && has(run, "bottles"))) return { ok: false, why: tr("Немає води", "No water") };
@@ -467,6 +476,7 @@ export function beginAction(run: RunState, id: ActionId, score = 1): string | nu
   const d = run.day!;
   d.used[id] = (d.used[id] ?? 0) + 1;
   if (def.place === "phone") d.phone = Math.max(0, d.phone - 6);
+  if (id === "music") d.phone = Math.max(0, d.phone - 4);
   if (def.power && !isLight(d) && def.id !== "cook") run.station = Math.max(0, run.station - (id === "work" ? 40 : 15));
   d.busy = { id, left: def.minutes, total: def.minutes, score };
   if (id === "shelter") d.sheltered = true;
@@ -493,6 +503,21 @@ export function finishAction(run: RunState, id: ActionId, score = 1, part = 1): 
   let ps = (fx.psyche ?? 0) * part;
   if (id === "exercise" && has(run, "dumbbells")) ps += 3;
   if (id === "read" && has(run, "books")) ps += 3;
+  if (id === "music" && has(run, "headphones")) ps += 2;
+  // how the minigame went: 1 is as it always was, a perfect game gives a little more, a bad one less
+  if (id !== "work" && MINIGAME_ACTIONS.includes(id) && score !== 1 && ps > 0) {
+    ps *= 0.6 + 0.4 * score;
+    const good = score >= 0.85, bad = score < 0.45;
+    const lines: Partial<Record<ActionId, [string, string, string, string]>> = {
+      cook: ["Вийшло як у мами.", "Turned out like mum's.", "Підгоріло. Їсти можна.", "Burnt a bit. Still edible."],
+      game: ["Новий рекорд. На дві години світу немає.", "A new high score. For two hours the world is gone.", "Game over. Ще раз? Ні.", "Game over. Again? No."],
+      shower: ["Нарешті тепла вода. Можна дихати.", "Finally warm water. You can breathe.", "То окріп, то крига. Але чистий.", "Scalding, then ice. But clean."],
+      music: ["Музика заглушила думки.", "The music drowned out the thoughts.", "Не чіпляє. Просто шум у вухах.", "Doesn't land. Just noise in your ears."],
+      guitar: ["Пальці пам'ятають. Тихо, але живе.", "The fingers remember. Quiet, but alive.", "Збиваєшся. Відклав гітару.", "You keep slipping. Put the guitar down."],
+    };
+    const l = lines[id];
+    if (l && (good || bad) && !r.text) r.text = good ? tr(l[0], l[1]) : tr(l[2], l[3]);
+  }
 
   switch (id) {
     case "work": {
