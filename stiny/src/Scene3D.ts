@@ -12,7 +12,7 @@ import { Sunbeam, curtains, faceUp, ficus, smoothen, surface, type Surface as Fi
 import { buildCourtyard, type Courtyard } from "./three/yard.ts";
 import * as F from "./three/furniture.ts";
 import { makeHearse, makeMinibus } from "./three/cars.ts";
-import { Human, loadPerson, replaceRig, type PersonId, type Pose as BodyPose } from "./three/people.ts";
+import { Human, RIM, loadPerson, replaceRig, type PersonId, type Pose as BodyPose } from "./three/people.ts";
 import type { ActionId, MemoryKind, PlaceId } from "./content.ts";
 
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
@@ -218,6 +218,10 @@ export class Scene3D {
     sc.left = -8; sc.right = 8; sc.top = 8; sc.bottom = -8; sc.near = 1; sc.far = 50;
     this.sun.shadow.bias = -0.0006;
     this.post = new Post(this.renderer, this.scene, this.camera, defaultQuality());
+    // on capable devices the evening lamp and the blackout candle throw real shadows round the room
+    if (defaultQuality() === "high") {
+      for (const l of [this.lamp, this.candle]) { l.castShadow = true; l.shadow.mapSize.set(512, 512); l.shadow.bias = -0.002; l.shadow.radius = 3; }
+    }
     // a soft room reflection for the glossy surfaces (varnished floor, fridge enamel)
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -990,7 +994,8 @@ export class Scene3D {
 
   highlight(place: PlaceId | null): void {
     this.ring.visible = !!place && !this.pose;
-    if (place) { const p = PLACES[place]; const o = this.shiftFor(p.x, p.z); this.ring.position.set(p.x + o.x, 0.03, p.z + o.z); }
+    // the ring sits round your feet: it says "you can do something here"
+    if (place) { this.ring.position.set(this.heroPos.x, 0.03, this.heroPos.z); this.ring.scale.setScalar(1 + Math.sin(performance.now() / 260) * 0.04); }
   }
 
   setPose(id: ActionId | null): void {
@@ -1200,6 +1205,7 @@ export class Scene3D {
     for (const b of this.beams) b.update(time, beamK);
     // the room reflection follows the daylight: glossy things do not glow at night
     this.scene.environmentIntensity = 0.08 + dayK * 0.27 * (1 - wet * 0.3);
+    RIM.value = 0.08 + dayK * 0.22;
     // lights inside
     const evening = h >= set - 1 || h < rise + 0.5;
     this.lamp.intensity = light && evening ? 5.5 : 0;

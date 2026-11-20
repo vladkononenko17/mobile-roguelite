@@ -33,7 +33,7 @@
   "outfit": null,
   "top": "elvs_crude_t-shirt_male",
   "bottom": "toigo_wool_pants",
-  "shoes": "toigo_mj_cloth_shoes",
+  "shoes": "shoes04",
   "makeup": {
    "eyeshadow": {
     "amount": 0,
@@ -83,7 +83,7 @@
   "outfit": null,
   "top": "toigo_fisherman_sweater",
   "bottom": "toigo_wool_pants",
-  "shoes": "toigo_mj_cloth_shoes",
+  "shoes": "shoes04",
   "makeup": {
    "eyeshadow": {
     "amount": 0,
@@ -133,7 +133,7 @@
   "outfit": null,
   "top": "toigo_fisherman_sweater",
   "bottom": "toigo_wool_pants",
-  "shoes": "toigo_mj_cloth_shoes",
+  "shoes": "shoes04",
   "makeup": {
    "eyeshadow": {
     "amount": 0,

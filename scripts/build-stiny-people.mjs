@@ -25,7 +25,8 @@ const OUT = path.join(ROOT, "public/stiny/people");
 /** The clips the flat needs; the rest of the Survivor's are dropped. */
 const KEEP = new Set(["Walking", "Survivor_Idle", "Survivor_Idle2", "Idle_10", "restpose"]);
 /** Texture size: the hero is seen close every day; the others less. */
-const TEX = (name) => (name.startsWith("hero") ? 1024 : 512);
+// you (the hero at three ages, the boy) are seen closest: full 2048 px skin and clothes; everyone else 512
+const TEX = (name) => (name.startsWith("hero") || name === "kid" ? 2048 : 512);
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -351,9 +352,15 @@ async function build(name, vrmPath) {
       // fabric's light and shade kept as a soft luminance on top.
       const src = sharp(Buffer.from(tex.getImage())).ensureAlpha();
       const { data, info } = await src.clone().raw().toBuffer({ resolveWithObject: true });
-      const blur = (await src.clone().blur(18).raw().toBuffer());
+      const near = name.startsWith("hero") || name === "kid";
+      const blur = (await src.clone().blur(near ? 1.2 : 18).raw().toBuffer());
+      let mean = 0;
+      for (let i = 0; i < blur.length; i += 4) mean += (blur[i] + blur[i + 1] + blur[i + 2]) / 765;
+      mean /= blur.length / 4;
       for (let i = 0; i < data.length; i += 4) {
-        const l = (0.6 * (blur[i] + blur[i + 1] + blur[i + 2]) / 765 + 0.4) * (0.9 + 0.1 * Math.abs(Math.sin(i * 12.9898) * 43758.5453 % 1));
+        const lum = (blur[i] + blur[i + 1] + blur[i + 2]) / 765;
+        // close up the folds and the weave stay (shade relative to the garment's own average); far away a soft wash
+        const l = near ? Math.min(1.45, 0.3 + 0.7 * lum / Math.max(0.05, mean)) : (0.6 * lum + 0.4) * (0.9 + 0.1 * Math.abs(Math.sin(i * 12.9898) * 43758.5453 % 1));
         data[i] = Math.min(255, tint[0] * l); data[i + 1] = Math.min(255, tint[1] * l); data[i + 2] = Math.min(255, tint[2] * l);
       }
       tex.setImage(await sharp(data, { raw: info }).png().toBuffer()).setMimeType("image/png");
