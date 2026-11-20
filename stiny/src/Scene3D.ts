@@ -178,6 +178,7 @@ export class Scene3D {
   private yardDress = new THREE.Group();
   private groundMat!: THREE.MeshStandardMaterial;
   private court!: Courtyard;
+  private mood: Mood = "home";
   private van: THREE.Group;
   private officers: Walker[] = [];
   private walkers: Walker[] = [];
@@ -1206,6 +1207,11 @@ export class Scene3D {
     // the room reflection follows the daylight: glossy things do not glow at night
     this.scene.environmentIntensity = 0.08 + dayK * 0.27 * (1 - wet * 0.3);
     RIM.value = 0.08 + dayK * 0.22;
+    // the blackout grade glows for a candle in the dark; on a winter day without power the sun
+    // still lights the room, and that glow would wash it out: only what is really bright may bloom
+    const glare = this.mood === "blackout" ? dayK : 0;
+    this.post.bloomScale = 1 - 0.7 * glare;
+    this.post.bloomLift = 0.6 * glare;
     // lights inside
     const evening = h >= set - 1 || h < rise + 0.5;
     this.lamp.intensity = light && evening ? 5.5 : 0;
@@ -1384,7 +1390,7 @@ export class Scene3D {
     this.post.render(dt);
   }
 
-  setMood(m: Mood): void { this.post.setMood(m); }
+  setMood(m: Mood): void { this.mood = m; this.post.setMood(m); }
 
   /** Projects a world point to screen pixels. */
   project(x: number, y: number, z: number): { x: number; y: number } {

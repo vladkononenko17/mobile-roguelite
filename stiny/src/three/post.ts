@@ -181,6 +181,8 @@ export class Post {
   tilt = 0;
   /** Multiplies the mood's bloom strength (1 = as graded); a game can tame a bright scene. */
   bloomScale = 1;
+  /** Raises the mood's bloom threshold (0 = as graded): only what is really bright glows. */
+  bloomLift = 0;
 
   constructor(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, quality: Quality) {
     this.renderer = renderer;
@@ -258,7 +260,7 @@ export class Post {
     u.grain.value += (g.grain - u.grain.value) * k;
     if (this.bloom) {
       this.bloom.strength += (g.bloom[0] * this.bloomScale - this.bloom.strength) * k;
-      this.bloom.threshold += (g.bloom[1] - this.bloom.threshold) * k;
+      this.bloom.threshold += (g.bloom[1] + this.bloomLift - this.bloom.threshold) * k;
     }
   }
 
