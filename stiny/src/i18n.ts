@@ -12,14 +12,13 @@ let lang: Lang = "uk";
 export function getLang(): Lang { return lang; }
 export function setLangValue(l: Lang): void { lang = l; }
 
-/** The saved choice, else the device language (Ukrainian/Russian → uk, everything else → en). */
+/** The saved choice, else Ukrainian: the game is Ukrainian for everyone; English only if the player picks it. */
 export function detectLang(): Lang {
   try {
     const saved = localStorage.getItem(KEY);
     if (saved === "uk" || saved === "en") return saved;
   } catch { /* storage blocked */ }
-  const nav = typeof navigator !== "undefined" ? (navigator.languages?.[0] ?? navigator.language ?? "") : "";
-  return /^(uk|ru|be)\b/i.test(nav) ? "uk" : "en";
+  return "uk";
 }
 
 export function saveLang(l: Lang): void {
