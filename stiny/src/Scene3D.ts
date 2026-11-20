@@ -1,15 +1,17 @@
 import * as THREE from "three";
 import {
-  C, CAMO_TCK, LOOKS, animateRig, at, camoTexture, canvasTexture, carpetTexture, facadeTextures, makeBench, makeCar, makeLamp,
-  makePerson, makePine, makeTrashBins, makeTree, makeVan, mat, mesh, type Rig,
+  C, CAMO_TCK, LOOKS, animateRig, at, camoTexture, canvasTexture, carpetTexture, makePerson, mat, mesh, type Rig,
 } from "../../rozshuk/src/three/models.ts";
-import { Post, defaultQuality, glowMat, lightPoolMaterial, type Mood } from "./three/post.ts";
+import { Post, defaultQuality, glowMat, type Mood } from "./three/post.ts";
 import { RainField, rainGlassMaterial } from "./three/weather.ts";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { lino, markTexture, parquet, plaster, tiles, wallpaper, type Mark, type Surface } from "./three/textures.ts";
 import { LaptopScreen, type ScreenMode } from "./three/screen.ts";
 import { Memory, type MemoryFriend } from "./three/memory.ts";
 import { Sunbeam, curtains, faceUp, ficus, smoothen, surface, type Surface as Finish } from "./three/smooth.ts";
+import { buildCourtyard, type Courtyard } from "./three/yard.ts";
+import * as F from "./three/furniture.ts";
+import { makeHearse, makeMinibus } from "./three/cars.ts";
 import { Human, loadPerson, replaceRig, type PersonId, type Pose as BodyPose } from "./three/people.ts";
 import type { ActionId, MemoryKind, PlaceId } from "./content.ts";
 
@@ -174,11 +176,8 @@ export class Scene3D {
   // yard
   private yard = new THREE.Group();
   private yardDress = new THREE.Group();
-  private ground!: THREE.Mesh;
-  private groundMat = new THREE.MeshLambertMaterial({ color: 0x6a8a4a });
-  private facadeMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-  private facades: Array<{ day: { map: THREE.Texture; glow: THREE.Texture }; night: { map: THREE.Texture; glow: THREE.Texture } }> = [];
-  private facadeMeshes: THREE.Mesh[] = [];
+  private groundMat!: THREE.MeshStandardMaterial;
+  private court!: Courtyard;
   private van: THREE.Group;
   private officers: Walker[] = [];
   private walkers: Walker[] = [];
@@ -252,7 +251,7 @@ export class Scene3D {
     smoothen(this.flat);
 
     this.buildYard();
-    this.van = makeVan();
+    this.van = makeMinibus();
     this.van.rotation.y = Math.PI * 0.5;
     at(this.van, -0.2, FLOOR_Y, -16.5, this.yard);
     for (let i = 0; i < 3; i++) {
@@ -378,8 +377,7 @@ export class Scene3D {
 
   /** The funeral car with a flag and the people who kneel along the path. */
   private buildProcession(): void {
-    const car = makeCar(77);
-    car.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && (m.material as THREE.MeshLambertMaterial).isMeshLambertMaterial && m.name !== "hull") m.material = surface("gloss", 0x1a1a1e); });
+    const car = makeHearse();
     car.rotation.y = Math.PI / 2;
     car.name = "hearse";
     this.procession.add(car);
@@ -558,7 +556,11 @@ export class Scene3D {
     this.wall(this.wallsR, 5, 3.0, 5, 3.5, H, outer);
     this.wall(this.wallsR, 5, 2.1, 5, 3.0, H - 2.15, outer, 2.15, false);
     this.solid(5, 2.1, 5.2, 3.0);
-    const door = mesh(new THREE.BoxGeometry(0.1, 2.1, 0.9), 0x5a3a24, 0.02);
+    // the padded front door: leatherette in diamonds and brass studs
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.08, 0.88), F.paddedDoor());
+    door.castShadow = true;
+    door.receiveShadow = true;
+    door.userData.keepShape = true;
     door.name = "door";
     at(door, 4.98, 1.05, 2.55, this.wallsR);
     at(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.05, 8), mat(C.yellow)), 4.9, 1.0, 2.9, this.wallsR).rotation.z = Math.PI / 2;
@@ -579,27 +581,27 @@ export class Scene3D {
     this.wall(g, 2.4, 1.5, 5, 1.5, 0.02, hallWall, 0, false);
 
     // ---------------- room
-    // desk + laptop + chair
+    const place = (o: THREE.Object3D, x: number, y: number, z: number, ry = 0, parent: THREE.Object3D = g) => { o.position.set(x, y, z); o.rotation.y = ry; parent.add(o); return o; };
+    // desk: drawers, the laptop, a mug, papers, the lamp; the candle for the blackouts
     const desk = new THREE.Group();
-    at(mesh(new THREE.BoxGeometry(1.4, 0.07, 0.7), 0x8a6a4a, 0.02), 0, 0.76, 0, desk);
-    for (const [x, z] of [[-0.62, -0.28], [0.62, -0.28], [-0.62, 0.28], [0.62, 0.28]]) at(mesh(new THREE.BoxGeometry(0.06, 0.76, 0.06), 0x5a4030, 0), x, 0.38, z, desk);
-    const lid = mesh(new THREE.BoxGeometry(0.5, 0.34, 0.03), 0x2a2d33, 0.01);
-    at(lid, 0, 0.97, -0.17, desk).rotation.x = -0.25;
-    at(new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.28), this.screenMat), 0, 0.97, -0.152, desk).rotation.x = -0.25;
-    at(mesh(new THREE.BoxGeometry(0.5, 0.03, 0.32), 0x2a2d33, 0.01), 0, 0.8, 0.02, desk);
-    at(mesh(new THREE.CylinderGeometry(0.05, 0.045, 0.11, 8), 0xe8e0d0, 0.01), 0.5, 0.85, 0.05, desk);
-    at(mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.14, 6), 0xf4ecd8, 0.008), -0.55, 0.86, -0.15, desk);
+    desk.add(F.desk());
+    const TOP = 0.7625;
+    place(F.laptopBody(), 0, TOP, -0.02, 0, desk);
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.2), this.screenMat);
+    scr.position.set(0, TOP + 0.12 + 0.002, -0.14 + 0.005);
+    scr.rotation.x = -0.25;
+    scr.userData.keepShape = true;
+    desk.add(scr);
+    at(mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.14, 6), 0xf4ecd8, 0.008), -0.55, TOP + 0.07, -0.15, desk);
     const flame = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.07, 6), glowMat(0xffa040, 5));
     flame.name = "flame";
-    at(flame, -0.55, 0.96, -0.15, desk);
-    at(this.candle, -0.55, 1.15, -0.15, desk);
+    at(flame, -0.55, TOP + 0.17, -0.15, desk);
+    at(this.candle, -0.55, TOP + 0.36, -0.15, desk);
     at(this.screenLight, 0, 1.05, 0.35, desk);
     at(desk, -2.1, 0, -3.05, g);
     this.solid(-2.8, -3.45, -1.4, -2.7);
     const chair = new THREE.Group();
-    at(mesh(new THREE.BoxGeometry(0.5, 0.07, 0.5), 0x3a3a44, 0.015), 0, 0.48, 0, chair);
-    at(mesh(new THREE.BoxGeometry(0.5, 0.55, 0.07), 0x3a3a44, 0.015), 0, 0.8, 0.25, chair);
-    at(mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.48, 6), 0x222222, 0), 0, 0.24, 0, chair);
+    chair.add(F.officeChair());
     chair.name = "chair";
     at(chair, -2.1, 0, -2.3, g);
     // calendar above the desk
@@ -617,105 +619,121 @@ export class Scene3D {
     at(plant, 0, 0, 0, this.plant);
     at(this.plant, -4.6, 0, -2.9, g);
     this.solid(-4.9, -3.2, -4.3, -2.6);
-    // shelf with books
-    const shelf = new THREE.Group();
-    at(mesh(new THREE.BoxGeometry(0.4, 1.9, 1.2), 0x6a4a2a, 0.02), 0, 0.95, 0, shelf);
-    const bookColors = [0xa63a2a, 0x2a4a6a, 0xd8c890, 0x3a6a3a, 0x8a5a9a, 0xe8602f];
-    for (let r = 0; r < 4; r++) for (let i = 0; i < 6; i++) {
-      if ((r * 7 + i * 3) % 5 === 0) continue;
-      at(mesh(new THREE.BoxGeometry(0.28, 0.32, 0.12), bookColors[(r * 3 + i) % bookColors.length], 0), 0.04, 0.3 + r * 0.45, -0.45 + i * 0.17, shelf);
-    }
-    at(shelf, -4.75, 0, -0.5, g);
+    // the bookcase, the bed and its bedside table, the old carpet
+    place(F.bookcase(), -4.76, 0, -0.5, Math.PI / 2);
     this.solid(-5, -1.1, -4.5, 0.1);
-    // bed with a blanket
-    const bed = new THREE.Group();
-    at(mesh(new THREE.BoxGeometry(1.5, 0.4, 2.2), 0x6a4a3a, 0.025), 0, 0.2, 0, bed);
-    at(mesh(new THREE.BoxGeometry(1.4, 0.16, 2.1), 0xe8e4d8, 0.015), 0, 0.48, 0, bed);
-    at(mesh(new THREE.BoxGeometry(1.42, 0.12, 1.3), 0x3a5a7a, 0.015), 0, 0.6, 0.35, bed);
-    at(mesh(new THREE.BoxGeometry(0.6, 0.14, 0.4), 0xf0ece0, 0.012), 0, 0.62, -0.8, bed);
-    at(mesh(new THREE.BoxGeometry(1.5, 0.7, 0.1), 0x5a3a2a, 0.02), 0, 0.55, -1.12, bed);
-    at(bed, -4.2, 0, 1.75, g);
+    const bookColors = [0xa63a2a, 0x2a4a6a, 0xd8c890, 0x3a6a3a, 0x8a5a9a, 0xe8602f];
+    place(F.bed(), -4.2, 0, 1.75);
     this.solid(-4.95, 0.6, -3.45, 2.9);
+    place(F.nightstand(), -3.19, 0, 0.84);
+    this.solid(-3.42, 0.62, -2.96, 1.05);
+    place(F.rug(2.3, 1.6), -2.55, 0, -0.6);
+    place(F.radiator(11), -3.8, 0, -3.34);
     // exercise mat
     const rug = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 1.8), mat(0x2a6a6a));
     rug.rotation.x = -Math.PI / 2;
     rug.rotation.z = Math.PI / 2;
     at(rug, -1.6, 0.012, 0.9, g);
-    // floor lamp
-    at(mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.6, 5), 0x333333, 0), -0.3, 0.8, 2.9, g);
-    at(mesh(new THREE.ConeGeometry(0.28, 0.32, 8, 1, true), 0xe8d8a0, 0.015), -0.3, 1.68, 2.9, g);
+    // the wardrobe, the chest of drawers with the television, the floor lamp
+    place(F.wardrobe(), 0.17, 0, 2.45, -Math.PI / 2);
+    this.solid(-0.11, 1.65, 0.45, 3.25);
+    place(F.dresser(), 0.2, 0, -2.45, -Math.PI / 2);
+    this.solid(-0.03, -2.95, 0.45, -1.95);
+    place(F.floorLamp(), -0.45, 0, 1.2);
     at(this.lamp, -1.5, 2.3, 0.2, g);
-    // ---------------- kitchen
-    at(mesh(new THREE.BoxGeometry(2.0, 0.9, 0.6), 0xe8e4d8, 0.02), 3.2, 0.45, -3.15, g);
-    at(mesh(new THREE.BoxGeometry(2.0, 0.04, 0.62), 0x8a7a6a, 0.01), 3.2, 0.92, -3.15, g);
-    this.solid(2.2, -3.45, 4.2, -2.85);
-    // stove
-    at(mesh(new THREE.BoxGeometry(0.6, 0.9, 0.6), 0xd8d8d0, 0.02), 2.6, 0.45, -3.15, g);
-    for (const [x, z] of [[-0.14, -0.12], [0.14, -0.12], [-0.14, 0.12], [0.14, 0.12]]) {
-      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.02, 10), mat(0x222222));
-      at(ring, 2.6 + x, 0.92, -3.15 + z, g);
-    }
+    // a clock between the window and the balcony door; trims round the doorways; skirting
+    place(F.clock(), -2.35, 2.12, -3.42, 0, this.wallsBack);
+    place(F.architrave(1.0, 2.2), -1.1, 0, -3.43, 0, this.wallsBack);
+    place(F.architrave(1.2, 2.1), 0.43, 0, 0.8, -Math.PI / 2);
+    place(F.architrave(1.2, 2.1), 0.57, 0, 0.8, Math.PI / 2);
+    place(F.architrave(0.9, 2.15), 4.93, 0, 2.55, -Math.PI / 2, this.wallsR);
+    const skirt = (parent: THREE.Object3D, x0: number, z0: number, x1: number, z1: number) => {
+      const len = Math.hypot(x1 - x0, z1 - z0);
+      const m = new THREE.Mesh(F.skirting(len), F.skirtingMat());
+      m.position.set((x0 + x1) / 2, 0.035, (z0 + z1) / 2);
+      m.rotation.y = -Math.atan2(z1 - z0, x1 - x0);
+      m.userData.keepShape = true;
+      m.receiveShadow = true;
+      parent.add(m);
+    };
+    skirt(this.wallsL, -4.93, -3.44, -4.93, 3.44);
+    skirt(this.wallsBack, -4.94, -3.43, -1.65, -3.43);
+    skirt(this.wallsBack, -0.55, -3.43, 0.44, -3.43);
+    skirt(g, 0.43, -3.44, 0.43, 0.2);
+    skirt(g, 0.43, 1.4, 0.43, 3.44);
+    skirt(this.wallsR, 4.93, 0.05, 4.93, 2.05);
+    skirt(g, 2.45, 0.07, 4.94, 0.07);
+    // ---------------- kitchen: laminate cabinets, the gas stove, the sink under the window
+    place(F.kitchenRun(1.0, 4.2, [2.32, 2.88], 3.65), 0, 0, -3.14);
+    this.solid(0.98, -3.45, 4.2, -2.85);
+    place(F.gasStove(), 2.6, 0, -3.14);
     const pot = mesh(new THREE.CylinderGeometry(0.14, 0.12, 0.18, 10), 0x8a8a90, 0.012);
-    at(pot, 2.46, 1.02, -3.27, g);
-    this.solid(2.25, -3.45, 2.95, -2.85);
-    // fridge with photos
-    const fridge = mesh(new THREE.BoxGeometry(0.7, 1.85, 0.68), new THREE.MeshStandardMaterial({ color: 0xeceae2, roughness: 0.32, metalness: 0.05 }), 0.03);
-    at(fridge, 4.55, 0.92, -3.05, g);
+    at(pot, 2.47, 0.99, -3.27, g);
+    place(F.kettle(), 2.73, 0.9, -3.02, -0.6);
+    place(F.counterThings(), 1.15, 0.918, -3.25);
+    place(F.wallCabinets(1.8), 1.95, 1.48, -3.27, 0, this.wallsBack);
+    const splashS = tiles();
+    for (const t of [splashS.map, splashS.normal]) { t.repeat.set(3.4, 0.6); }
+    const splash = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.56), new THREE.MeshStandardMaterial({ map: splashS.map, normalMap: splashS.normal, roughness: 0.25 }));
+    splash.userData.keepShape = true;
+    at(splash, 2.6, 1.2, -3.435, this.wallsBack);
+    // the fridge with photos
+    place(F.fridge(), 4.52, 0, -3.08);
     this.solid(4.15, -3.45, 4.95, -2.7);
     for (let i = 0; i < 5; i++) {
       const ph = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.12), new THREE.MeshLambertMaterial({ color: 0xd8c8a8 }));
       ph.rotation.y = -Math.PI / 2;
-      at(ph, 4.19, 1.2 + (i % 2) * 0.18, -3.25 + i * 0.1, g);
+      at(ph, 4.205, 1.2 + (i % 2) * 0.18, -3.25 + i * 0.1, g);
       this.photos.push(ph);
       const rib = new THREE.Mesh(new THREE.PlaneGeometry(0.03, 0.16), mat(0x111111));
       rib.rotation.y = -Math.PI / 2;
       rib.rotation.x = 0.7;
-      at(rib, 4.185, 1.2 + (i % 2) * 0.18, -3.25 + i * 0.1 + 0.05, g);
+      at(rib, 4.2, 1.2 + (i % 2) * 0.18, -3.25 + i * 0.1 + 0.05, g);
       rib.visible = false;
       this.ribbons.push(rib);
     }
-    // table + stools
-    at(mesh(new THREE.BoxGeometry(1.0, 0.06, 0.7), 0xc8b89a, 0.015), 1.6, 0.74, -1.6, g);
-    for (const [x, z] of [[1.15, -1.9], [2.05, -1.9], [1.15, -1.3], [2.05, -1.3]]) at(mesh(new THREE.BoxGeometry(0.05, 0.74, 0.05), 0x666666, 0), x, 0.37, z, g);
-    at(mesh(new THREE.BoxGeometry(0.4, 0.05, 0.4), 0x8a5a3a, 0.012), 1.6, 0.46, -1.0, g);
+    // table under the oilcloth, two stools
+    place(F.kitchenTable(), 1.6, 0, -1.6);
+    place(F.stool(), 1.6, 0, -0.98, 0.2);
+    place(F.stool(), 0.92, 0, -1.7, -0.3);
     this.solid(1.05, -1.95, 2.15, -1.25);
     // trash: a bin and the bags that can never be taken out
-    at(mesh(new THREE.CylinderGeometry(0.22, 0.2, 0.55, 8), 0x3a5a3a, 0.015), 4.65, 0.28, -0.6, g);
+    place(F.pedalBin(), 4.65, 0, -0.6);
     this.solid(4.4, -0.85, 4.9, -0.35);
     const bagSpots: Array<[number, number, number]> = [
       [4.6, 0.3, 0], [4.4, 0.55, 0.3], [4.65, 0.75, 0.9], [4.1, 0.35, 0.6], [3.9, 1.2, 0.2], [4.6, 1.2, 1.2],
       [-0.2, 2.9, 0.4], [0.1, -2.6, 0.8], [-1.0, 2.4, 1.5], [3.8, -1.0, 0.5], [2.9, -1.2, 1.0], [-2.9, -0.4, 0.2], [-0.6, -1.6, 2.2], [1.8, -0.5, 0.4],
     ];
     bagSpots.forEach(([x, z, ry], i) => {
-      let o: THREE.Mesh;
-      if (i < 6 || i % 3 === 0) o = mesh(new THREE.IcosahedronGeometry(0.24, 0), i % 2 ? 0x2a2a2a : 0x3a4a6a, 0.015);
-      else if (i % 3 === 1) { o = mesh(new THREE.BoxGeometry(0.42, 0.05, 0.42), 0xc8a06a, 0.01); o.position.y = 0.03; }
-      else o = mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 6), 0x3a7a5a, 0.01);
+      const o = i < 6 || i % 3 === 0 ? F.trashBag(i + 1, i % 2 ? 0x1e1e20 : 0x2a3a5a) : i % 3 === 1 ? F.pizzaBox() : F.plasticBottle();
+      o.position.set(x, 0, z);
       o.rotation.y = ry;
-      if (o.geometry.type === "IcosahedronGeometry") o.scale.set(1, 1.3, 1);
-      o.position.set(x, o.geometry.type === "CylinderGeometry" ? 0.15 : o.position.y || 0.25, z);
-      if (o.geometry.type === "CylinderGeometry") { o.rotation.z = Math.PI / 2; o.position.y = 0.05; }
       o.visible = false;
       g.add(o);
       this.clutter.push(o);
     });
     // ---------------- bathroom
-    at(mesh(new THREE.BoxGeometry(1.7, 0.55, 0.75), 0xf4f4f0, 0.02), 1.45, 0.28, 3.1, g);
+    place(F.bathtub(), 1.45, 0, 3.1);
     this.solid(0.55, 2.7, 2.35, 3.5);
-    at(mesh(new THREE.BoxGeometry(0.45, 0.15, 0.4), 0xf4f4f0, 0.015), 0.8, 0.85, 1.95, g);
+    place(F.basin(), 0.79, 0, 1.95, Math.PI / 2);
     this.solid(0.55, 1.7, 1.0, 2.2);
+    place(F.washer(), 1.95, 0, 1.86);
+    this.solid(1.64, 1.55, 2.26, 2.14);
     const mirror = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.6), new THREE.MeshBasicMaterial({ color: 0x9ab0c0 }));
     mirror.rotation.y = Math.PI / 2;
     at(mirror, 0.57, 1.5, 1.95, g);
     at(this.kitchenLamp, 3.0, 2.3, -1.6, g);
+    // ---------------- hall: jackets on hooks, shoes, the go-bag by the door, a mat
+    place(F.coatRack(), 4.93, 0, 0.9, -Math.PI / 2, this.wallsR);
+    place(F.goBag(), 4.62, 0, 1.75, -0.4);
+    place(F.doorMat(), 4.5, 0, 2.55, Math.PI / 2);
+    // ---------------- the balcony: preserves, boxes, the drying rack
+    place(F.balconyStuff(), -1.0, 0, -4.35);
     // ---------------- perks you picked up
-    const station = new THREE.Group();
-    at(mesh(new THREE.BoxGeometry(0.4, 0.28, 0.25), 0x3a3d44, 0.015), 0, 0.14, 0, station);
-    at(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.04, 0.01), glowMat(0x6aff8a, 3)), 0.1, 0.22, 0.13, station);
+    const station = F.powerStation();
     at(station, -1.2, 0, -3.2, g);
     this.perkProps.station = station;
-    const bottles = new THREE.Group();
-    for (let i = 0; i < 4; i++) at(mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.4, 8), 0x8ab8d8, 0.012), (i % 2) * 0.28, 0.2, Math.floor(i / 2) * 0.28, bottles);
+    const bottles = F.waterBottles();
     at(bottles, 1.8, 0, 0.4, g);
     this.perkProps.bottles = bottles;
     const dumb = new THREE.Group();
@@ -728,10 +746,11 @@ export class Scene3D {
     at(dumb, -0.9, 0, 1.5, g);
     this.perkProps.dumbbells = dumb;
     const guitar = new THREE.Group();
-    at(mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.09, 10), 0xc8823a, 0.012), 0, 0.3, 0, guitar).rotation.x = Math.PI / 2;
-    at(mesh(new THREE.BoxGeometry(0.06, 0.65, 0.04), 0x5a3a24, 0.008), 0, 0.75, 0, guitar);
-    guitar.rotation.x = -0.25;
-    at(guitar, -4.85, 0, 0.35, g);
+    const gInner = F.guitar();
+    gInner.rotation.x = -0.22;
+    guitar.add(gInner);
+    guitar.rotation.y = Math.PI / 2;
+    at(guitar, -4.82, 0, 0.42, g);
     this.perkProps.guitar = guitar;
     const books = new THREE.Group();
     for (let i = 0; i < 6; i++) at(mesh(new THREE.BoxGeometry(0.35, 0.07, 0.25), bookColors[i], 0.008), (i % 2) * 0.03, 0.035 + i * 0.07, 0, books).rotation.y = i * 0.2;
@@ -745,14 +764,13 @@ export class Scene3D {
     }
     at(tomatoes, -1.9, 0, -4.85, g);
     this.perkProps.tomatoes = tomatoes;
-    const consoleBox = mesh(new THREE.BoxGeometry(0.3, 0.06, 0.22), 0xf0f0f0, 0.008);
-    at(consoleBox, -1.65, 0.82, -3.0, g);
+    const consoleBox = F.gamepad();
+    at(consoleBox, -1.65, TOP, -3.0, g);
     this.perkProps.console = consoleBox;
     const pills = mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.1, 8), 0xe8e8e8, 0.006);
-    at(pills, 0.95, 0.97, 1.95, g);
+    at(pills, 0.95, 0.9, 1.9, g);
     this.perkProps.meds = pills;
-    const beer = new THREE.Group();
-    for (let i = 0; i < 5; i++) at(mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.22, 6), 0x5a3a1a, 0.006), (i % 3) * 0.1, 0.11, Math.floor(i / 3) * 0.1, beer);
+    const beer = F.beerBottles();
     at(beer, 3.7, 0, -2.6, g);
     this.perkProps.alcohol = beer;
     // the cat
@@ -790,79 +808,10 @@ export class Scene3D {
 
   private buildYard(): void {
     const y = this.yard;
-    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(90, 50), this.groundMat);
-    this.ground.rotation.x = -Math.PI / 2;
-    at(this.ground, 0, FLOOR_Y, -22, y);
-    const asphalt = mat(0x55575a);
-    const road = new THREE.Mesh(new THREE.PlaneGeometry(90, 5), asphalt);
-    road.rotation.x = -Math.PI / 2;
-    at(road, 0, FLOOR_Y + 0.02, -24, y);
-    const path = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 18), asphalt);
-    path.rotation.x = -Math.PI / 2;
-    at(path, -3, FLOOR_Y + 0.02, -13, y);
-    const path2 = new THREE.Mesh(new THREE.PlaneGeometry(60, 2.2), asphalt);
-    path2.rotation.x = -Math.PI / 2;
-    at(path2, 0, FLOOR_Y + 0.02, -7.2, y);
-    // our own building below the window: the facade under us and the entrance
-    const ownMaps = facadeTextures(0xc8c2b4, 11, false);
-    ownMaps.map.repeat.set(5, 1.1);
-    const own = new THREE.Mesh(new THREE.BoxGeometry(60, 13.2, 0.4), new THREE.MeshLambertMaterial({ map: ownMaps.map }));
-    at(own, 0, FLOOR_Y + 6.5, -3.75, y);
-    at(mesh(new THREE.BoxGeometry(2.6, 0.15, 1.6), 0x8a8a84, 0.02), -3, FLOOR_Y + 2.6, -4.7, y);
-    at(mesh(new THREE.BoxGeometry(1.4, 2.2, 0.1), 0x4a3a2a, 0.015), -3, FLOOR_Y + 1.1, -4.0, y);
-    for (let f = 1; f < 5; f++) for (const x of [-12, -1, 10]) {
-      at(mesh(new THREE.BoxGeometry(2.8, 0.15, 1.4), 0xa8a49a, 0.02), x, f * 2.7 + FLOOR_Y + 0.4, -4.65, y);
-      at(mesh(new THREE.BoxGeometry(2.8, 0.9, 0.06), [0xb8b0a0, 0x8a9aa8, 0xc9c2b0][(f + x) & 1 ? 1 : 0], 0.015), x, f * 2.7 + FLOOR_Y + 0.9, -5.33, y);
-    }
-    // the block opposite, and two at the sides
-    this.facades.push({ day: facadeTextures(0xd8d0bc, 23, false), night: facadeTextures(0xd8d0bc, 23, true) });
-    const f = this.facades[0];
-    f.day.map.repeat.set(6, 2.4); f.day.glow.repeat.set(6, 2.4);
-    f.night.map.repeat.set(6, 2.4); f.night.glow.repeat.set(6, 2.4);
-    this.facadeMat = new THREE.MeshLambertMaterial({ map: f.day.map, emissiveMap: f.day.glow, emissive: 0xffffff, emissiveIntensity: 0 });
-    const opposite = new THREE.Mesh(new THREE.BoxGeometry(70, 29, 6), this.facadeMat);
-    at(opposite, 0, FLOOR_Y + 14.5, -40, y);
-    this.facadeMeshes.push(opposite);
-    for (const s of [-1, 1]) {
-      const side = new THREE.Mesh(new THREE.BoxGeometry(6, 29, 30), this.facadeMat);
-      at(side, s * 34, FLOOR_Y + 14.5, -22, y);
-      this.facadeMeshes.push(side);
-    }
-    // parked cars, trash bins, benches, a playground, lamps
-    for (let i = 0; i < 9; i++) {
-      const car = makeCar(i + 3);
-      car.rotation.y = Math.PI / 2;
-      at(car, -20 + i * 4.6 + (i % 3) * 0.4, FLOOR_Y, -27.5, y);
-    }
-    for (let i = 0; i < 4; i++) {
-      const car = makeCar(i + 20);
-      at(car, 6 + i * 2.6, FLOOR_Y, -11.5 - (i % 2) * 0.3, y);
-    }
-    at(makeTrashBins(), 10, FLOOR_Y, -8.5, y);
-    for (const [x, z, r] of [[-5.5, -8.4, 0], [0.5, -8.4, 0], [8, -17, Math.PI / 2]] as const) {
-      const b = makeBench();
-      b.rotation.y = r;
-      at(b, x, FLOOR_Y, z, y);
-    }
-    // swings
-    const swing = new THREE.Group();
-    for (const s of [-1, 1]) at(mesh(new THREE.BoxGeometry(0.1, 2.4, 0.1), 0xc83a32, 0.012), s * 1.2, 1.2, 0, swing);
-    at(mesh(new THREE.BoxGeometry(2.5, 0.1, 0.1), 0xc83a32, 0.012), 0, 2.4, 0, swing);
-    at(mesh(new THREE.BoxGeometry(0.5, 0.06, 0.3), 0xf2b632, 0.01), 0, 0.6, 0, swing);
-    at(swing, 8, FLOOR_Y, -16, y);
-    const sand = mesh(new THREE.BoxGeometry(2.6, 0.25, 2.6), 0xd8c08a, 0.02);
-    at(sand, 5.5, FLOOR_Y + 0.12, -13, y);
-    for (const [x, z] of [[-10, -9], [6, -8.5], [-8, -20], [12, -20]]) {
-      const l = makeLamp();
-      at(l, x, FLOOR_Y, z, y);
-      const bulb = l.getObjectByName("bulb") as THREE.Mesh;
-      this.yardLamps.push(bulb);
-      const pool = new THREE.Mesh(new THREE.CircleGeometry(3, 16), lightPoolMaterial(0xffd98a, 0.4));
-      pool.rotation.x = -Math.PI / 2;
-      at(pool, x, FLOOR_Y + 0.04, z + 0.6, y);
-      pool.name = "pool";
-      this.yardLamps.push(pool);
-    }
+    this.court = buildCourtyard(FLOOR_Y);
+    y.add(this.court.root);
+    this.groundMat = this.court.groundMat;
+    this.yardLamps.push(...(this.court.lamps as THREE.Mesh[]));
     y.add(this.yardDress);
     // people
     const looks = [0x8a3a5a, 0x3a6a8a, 0xd8a03a, 0x5a8a4a, 0x7a5a9a, 0xc85a3a];
@@ -879,22 +828,7 @@ export class Scene3D {
   setSeason(season: number, opts: { clutter: number; plant: number; plantDead: boolean; perks: string[]; friends: Array<{ color: number; state: string }>; glass: boolean }): void {
     const s = season % 4;
     const winter = s === 0;
-    const autumn = s === 3;
-    this.yardDress.clear();
-    this.groundBase.set(winter ? 0xe4e8ea : autumn ? 0x8a8a4a : s === 2 ? 0x7a9a4a : 0x6a9a4a);
-    this.groundMat.color.copy(this.groundBase);
-    const trees: Array<[number, number]> = [[-12, -12], [-8, -15], [12, -14], [16, -10], [-16, -18], [5, -20], [-2, -20], [20, -18], [-20, -11], [9, -9.5]];
-    trees.forEach(([x, z], i) => {
-      const t = winter ? makePine(i + 1, true) : makeTree(i + 1, autumn);
-      if (winter && i % 2) {
-        // bare deciduous tree in winter: just the trunk and branches
-        const bare = new THREE.Group();
-        at(mesh(new THREE.CylinderGeometry(0.12, 0.18, 3.2, 6), 0x5a4a3a, 0.02), 0, 1.6, 0, bare);
-        for (let k = 0; k < 4; k++) { const br = mesh(new THREE.CylinderGeometry(0.04, 0.06, 1.4, 5), 0x5a4a3a, 0.01); br.rotation.z = (k - 1.5) * 0.6; at(br, (k - 1.5) * 0.3, 3.2, 0, bare); }
-        at(bare, x, FLOOR_Y, z, this.yardDress);
-      } else at(t, x, FLOOR_Y, z, this.yardDress);
-    });
-    smoothen(this.yardDress, "far");
+    this.groundBase.set(this.court.setSeason(s));
     if (this.snow) { this.scene.remove(this.snow); this.snow.geometry.dispose(); this.snow = null; }
     if (winter) {
       const n = 900;
@@ -902,7 +836,9 @@ export class Scene3D {
       for (let i = 0; i < n; i++) { pos[i * 3] = (Math.random() - 0.5) * 40; pos[i * 3 + 1] = FLOOR_Y + Math.random() * 22; pos[i * 3 + 2] = -4 - Math.random() * 30; }
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-      this.snow = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.12, transparent: true, opacity: 0.85, depthWrite: false }));
+      // round, soft flakes (a square point sprite reads as confetti)
+      const flake = canvasTexture(32, 32, (c) => { const gr = c.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, "rgba(255,255,255,1)"); gr.addColorStop(0.5, "rgba(255,255,255,.7)"); gr.addColorStop(1, "rgba(255,255,255,0)"); c.fillStyle = gr; c.fillRect(0, 0, 32, 32); }, false);
+      this.snow = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.1, map: flake, transparent: true, opacity: 0.9, depthWrite: false }));
       this.scene.add(this.snow);
     }
     // inside
@@ -1229,8 +1165,14 @@ export class Scene3D {
     const dayK = clamp(Math.min((h - rise) / 1.5, (set - h) / 1.5), 0, 1);
     const night = dayK < 0.3;
     const az = ((h - rise) / (set - rise)) * Math.PI;
-    this.sun.position.set(Math.cos(az) * 12 - 2, 4 + Math.sin(az) * 10, -10);
-    this.sun.target.position.set(0, 0, 0);
+    // looking down into the yard, the shadows follow the eye: the sun's box moves down there and widens
+    const yardView = this.view === "window";
+    const sx = yardView ? -2 : 0, sy = yardView ? FLOOR_Y : 0, sz = yardView ? -17 : 0;
+    this.sun.position.set(sx + Math.cos(az) * 12 - 2, sy + 4 + Math.sin(az) * 10, sz - 10);
+    this.sun.target.position.set(sx, sy, sz);
+    const sc = this.sun.shadow.camera;
+    const span = yardView ? 17 : 8;
+    if (sc.right !== span) { sc.left = -span; sc.right = span; sc.top = span; sc.bottom = -span; sc.updateProjectionMatrix(); }
     this.sun.intensity = 0.15 + dayK * (s === 0 ? 1.1 : 1.6);
     this.sun.color.set(dayK < 0.7 ? 0xffb070 : 0xfff2dc);
     this.hemi.intensity = 0.25 + dayK * 0.85;
@@ -1272,10 +1214,7 @@ export class Scene3D {
     this.screenMat.color.setScalar(working ? 1.7 : 0.9);
     this.screenLight.intensity = working ? this.laptop.glow * (night || !light ? 2.4 : 0.8) * (0.92 + Math.sin(time * 7) * 0.08) : 0;
     // the block opposite: lit windows at night, dark in a blackout
-    const f = this.facades[0];
-    const want = night ? f.night : f.day;
-    if (this.facadeMat.map !== want.map) { this.facadeMat.map = want.map; this.facadeMat.emissiveMap = want.glow; this.facadeMat.needsUpdate = true; }
-    this.facadeMat.emissiveIntensity = night && light ? 1.2 : 0;
+    this.court.setNight(night && light);
     for (const l of this.yardLamps) l.visible = night && light;
     // the walls come closer: slowly with despair, they breathe, they throb with the heart, they lurch in panic
     this.squeezeV = Math.max(0, this.squeezeV - dt * 0.9);
